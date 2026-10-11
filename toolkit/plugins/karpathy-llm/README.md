@@ -4,7 +4,7 @@ The **`karpathy-llm`** plugin packages Andrej Karpathy's agent behavioral princi
 
 No external vector databases, embedding pipelines, or MCP servers required — just interlinked markdown files with structured YAML frontmatter traversed natively by AI agents.
 
-Reference specification: [setup-karpathy-wiki.md](https://github.com/nu-nenoi/ai-toolkit/blob/main/prompts/setup-karpathy-wiki.md) (also available locally in [`instructions/scaffolding-meta-prompt.md`](instructions/scaffolding-meta-prompt.md)).
+Reference specification: [setup-karpathy-wiki.md](https://github.com/unoxen/ai-toolkit/blob/main/prompts/setup-karpathy-wiki.md) (also available locally in [`instructions/scaffolding-meta-prompt.md`](instructions/scaffolding-meta-prompt.md)).
 
 ---
 

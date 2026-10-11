@@ -1,7 +1,7 @@
 name: claude
 version: 0.5.1
 description: Anthropic Claude Code integration (maintains CLAUDE.md instructions and mirrors workspace prompts/skills)
-author: nu-nenoi
-homepage: https://github.com/nu-nenoi/repo-nexus
+author: unoxen
+homepage: https://github.com/unoxen/repo-nexus
 instructions:
   - instructions/claude-integration.md: .rnex/plugins/claude/instructions/claude-integration.md

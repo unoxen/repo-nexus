@@ -1,7 +1,7 @@
 name: gemini
 version: 0.5.1
 description: Google Gemini and Antigravity integration (maintains GEMINI.md instructions and mirrors workspace prompts/skills)
-author: nu-nenoi
-homepage: https://github.com/nu-nenoi/repo-nexus
+author: unoxen
+homepage: https://github.com/unoxen/repo-nexus
 instructions:
   - instructions/gemini-integration.md: .rnex/plugins/gemini/instructions/gemini-integration.md

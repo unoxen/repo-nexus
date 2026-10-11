@@ -85,9 +85,11 @@ jobs:
       - name: Publish to GitHub Packages
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GPR_OWNER: ${{ github.repository_owner }}
         run: |
-          echo "Configuring GitHub Packages registry..."
-          npm config set @nu-nenoi:registry=https://npm.pkg.github.com
+          OWNER=$(echo "${GPR_OWNER:-unoxen}" | tr '[:upper:]' '[:lower:]')
+          echo "Configuring GitHub Packages registry for @${OWNER}..."
+          npm config set @${OWNER}:registry=https://npm.pkg.github.com
           npm config set //npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}
 
           CURRENT_COMMIT=$(git rev-parse HEAD)
@@ -95,14 +97,15 @@ jobs:
           # Backfill any missing tagged versions to GitHub Packages
           for TAG in $(git tag -l "v*"); do
             TAG_VER="${TAG#v}"
-            echo "Checking if @nu-nenoi/repo-nexus@${TAG_VER} is published on GitHub Packages..."
-            GPR_VER=$(npm view "@nu-nenoi/repo-nexus@${TAG_VER}" version --registry=https://npm.pkg.github.com 2>/dev/null || true)
+            echo "Checking if @${OWNER}/repo-nexus@${TAG_VER} is published on GitHub Packages..."
+            GPR_VER=$(npm view "@${OWNER}/repo-nexus@${TAG_VER}" version --registry=https://npm.pkg.github.com 2>/dev/null || true)
             if [ "$GPR_VER" != "$TAG_VER" ]; then
               echo "Publishing missing version ${TAG_VER} (${TAG}) to GitHub Packages..."
               git checkout -f "$TAG" -q
               node -e '
                 const pkg = require("./package.json");
-                pkg.name = "@nu-nenoi/repo-nexus";
+                const owner = (process.env.GPR_OWNER || "unoxen").toLowerCase();
+                pkg.name = `@${owner}/repo-nexus`;
                 pkg.publishConfig = { registry: "https://npm.pkg.github.com" };
                 require("fs").writeFileSync("./package.json", JSON.stringify(pkg, null, 2) + "\n");
               '
@@ -116,18 +119,19 @@ jobs:
           # Scope and publish current HEAD version if not already published
           node -e '
             const pkg = require("./package.json");
-            pkg.name = "@nu-nenoi/repo-nexus";
+            const owner = (process.env.GPR_OWNER || "unoxen").toLowerCase();
+            pkg.name = `@${owner}/repo-nexus`;
             pkg.publishConfig = { registry: "https://npm.pkg.github.com" };
             require("fs").writeFileSync("./package.json", JSON.stringify(pkg, null, 2) + "\n");
           '
 
           PKG_VERSION=$(node -p "require('./package.json').version")
-          echo "Checking if @nu-nenoi/repo-nexus@${PKG_VERSION} is already published on GitHub Packages..."
-          GPR_VERSION=$(npm view "@nu-nenoi/repo-nexus@${PKG_VERSION}" version --registry=https://npm.pkg.github.com 2>/dev/null || true)
+          echo "Checking if @${OWNER}/repo-nexus@${PKG_VERSION} is already published on GitHub Packages..."
+          GPR_VERSION=$(npm view "@${OWNER}/repo-nexus@${PKG_VERSION}" version --registry=https://npm.pkg.github.com 2>/dev/null || true)
 
           if [ "$GPR_VERSION" = "$PKG_VERSION" ]; then
-            echo "Version ${PKG_VERSION} of @nu-nenoi/repo-nexus is already published on GitHub Packages. Skipping."
+            echo "Version ${PKG_VERSION} of @${OWNER}/repo-nexus is already published on GitHub Packages. Skipping."
           else
-            echo "Publishing @nu-nenoi/repo-nexus@${PKG_VERSION} to GitHub Packages..."
+            echo "Publishing @${OWNER}/repo-nexus@${PKG_VERSION} to GitHub Packages..."
             npm publish --registry=https://npm.pkg.github.com
           fi

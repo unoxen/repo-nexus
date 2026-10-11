@@ -1,12 +1,12 @@
 import { defineConfig } from 'vitepress'
 
 export default defineConfig({
-  title: 'Repo Nexus',
-  titleTemplate: ':title | Repo Nexus',
+  title: 'Repo Nexus (rnex)',
+  titleTemplate: ':title | rnex',
   description: 'Virtual Meta-Repo Companion for Multi-Repo Workspaces & Scoped AI Context',
 
-  // Dynamic base URL: defaults to '/repo-nexus/' for GitHub Pages, '/' for root/custom domain
-  base: (process.env.BASE_URL as `/${string}/`) || '/repo-nexus/',
+  // Dynamic base URL: defaults to '/rnex/' for GitHub Pages, '/' for root/custom domain
+  base: (process.env.BASE_URL as `/${string}/`) || '/rnex/',
 
   cleanUrls: true,
   lastUpdated: true,
@@ -19,13 +19,13 @@ export default defineConfig({
   ],
 
   sitemap: {
-    hostname: 'https://unoxen.github.io/repo-nexus'
+    hostname: 'https://unoxen.github.io/rnex/'
   },
 
   head: [
     ['meta', { name: 'theme-color', content: '#3eaf7c' }],
     ['meta', { name: 'og:type', content: 'website' }],
-    ['meta', { name: 'og:site_name', content: 'Repo Nexus' }],
+    ['meta', { name: 'og:site_name', content: 'Repo Nexus (rnex)' }],
     ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
     ['link', { rel: 'icon', type: 'image/svg+xml', href: '/logo.svg' }]
   ],
@@ -35,7 +35,7 @@ export default defineConfig({
   },
 
   themeConfig: {
-    siteTitle: 'Repo Nexus',
+    siteTitle: 'Repo Nexus (rnex)',
     logo: '/logo.svg',
 
     editLink: {

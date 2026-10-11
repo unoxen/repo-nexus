@@ -1,8 +1,8 @@
 # Repo Nexus (`rnex`)
 
-[![CI](https://github.com/nu-nenoi/repo-nexus/actions/workflows/ci.yml/badge.svg)](https://github.com/nu-nenoi/repo-nexus/actions/workflows/ci.yml)
+[![CI](https://github.com/unoxen/repo-nexus/actions/workflows/ci.yml/badge.svg)](https://github.com/unoxen/repo-nexus/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/repo-nexus.svg)](https://www.npmjs.com/package/repo-nexus)
-[![License: MIT](https://img.shields.io/github/license/nu-nenoi/repo-nexus)](LICENSE)
+[![License: MIT](https://img.shields.io/github/license/unoxen/repo-nexus)](LICENSE)
 [![POSIX Compatible](https://img.shields.io/badge/POSIX-compatible-success)](#)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey)](#)
 [![CLI Reference](https://img.shields.io/badge/docs-CLI%20Reference-blue.svg)](docs/CLI.md)
@@ -116,16 +116,16 @@ npm install -g repo-nexus
 ### Option 2: Standalone One-Liner (curl / wget — Zero Dependencies, No Node.js)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/nu-nenoi/repo-nexus/main/scripts/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/unoxen/repo-nexus/main/scripts/install.sh | sh
 # or
-wget -qO- https://raw.githubusercontent.com/nu-nenoi/repo-nexus/main/scripts/install.sh | sh
+wget -qO- https://raw.githubusercontent.com/unoxen/repo-nexus/main/scripts/install.sh | sh
 ```
 *(Downloads and links `rnex` and `repo-nexus` into `~/.local/bin` without requiring Node.js or npm)*
 
 ### Option 3: Native Installer (Clone & Install)
 
 ```bash
-git clone https://github.com/nu-nenoi/repo-nexus.git
+git clone https://github.com/unoxen/repo-nexus.git
 cd repo-nexus
 ./rnex install
 ```

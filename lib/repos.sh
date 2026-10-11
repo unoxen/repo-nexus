@@ -78,7 +78,7 @@ sync_repo_rnex() {
     cat <<EOF > "$_r_rnex/README.md"
 # .rnex — Repo Nexus Workspace Integration
 
-This directory is managed by [Repo Nexus](https://github.com/nu-nenoi/repo-nexus).
+This directory is managed by [Repo Nexus](https://github.com/unoxen/repo-nexus).
 It stores documents, scripts, instructions, and workflows related to Repo Nexus for this member repository.
 
 AI tools operating at the Repo Nexus workspace level inspect this directory (\`repos/$_name/.rnex/\`) for repository-specific context and instructions.
