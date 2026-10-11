@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/github/license/unoxen/repo-nexus)](LICENSE)
 [![POSIX Compatible](https://img.shields.io/badge/POSIX-compatible-success)](#)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey)](#)
-[![CLI Reference](https://img.shields.io/badge/docs-CLI%20Reference-blue.svg)](docs/CLI.md)
+[![CLI Reference](https://img.shields.io/badge/docs-site-blue.svg)](https://unoxen.github.io/repo-nexus/)
 
 A **simple, lightweight Virtual Meta-Repo companion** for multi-repo workspaces and shared AI context. It organizes independent repositories into a unified workspace and shares lean routing instructions (`AGENTS.md`) **without Git submodules, monorepo migrations, or symlink fragility**.
 
@@ -18,9 +18,9 @@ A **simple, lightweight Virtual Meta-Repo companion** for multi-repo workspaces 
 - **Zero Dependencies**: Pure POSIX shell CLI (`rnex`). Works out of the box across macOS, Linux, and Windows (WSL/Git Bash).
 
 > 💡 **Documentation & Guides:**
-> - Check out the **[CLI Reference Manual](docs/CLI.md)** for complete command syntax, flags, Git hooks, plugins, and prompts.
-> - Check out the **[Plugins Guide](docs/plugins/README.md)** for detailed documentation on all built-in AI provider and domain plugins.
-> - Check out the **[Frequently Asked Questions (FAQ)](docs/FAQ.md)** for architecture deep dives, Git workflows, and AI context strategies.
+> - Check out the **[Documentation Site](https://unoxen.github.io/repo-nexus/)** or local **[CLI Reference](docs/cli/)** for complete command syntax, flags, Git hooks, plugins, and prompts.
+> - Check out the **[Plugins Guide](docs/plugins/)** for detailed documentation on all built-in AI provider and domain plugins.
+> - Check out the **[Frequently Asked Questions (FAQ)](docs/faq/)** for architecture deep dives, Git workflows, and AI context strategies.
 
 ---
 
@@ -35,11 +35,11 @@ A **simple, lightweight Virtual Meta-Repo companion** for multi-repo workspaces 
 - [Plugins & Scoped Context Packs](#plugins--scoped-context-packs)
 - [Two-Level Configuration (`rnex.yaml` & `.local.rnex.yaml`)](#two-level-configuration)
 - [CLI Command Reference](#cli-command-reference)
-- [Full CLI Reference Manual (docs/CLI.md)](docs/CLI.md)
+- [Full CLI Reference Manual (docs/cli/)](docs/cli/)
 - [Shell Auto-Completion](#shell-auto-completion)
 - [Project Structure](#project-structure)
 - [Running Tests](#running-tests)
-- [Frequently Asked Questions (FAQ)](docs/FAQ.md)
+- [Frequently Asked Questions (FAQ)](docs/faq/)
 - [License](#license)
 
 ---
@@ -217,7 +217,7 @@ rnex plugin disable karpathy-llm
 
 ### Built-in Plugins
 
-> For dedicated guides, configuration options, and directory layouts for each plugin, see the [**Repo Nexus Plugins Guide**](docs/plugins/README.md).
+> For dedicated guides, configuration options, and directory layouts for each plugin, see the [**Repo Nexus Plugins Guide**](docs/plugins/).
 
 #### 1. `copilot`
 The `copilot` plugin provides GitHub Copilot integration, automatically mirroring workspace and active plugin assets:
@@ -360,7 +360,7 @@ repos:
 
 ## CLI Command Reference
 
-> 📖 **Full Manual Available:** See the comprehensive **[CLI Reference Manual](docs/CLI.md)** for exhaustive details, deep dives into every command and flag, lifecycle behaviors, automated Git hooks, scoped plugins, standardized prompts catalog, and shell completion recipes.
+> 📖 **Full Manual Available:** See the comprehensive **[CLI Reference Manual](docs/cli/)** for exhaustive details, deep dives into every command and flag, lifecycle behaviors, automated Git hooks, scoped plugins, standardized prompts catalog, and shell completion recipes.
 
 ### Global Options
 | Option | Description |
@@ -425,9 +425,12 @@ repo-nexus/
 ├── CHANGELOG.md                    # Release history and migration notes
 ├── docs/
 │   ├── AGENTS.sample.md            # Template for routing-only AGENTS.md
-│   ├── CLI.md                      # Comprehensive CLI reference manual
-│   ├── FAQ.md                      # Frequently Asked Questions
-│   └── rnex.example.yaml           # Full config reference with examples
+│   ├── rnex.example.yaml           # Full config reference with examples
+│   ├── guide/                      # Architecture, workflows, and getting started
+│   ├── cli/                        # Comprehensive CLI reference manual
+│   ├── plugins/                    # Scoped plugin guides and specifications
+│   ├── examples/                   # Multi-repo patterns and case studies
+│   └── faq/                        # Frequently Asked Questions
 ├── .github/
 │   └── workflows/ci.yml            # GitHub Actions CI workflow
 ├── tests/

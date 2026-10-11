@@ -85,3 +85,42 @@ rnex plugin disable <name>
 # Disable a plugin locally on this workstation only
 rnex plugin disable --local <name>
 ```
+
+---
+
+## Declarative Configuration
+
+Plugins are declared under the `plugins:` block in `rnex.yaml` or `.local.rnex.yaml`:
+
+```yaml
+version: 0.5.8
+repos_dir: ./repos
+
+plugins:
+  # AI Provider Plugins
+  claude:
+    instructions: true
+    prompts: true
+    skills: true
+    agents: true
+
+  copilot:
+    prompts: true
+    skills: true
+    instructions: true
+    agents: true
+
+  # Functional / Knowledge Plugins
+  karpathy-llm:
+    lint_trigger: git-post-merge
+    notify_on_changes: true
+```
+
+Whenever you modify plugin configuration manually, run:
+
+```bash
+rnex fix
+```
+
+to reconcile scoped directories, prompt assets, provider mirrors, and member `.rnex/` folders.
+

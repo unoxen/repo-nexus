@@ -1,33 +1,33 @@
 import { defineConfig } from 'vitepress'
 
+const base = (process.env.BASE_URL as `/${string}/`) || '/repo-nexus/'
+
 export default defineConfig({
   title: 'Repo Nexus (rnex)',
   titleTemplate: ':title | rnex',
-  description: 'Virtual Meta-Repo Companion for Multi-Repo Workspaces & Scoped AI Context',
+  description: 'Zero-Dependency Virtual Meta-Repo Companion for Multi-Repo Workspaces & Scoped AI Context',
 
   // Dynamic base URL: defaults to '/repo-nexus/' for GitHub Pages, '/' for root/custom domain
-  base: (process.env.BASE_URL as `/${string}/`) || '/repo-nexus/',
+  base,
 
   cleanUrls: true,
   lastUpdated: true,
 
   srcExclude: [
-    'CLI.md',
-    'FAQ.md',
-    'AGENTS.sample.md',
-    'plugins/README.md'
+    'AGENTS.sample.md'
   ],
 
   sitemap: {
-    hostname: 'https://unoxen.github.io/repo-nexus/'
+    hostname: `https://unoxen.github.io${base}`
   },
 
   head: [
-    ['meta', { name: 'theme-color', content: '#3eaf7c' }],
+    ['meta', { name: 'theme-color', content: '#10b981' }],
     ['meta', { name: 'og:type', content: 'website' }],
     ['meta', { name: 'og:site_name', content: 'Repo Nexus (rnex)' }],
     ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
-    ['link', { rel: 'icon', type: 'image/svg+xml', href: '/logo.svg' }]
+    ['link', { rel: 'icon', type: 'image/svg+xml', href: `${base}logo.svg` }],
+    ['link', { rel: 'alternate icon', type: 'image/svg+xml', href: `${base}logo.svg` }]
   ],
 
   markdown: {
@@ -140,8 +140,7 @@ export default defineConfig({
     ],
 
     footer: {
-      message: 'Released under the MIT License.',
-      copyright: 'Copyright © 2026 Anton Shramkov & Repo Nexus Contributors'
+      copyright: 'Copyright © 2026 Repo Nexus · MIT License'
     }
   }
 })

@@ -47,6 +47,22 @@ rnex [global-options] <command> [command-options] [arguments]
 
 ---
 
+## Standardized Prompts Catalog
+
+Repo Nexus provides a standardized suite of operational prompt templates in `toolkit/prompts/` that sync to `.rnex/prompts/` during `rnex fix` or `rnex init`.
+
+AI assistants navigate workflows via the catalog index at `.rnex/prompts/index.md`:
+
+| Prompt File | Purpose |
+|:---|:---|
+| `index.md` | Master catalog indexing all available workflows and prompts. |
+| `rnex-cross-repo-feature.md` | Structured workflow for implementing cross-cutting features across multiple repos. |
+| `rnex-workspace-audit.md` | Health, git dirty status, branch tracking, and configuration audit workflow. |
+| `rnex-wiki-ingest.md` | Autonomous ingestion of source docs from `/raw/` into Karpathy LLM Wiki pages. |
+| `rnex-wiki-lint.md` | Link validation, backlink (`mentioned_in`) recalculation, and index rebuilding. |
+
+---
+
 ## Environment Variables
 
 | Variable | Description |
@@ -62,3 +78,4 @@ rnex [global-options] <command> [command-options] [arguments]
 |:---|:---|
 | `0` | Success. |
 | `1` | General error (missing config, invalid arguments, or failing `rnex exec` command). |
+
