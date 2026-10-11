@@ -4,9 +4,9 @@ layout: home
 hero:
   name: "Repo Nexus (rnex)"
   text: "Virtual Meta-Repo Companion"
-  tagline: "Unite independent repositories into a cohesive AI-enabled workspace with Zero Dependencies, without Git submodules or monorepo migrations."
+  tagline: "Unite independent repositories into a cohesive AI-enabled workspace, without dependencies, Git submodules or monorepo migrations."
   image:
-    src: /logo.svg
+    src: /logo.png
     alt: Repo Nexus Logo
   actions:
     - theme: brand
@@ -44,7 +44,6 @@ features:
   <div class="home-quickstart-box">
     <div class="home-quickstart-header">
       <span class="home-quickstart-badge">QUICKSTART</span>
-      <h2>Get Started in 60 Seconds</h2>
       <p class="home-quickstart-sub">Initialize a unified meta-repo workspace and connect member repositories in three commands.</p>
     </div>
 
