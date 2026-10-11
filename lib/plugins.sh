@@ -130,11 +130,11 @@ sync_plugins() {
       # Deterministically sync plugin asset directories (clean stale files)
       for _sub in rules workflows instructions prompts skills agents templates; do
         if [ -d "$_pdir/$_sub" ]; then
-          rm -rf "$_scoped_dest/$_sub"
+          rm -rf "${_scoped_dest:?}/$_sub"
           mkdir -p "$_scoped_dest/$_sub"
           cp -R "$_pdir/$_sub"/. "$_scoped_dest/$_sub"/ 2>/dev/null || true
         else
-          rm -rf "$_scoped_dest/$_sub"
+          rm -rf "${_scoped_dest:?}/$_sub"
         fi
       done
 

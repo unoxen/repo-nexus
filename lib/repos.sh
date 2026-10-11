@@ -98,11 +98,11 @@ EOF
     # Deterministically sync plugin asset directories into member repo
     for _sub in rules workflows instructions prompts skills agents templates; do
       if [ -d "$_pdir/$_sub" ]; then
-        rm -rf "$_dest_pdir/$_sub"
+        rm -rf "${_dest_pdir:?}/$_sub"
         mkdir -p "$_dest_pdir/$_sub"
         cp -R "$_pdir/$_sub"/. "$_dest_pdir/$_sub"/ 2>/dev/null || true
       else
-        rm -rf "$_dest_pdir/$_sub"
+        rm -rf "${_dest_pdir:?}/$_sub"
       fi
     done
     if [ -f "$_pdir/plugin.yaml" ]; then
