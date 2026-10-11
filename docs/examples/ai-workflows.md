@@ -7,31 +7,34 @@ description: Practical walkthrough of executing cross-cutting features, workspac
 
 One of the greatest challenges with AI coding assistants in multi-repo setups is context isolation: agents operating inside one repository cannot easily coordinate changes across upstream or downstream services.
 
-Repo Nexus equips AI assistants with standardized cross-repo workflows located in `.rnex/prompts/`.
+Repo Nexus equips AI assistants with standardized cross-repo skills and workflows located in `.rnex/skills/` and `.rnex/workflows/`, routed directly through universal `AGENTS.md`.
 
 ---
 
-## The Prompts Catalog
+## Workspace Skills & Workflows
 
-When a workspace is initialized, Repo Nexus seeds `.rnex/prompts/` with specialized agent workflow templates:
+When a workspace is initialized, Repo Nexus seeds `.rnex/skills/` and `.rnex/workflows/` with specialized agent workflow templates:
 
-| Workflow Prompt | Target Agent Goal |
+| Workflow / Skill | Target Agent Goal |
 |:---|:---|
-| `rnex-cross-repo-feature.md` | Implement an end-to-end feature across backend, frontend, and shared contracts. |
-| `rnex-workspace-audit.md` | Audit git status, unpushed branches, dirty files, and schema health. |
-| `rnex-wiki-ingest.md` | Ingest raw documentation from `/raw/` into Karpathy LLM Wiki pages. |
-| `rnex-wiki-lint.md` | Validate markdown links, compute backlinks, and update the master index. |
+| `rnex-cross-repo-feature` | Implement an end-to-end feature across backend, frontend, and shared contracts. |
+| `rnex-workspace-audit` | Audit git status, unpushed branches, dirty files, and schema health. |
+| `rnex-wiki-ingest` | Ingest raw intake documents into atomic Karpathy LLM Wiki pages. |
+| `rnex-wiki-lint` | Validate markdown links, compute backlinks, and update the master index. |
+
+When provider plugins (such as `copilot`, `claude`, `gemini`, `cursor`, or `windsurf`) are enabled with `prompts: true`, these workflows are automatically mirrored into the respective native prompt pickers (e.g. `.github/prompts/`, `.claude/commands/`, `.gemini/prompts/`, `.cursor/prompts/`, `.windsurf/prompts/`).
 
 ---
 
 ## Executing a Cross-Repo Feature
 
-### 1. Invoke the Prompt in Your AI Assistant
-In Claude Code, Cursor, or Gemini, invoke the workflow:
+### 1. Invoke the Workflow in Your AI Assistant
+In your AI assistant (Copilot Chat, Claude Code, Gemini/Antigravity, Cursor, Windsurf), run or type:
 
 ```text
-Follow the workflow in .rnex/prompts/rnex-cross-repo-feature.md to add OAuth2 login support across backend and web-client.
+Follow the workflow in .rnex/workflows/rnex-cross-repo-feature.md to add OAuth2 login support across backend and web-client.
 ```
+*(Or select `rnex-cross-repo-feature` directly from your IDE's prompt picker or slash commands.)*
 
 ### 2. Autonomous Execution Sequence
 The agent follows a 4-stage protocol:
@@ -41,7 +44,7 @@ The agent follows a 4-stage protocol:
 4. **Verification**: Executes workspace-wide verification via `rnex exec npm test`.
 
 ### 3. Preserving Commits per Repository
-Because each repository in `./repos/` is a standard Git repository, the agent commits changes directly in each repository root without creating messy parent commit dependencies:
+Because each repository in `./repos/` is an autonomous Git repository, the agent commits changes directly in each repository root without creating messy parent commit dependencies:
 
 ```bash
 cd repos/contracts && git commit -m "feat(auth): define oauth2 schema"

@@ -51,8 +51,8 @@ cmd_help() {
                             Initialize a new Repo Nexus workspace (default: AGENTS.md)
     install [dir]           Install rnex & repo-nexus globally into ~/.local/bin (or custom dir)
     fix [-y] [--quiet]      Reconcile workspace, upgrade configuration & routing, sync plugins & repos (aliases: sync, update, upgrade)
-    update [-y]             Alias for fix (upgrades configuration and reconciles workspace)
-    upgrade [-y]            Alias for fix
+    update [-y]             Part of fix: check version, upgrade schema, and reconcile workspace (alias: upgrade)
+    upgrade [-y]            Alias for update
     hooks <install|uninstall|status> [--local]
                             Manage automated Git hooks (--local writes to .local.rnex.yaml)
     completion <shell>      Generate shell completion script (bash, zsh, fish)
@@ -88,7 +88,7 @@ cmd_help() {
     rnex list                                   # List all member repos and active branches
     rnex status                                 # Inspect workspace configuration and health
     rnex fix                                    # Reconcile all repos, plugins, and .rnex directories
-    rnex update                                 # Upgrade workspace configuration to newest version
+    rnex update                                 # Upgrade workspace configuration to newest version (part of fix)
     rnex hooks install                          # Enable automated workspace Git hooks
     rnex completion zsh                         # Generate Zsh completion script
 

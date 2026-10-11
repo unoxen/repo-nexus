@@ -96,40 +96,22 @@ cmd_status() {
   printf '\n'
 
   printf '%bWorkspace AI Context (Routing):%b\n' "$_BOLD" "$_NC"
-  _has_any_ai=0
   if [ -f "$NEXUS_DIR/AGENTS.md" ]; then
     printf '  %b✓%b %s %b(standard instructions)%b\n' "$_G" "$_NC" "AGENTS.md" "$_DIM" "$_NC"
-    _has_any_ai=1
+  else
+    printf '  %b✗%b %s %b(standard instructions — MISSING; run "rnex fix" to create)%b\n' "$_R" "$_NC" "AGENTS.md" "$_R" "$_NC"
   fi
   if [ -f "$NEXUS_DIR/CLAUDE.md" ]; then
     printf '  %b✓%b %s %b(Claude instructions)%b\n' "$_G" "$_NC" "CLAUDE.md" "$_DIM" "$_NC"
-    _has_any_ai=1
   fi
   if [ -f "$NEXUS_DIR/GEMINI.md" ]; then
     printf '  %b✓%b %s %b(Gemini instructions)%b\n' "$_G" "$_NC" "GEMINI.md" "$_DIM" "$_NC"
-    _has_any_ai=1
   fi
   if [ -f "$NEXUS_DIR/.cursorrules" ]; then
     printf '  %b✓%b %s %b(Cursor instructions)%b\n' "$_G" "$_NC" ".cursorrules" "$_DIM" "$_NC"
-    _has_any_ai=1
-  fi
-  if [ -f "$NEXUS_DIR/.cursor/rules/rnex-context.mdc" ]; then
-    printf '  %b✓%b %s %b(Cursor MDC rule)%b\n' "$_G" "$_NC" ".cursor/rules/rnex-context.mdc" "$_DIM" "$_NC"
-    _has_any_ai=1
-  elif [ -f "$NEXUS_DIR/.cursor/rules/repo-nexus.mdc" ]; then
-    printf '  %b✓%b %s %b(Cursor MDC rule)%b\n' "$_G" "$_NC" ".cursor/rules/repo-nexus.mdc" "$_DIM" "$_NC"
-    _has_any_ai=1
   fi
   if [ -f "$NEXUS_DIR/.windsurfrules" ]; then
     printf '  %b✓%b %s %b(Windsurf instructions)%b\n' "$_G" "$_NC" ".windsurfrules" "$_DIM" "$_NC"
-    _has_any_ai=1
-  fi
-  if [ -f "$NEXUS_DIR/.github/copilot-instructions.md" ]; then
-    printf '  %b✓%b %s %b(Copilot instructions)%b\n' "$_G" "$_NC" ".github/copilot-instructions.md" "$_DIM" "$_NC"
-    _has_any_ai=1
-  fi
-  if [ "$_has_any_ai" -eq 0 ]; then
-    printf '  %b✗%b %s %b(standard instructions — MISSING; run "rnex fix" to create)%b\n' "$_R" "$_NC" "AGENTS.md" "$_R" "$_NC"
   fi
   if [ -n "$CODE_WORKSPACE_FILE" ]; then
     if [ -f "$NEXUS_DIR/$CODE_WORKSPACE_FILE" ]; then
@@ -146,53 +128,26 @@ cmd_status() {
   if [ -d "$NEXUS_DIR/.rnex" ]; then
     printf '  %b✓%b %s\n' "$_G" "$_NC" ".rnex/"
   fi
-  if [ -f "$NEXUS_DIR/.rnex/prompts/index.md" ]; then
-    printf '  %b✓%b %s %b(prompts catalog)%b\n' "$_G" "$_NC" ".rnex/prompts/index.md" "$_DIM" "$_NC"
+  if [ -d "$NEXUS_DIR/.rnex/skills" ]; then
+    printf '  %b✓%b %s %b(workspace skills)%b\n' "$_G" "$_NC" ".rnex/skills/" "$_DIM" "$_NC"
+  fi
+  if [ -d "$NEXUS_DIR/.rnex/workflows" ]; then
+    printf '  %b✓%b %s %b(workspace workflows)%b\n' "$_G" "$_NC" ".rnex/workflows/" "$_DIM" "$_NC"
   fi
   if [ -d "$NEXUS_DIR/.github/prompts" ]; then
     printf '  %b✓%b %s %b(Copilot prompts)%b\n' "$_G" "$_NC" ".github/prompts/" "$_DIM" "$_NC"
   fi
-  if [ -d "$NEXUS_DIR/.github/skills" ]; then
-    printf '  %b✓%b %s %b(Copilot skills)%b\n' "$_G" "$_NC" ".github/skills/" "$_DIM" "$_NC"
-  fi
-  if [ -d "$NEXUS_DIR/.github/agents" ]; then
-    printf '  %b✓%b %s %b(Copilot agents)%b\n' "$_G" "$_NC" ".github/agents/" "$_DIM" "$_NC"
-  fi
   if [ -d "$NEXUS_DIR/.claude/commands" ] || [ -d "$NEXUS_DIR/.claude/prompts" ]; then
     printf '  %b✓%b %s %b(Claude prompts/commands)%b\n' "$_G" "$_NC" ".claude/commands/" "$_DIM" "$_NC"
-  fi
-  if [ -d "$NEXUS_DIR/.claude/skills" ]; then
-    printf '  %b✓%b %s %b(Claude skills)%b\n' "$_G" "$_NC" ".claude/skills/" "$_DIM" "$_NC"
-  fi
-  if [ -d "$NEXUS_DIR/.claude/agents" ]; then
-    printf '  %b✓%b %s %b(Claude agents)%b\n' "$_G" "$_NC" ".claude/agents/" "$_DIM" "$_NC"
   fi
   if [ -d "$NEXUS_DIR/.gemini/prompts" ]; then
     printf '  %b✓%b %s %b(Gemini prompts)%b\n' "$_G" "$_NC" ".gemini/prompts/" "$_DIM" "$_NC"
   fi
-  if [ -d "$NEXUS_DIR/.gemini/skills" ]; then
-    printf '  %b✓%b %s %b(Gemini skills)%b\n' "$_G" "$_NC" ".gemini/skills/" "$_DIM" "$_NC"
-  fi
-  if [ -d "$NEXUS_DIR/.gemini/agents" ]; then
-    printf '  %b✓%b %s %b(Gemini agents)%b\n' "$_G" "$_NC" ".gemini/agents/" "$_DIM" "$_NC"
-  fi
   if [ -d "$NEXUS_DIR/.cursor/prompts" ]; then
     printf '  %b✓%b %s %b(Cursor prompts)%b\n' "$_G" "$_NC" ".cursor/prompts/" "$_DIM" "$_NC"
   fi
-  if [ -d "$NEXUS_DIR/.cursor/skills" ]; then
-    printf '  %b✓%b %s %b(Cursor skills)%b\n' "$_G" "$_NC" ".cursor/skills/" "$_DIM" "$_NC"
-  fi
-  if [ -d "$NEXUS_DIR/.cursor/agents" ]; then
-    printf '  %b✓%b %s %b(Cursor agents)%b\n' "$_G" "$_NC" ".cursor/agents/" "$_DIM" "$_NC"
-  fi
   if [ -d "$NEXUS_DIR/.windsurf/prompts" ]; then
     printf '  %b✓%b %s %b(Windsurf prompts)%b\n' "$_G" "$_NC" ".windsurf/prompts/" "$_DIM" "$_NC"
-  fi
-  if [ -d "$NEXUS_DIR/.windsurf/skills" ]; then
-    printf '  %b✓%b %s %b(Windsurf skills)%b\n' "$_G" "$_NC" ".windsurf/skills/" "$_DIM" "$_NC"
-  fi
-  if [ -d "$NEXUS_DIR/.windsurf/agents" ]; then
-    printf '  %b✓%b %s %b(Windsurf agents)%b\n' "$_G" "$_NC" ".windsurf/agents/" "$_DIM" "$_NC"
   fi
   printf '\n'
 
@@ -214,18 +169,15 @@ cmd_status() {
           printf '    %bScoped directory: .rnex/plugins/%s%b\n' "$_DIM" "$_pname" "$_NC"
           case "$_pname" in
             copilot)
-              printf '    %b↳ Options: prompts=%s, skills=%s, instructions=%s, agents=%s%b\n' "$_DIM" \
-                "$(copilot_prompts_enabled && echo "true" || echo "false")" \
-                "$(copilot_skills_enabled && echo "true" || echo "false")" \
-                "$(copilot_instructions_enabled && echo "true" || echo "false")" \
-                "$(copilot_agents_enabled && echo "true" || echo "false")" "$_NC"
+              printf '    %b↳ Options: prompts=%s, workflows=%s%b\n' "$_DIM" \
+                "$(provider_option_enabled "$_pname" "prompts" && echo "true" || echo "false")" \
+                "$(provider_option_enabled "$_pname" "workflows" && echo "true" || echo "false")" "$_NC"
               ;;
             claude|gemini|cursor|windsurf)
-              printf '    %b↳ Options: instructions=%s, prompts=%s, skills=%s, agents=%s%b\n' "$_DIM" \
+              printf '    %b↳ Options: instructions=%s, prompts=%s, workflows=%s%b\n' "$_DIM" \
                 "$(provider_option_enabled "$_pname" "instructions" && echo "true" || echo "false")" \
                 "$(provider_option_enabled "$_pname" "prompts" && echo "true" || echo "false")" \
-                "$(provider_option_enabled "$_pname" "skills" && echo "true" || echo "false")" \
-                "$(provider_option_enabled "$_pname" "agents" && echo "true" || echo "false")" "$_NC"
+                "$(provider_option_enabled "$_pname" "workflows" && echo "true" || echo "false")" "$_NC"
               ;;
           esac
         fi

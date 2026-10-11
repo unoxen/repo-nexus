@@ -1,6 +1,6 @@
 # Cross-Repository Feature Implementation Workflow
 
-Use this prompt to guide the planning, execution, and verification of features spanning multiple member repositories in a Repo Nexus workspace.
+Use this workflow to guide the planning, execution, and verification of features spanning multiple member repositories in a Repo Nexus workspace.
 
 ---
 

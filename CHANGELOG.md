@@ -8,6 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Universal `AGENTS.md` & Native Provider Instructions Architecture**:
+  - Maintained [`AGENTS.md`](file:///Users/admin/Projects/ai/repo-nexus/AGENTS.md) at the workspace root as the universal, cross-tool standard for workspace routing instructions.
+  - Assistants that read `AGENTS.md` unconditionally (such as GitHub Copilot) rely directly on `AGENTS.md`, eliminating redundant instruction files (`.github/copilot-instructions.md`) and diverging contexts.
+  - Assistants with primary native configuration formats (Anthropic Claude Code with `CLAUDE.md`, Google Gemini CLI with `GEMINI.md`, Cursor with `.cursorrules` and `.cursor/rules/`, and Windsurf with `.windsurfrules`) have their instruction files maintained when their respective plugin is enabled (`instructions: true`, default). Since Claude Code only falls back to `AGENTS.md` when no `CLAUDE.md` is present, maintaining `CLAUDE.md` ensures Claude Code never misses Repo Nexus routing instructions when project-specific rules exist.
+- **Self-Contained Skills, Workflows, Rules, and Subagents under `.rnex/`**:
+  - Tools and autonomous agents operate directly on `.rnex/skills/`, `.rnex/workflows/`, `.rnex/rules/`, `.rnex/instructions/`, and active plugin scopes under `.rnex/plugins/<plugin-name>/`.
+  - Autonomous subagents (e.g. `rnex-wiki-curator.agent.md`) are maintained under `.rnex/agents/` and `.rnex/plugins/<plugin>/agents/` without external mirroring to provider folders.
+- **Prompts-Only AI Provider Synchronization**:
+  - Streamlined provider plugins (`copilot`, `claude`, `gemini`, `cursor`, `windsurf`) to mirror human-facing prompts and active plugin workflows exclusively to native IDE prompt pickers (`.github/prompts/*.prompt.md`, `.claude/commands/*.md`, `.gemini/prompts/*.prompt.md`, `.cursor/prompts/*.md`, `.windsurf/prompts/*.md`).
+  - Purged internal prompts from `.rnex/prompts/` and plugin directories.
+  - Simplified provider plugin options: `copilot` uses `prompts: true|false` and `workflows: true|false` (no `instructions:` needed as Copilot reads `AGENTS.md`); `claude`, `gemini`, `cursor`, and `windsurf` use `instructions: true|false`, `prompts: true|false`, and `workflows: true|false`.
+  - Surgical cleanup during `rnex fix` purges legacy mirrored skills and agents while preserving user-authored custom files.
+- **Configurable Karpathy LLM Wiki Directories**:
+  - Made wiki destination paths fully configurable via `plugins.karpathy-llm.wiki_dir` (default: `wiki`) and `plugins.karpathy-llm.raw_dir` (default: `raw`) in `rnex.yaml` and `.local.rnex.yaml`.
+  - Workflows, templates, and Git hooks dynamically resolve configured paths.
+- **Standardized `rnex-` Asset Naming**:
+  - All workspace prompts, workflows, skills, and agents consistently start with `rnex-` prefix.
 - **Dedicated Plugins Documentation (`docs/plugins/`)**:
   - Comprehensive documentation suite covering all built-in AI provider and domain plugins, architecture, and developer authoring guides.
   - Added `docs/plugins/README.md` detailing scoped plugin isolation, member repo synchronization, decoupled cross-plugin asset discovery, two-level configuration, delimited instruction merging, CLI command reference, and custom plugin authoring specifications.

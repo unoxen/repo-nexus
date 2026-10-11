@@ -63,37 +63,22 @@ cmd_plugin_info() {
   [ -n "$_home" ] && printf '%bHomepage:%b     %s\n' "$_BOLD" "$_NC" "$_home"
   printf '%bLocation:%b     %s\n' "$_BOLD" "$_NC" "$_pdir"
 
-  if [ "$_name" = "copilot" ]; then
-    printf '\n%bConfigurable Options (in rnex.yaml or .local.rnex.yaml):%b\n' "$_BOLD" "$_NC"
-    printf '  - prompts: true|false  (mirror prompts to .github/prompts/*.prompt.md; current: %s)\n' "$(copilot_prompts_enabled && echo "true" || echo "false")"
-    printf '  - skills: true|false  (mirror skills to .github/skills/<name>/SKILL.md; current: %s)\n' "$(copilot_skills_enabled && echo "true" || echo "false")"
-    printf '  - instructions: true|false  (mirror instructions to .github/copilot-instructions.md; current: %s)\n' "$(copilot_instructions_enabled && echo "true" || echo "false")"
-    printf '  - agents: true|false  (mirror agents to .github/agents/*.agent.md; current: %s)\n' "$(copilot_agents_enabled && echo "true" || echo "false")"
-  elif [ "$_name" = "claude" ]; then
-    printf '\n%bConfigurable Options (in rnex.yaml or .local.rnex.yaml):%b\n' "$_BOLD" "$_NC"
-    printf '  - instructions: true|false  (mirror instructions to CLAUDE.md; current: %s)\n' "$(claude_instructions_enabled && echo "true" || echo "false")"
-    printf '  - prompts: true|false  (mirror prompts to .claude/commands/ and .claude/prompts/; current: %s)\n' "$(claude_prompts_enabled && echo "true" || echo "false")"
-    printf '  - skills: true|false  (mirror skills to .claude/skills/<name>/SKILL.md; current: %s)\n' "$(claude_skills_enabled && echo "true" || echo "false")"
-    printf '  - agents: true|false  (mirror agents to .claude/agents/*.md; current: %s)\n' "$(claude_agents_enabled && echo "true" || echo "false")"
-  elif [ "$_name" = "gemini" ]; then
-    printf '\n%bConfigurable Options (in rnex.yaml or .local.rnex.yaml):%b\n' "$_BOLD" "$_NC"
-    printf '  - instructions: true|false  (mirror instructions to GEMINI.md; current: %s)\n' "$(gemini_instructions_enabled && echo "true" || echo "false")"
-    printf '  - prompts: true|false  (mirror prompts to .gemini/prompts/; current: %s)\n' "$(gemini_prompts_enabled && echo "true" || echo "false")"
-    printf '  - skills: true|false  (mirror skills to .gemini/skills/<name>/SKILL.md; current: %s)\n' "$(gemini_skills_enabled && echo "true" || echo "false")"
-    printf '  - agents: true|false  (mirror agents to .gemini/agents/*.md; current: %s)\n' "$(gemini_agents_enabled && echo "true" || echo "false")"
-  elif [ "$_name" = "cursor" ]; then
-    printf '\n%bConfigurable Options (in rnex.yaml or .local.rnex.yaml):%b\n' "$_BOLD" "$_NC"
-    printf '  - instructions: true|false  (mirror instructions to .cursorrules & .cursor/rules/; current: %s)\n' "$(cursor_instructions_enabled && echo "true" || echo "false")"
-    printf '  - prompts: true|false  (mirror prompts to .cursor/prompts/; current: %s)\n' "$(cursor_prompts_enabled && echo "true" || echo "false")"
-    printf '  - skills: true|false  (mirror skills to .cursor/skills/<name>/SKILL.md; current: %s)\n' "$(cursor_skills_enabled && echo "true" || echo "false")"
-    printf '  - agents: true|false  (mirror agents to .cursor/agents/*.md; current: %s)\n' "$(cursor_agents_enabled && echo "true" || echo "false")"
-  elif [ "$_name" = "windsurf" ]; then
-    printf '\n%bConfigurable Options (in rnex.yaml or .local.rnex.yaml):%b\n' "$_BOLD" "$_NC"
-    printf '  - instructions: true|false  (mirror instructions to .windsurfrules; current: %s)\n' "$(windsurf_instructions_enabled && echo "true" || echo "false")"
-    printf '  - prompts: true|false  (mirror prompts to .windsurf/prompts/; current: %s)\n' "$(windsurf_prompts_enabled && echo "true" || echo "false")"
-    printf '  - skills: true|false  (mirror skills to .windsurf/skills/<name>/SKILL.md; current: %s)\n' "$(windsurf_skills_enabled && echo "true" || echo "false")"
-    printf '  - agents: true|false  (mirror agents to .windsurf/agents/*.md; current: %s)\n' "$(windsurf_agents_enabled && echo "true" || echo "false")"
-  elif [ "$_name" = "karpathy-llm" ]; then
+  case "$_name" in
+    copilot|claude|gemini|cursor|windsurf)
+      _prompt_target=""
+      case "$_name" in
+        copilot) _prompt_target=".github/prompts/*.prompt.md" ;;
+        claude) _prompt_target=".claude/commands/ and .claude/prompts/" ;;
+        gemini) _prompt_target=".gemini/prompts/*.prompt.md" ;;
+        cursor) _prompt_target=".cursor/prompts/*.md" ;;
+        windsurf) _prompt_target=".windsurf/prompts/*.md" ;;
+      esac
+      printf '\n%bConfigurable Options (in rnex.yaml or .local.rnex.yaml):%b\n' "$_BOLD" "$_NC"
+      printf '  - prompts: true|false  (mirror prompts to %s; current: %s)\n' "$_prompt_target" "$(provider_option_enabled "$_name" "prompts" && echo "true" || echo "false")"
+      printf '  - workflows: true|false  (mirror workflows; current: %s)\n' "$(provider_option_enabled "$_name" "workflows" && echo "true" || echo "false")"
+      ;;
+  esac
+  if [ "$_name" = "karpathy-llm" ]; then
     _cur_lt="$(yaml_plugin_get "karpathy-llm" "lint_trigger" 2>/dev/null || true)"
     _cur_nc="$(yaml_plugin_get "karpathy-llm" "notify_on_changes" 2>/dev/null || true)"
     printf '\n%bConfigurable Options (in rnex.yaml or .local.rnex.yaml):%b\n' "$_BOLD" "$_NC"
@@ -209,7 +194,7 @@ cmd_plugin_disable() {
   fi
 
   sync_prompts
-  if ! has_ai_provider_plugin_enabled && [ ! -f "$NEXUS_DIR/AGENTS.md" ]; then
+  if [ ! -f "$NEXUS_DIR/AGENTS.md" ]; then
     merge_rnex_instructions "$NEXUS_DIR/AGENTS.md"
   fi
   log_ok "Plugin '$_name' disabled from workspace"

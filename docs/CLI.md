@@ -71,17 +71,17 @@ rnex init [options] [directory]
 - `--code-workspace [filename]`: Enable VS Code / Cursor multi-root workspace file generation. Defaults to `<directory-name>.code-workspace` if omitted.
 - `--hooks`: Force-enable automated Git hooks setup during initialization.
 - `--no-hooks`: Skip Git hooks configuration during initialization.
-- `--copilot`: Enable GitHub Copilot integration plugin (mirrors prompts, skills, agents, and instructions to `.github/`).
-- `--claude`: Enable Anthropic Claude Code plugin (maintains `CLAUDE.md`, mirrors prompts/skills/agents to `.claude/`).
-- `--gemini`: Enable Google Gemini & Antigravity plugin (maintains `GEMINI.md`, mirrors prompts/skills/agents to `.gemini/`).
-- `--cursor`: Enable Cursor IDE plugin (maintains `.cursorrules` / `.cursor/rules/`, mirrors prompts/skills/agents to `.cursor/`).
-- `--windsurf`: Enable Windsurf IDE plugin (maintains `.windsurfrules`, mirrors prompts/skills/agents to `.windsurf/`).
+- `--copilot`: Enable GitHub Copilot integration plugin (mirrors prompts to `.github/prompts/`).
+- `--claude`: Enable Anthropic Claude Code plugin (mirrors prompts to `.claude/commands/`).
+- `--gemini`: Enable Google Gemini & Antigravity plugin (mirrors prompts to `.gemini/prompts/`).
+- `--cursor`: Enable Cursor IDE plugin (mirrors prompts to `.cursor/prompts/`).
+- `--windsurf`: Enable Windsurf IDE plugin (mirrors prompts to `.windsurf/prompts/`).
 
 #### What it does:
 1. Creates `rnex.yaml` with schema versioning (`version: <version>`), `repos_dir: ./repos`, and configured defaults.
-2. Merges Repo Nexus routing instructions (`<!-- REPO-NEXUS:START -->` ... `<!-- REPO-NEXUS:END -->`) into `AGENTS.md` (or the respective provider file if a provider plugin flag was specified).
+2. Merges Repo Nexus routing instructions (`<!-- REPO-NEXUS:START -->` ... `<!-- REPO-NEXUS:END -->`) into `AGENTS.md` (universal for all AI assistants).
 3. Creates `./repos/` directory with a tracked `.gitkeep`.
-4. Creates `.rnex/`, `.rnex/plugins/`, and copies standardized prompts to `.rnex/prompts/`.
+4. Creates `.rnex/`, `.rnex/plugins/`, `.rnex/skills/`, and `.rnex/workflows/`.
 5. Reconciles `.gitignore` to ensure `repos/` and `.local.rnex.yaml` are never tracked by the meta-repo (while keeping `.rnex/` tracked).
 6. Generates a multi-root `.code-workspace` file if configured.
 7. Prompts to configure automated workspace Git hooks (`core.hooksPath = .rnex/hooks`) if inside a Git repository.
@@ -95,7 +95,7 @@ rnex init
 # Non-interactive initialization for CI or automated setup
 rnex init -y
 
-# Initialize for Anthropic Claude Code with automated Git hooks (creates CLAUDE.md)
+# Initialize with Claude plugin enabled and automated Git hooks
 rnex init -y --claude --hooks
 
 # Initialize with VS Code multi-root workspace support
@@ -114,17 +114,17 @@ rnex status
 
 #### What it reports:
 - **Configuration & Versions**: Path, version tag, and load status of `rnex.yaml` and `.local.rnex.yaml`.
-- **Paths**: Clones directory (`repos_dir`) and primary AI instructions file.
+- **Paths**: Clones directory (`repos_dir`) and primary AI instructions file (`AGENTS.md`).
 - **Git Integration**: Validation that `.gitignore` ignores `repos/` and local files (while keeping `.rnex/` tracked), and whether `core.hooksPath` points to `.rnex/hooks`.
-- **AI Routing Context**: Existence and routing block markers in `AGENTS.md`, `CLAUDE.md`, `.code-workspace`, and prompts catalog (`.rnex/prompts/index.md`).
-- **Active Plugins**: List of enabled plugins, scoped versions, and asset directories.
+- **AI Routing Context**: Status of universal `AGENTS.md`, `.code-workspace`, workspace skills (`.rnex/skills/`), workflows (`.rnex/workflows/`), and active provider prompts directories.
+- **Active Plugins**: List of enabled plugins, scoped versions, and configurable options.
 - **Member Repositories**: Every registered repository, enabled/disabled state, clone health, and active Git branch.
 
 ---
 
 ### `rnex fix` (alias: `sync`)
 
-Reconciles the workspace configuration, instructions, prompts, plugins, and member clones.
+Reconciles the workspace configuration, instructions, skills, workflows, plugins, and member clones.
 
 ```sh
 rnex fix [options]
@@ -138,27 +138,37 @@ rnex fix [options]
 #### What it reconciles:
 1. **Version Upgrade Check**: If workspace configuration version is older than running CLI, prompts to upgrade non-destructively.
 2. **Git Ignore**: Ensures `repos/`, `.rnex/`, and local config files are ignored, stripping legacy counters.
-3. **Routing Instructions**: Replaces or inserts the delimited Repo Nexus routing block in `AGENTS.md`, `CLAUDE.md`, etc.
-4. **Prompts Synchronization**: Copies standard workflow prompts into `.rnex/prompts/`.
+3. **Routing Instructions**: Replaces or inserts the delimited Repo Nexus routing block in `AGENTS.md` and active provider instruction files (`CLAUDE.md`, `GEMINI.md`, `.cursorrules`, `.windsurfrules`).
+4. **Skills & Workflows Synchronization**: Copies base workflows to `.rnex/workflows/`, base skills to `.rnex/skills/`, and purges any legacy `.rnex/prompts/`.
 5. **Git Hooks**: Re-syncs hook scripts in `.rnex/hooks/` if active.
-6. **Plugins**: Scopes plugin templates, instructions, and rules to `.rnex/plugins/<plugin>/`.
-7. **Member Repositories**: Ensures member `.rnex/` directories exist where enabled.
-8. **VS Code / Cursor Workspace**: Regenerates folder mappings in the `.code-workspace` file.
+6. **Plugins**: Scopes plugin templates, instructions, rules, workflows, skills, and agents to `.rnex/plugins/<plugin>/`.
+7. **AI Provider Prompts**: Mirrors operational prompts to enabled provider locations (`.github/prompts/`, `.claude/commands/`, etc.).
+8. **Member Repositories**: Ensures member `.rnex/` directories exist where enabled.
+9. **VS Code / Cursor Workspace**: Regenerates folder mappings in the `.code-workspace` file.
 
 ---
 
 ### `rnex update` (alias: `upgrade`)
 
-Safely updates an existing workspace's configuration schema and routing instructions to match the currently installed CLI version as part of the unified `rnex fix` reconciliation process.
+Runs version verification and invokes the unified `rnex fix` reconciliation engine to upgrade workspace configuration and routing instructions to match the currently installed CLI version.
 
 ```sh
-rnex update [-y]
+rnex update [options]
+rnex upgrade [options]
 ```
 
-- Compares `version:` in `rnex.yaml` with the running `rnex` CLI version.
-- Non-destructively upgrades the configuration schema and inserts newly introduced keys while strictly preserving existing comments, indentation, and repository declarations.
-- Reconciles AI instructions, active provider plugins, and workspace routing in a single execution.
-- `rnex update` and `rnex upgrade` are aliases that invoke the unified `rnex fix` workflow.
+#### Options:
+- `-y`, `--yes`: Automatically confirm configuration schema upgrades without interactive prompts.
+- `-q`, `--quiet`: Quiet mode; suppresses non-error informational messages.
+
+#### Relationship with `rnex fix`:
+- **Integrated Architecture**: `rnex update` is part of the `rnex fix` command family. Configuration schema upgrades and workspace reconciliation are handled in a single unified workflow.
+- **Upfront Version Diagnostics**: Checks `version:` in `rnex.yaml` against the installed CLI version:
+  - If identical, reports that the workspace is already up to date.
+  - If older, runs schema migration and full workspace reconciliation.
+  - If newer, notifies that the workspace was created by a newer CLI version.
+- **Non-Destructive Migration**: Automatically updates `version:` to the current CLI version and injects any newly added configuration options (e.g. `code_workspace`, `git_hooks`, `plugins`) while strictly preserving existing comments, indentation, custom plugins, and member repository definitions.
+- **Full Reconciliation Pass**: Concludes by executing the complete `rnex fix` workflow—re-generating routing instructions in `AGENTS.md` and provider files, syncing skills, workflows, plugin scopes, Git hooks, and member repository scaffolding.
 
 ---
 
@@ -372,19 +382,16 @@ rnex plugin <list|info|enable|disable> [options] [name]
 
 ---
 
-## Standardized Prompts Catalog
+## Standardized Workflows & Skills Catalog
 
-Repo Nexus provides a standardized suite of operational prompt templates in `toolkit/prompts/` that sync to `.rnex/prompts/` during `rnex fix` or `rnex init`.
+Repo Nexus provides a standardized suite of operational skills and workflows in `.rnex/skills/` and `.rnex/workflows/`. AI assistants inspect these directly as routed by `AGENTS.md`. When provider plugins (e.g. `copilot`, `claude`) are active with `prompts: true`, human-facing operational prompt entry points are mirrored to provider directories:
 
-AI assistants navigate workflows via the catalog index at `.rnex/prompts/index.md`:
-
-| Prompt File | Purpose |
+| Workflow / Skill | Purpose |
 |:---|:---|
-| [`index.md`](../toolkit/prompts/index.md) | Master catalog indexing all available workflows and prompts. |
-| [`rnex-cross-repo-feature.md`](../toolkit/prompts/rnex-cross-repo-feature.md) | Structured workflow for implementing cross-cutting features across multiple repos. |
-| [`rnex-workspace-audit.md`](../toolkit/prompts/rnex-workspace-audit.md) | Health, git dirty status, branch tracking, and configuration audit workflow. |
-| [`rnex-wiki-ingest.md`](../toolkit/prompts/rnex-wiki-ingest.md) | Autonomous ingestion of source docs from `/raw/` into Karpathy LLM Wiki pages. |
-| [`rnex-wiki-lint.md`](../toolkit/prompts/rnex-wiki-lint.md) | Link validation, backlink (`mentioned_in`) recalculation, and index rebuilding. |
+| [`rnex-cross-repo-feature`](../toolkit/workflows/rnex-cross-repo-feature.md) | Structured workflow for implementing cross-cutting features across multiple repos. |
+| [`rnex-workspace-audit`](../toolkit/workflows/rnex-workspace-audit.md) | Health, git dirty status, branch tracking, and configuration audit workflow. |
+| [`rnex-wiki-ingest`](../toolkit/plugins/karpathy-llm/workflows/rnex-wiki-ingest.md) | Autonomous ingestion of source docs into atomic Karpathy LLM Wiki pages. |
+| [`rnex-wiki-lint`](../toolkit/plugins/karpathy-llm/workflows/rnex-wiki-lint.md) | Link validation, backlink (`mentioned_in`) recalculation, and index rebuilding. |
 
 ---
 

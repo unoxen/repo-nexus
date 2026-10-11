@@ -1,13 +1,13 @@
 # Repo Nexus Workspace Audit Workflow
 
-Use this prompt to audit workspace configuration integrity, member repository git statuses, and active plugin states.
+Use this workflow to audit workspace configuration integrity, member repository git statuses, and active plugin states.
 
 ---
 
 ## 1. Configuration & Health Audit
 1. Run `rnex status` to inspect:
    - Configuration files (`rnex.yaml` and `.local.rnex.yaml`).
-   - Main AI instructions file existence and routing markers.
+   - Main AI instructions file (`AGENTS.md`) and routing markers.
    - VS Code / Cursor `.code-workspace` synchronization.
    - Git ignore status for `repos/`, `.rnex/`, and local overrides.
    - Active plugins and member repository registry.

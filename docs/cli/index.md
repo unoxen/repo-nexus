@@ -14,7 +14,7 @@ description: Fast reference cheatsheet for rnex commands, global options, enviro
 | [`rnex init`](workspace.md#rnex-init) | Workspace | Initialize a new Repo Nexus workspace. |
 | [`rnex status`](workspace.md#rnex-status) | Workspace | Inspect workspace health, clones, and AI instructions. |
 | [`rnex fix` / `sync`](workspace.md#rnex-fix-alias-sync) | Workspace | Reconcile config, routing, prompts, and plugins. |
-| [`rnex update` / `upgrade`](workspace.md#rnex-update-alias-upgrade) | Workspace | Safely upgrade workspace schema to installed CLI version. |
+| [`rnex update` / `upgrade`](workspace.md#rnex-update-alias-upgrade) | Workspace | Part of fix: verify version, upgrade schema, and reconcile workspace. |
 | [`rnex install`](workspace.md#rnex-install) | Workspace | Symlink `rnex` to `~/.local/bin`. |
 | [`rnex completion`](workspace.md#rnex-completion) | Workspace | Generate shell auto-completion for Zsh, Bash, or Fish. |
 | [`rnex version`](workspace.md#rnex-version) | Workspace | Display current installed CLI version. |

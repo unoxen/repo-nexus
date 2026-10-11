@@ -73,45 +73,45 @@ git_hooks: true
 #   rnex plugin info <name>          # View plugin details & configurable options
 #
 # Built-in plugins:
-#   copilot        — GitHub Copilot integration: mirrors operational prompts, skills,
-#                    agents, and synthesized instructions into .github/
-#   claude         — Anthropic Claude Code integration: maintains CLAUDE.md instructions
-#                    and mirrors commands, prompts, skills, and agents into .claude/
-#   gemini         — Google Gemini / Antigravity integration: maintains GEMINI.md instructions
-#                    and mirrors prompts, skills, and agents into .gemini/
-#   cursor         — Cursor IDE integration: maintains .cursorrules / .cursor/rules/
-#                    and mirrors prompts, skills, and agents into .cursor/
-#   windsurf       — Windsurf IDE integration: maintains .windsurfrules
-#                    and mirrors prompts, skills, and agents into .windsurf/
+#   copilot        — GitHub Copilot integration: natively reads AGENTS.md all the time;
+#                    mirrors operational prompts to .github/prompts/
+#   claude         — Anthropic Claude Code integration: manages CLAUDE.md (Claude Code prioritizes
+#                    CLAUDE.md and only falls back to AGENTS.md when absent); mirrors commands to .claude/commands/
+#   gemini         — Google Gemini / Antigravity integration: manages GEMINI.md; mirrors prompts to .gemini/prompts/
+#   cursor         — Cursor IDE integration: manages .cursorrules & .cursor/rules/; mirrors prompts to .cursor/prompts/
+#   windsurf       — Windsurf IDE integration: manages .windsurfrules; mirrors prompts to .windsurf/prompts/
 #   karpathy-llm   — Andrej Karpathy's agent behavioral principles,
 #                    context engineering guidelines, and LLM Wiki architecture
+#
+# Note on AI Architecture:
+#   AGENTS.md at workspace root is the universal cross-tool standard. Assistants that read AGENTS.md
+#   all the time (such as Copilot) need no separate top-level instructions file. Assistants with native
+#   formats (Claude with CLAUDE.md, Gemini with GEMINI.md, Cursor with .cursorrules, Windsurf with .windsurfrules)
+#   have their instruction files maintained when their plugin is enabled (instructions: true).
+#   Operational skills, workflows, rules, and subagents live self-contained inside .rnex/ and active
+#   plugin directories (.rnex/plugins/) and are never mirrored to external provider folders.
+#   Provider plugins only mirror user-facing prompts/workflows into IDE-specific prompt locations.
 
 plugins:
   # copilot:
   #   prompts: true        # mirror prompts to .github/prompts/*.prompt.md (default: true)
-  #   skills: true         # mirror skills to .github/skills/<name>/SKILL.md (default: true)
-  #   instructions: true   # mirror instructions to .github/copilot-instructions.md (default: true)
-  #   agents: true         # mirror custom agents to .github/agents/*.agent.md (default: true)
+  #   workflows: true      # mirror workflows as prompts (default: true)
   # claude:
-  #   instructions: true   # maintain routing in CLAUDE.md (default: true)
-  #   prompts: true        # mirror commands & prompts to .claude/commands/ (default: true)
-  #   skills: true         # mirror skills to .claude/skills/ (default: true)
-  #   agents: true         # mirror custom agents to .claude/agents/ (default: true)
+  #   instructions: true   # sync routing instructions to CLAUDE.md (default: true)
+  #   prompts: true        # mirror prompts & commands to .claude/commands/ (default: true)
+  #   workflows: true      # mirror workflows as prompts (default: true)
   # gemini:
-  #   instructions: true   # maintain routing in GEMINI.md (default: true)
-  #   prompts: true        # mirror prompts to .gemini/prompts/ (default: true)
-  #   skills: true         # mirror skills to .gemini/skills/ (default: true)
-  #   agents: true         # mirror custom agents to .gemini/agents/ (default: true)
+  #   instructions: true   # sync routing instructions to GEMINI.md (default: true)
+  #   prompts: true        # mirror prompts to .gemini/prompts/*.prompt.md (default: true)
+  #   workflows: true      # mirror workflows as prompts (default: true)
   # cursor:
-  #   instructions: true   # maintain routing in .cursorrules & .cursor/rules/ (default: true)
-  #   prompts: true        # mirror prompts to .cursor/prompts/ (default: true)
-  #   skills: true         # mirror skills to .cursor/skills/ (default: true)
-  #   agents: true         # mirror custom agents to .cursor/agents/ (default: true)
+  #   instructions: true   # sync routing instructions to .cursorrules and .cursor/rules/ (default: true)
+  #   prompts: true        # mirror prompts to .cursor/prompts/*.md (default: true)
+  #   workflows: true      # mirror workflows as prompts (default: true)
   # windsurf:
-  #   instructions: true   # maintain routing in .windsurfrules (default: true)
-  #   prompts: true        # mirror prompts to .windsurf/prompts/ (default: true)
-  #   skills: true         # mirror skills to .windsurf/skills/ (default: true)
-  #   agents: true         # mirror custom agents to .windsurf/agents/ (default: true)
+  #   instructions: true   # sync routing instructions to .windsurfrules (default: true)
+  #   prompts: true        # mirror prompts to .windsurf/prompts/*.md (default: true)
+  #   workflows: true      # mirror workflows as prompts (default: true)
   # karpathy-llm:
   #   wiki_dir: wiki              # Directory for curated atomic markdown pages (default: wiki)
   #   raw_dir: raw                # Append-only directory for unmodified intake documents (default: raw)

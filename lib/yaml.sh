@@ -124,33 +124,39 @@ provider_option_enabled() {
 
 copilot_plugin_enabled() { provider_plugin_enabled "copilot"; }
 copilot_prompts_enabled() { provider_option_enabled "copilot" "prompts"; }
-copilot_skills_enabled() { provider_option_enabled "copilot" "skills"; }
-copilot_instructions_enabled() { provider_option_enabled "copilot" "instructions"; }
-copilot_agents_enabled() { provider_option_enabled "copilot" "agents"; }
+copilot_workflows_enabled() { provider_option_enabled "copilot" "workflows"; }
+copilot_skills_enabled() { return 1; }
+copilot_instructions_enabled() { return 1; }
+copilot_agents_enabled() { return 1; }
+copilot_agents_as_skills_enabled() { return 1; }
 
 claude_plugin_enabled() { provider_plugin_enabled "claude"; }
-claude_prompts_enabled() { provider_option_enabled "claude" "prompts"; }
-claude_skills_enabled() { provider_option_enabled "claude" "skills"; }
 claude_instructions_enabled() { provider_option_enabled "claude" "instructions"; }
-claude_agents_enabled() { provider_option_enabled "claude" "agents"; }
+claude_prompts_enabled() { provider_option_enabled "claude" "prompts"; }
+claude_workflows_enabled() { provider_option_enabled "claude" "workflows"; }
+claude_skills_enabled() { return 1; }
+claude_agents_enabled() { return 1; }
 
 gemini_plugin_enabled() { provider_plugin_enabled "gemini"; }
-gemini_prompts_enabled() { provider_option_enabled "gemini" "prompts"; }
-gemini_skills_enabled() { provider_option_enabled "gemini" "skills"; }
 gemini_instructions_enabled() { provider_option_enabled "gemini" "instructions"; }
-gemini_agents_enabled() { provider_option_enabled "gemini" "agents"; }
+gemini_prompts_enabled() { provider_option_enabled "gemini" "prompts"; }
+gemini_workflows_enabled() { provider_option_enabled "gemini" "workflows"; }
+gemini_skills_enabled() { return 1; }
+gemini_agents_enabled() { return 1; }
 
 cursor_plugin_enabled() { provider_plugin_enabled "cursor"; }
-cursor_prompts_enabled() { provider_option_enabled "cursor" "prompts"; }
-cursor_skills_enabled() { provider_option_enabled "cursor" "skills"; }
 cursor_instructions_enabled() { provider_option_enabled "cursor" "instructions"; }
-cursor_agents_enabled() { provider_option_enabled "cursor" "agents"; }
+cursor_prompts_enabled() { provider_option_enabled "cursor" "prompts"; }
+cursor_workflows_enabled() { provider_option_enabled "cursor" "workflows"; }
+cursor_skills_enabled() { return 1; }
+cursor_agents_enabled() { return 1; }
 
 windsurf_plugin_enabled() { provider_plugin_enabled "windsurf"; }
-windsurf_prompts_enabled() { provider_option_enabled "windsurf" "prompts"; }
-windsurf_skills_enabled() { provider_option_enabled "windsurf" "skills"; }
 windsurf_instructions_enabled() { provider_option_enabled "windsurf" "instructions"; }
-windsurf_agents_enabled() { provider_option_enabled "windsurf" "agents"; }
+windsurf_prompts_enabled() { provider_option_enabled "windsurf" "prompts"; }
+windsurf_workflows_enabled() { provider_option_enabled "windsurf" "workflows"; }
+windsurf_skills_enabled() { return 1; }
+windsurf_agents_enabled() { return 1; }
 
 has_ai_provider_plugin_enabled() {
   for _ap in claude gemini cursor windsurf; do
@@ -275,14 +281,14 @@ yaml_enable_plugin() {
         awk -v name="$_name" '
           /^plugins:[ ]*$/ || /^plugins:[ ]*#/ {
             print
-            printf "  %s:\n    prompts: true\n    skills: true\n    instructions: true\n    agents: true\n", name
+            printf "  %s:\n    prompts: true\n    workflows: true\n", name
             added=1
             next
           }
           { print }
           END {
             if (!added) {
-              printf "plugins:\n  %s:\n    prompts: true\n    skills: true\n    instructions: true\n    agents: true\n", name
+              printf "plugins:\n  %s:\n    prompts: true\n    workflows: true\n", name
             }
           }
         ' "$_target_file" > "$_tmp" && mv "$_tmp" "$_target_file"
@@ -291,14 +297,14 @@ yaml_enable_plugin() {
         awk -v name="$_name" '
           /^plugins:[ ]*$/ || /^plugins:[ ]*#/ {
             print
-            printf "  %s:\n    instructions: true\n    prompts: true\n    skills: true\n    agents: true\n", name
+            printf "  %s:\n    instructions: true\n    prompts: true\n    workflows: true\n", name
             added=1
             next
           }
           { print }
           END {
             if (!added) {
-              printf "plugins:\n  %s:\n    instructions: true\n    prompts: true\n    skills: true\n    agents: true\n", name
+              printf "plugins:\n  %s:\n    instructions: true\n    prompts: true\n    workflows: true\n", name
             }
           }
         ' "$_target_file" > "$_tmp" && mv "$_tmp" "$_target_file"

@@ -1,31 +1,31 @@
 ---
 title: Windsurf IDE Plugin
-description: Integrate Windsurf IDE and Cascade with Repo Nexus, maintain .windsurfrules and mirror prompts to .windsurf/.
+description: Integrate Windsurf IDE and Cascade with Repo Nexus, mirroring operational prompts to .windsurf/prompts/.
 ---
 
 # Windsurf IDE Plugin
 
 The **`windsurf`** plugin integrates Codeium's Windsurf IDE and Cascade into a Repo Nexus Virtual Meta-Repo.
 
-It maintains instructions in `.windsurfrules` and synchronizes prompt templates, skills, and agents into `.windsurf/` for contextual pair programming and multi-repo workflows.
+All AI assistants in Repo Nexus share [`AGENTS.md`](file:///Users/admin/Projects/ai/repo-nexus/AGENTS.md) at the workspace root as the single universal source of truth for routing. The `windsurf` plugin mirrors human-facing operational prompts into `.windsurf/prompts/*.md` with standard YAML frontmatter.
+
+Operational skills, workflows, rules, and subagents remain cleanly self-contained within `.rnex/` and active plugin directories (`.rnex/plugins/<plugin-name>/`).
 
 ---
 
 ## Capabilities
 
-1. **Instructions Integration (`.windsurfrules`)**:
-   - Generates and maintains `.windsurfrules` with multi-repo orientation protocols and workspace context.
-   - Windsurf Cascade automatically loads `.windsurfrules` on session startup to identify repository boundaries and active member projects.
-   - Protected by `<!-- REPO-NEXUS:START -->` and `<!-- REPO-NEXUS:END -->` delimiters.
+1. **Native Instructions Support via `.windsurfrules`**:
+   - Synchronizes Repo Nexus routing instructions to `.windsurfrules` when `instructions: true` (default).
+   - Preserves user custom rules and custom sections in `.windsurfrules`.
 
 2. **Prompts Mirroring (`.windsurf/prompts/*.md`)**:
-   - Converts standard Repo Nexus operational prompts (`rnex-cross-repo-feature`, `rnex-workspace-audit`, etc.) and active plugins' workflows into Windsurf prompt files with YAML frontmatter.
+   - Converts standard Repo Nexus operational prompts (`rnex-cross-repo-feature`, `rnex-workspace-audit`) and active plugins' workflows into Windsurf prompt files with YAML frontmatter.
 
-3. **Agent Skills (`.windsurf/skills/<name>/SKILL.md`)**:
-   - Mirrors skills from active plugins (like `wiki-ingest` and `wiki-lint` from [`karpathy-llm`](karpathy-llm.md)) into `.windsurf/skills/<name>/SKILL.md`.
-
-4. **Custom Agents (`.windsurf/agents/*.md`)**:
-   - Mirrors custom agents declared in active plugins (e.g., `wiki-curator.md`) into `.windsurf/agents/`.
+3. **Subagent & Skill Execution**:
+   - Skills reside under `.rnex/skills/` and `.rnex/plugins/<plugin>/skills/`.
+   - Workflows reside under `.rnex/workflows/` and `.rnex/plugins/<plugin>/workflows/`.
+   - Subagents reside under `.rnex/agents/` and `.rnex/plugins/<plugin>/agents/` and are invoked as subagents without external mirroring.
 
 ---
 
@@ -41,12 +41,11 @@ rnex plugin enable windsurf
 rnex plugin enable --local windsurf
 ```
 
-Or initialize a new workspace for Windsurf:
+Or initialize a new workspace with Windsurf integration pre-configured:
 
 ```sh
 rnex init --windsurf
 ```
-*(When `--windsurf` is passed to `rnex init`, `.windsurfrules` is generated instead of `AGENTS.md`.)*
 
 ---
 
@@ -57,19 +56,17 @@ Configure options under `plugins.windsurf` in `rnex.yaml` or `.local.rnex.yaml`:
 ```yaml
 plugins:
   windsurf:
-    instructions: true   # Maintain routing in .windsurfrules (default: true)
+    instructions: true   # Sync routing instructions to .windsurfrules (default: true)
     prompts: true        # Mirror prompts to .windsurf/prompts/ (default: true)
-    skills: true         # Mirror skills to .windsurf/skills/<name>/SKILL.md (default: true)
-    agents: true         # Mirror custom agents to .windsurf/agents/*.md (default: true)
+    workflows: true      # Mirror active plugin workflows as prompts (default: true)
     enabled: true        # Set to false to disable
 ```
 
 | Option | Type | Default | Description |
 |:---|:---|:---|:---|
-| `instructions` | boolean | `true` | Maintain delimited routing in `.windsurfrules`. |
+| `instructions` | boolean | `true` | Merge routing instructions into `.windsurfrules`. |
 | `prompts` | boolean | `true` | Mirror prompts to `.windsurf/prompts/*.md`. |
-| `skills` | boolean | `true` | Mirror skills into `.windsurf/skills/<name>/SKILL.md`. |
-| `agents` | boolean | `true` | Mirror custom agents into `.windsurf/agents/*.md`. |
+| `workflows` | boolean | `true` | Mirror plugin workflows into `.windsurf/prompts/*.md`. |
 | `enabled` | boolean | `true` | Enable or disable the plugin. Overridable in `.local.rnex.yaml`. |
 
 ---
@@ -80,20 +77,19 @@ When `windsurf` is enabled with functional plugins like `karpathy-llm`, it gener
 
 ```text
 my-workspace/
-├── .windsurfrules                     # Multi-repo routing context for Windsurf & Cascade
+├── AGENTS.md                          # Universal workspace instructions & routing
+├── .windsurfrules                     # Windsurf instructions (if instructions: true)
 ├── .windsurf/
-│   ├── prompts/
-│   │   ├── rnex-cross-repo-feature.md
-│   │   ├── rnex-workspace-audit.md
-│   │   ├── wiki-ingest.md
-│   │   └── wiki-lint.md
-│   ├── skills/
-│   │   ├── wiki-ingest/
-│   │   │   └── SKILL.md
-│   │   └── wiki-lint/
-│   │       └── SKILL.md
-│   └── agents/
-│       └── wiki-curator.md
+│   └── prompts/
+│       ├── rnex-cross-repo-feature.md
+│       ├── rnex-workspace-audit.md
+│       ├── rnex-wiki-ingest.md
+│       └── rnex-wiki-lint.md
+├── .rnex/
+│   ├── skills/                        # Workspace operational skills
+│   ├── workflows/                     # Workspace workflows
+│   └── plugins/
+│       └── karpathy-llm/              # Scoped plugin skills, workflows, and agents
 └── rnex.yaml
 ```
 
@@ -108,6 +104,6 @@ rnex plugin disable windsurf
 ```
 
 Repo Nexus automatically performs surgical cleanup:
-- Strips Repo Nexus instructions from `.windsurfrules` (or removes it if empty).
-- Removes auto-generated prompts, skills, and agents under `.windsurf/`.
+- Removes auto-generated prompts under `.windsurf/prompts/`.
+- Cleans up any legacy mirrored skills, agents, or instructions blocks.
 - Developer-created custom files under `.windsurf/` are preserved.

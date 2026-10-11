@@ -127,8 +127,9 @@ sync_plugins() {
     if [ "$_pdir" != "$_scoped_dest" ]; then
       mkdir -p "$_scoped_dest"
 
-      # Deterministically sync plugin asset directories (clean stale files)
-      for _sub in rules workflows instructions prompts skills agents templates; do
+      # Deterministically sync plugin asset directories (clean stale files; no prompts in plugins)
+      rm -rf "${_scoped_dest:?}/prompts" 2>/dev/null || true
+      for _sub in rules workflows instructions skills agents templates; do
         if [ -d "$_pdir/$_sub" ]; then
           rm -rf "${_scoped_dest:?}/$_sub"
           mkdir -p "$_scoped_dest/$_sub"

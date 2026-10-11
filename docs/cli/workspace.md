@@ -26,11 +26,11 @@ rnex init [options] [directory]
 | `--code-workspace` | | boolean \| string | `false` | Enable VS Code multi-root workspace file. Pass string for custom name. |
 | `--hooks` | | boolean | `true` (if git) | Force-enable automated Git hooks setup during initialization. |
 | `--no-hooks` | | boolean | `false` | Skip Git hooks configuration during initialization. |
-| `--claude` | | boolean | `false` | Enable Claude Code plugin (`CLAUDE.md` and `.claude/`). |
-| `--copilot` | | boolean | `false` | Enable GitHub Copilot plugin (`.github/`). |
-| `--cursor` | | boolean | `false` | Enable Cursor plugin (`.cursorrules` and `.cursor/rules/`). |
-| `--gemini` | | boolean | `false` | Enable Google Gemini plugin (`GEMINI.md` and `.gemini/`). |
-| `--windsurf` | | boolean | `false` | Enable Windsurf plugin (`.windsurfrules` and `.windsurf/`). |
+| `--claude` | | boolean | `false` | Enable Claude Code plugin (mirrors prompts to `.claude/commands/`). |
+| `--copilot` | | boolean | `false` | Enable GitHub Copilot plugin (mirrors prompts to `.github/prompts/`). |
+| `--cursor` | | boolean | `false` | Enable Cursor plugin (mirrors prompts to `.cursor/prompts/`). |
+| `--gemini` | | boolean | `false` | Enable Google Gemini plugin (mirrors prompts to `.gemini/prompts/`). |
+| `--windsurf` | | boolean | `false` | Enable Windsurf plugin (mirrors prompts to `.windsurf/prompts/`). |
 
 ### Examples
 ```bash
@@ -55,7 +55,7 @@ rnex status
 ### What It Reports
 * **Configuration State**: Location and schema version of `rnex.yaml` and `.local.rnex.yaml`.
 * **Git Status**: Validation that `.gitignore` ignores `repos/` and local files, and whether `core.hooksPath` points to `.rnex/hooks`.
-* **AI Routing**: Existence of delimited routing blocks in `AGENTS.md`, `CLAUDE.md`, etc.
+* **AI Routing**: Status of universal `AGENTS.md`, `.rnex/skills/`, `.rnex/workflows/`, and provider prompts directories.
 * **Member Clones**: Health, branches, and `.rnex` state of every member repository.
 
 ```bash
@@ -72,7 +72,7 @@ rnex status
 
 ## `rnex fix` (alias: `sync`)
 
-Reconciles workspace configuration, AI routing blocks, prompts catalog, active plugins, and member clones.
+Reconciles workspace configuration, AI routing blocks, skills, workflows, active plugins, and member clones.
 
 ### Syntax
 ```sh
@@ -88,26 +88,39 @@ rnex sync [options]
 | `--upgrade` | | boolean | `false` | Explicitly trigger version upgrade reconciliation. |
 
 ### Reconciliation Actions
-1. Upgrades configuration schema non-destructively if older version detected.
+1. Upgrades configuration schema non-destructively if an older version is detected.
 2. Re-verifies `.gitignore` rules for `repos/` and local configs.
-3. Inserts or updates delimited routing blocks (`<!-- REPO-NEXUS:START -->` ... `<!-- REPO-NEXUS:END -->`).
-4. Syncs standardized workflow prompts into `.rnex/prompts/`.
-5. Re-syncs enabled plugin assets into `.rnex/plugins/` and member `repos/<name>/.rnex/`.
+3. Inserts or updates delimited routing blocks in universal `AGENTS.md` and active provider instruction files (`CLAUDE.md`, `GEMINI.md`, `.cursorrules`, `.windsurfrules`).
+4. Syncs base workflows to `.rnex/workflows/` and base skills to `.rnex/skills/`, purging any legacy `.rnex/prompts/`.
+5. Mirrors operational prompts to enabled AI providers (`.github/prompts/`, `.claude/commands/`, etc.).
+6. Re-syncs enabled plugin assets into `.rnex/plugins/` and member `repos/<name>/.rnex/`.
+7. Reconciles automated Git hooks in `.rnex/hooks/` against `git_hooks` config.
+8. Re-creates member `.rnex/` scaffolding in active repositories.
+9. Updates multi-root `.code-workspace` folder mappings if configured.
 
 ---
 
 ## `rnex update` (alias: `upgrade`)
 
-Safely updates an existing workspace's configuration schema and routing instructions to match the currently installed CLI version.
+Runs version verification and invokes the unified `rnex fix` reconciliation engine to upgrade workspace configuration and routing instructions to match the installed CLI version.
 
 ### Syntax
 ```sh
-rnex update [-y]
-rnex upgrade [-y]
+rnex update [options]
+rnex upgrade [options]
 ```
 
-* Upgrades configuration schema without wiping comments or indentation.
-* Reconciles AI instructions and active provider plugins in a single run.
+### Options
+| Option | Shorthand | Type | Default | Description |
+|:---|:---|:---|:---|:---|
+| `--yes` | `-y` | boolean | `false` | Automatically confirm schema upgrades if prompted. |
+| `--quiet` | `-q` | boolean | `false` | Suppress non-error informational messages. |
+
+### Relationship with `rnex fix`
+`rnex update` is part of the `rnex fix` command family:
+* **Upfront Version Diagnostics**: Compares `version:` in `rnex.yaml` against the installed CLI version. If already matching, it reports that the workspace is up to date.
+* **Unified Reconciliation**: Delegates directly to `rnex fix`, ensuring configuration schema upgrades, instruction updates (`AGENTS.md`, provider files), skills/workflows sync, and plugin reconciliation occur in a single, idempotent pass.
+* **Non-Destructive Migration**: Upgrades schema keys while preserving comments, indentation, and custom configurations.
 
 ---
 

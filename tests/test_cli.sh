@@ -287,36 +287,39 @@ pass
 
 # --------------------------------------------------------------------------
 # --------------------------------------------------------------------------
-run_test "Enabling provider plugin creates provider instructions instead of AGENTS.md"
+run_test "Enabling provider plugin creates instruction file, preserves AGENTS.md, and mirrors prompts only"
 # Enable gemini plugin in workspace
 "$TEST_WORKSPACE/rnex" plugin enable gemini >/dev/null
-[ -f "$TEST_WORKSPACE/GEMINI.md" ] || { fail "GEMINI.md was not created when gemini plugin enabled"; exit 1; }
-grep -q "Multi-Repo AI Workspace Context" "$TEST_WORKSPACE/GEMINI.md" || { fail "GEMINI.md missing routing instructions"; exit 1; }
+[ -f "$TEST_WORKSPACE/AGENTS.md" ] || { fail "AGENTS.md missing when gemini enabled"; exit 1; }
+[ -f "$TEST_WORKSPACE/GEMINI.md" ] || { fail "GEMINI.md missing when gemini enabled"; exit 1; }
+[ ! -d "$TEST_WORKSPACE/.gemini/skills" ] || { fail ".gemini/skills should not be created"; exit 1; }
 [ -d "$TEST_WORKSPACE/.gemini/prompts" ] || { fail ".gemini/prompts not created"; exit 1; }
-# Remove AGENTS.md to simulate user wanting GEMINI.md instead of AGENTS.md
-rm -f "$TEST_WORKSPACE/AGENTS.md"
-"$TEST_WORKSPACE/rnex" fix >/dev/null
-[ ! -f "$TEST_WORKSPACE/AGENTS.md" ] || { fail "rnex fix recreated AGENTS.md when gemini plugin is active"; exit 1; }
+[ -f "$TEST_WORKSPACE/.gemini/prompts/rnex-cross-repo-feature.prompt.md" ] || { fail "rnex-cross-repo-feature missing in .gemini/prompts"; exit 1; }
 _status_fixed="$("$TEST_WORKSPACE/rnex" status 2>&1)"
-echo "$_status_fixed" | grep "GEMINI.md" | grep -q "Gemini instructions" || { fail "Status did not show GEMINI.md as Gemini instructions"; exit 1; }
-# Disable gemini plugin; AGENTS.md should be restored as default
+echo "$_status_fixed" | grep -q "AGENTS.md" || { fail "Status did not show AGENTS.md"; exit 1; }
+echo "$_status_fixed" | grep -q "GEMINI.md" || { fail "Status did not show GEMINI.md"; exit 1; }
+echo "$_status_fixed" | grep -q ".gemini/prompts/" || { fail "Status did not show .gemini/prompts/"; exit 1; }
+# Disable gemini plugin; AGENTS.md should remain intact, GEMINI.md cleaned, and prompts cleaned up
 "$TEST_WORKSPACE/rnex" plugin disable gemini >/dev/null
-[ ! -f "$TEST_WORKSPACE/GEMINI.md" ] || { fail "GEMINI.md was not removed after disabling plugin"; exit 1; }
-[ -f "$TEST_WORKSPACE/AGENTS.md" ] || { fail "AGENTS.md was not restored after disabling provider plugin"; exit 1; }
+[ ! -f "$TEST_WORKSPACE/GEMINI.md" ] || { fail "GEMINI.md was not cleaned up"; exit 1; }
+[ -f "$TEST_WORKSPACE/AGENTS.md" ] || { fail "AGENTS.md was removed after disabling provider plugin"; exit 1; }
+[ ! -f "$TEST_WORKSPACE/.gemini/prompts/rnex-cross-repo-feature.prompt.md" ] || { fail "Prompts not cleaned up after disabling gemini"; exit 1; }
 pass
 
 # --------------------------------------------------------------------------
-run_test "Init with --claude flag sets up Claude plugin and CLAUDE.md instead of AGENTS.md"
+run_test "Init with --claude flag sets up Claude plugin, universal AGENTS.md, CLAUDE.md, and mirrors prompts only"
 TEST_AI_WS="$TEST_TMP/ai-workspace"
 mkdir -p "$TEST_AI_WS"
 cp "$CLI" "$TEST_AI_WS/rnex"
 chmod +x "$TEST_AI_WS/rnex"
 cp -r "$DIR/toolkit" "$TEST_AI_WS/toolkit"
 "$TEST_AI_WS/rnex" init -y --claude "$TEST_AI_WS" >/dev/null
-[ -f "$TEST_AI_WS/CLAUDE.md" ] || { fail "CLAUDE.md was not created by init --claude"; exit 1; }
-[ ! -f "$TEST_AI_WS/AGENTS.md" ] || { fail "AGENTS.md should not be created when --claude is used"; exit 1; }
+[ -f "$TEST_AI_WS/AGENTS.md" ] || { fail "AGENTS.md missing after init --claude"; exit 1; }
+[ -f "$TEST_AI_WS/CLAUDE.md" ] || { fail "CLAUDE.md missing after init --claude"; exit 1; }
+[ ! -d "$TEST_AI_WS/.claude/skills" ] || { fail ".claude/skills should not be created"; exit 1; }
 grep -q "claude:" "$TEST_AI_WS/rnex.yaml" || { fail "claude plugin not enabled in rnex.yaml"; exit 1; }
 ! grep -q "ai_instructions:" "$TEST_AI_WS/rnex.yaml" || { fail "ai_instructions should not be present in rnex.yaml"; exit 1; }
+grep -q "Multi-Repo AI Workspace Context" "$TEST_AI_WS/AGENTS.md" || { fail "AGENTS.md missing routing rules"; exit 1; }
 grep -q "Multi-Repo AI Workspace Context" "$TEST_AI_WS/CLAUDE.md" || { fail "CLAUDE.md missing routing rules"; exit 1; }
 [ -d "$TEST_AI_WS/.claude/commands" ] || { fail ".claude/commands not created"; exit 1; }
 [ -f "$TEST_AI_WS/.claude/commands/rnex-cross-repo-feature.md" ] || { fail "rnex-cross-repo-feature.md missing in .claude/commands"; exit 1; }
@@ -384,7 +387,8 @@ grep -q "version:[ ]*$_ws_cli_ver" "$TEST_UPGRADE_WS/rnex.yaml" || { fail "rnex 
 grep -q "code_workspace:[ ]*false" "$TEST_UPGRADE_WS/rnex.yaml" || { fail "rnex fix -y did not populate missing code_workspace key"; exit 1; }
 grep -q "git_hooks:[ ]*false" "$TEST_UPGRADE_WS/rnex.yaml" || { fail "rnex fix -y did not populate missing git_hooks key"; exit 1; }
 grep -q "Mandatory Session Startup" "$TEST_UPGRADE_WS/AGENTS.md" || { fail "AGENTS.md not updated with Mandatory Session Startup"; exit 1; }
-grep -q "\.rnex/prompts/index\.md" "$TEST_UPGRADE_WS/AGENTS.md" || { fail "AGENTS.md missing prompts catalog reference"; exit 1; }
+grep -q "\.rnex/skills/" "$TEST_UPGRADE_WS/AGENTS.md" || { fail "AGENTS.md missing skills reference"; exit 1; }
+grep -q "Subagents" "$TEST_UPGRADE_WS/AGENTS.md" || { fail "AGENTS.md missing subagents reference"; exit 1; }
 
 # Running update when already at current version should report up to date
 _up_out="$(cd "$TEST_UPGRADE_WS" && ./rnex update 2>&1)"
@@ -392,18 +396,20 @@ echo "$_up_out" | grep -q "already up to date" || { fail "rnex update did not re
 pass
 
 # --------------------------------------------------------------------------
-run_test "Standardized prompts synced to .rnex/prompts/ and indexed"
-[ -d "$TEST_WORKSPACE/.rnex/prompts" ] || { fail ".rnex/prompts directory was not created"; exit 1; }
-[ -f "$TEST_WORKSPACE/.rnex/prompts/index.md" ] || { fail "prompts/index.md missing"; exit 1; }
-[ -f "$TEST_WORKSPACE/.rnex/prompts/rnex-cross-repo-feature.md" ] || { fail "rnex-cross-repo-feature.md missing"; exit 1; }
-[ -f "$TEST_WORKSPACE/.rnex/prompts/rnex-workspace-audit.md" ] || { fail "rnex-workspace-audit.md missing"; exit 1; }
-[ -f "$TEST_WORKSPACE/.rnex/prompts/rnex-wiki-ingest.md" ] || { fail "rnex-wiki-ingest.md missing"; exit 1; }
-[ -f "$TEST_WORKSPACE/.rnex/prompts/rnex-wiki-lint.md" ] || { fail "rnex-wiki-lint.md missing"; exit 1; }
+run_test "Standardized skills and workflows synced to .rnex/skills/ and .rnex/workflows/, prompts purged from .rnex/"
+[ ! -d "$TEST_WORKSPACE/.rnex/prompts" ] || { fail ".rnex/prompts directory should not exist"; exit 1; }
+[ -d "$TEST_WORKSPACE/.rnex/skills" ] || { fail ".rnex/skills directory was not created"; exit 1; }
+[ -f "$TEST_WORKSPACE/.rnex/skills/rnex-cross-repo-feature/SKILL.md" ] || { fail "rnex-cross-repo-feature skill missing"; exit 1; }
+[ -f "$TEST_WORKSPACE/.rnex/skills/rnex-workspace-audit/SKILL.md" ] || { fail "rnex-workspace-audit skill missing"; exit 1; }
+[ -d "$TEST_WORKSPACE/.rnex/workflows" ] || { fail ".rnex/workflows directory was not created"; exit 1; }
+[ -f "$TEST_WORKSPACE/.rnex/workflows/rnex-cross-repo-feature.md" ] || { fail "rnex-cross-repo-feature workflow missing"; exit 1; }
+[ -f "$TEST_WORKSPACE/.rnex/workflows/rnex-workspace-audit.md" ] || { fail "rnex-workspace-audit workflow missing"; exit 1; }
 # Verify member repos do not contain workspace prompts
 [ ! -d "$TEST_WORKSPACE/repos/test-app/.rnex/prompts" ] || { fail "Workspace prompts leaked into member repo .rnex"; exit 1; }
-# Verify status highlights prompts catalog
+# Verify status highlights workspace skills and workflows
 _status_prompts="$("$TEST_WORKSPACE/rnex" status 2>&1)"
-echo "$_status_prompts" | grep -q "prompts catalog" || { fail "Status does not highlight prompts catalog"; exit 1; }
+echo "$_status_prompts" | grep -q "workspace skills" || { fail "Status does not highlight workspace skills"; exit 1; }
+echo "$_status_prompts" | grep -q "workspace workflows" || { fail "Status does not highlight workspace workflows"; exit 1; }
 pass
 
 # --------------------------------------------------------------------------
@@ -571,133 +577,91 @@ git -C "$TEST_COPILOT_WS" init -q
 "$TEST_COPILOT_WS/rnex" init -y --copilot "$TEST_COPILOT_WS" >/dev/null
 grep -q "copilot:" "$TEST_COPILOT_WS/rnex.yaml" || { fail "init --copilot did not write copilot plugin to rnex.yaml"; exit 1; }
 
+# Universal AGENTS.md created
+[ -f "$TEST_COPILOT_WS/AGENTS.md" ] || { fail "AGENTS.md missing after init --copilot"; exit 1; }
+
 # Verify .github/prompts/*.prompt.md files created with frontmatter
 [ -d "$TEST_COPILOT_WS/.github/prompts" ] || { fail ".github/prompts directory missing"; exit 1; }
 [ -f "$TEST_COPILOT_WS/.github/prompts/rnex-cross-repo-feature.prompt.md" ] || { fail "rnex-cross-repo-feature.prompt.md missing"; exit 1; }
 grep -q "name: rnex-cross-repo-feature" "$TEST_COPILOT_WS/.github/prompts/rnex-cross-repo-feature.prompt.md" || { fail "Missing frontmatter in .prompt.md"; exit 1; }
 
-# Verify .github/skills/rnex-*/SKILL.md created
-[ -d "$TEST_COPILOT_WS/.github/skills/rnex-cross-repo-feature" ] || { fail "rnex-cross-repo-feature skill folder missing"; exit 1; }
-[ -f "$TEST_COPILOT_WS/.github/skills/rnex-cross-repo-feature/SKILL.md" ] || { fail "rnex-cross-repo-feature SKILL.md missing"; exit 1; }
-grep -q "name: rnex-cross-repo-feature" "$TEST_COPILOT_WS/.github/skills/rnex-cross-repo-feature/SKILL.md" || { fail "Missing frontmatter in SKILL.md"; exit 1; }
-
-# Verify .github/copilot-instructions.md created
-[ -f "$TEST_COPILOT_WS/.github/copilot-instructions.md" ] || { fail ".github/copilot-instructions.md missing"; exit 1; }
-grep -q "REPO-NEXUS:START" "$TEST_COPILOT_WS/.github/copilot-instructions.md" || { fail "Missing REPO-NEXUS:START marker in copilot-instructions.md"; exit 1; }
+# Verify .github/skills/, .github/agents/, and .github/copilot-instructions.md are NOT created
+[ ! -d "$TEST_COPILOT_WS/.github/skills" ] || { fail ".github/skills folder should not be created"; exit 1; }
+[ ! -d "$TEST_COPILOT_WS/.github/agents" ] || { fail ".github/agents folder should not be created"; exit 1; }
+[ ! -f "$TEST_COPILOT_WS/.github/copilot-instructions.md" ] || { fail ".github/copilot-instructions.md should not be created"; exit 1; }
 
 # Verify plugin list and plugin info
 _cop_list="$(cd "$TEST_COPILOT_WS" && ./rnex plugin list 2>&1)"
 echo "$_cop_list" | grep -q "copilot" || { fail "plugin list did not list copilot plugin"; exit 1; }
 _cop_info="$(cd "$TEST_COPILOT_WS" && ./rnex plugin info copilot 2>&1)"
 echo "$_cop_info" | grep -q "prompts: true|false" || { fail "plugin info did not show prompts option"; exit 1; }
-echo "$_cop_info" | grep -q "instructions: true|false" || { fail "plugin info did not show instructions option"; exit 1; }
-echo "$_cop_info" | grep -q "agents: true|false" || { fail "plugin info did not show agents option"; exit 1; }
+echo "$_cop_info" | grep -q "workflows: true|false" || { fail "plugin info did not show workflows option"; exit 1; }
 
-# Verify status highlights copilot plugin, options, and routing
+# Verify status highlights copilot plugin, options, and prompts directory
 _cop_status="$(cd "$TEST_COPILOT_WS" && ./rnex status 2>&1)"
 echo "$_cop_status" | grep -q "copilot" || { fail "Status did not report copilot plugin"; exit 1; }
 echo "$_cop_status" | grep -q ".github/prompts/" || { fail "Status did not report .github/prompts/"; exit 1; }
-echo "$_cop_status" | grep -q ".github/copilot-instructions.md" || { fail "Status did not report .github/copilot-instructions.md"; exit 1; }
-echo "$_cop_status" | grep -q "instructions=true" || { fail "Status did not report copilot instructions option"; exit 1; }
+echo "$_cop_status" | grep -q "prompts=true" || { fail "Status did not report copilot prompts option"; exit 1; }
 
-# Enable karpathy-llm alongside copilot to test decoupled cross-plugin mirroring
+# Enable karpathy-llm alongside copilot: workflows mirrored as prompts only
 (cd "$TEST_COPILOT_WS" && ./rnex plugin enable karpathy-llm >/dev/null)
 (cd "$TEST_COPILOT_WS" && ./rnex fix -y --quiet >/dev/null)
 
-# Verify Karpathy prompts mirrored to .github/prompts/
+# Verify Karpathy workflows mirrored to .github/prompts/
 [ -f "$TEST_COPILOT_WS/.github/prompts/rnex-wiki-ingest.prompt.md" ] || { fail "rnex-wiki-ingest prompt not mirrored to .github/prompts/"; exit 1; }
 [ -f "$TEST_COPILOT_WS/.github/prompts/rnex-wiki-lint.prompt.md" ] || { fail "rnex-wiki-lint prompt not mirrored to .github/prompts/"; exit 1; }
 grep -q "name: rnex-wiki-ingest" "$TEST_COPILOT_WS/.github/prompts/rnex-wiki-ingest.prompt.md" || { fail "rnex-wiki-ingest prompt missing frontmatter"; exit 1; }
 
-# Verify Karpathy skills mirrored to .github/skills/
-[ -f "$TEST_COPILOT_WS/.github/skills/rnex-wiki-ingest/SKILL.md" ] || { fail "rnex-wiki-ingest skill not mirrored to .github/skills/"; exit 1; }
-[ -f "$TEST_COPILOT_WS/.github/skills/rnex-wiki-lint/SKILL.md" ] || { fail "rnex-wiki-lint skill not mirrored to .github/skills/"; exit 1; }
+# Verify skills and agents are NOT mirrored
+[ ! -d "$TEST_COPILOT_WS/.github/skills" ] || { fail "Skills mirrored to .github/skills"; exit 1; }
+[ ! -d "$TEST_COPILOT_WS/.github/agents" ] || { fail "Agents mirrored to .github/agents"; exit 1; }
 
-# Verify Karpathy agents mirrored to .github/agents/ and skills
-[ -f "$TEST_COPILOT_WS/.github/agents/rnex-wiki-curator.agent.md" ] || { fail "rnex-wiki-curator agent not mirrored to .github/agents/"; exit 1; }
-[ -f "$TEST_COPILOT_WS/.github/skills/rnex-wiki-curator/SKILL.md" ] || { fail "rnex-wiki-curator skill not mirrored to .github/skills/"; exit 1; }
-
-# Verify Karpathy rules and instructions merged into .github/copilot-instructions.md
-grep -q "Plugin: karpathy-llm" "$TEST_COPILOT_WS/.github/copilot-instructions.md" || { fail "Karpathy guidelines missing from copilot-instructions.md"; exit 1; }
-
-# Test preserving user custom content outside REPO-NEXUS delimiters in copilot-instructions.md
-printf '# Custom Developer Section\n\n' | cat - "$TEST_COPILOT_WS/.github/copilot-instructions.md" > "$TEST_COPILOT_WS/.github/copilot-instructions.md.tmp"
-mv "$TEST_COPILOT_WS/.github/copilot-instructions.md.tmp" "$TEST_COPILOT_WS/.github/copilot-instructions.md"
-(cd "$TEST_COPILOT_WS" && ./rnex fix -y --quiet >/dev/null)
-grep -q "Custom Developer Section" "$TEST_COPILOT_WS/.github/copilot-instructions.md" || { fail "User custom content lost during copilot-instructions sync"; exit 1; }
-grep -q "Plugin: karpathy-llm" "$TEST_COPILOT_WS/.github/copilot-instructions.md" || { fail "Plugin instructions lost during copilot-instructions sync"; exit 1; }
-
-# Granular option test: disable instructions only (prompts, skills, agents remain)
-cat <<EOF > "$TEST_COPILOT_WS/rnex.yaml"
-version: 0.5.6
-repos_dir: ./repos
-code_workspace: false
-git_hooks: false
-plugins:
-  copilot:
-    prompts: true
-    skills: true
-    instructions: false
-    agents: true
-  karpathy-llm: {}
-repos:
-EOF
-(cd "$TEST_COPILOT_WS" && ./rnex fix -y --quiet >/dev/null)
-grep -q "Custom Developer Section" "$TEST_COPILOT_WS/.github/copilot-instructions.md" || { fail "Custom developer instructions lost when instructions: false"; exit 1; }
-grep -q "REPO-NEXUS:START" "$TEST_COPILOT_WS/.github/copilot-instructions.md" && { fail "REPO-NEXUS block not removed when instructions: false"; exit 1; }
-
-# Granular option test: disable agents only
-cat <<EOF > "$TEST_COPILOT_WS/rnex.yaml"
-version: 0.5.6
-repos_dir: ./repos
-code_workspace: false
-git_hooks: false
-plugins:
-  copilot:
-    prompts: true
-    skills: true
-    instructions: false
-    agents: false
-  karpathy-llm: {}
-repos:
-EOF
-(cd "$TEST_COPILOT_WS" && ./rnex fix -y --quiet >/dev/null)
-[ ! -d "$TEST_COPILOT_WS/.github/agents" ] || { fail "Agents directory not cleaned up when agents: false"; exit 1; }
-
-# Granular option test: disable prompts only (skills remain)
-cat <<EOF > "$TEST_COPILOT_WS/rnex.yaml"
-version: 0.5.6
-repos_dir: ./repos
-code_workspace: false
-git_hooks: false
-plugins:
-  copilot:
-    prompts: false
-    skills: true
-    instructions: false
-    agents: false
-  karpathy-llm: {}
-repos:
-EOF
-(cd "$TEST_COPILOT_WS" && ./rnex fix -y --quiet >/dev/null)
-[ ! -f "$TEST_COPILOT_WS/.github/prompts/rnex-cross-repo-feature.prompt.md" ] || { fail "Base prompts not cleaned up when prompts: false"; exit 1; }
-[ ! -f "$TEST_COPILOT_WS/.github/prompts/rnex-wiki-ingest.prompt.md" ] || { fail "Plugin prompts not cleaned up when prompts: false"; exit 1; }
-[ -f "$TEST_COPILOT_WS/.github/skills/rnex-cross-repo-feature/SKILL.md" ] || { fail "Skills removed when skills: true"; exit 1; }
-
-# Add custom user skill, agent, and prompt to verify preservation
+# Add custom user skill, agent, prompt, and custom developer copilot-instructions.md
 mkdir -p "$TEST_COPILOT_WS/.github/skills/user-custom-skill"
 echo "# User Skill" > "$TEST_COPILOT_WS/.github/skills/user-custom-skill/SKILL.md"
 mkdir -p "$TEST_COPILOT_WS/.github/agents"
 echo "# User Agent" > "$TEST_COPILOT_WS/.github/agents/user-custom.agent.md"
 mkdir -p "$TEST_COPILOT_WS/.github/prompts"
 echo "# User Prompt" > "$TEST_COPILOT_WS/.github/prompts/user-custom.prompt.md"
+echo "# Custom Developer Section" > "$TEST_COPILOT_WS/.github/copilot-instructions.md"
+
+# Simulate legacy mirrored skill and verify rnex fix purges it while keeping user files
+mkdir -p "$TEST_COPILOT_WS/.github/skills/rnex-cross-repo-feature"
+echo "# Legacy Mirrored" > "$TEST_COPILOT_WS/.github/skills/rnex-cross-repo-feature/SKILL.md"
+mkdir -p "$TEST_COPILOT_WS/.github/agents"
+echo "# Legacy Agent" > "$TEST_COPILOT_WS/.github/agents/rnex-wiki-curator.agent.md"
+
+(cd "$TEST_COPILOT_WS" && ./rnex fix -y --quiet >/dev/null)
+[ ! -d "$TEST_COPILOT_WS/.github/skills/rnex-cross-repo-feature" ] || { fail "Legacy mirrored skill not cleaned up by fix"; exit 1; }
+[ ! -f "$TEST_COPILOT_WS/.github/agents/rnex-wiki-curator.agent.md" ] || { fail "Legacy mirrored agent not cleaned up by fix"; exit 1; }
+[ -f "$TEST_COPILOT_WS/.github/skills/user-custom-skill/SKILL.md" ] || { fail "User custom skill deleted"; exit 1; }
+[ -f "$TEST_COPILOT_WS/.github/agents/user-custom.agent.md" ] || { fail "User custom agent deleted"; exit 1; }
+[ -f "$TEST_COPILOT_WS/.github/prompts/user-custom.prompt.md" ] || { fail "User custom prompt deleted"; exit 1; }
+[ -f "$TEST_COPILOT_WS/.github/copilot-instructions.md" ] || { fail "User copilot-instructions.md deleted"; exit 1; }
+grep -q "Custom Developer Section" "$TEST_COPILOT_WS/.github/copilot-instructions.md" || { fail "User content lost in copilot-instructions.md"; exit 1; }
+
+# Disable prompts option in rnex.yaml
+cat <<EOF > "$TEST_COPILOT_WS/rnex.yaml"
+version: 0.5.15
+repos_dir: ./repos
+code_workspace: false
+git_hooks: false
+plugins:
+  copilot:
+    prompts: false
+    workflows: false
+  karpathy-llm: {}
+repos:
+EOF
+(cd "$TEST_COPILOT_WS" && ./rnex fix -y --quiet >/dev/null)
+[ ! -f "$TEST_COPILOT_WS/.github/prompts/rnex-cross-repo-feature.prompt.md" ] || { fail "Base prompts not cleaned up when prompts: false"; exit 1; }
+[ ! -f "$TEST_COPILOT_WS/.github/prompts/rnex-wiki-ingest.prompt.md" ] || { fail "Plugin prompts not cleaned up when prompts: false"; exit 1; }
+[ -f "$TEST_COPILOT_WS/.github/prompts/user-custom.prompt.md" ] || { fail "User prompt deleted when prompts: false"; exit 1; }
 
 # Disable copilot via local override and run fix
 (cd "$TEST_COPILOT_WS" && ./rnex plugin disable --local copilot >/dev/null)
 (cd "$TEST_COPILOT_WS" && ./rnex fix -y --quiet >/dev/null)
 [ ! -f "$TEST_COPILOT_WS/.github/prompts/rnex-cross-repo-feature.prompt.md" ] || { fail "Prompts not cleaned up when copilot disabled locally"; exit 1; }
-[ ! -d "$TEST_COPILOT_WS/.github/skills/rnex-cross-repo-feature" ] || { fail "Skills not cleaned up when copilot disabled locally"; exit 1; }
-[ ! -f "$TEST_COPILOT_WS/.github/agents/rnex-wiki-curator.agent.md" ] || { fail "Plugin agents not cleaned up when copilot disabled locally"; exit 1; }
 
 # Verify custom user skills, agents, and prompts are preserved
 [ -f "$TEST_COPILOT_WS/.github/skills/user-custom-skill/SKILL.md" ] || { fail "User custom skill deleted when copilot disabled"; exit 1; }
@@ -721,17 +685,17 @@ git -C "$TEST_PROVIDERS_WS" init -q
 
 # Init workspace with claude flag
 "$TEST_PROVIDERS_WS/rnex" init -y --claude "$TEST_PROVIDERS_WS" >/dev/null
+[ -f "$TEST_PROVIDERS_WS/AGENTS.md" ] || { fail "AGENTS.md missing after init --claude"; exit 1; }
 [ -f "$TEST_PROVIDERS_WS/CLAUDE.md" ] || { fail "CLAUDE.md missing after init --claude"; exit 1; }
-[ ! -f "$TEST_PROVIDERS_WS/AGENTS.md" ] || { fail "AGENTS.md should not be created when claude plugin is enabled"; exit 1; }
+[ ! -d "$TEST_PROVIDERS_WS/.claude/skills" ] || { fail ".claude/skills should not be created"; exit 1; }
 [ -f "$TEST_PROVIDERS_WS/.claude/commands/rnex-cross-repo-feature.md" ] || { fail "Claude commands missing"; exit 1; }
-[ -f "$TEST_PROVIDERS_WS/.claude/skills/rnex-cross-repo-feature/SKILL.md" ] || { fail "Claude skills missing"; exit 1; }
 
 # Enable gemini plugin
 (cd "$TEST_PROVIDERS_WS" && ./rnex plugin enable gemini >/dev/null)
 (cd "$TEST_PROVIDERS_WS" && ./rnex fix -y --quiet >/dev/null)
 [ -f "$TEST_PROVIDERS_WS/GEMINI.md" ] || { fail "GEMINI.md missing after enabling gemini"; exit 1; }
 [ -f "$TEST_PROVIDERS_WS/.gemini/prompts/rnex-cross-repo-feature.prompt.md" ] || { fail "Gemini prompts missing"; exit 1; }
-[ -f "$TEST_PROVIDERS_WS/.gemini/skills/rnex-cross-repo-feature/SKILL.md" ] || { fail "Gemini skills missing"; exit 1; }
+[ ! -d "$TEST_PROVIDERS_WS/.gemini/skills" ] || { fail "Gemini skills should not be created"; exit 1; }
 
 # Enable cursor and windsurf plugins
 (cd "$TEST_PROVIDERS_WS" && ./rnex plugin enable cursor >/dev/null)
@@ -740,17 +704,22 @@ git -C "$TEST_PROVIDERS_WS" init -q
 [ -f "$TEST_PROVIDERS_WS/.cursorrules" ] || { fail ".cursorrules missing after enabling cursor"; exit 1; }
 [ -f "$TEST_PROVIDERS_WS/.cursor/rules/rnex-context.mdc" ] || { fail ".cursor/rules/rnex-context.mdc missing"; exit 1; }
 [ -f "$TEST_PROVIDERS_WS/.cursor/prompts/rnex-cross-repo-feature.md" ] || { fail "Cursor prompts missing"; exit 1; }
-[ -f "$TEST_PROVIDERS_WS/.cursor/skills/rnex-cross-repo-feature/SKILL.md" ] || { fail "Cursor skills missing"; exit 1; }
+[ ! -d "$TEST_PROVIDERS_WS/.cursor/skills" ] || { fail "Cursor skills should not be created"; exit 1; }
 [ -f "$TEST_PROVIDERS_WS/.windsurfrules" ] || { fail ".windsurfrules missing after enabling windsurf"; exit 1; }
 [ -f "$TEST_PROVIDERS_WS/.windsurf/prompts/rnex-cross-repo-feature.md" ] || { fail "Windsurf prompts missing"; exit 1; }
-[ -f "$TEST_PROVIDERS_WS/.windsurf/skills/rnex-cross-repo-feature/SKILL.md" ] || { fail "Windsurf skills missing"; exit 1; }
+[ ! -d "$TEST_PROVIDERS_WS/.windsurf/skills" ] || { fail "Windsurf skills should not be created"; exit 1; }
 
 # Status command reports all enabled AI providers
 _prov_status="$(cd "$TEST_PROVIDERS_WS" && ./rnex status 2>&1)"
+echo "$_prov_status" | grep -q "AGENTS.md" || { fail "Status did not report AGENTS.md"; exit 1; }
 echo "$_prov_status" | grep -q "CLAUDE.md" || { fail "Status did not report CLAUDE.md"; exit 1; }
 echo "$_prov_status" | grep -q "GEMINI.md" || { fail "Status did not report GEMINI.md"; exit 1; }
 echo "$_prov_status" | grep -q "\.cursorrules" || { fail "Status did not report .cursorrules"; exit 1; }
 echo "$_prov_status" | grep -q "\.windsurfrules" || { fail "Status did not report .windsurfrules"; exit 1; }
+echo "$_prov_status" | grep -q ".claude/commands/" || { fail "Status did not report .claude/commands/"; exit 1; }
+echo "$_prov_status" | grep -q ".gemini/prompts/" || { fail "Status did not report .gemini/prompts/"; exit 1; }
+echo "$_prov_status" | grep -q ".cursor/prompts/" || { fail "Status did not report .cursor/prompts/"; exit 1; }
+echo "$_prov_status" | grep -q ".windsurf/prompts/" || { fail "Status did not report .windsurf/prompts/"; exit 1; }
 
 # Test user custom content preservation across provider instructions
 printf "# Custom Section\n" >> "$TEST_PROVIDERS_WS/CLAUDE.md"
@@ -759,9 +728,13 @@ printf "# Cursor Custom\n" >> "$TEST_PROVIDERS_WS/.cursorrules"
 printf "# Windsurf Custom\n" >> "$TEST_PROVIDERS_WS/.windsurfrules"
 (cd "$TEST_PROVIDERS_WS" && ./rnex fix -y --quiet >/dev/null)
 grep -q "# Custom Section" "$TEST_PROVIDERS_WS/CLAUDE.md" || { fail "Custom section lost in CLAUDE.md"; exit 1; }
+grep -q "REPO-NEXUS:START" "$TEST_PROVIDERS_WS/CLAUDE.md" || { fail "REPO-NEXUS block missing in CLAUDE.md"; exit 1; }
 grep -q "# Gemini Custom" "$TEST_PROVIDERS_WS/GEMINI.md" || { fail "Custom section lost in GEMINI.md"; exit 1; }
+grep -q "REPO-NEXUS:START" "$TEST_PROVIDERS_WS/GEMINI.md" || { fail "REPO-NEXUS block missing in GEMINI.md"; exit 1; }
 grep -q "# Cursor Custom" "$TEST_PROVIDERS_WS/.cursorrules" || { fail "Custom section lost in .cursorrules"; exit 1; }
+grep -q "REPO-NEXUS:START" "$TEST_PROVIDERS_WS/.cursorrules" || { fail "REPO-NEXUS block missing in .cursorrules"; exit 1; }
 grep -q "# Windsurf Custom" "$TEST_PROVIDERS_WS/.windsurfrules" || { fail "Custom section lost in .windsurfrules"; exit 1; }
+grep -q "REPO-NEXUS:START" "$TEST_PROVIDERS_WS/.windsurfrules" || { fail "REPO-NEXUS block missing in .windsurfrules"; exit 1; }
 
 # Add custom user skills, prompts, agents, and extra files across all providers
 mkdir -p "$TEST_PROVIDERS_WS/.claude/skills/my-claude-skill"
@@ -796,25 +769,20 @@ echo "custom" > "$TEST_PROVIDERS_WS/.windsurf/prompts/my-prompt.md"
 mkdir -p "$TEST_PROVIDERS_WS/.windsurf/agents"
 echo "custom" > "$TEST_PROVIDERS_WS/.windsurf/agents/my-agent.md"
 
-# Disable all provider plugins and verify AGENTS.md restored as fallback default
+# Disable all provider plugins and verify AGENTS.md remains intact
 (cd "$TEST_PROVIDERS_WS" && ./rnex plugin disable claude >/dev/null)
 (cd "$TEST_PROVIDERS_WS" && ./rnex plugin disable gemini >/dev/null)
 (cd "$TEST_PROVIDERS_WS" && ./rnex plugin disable cursor >/dev/null)
 (cd "$TEST_PROVIDERS_WS" && ./rnex plugin disable windsurf >/dev/null)
 (cd "$TEST_PROVIDERS_WS" && ./rnex fix -y --quiet >/dev/null)
 
-[ -f "$TEST_PROVIDERS_WS/AGENTS.md" ] || { fail "AGENTS.md not restored when all AI provider plugins disabled"; exit 1; }
+[ -f "$TEST_PROVIDERS_WS/AGENTS.md" ] || { fail "AGENTS.md not preserved when all AI provider plugins disabled"; exit 1; }
 
 # Verify Repo Nexus generated assets were cleaned up
 [ ! -f "$TEST_PROVIDERS_WS/.claude/commands/rnex-cross-repo-feature.md" ] || { fail "rnex prompt not cleaned from claude"; exit 1; }
-[ ! -f "$TEST_PROVIDERS_WS/.claude/skills/rnex-cross-repo-feature/SKILL.md" ] || { fail "rnex skill not cleaned from claude"; exit 1; }
 [ ! -f "$TEST_PROVIDERS_WS/.gemini/prompts/rnex-cross-repo-feature.prompt.md" ] || { fail "rnex prompt not cleaned from gemini"; exit 1; }
-[ ! -f "$TEST_PROVIDERS_WS/.gemini/skills/rnex-cross-repo-feature/SKILL.md" ] || { fail "rnex skill not cleaned from gemini"; exit 1; }
-[ ! -f "$TEST_PROVIDERS_WS/.cursor/rules/rnex-context.mdc" ] || { fail "rnex-context.mdc not cleaned from cursor"; exit 1; }
 [ ! -f "$TEST_PROVIDERS_WS/.cursor/prompts/rnex-cross-repo-feature.md" ] || { fail "rnex prompt not cleaned from cursor"; exit 1; }
-[ ! -f "$TEST_PROVIDERS_WS/.cursor/skills/rnex-cross-repo-feature/SKILL.md" ] || { fail "rnex skill not cleaned from cursor"; exit 1; }
 [ ! -f "$TEST_PROVIDERS_WS/.windsurf/prompts/rnex-cross-repo-feature.md" ] || { fail "rnex prompt not cleaned from windsurf"; exit 1; }
-[ ! -f "$TEST_PROVIDERS_WS/.windsurf/skills/rnex-cross-repo-feature/SKILL.md" ] || { fail "rnex skill not cleaned from windsurf"; exit 1; }
 
 # Verify ALL user custom files were preserved
 [ -f "$TEST_PROVIDERS_WS/.claude/skills/my-claude-skill/SKILL.md" ] || { fail "User skill deleted from .claude"; exit 1; }

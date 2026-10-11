@@ -102,19 +102,19 @@ cmd_init() {
   else
     _init_plugins=""
     if [ "$_cli_copilot" = "true" ]; then
-      _init_plugins="${_init_plugins}  copilot:\n    prompts: true\n    skills: true\n    instructions: true\n    agents: true\n"
+      _init_plugins="${_init_plugins}  copilot:\n    prompts: true\n    workflows: true\n"
     fi
     if [ "$_cli_claude" = "true" ]; then
-      _init_plugins="${_init_plugins}  claude:\n    instructions: true\n    prompts: true\n    skills: true\n    agents: true\n"
+      _init_plugins="${_init_plugins}  claude:\n    instructions: true\n    prompts: true\n    workflows: true\n"
     fi
     if [ "$_cli_gemini" = "true" ]; then
-      _init_plugins="${_init_plugins}  gemini:\n    instructions: true\n    prompts: true\n    skills: true\n    agents: true\n"
+      _init_plugins="${_init_plugins}  gemini:\n    instructions: true\n    prompts: true\n    workflows: true\n"
     fi
     if [ "$_cli_cursor" = "true" ]; then
-      _init_plugins="${_init_plugins}  cursor:\n    instructions: true\n    prompts: true\n    skills: true\n    agents: true\n"
+      _init_plugins="${_init_plugins}  cursor:\n    instructions: true\n    prompts: true\n    workflows: true\n"
     fi
     if [ "$_cli_windsurf" = "true" ]; then
-      _init_plugins="${_init_plugins}  windsurf:\n    instructions: true\n    prompts: true\n    skills: true\n    agents: true\n"
+      _init_plugins="${_init_plugins}  windsurf:\n    instructions: true\n    prompts: true\n    workflows: true\n"
     fi
 
     cat > "$_target_yaml" <<YAML_EOF
@@ -143,10 +143,7 @@ YAML_EOF
   fi
 
   # ---- 2. Merge routing instructions into AI instructions files ------------
-  if [ "$_cli_claude" != "true" ] && [ "$_cli_gemini" != "true" ] && [ "$_cli_cursor" != "true" ] && [ "$_cli_windsurf" != "true" ]; then
-    merge_rnex_instructions "$_init_dir/AGENTS.md"
-  fi
-  [ -f "$_init_dir/AGENTS.md" ] && merge_rnex_instructions "$_init_dir/AGENTS.md"
+  merge_rnex_instructions "$_init_dir/AGENTS.md"
   [ -f "$_init_dir/CLAUDE.md" ] && merge_rnex_instructions "$_init_dir/CLAUDE.md"
   [ -f "$_init_dir/GEMINI.md" ] && merge_rnex_instructions "$_init_dir/GEMINI.md"
   [ -f "$_init_dir/.cursorrules" ] && merge_rnex_instructions "$_init_dir/.cursorrules"
@@ -157,10 +154,9 @@ YAML_EOF
   mkdir -p "$_repos_dir"
   [ -f "$_repos_dir/.gitkeep" ] || touch "$_repos_dir/.gitkeep"
 
-  # ---- 4. Create internal .rnex directory and sync prompts ----------------
+  # ---- 4. Create internal .rnex directory and sync base assets -------------
   mkdir -p "$_init_dir/.rnex"
   mkdir -p "$_init_dir/.rnex/plugins"
-  mkdir -p "$_init_dir/.rnex/prompts"
   _orig_nexus="$NEXUS_DIR"
   _orig_yaml="$WORKSPACE_YAML"
   _orig_local_yaml="$WORKSPACE_LOCAL_YAML"

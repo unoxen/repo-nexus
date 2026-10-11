@@ -5,7 +5,7 @@ description: Guide to building, structuring, and distributing custom Repo Nexus 
 
 # Authoring Custom Plugins
 
-Repo Nexus allows teams to author custom plugins containing specialized coding conventions, prompt libraries, agent skills, and scaffolding templates.
+Repo Nexus allows teams to author custom plugins containing specialized coding conventions, agent workflows, skills, subagents, and scaffolding templates.
 
 ---
 
@@ -24,17 +24,9 @@ Every plugin requires a `plugin.yaml` manifest in its root directory:
 ```yaml
 name: team-conventions
 version: 1.0.0
-description: Organization architecture guidelines, prompt suites, and agent skills
+description: Organization architecture guidelines, workflows, and subagents
 author: Architecture Team <arch@my-org.com>
 homepage: https://github.com/my-org/team-conventions
-
-# Destination mappings for instructions
-instructions:
-  - instructions/guidelines.md: .rnex/plugins/team-conventions/instructions/guidelines.md
-
-# Destination mappings for coding rules
-rules:
-  - rules/typescript.md: .rnex/plugins/team-conventions/rules/typescript.md
 
 # Scaffolding templates copied into the workspace
 templates:
@@ -49,13 +41,15 @@ A plugin can contain any of the following standard directories:
 
 | Subdirectory | Purpose | Behavior |
 |:---|:---|:---|
-| `instructions/` | Markdown guidelines referenced by AI agents. | Mirrored to AI provider instructions. |
-| `rules/` | Coding rules and architectural constraints. | Injected into provider rule systems (e.g. `.cursor/rules/`). |
-| `prompts/` | Operational task prompts (`*.md`). | Automatically indexed in `.rnex/prompts/index.md` and mirrored to `.github/prompts/` and `.claude/`. |
-| `skills/` | Agent skills with `SKILL.md` definitions. | Mirrored to `.github/skills/`, `.claude/skills/`, `.gemini/skills/`. |
-| `agents/` | Custom sub-agent declarations (`*.agent.md`). | Mirrored to provider agent folders. |
-| `workflows/` | Multi-step agent procedural checklists. | Tracked under plugin scope. |
+| `workflows/` | Multi-step agent procedural checklists and workflows. | Maintained under `.rnex/plugins/<plugin>/workflows/` and mirrored to provider prompt pickers when `prompts: true`. |
+| `skills/` | Agent skills with `SKILL.md` definitions. | Scoped to `.rnex/plugins/<plugin>/skills/`. Ingested by agents via `AGENTS.md` routing. |
+| `agents/` | Autonomous subagent declarations (`*.agent.md`). | Scoped to `.rnex/plugins/<plugin>/agents/`. Ingested by agents via `AGENTS.md` subagent routing. |
+| `instructions/` | Markdown guidelines and domain principles. | Scoped to `.rnex/plugins/<plugin>/instructions/`. |
+| `rules/` | Coding rules and architectural constraints. | Scoped to `.rnex/plugins/<plugin>/rules/`. |
 | `templates/` | Starter configuration files copied during `rnex fix`. | Copied to mapped paths specified in `templates:`. |
+
+> [!NOTE]
+> All AI assistants share `AGENTS.md` at workspace root. Tools, skills, workflows, and subagents stay inside `.rnex/` and are not mirrored externally. Prompts are exclusively for user invocation through IDE prompt pickers (e.g. `.github/prompts/`, `.claude/commands/`).
 
 ---
 
@@ -66,11 +60,10 @@ A plugin can contain any of the following standard directories:
 3. Enable the plugin in `rnex.yaml`:
    ```yaml
    plugins:
-     my-plugin:
-       enabled: true
+     my-plugin: {}
    ```
 4. Reconcile workspace state:
    ```bash
    rnex fix
    ```
-5. Verify that assets were correctly discovered and mirrored across enabled AI providers.
+5. Verify that assets were correctly scoped into `.rnex/plugins/my-plugin/`.

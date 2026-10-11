@@ -40,14 +40,10 @@ cmd_fix() {
   # 1. Ensure .gitignore ignores repos/, .rnex/, and local configs, and strips legacy counters
   reconcile_gitignore "$NEXUS_DIR"
 
-  # 2. Reconcile instructions in workspace AI files
-  if [ -f "$NEXUS_DIR/AGENTS.md" ]; then
-    merge_rnex_instructions "$NEXUS_DIR/AGENTS.md"
-  elif ! has_ai_provider_plugin_enabled; then
-    merge_rnex_instructions "$NEXUS_DIR/AGENTS.md"
-  fi
+  # 2. Reconcile universal workspace instructions in AGENTS.md
+  merge_rnex_instructions "$NEXUS_DIR/AGENTS.md"
 
-  # 3. Sync standard prompts to .rnex/prompts/
+  # 3. Sync standard skills, workflows, and provider prompts
   sync_prompts
 
   # 4. Reconcile Git hooks according to configuration
