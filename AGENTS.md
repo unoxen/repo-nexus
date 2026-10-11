@@ -3,11 +3,15 @@
 
 This workspace operates as a **Repo Nexus Virtual Meta-Repo** uniting independent repositories.
 
-## Mandatory Session Startup
+## Routing Protocol for AI Assistants
+
+### Mandatory Session Startup
 
 Before answering the first task or making any task-specific tool call in a new session:
 
-1. Read `.local.rnex.yaml` when present, then `rnex.yaml`.
+1. **Read Configuration First (Highest Priority)**: Inspect and read `.local.rnex.yaml` (if present) and `rnex.yaml` to identify workspace structure (`repos_dir`), active member repositories (`repos/`), and enabled plugins.
+   - `.local.rnex.yaml` takes highest priority over `rnex.yaml`.
+   - Repositories are enabled by default unless explicitly marked `enabled: false`. Disabled repositories are excluded from active tasks.
 2. Inspect instructions for every enabled Repo Nexus plugin under `.rnex/plugins/<plugin-name>/`.
 3. If `wiki/` is present: read `wiki/hot.md` and `wiki/index.md` to orient on architecture and domain concepts.
 4. Follow links from the index to wiki pages relevant to the request.

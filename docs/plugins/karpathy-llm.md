@@ -13,13 +13,13 @@ It requires **zero external vector databases, embedding pipelines, or heavy MCP 
 
 ## What It Provides
 
-### 1. The 4 Cardinal Principles for Coding Agents (`rules/behavioral.md`)
+### 1. The 4 Cardinal Principles for Coding Agents (`rules/rnex-behavioral.md`)
 - **Think Before Coding**: State explicit assumptions, formulate the problem clearly, and evaluate trade-offs before touching code.
 - **Simplicity First**: Minimal abstractions, readable implementations, and zero boilerplate bloat. Avoid premature optimization or speculative generalization.
 - **Surgical Changes**: Minimize blast radius. Modify only what is strictly necessary, preserve existing comments/docstrings, and produce clean, reviewable diffs.
 - **Goal-Driven Execution**: Define upfront verification criteria, write/run automated tests, and review diffs rigorously before completing tasks.
 
-### 2. Multi-Repo Context Engineering & Autonomy (`rules/behavioral.md`)
+### 2. Multi-Repo Context Engineering & Autonomy (`rules/rnex-behavioral.md`)
 - Guidelines tailored specifically for multi-repo virtual workspaces:
   - Always read workspace configuration (`.local.rnex.yaml` and `rnex.yaml`) first.
   - Respect member repository autonomy (`repos/<name>/`).
@@ -91,6 +91,10 @@ Configure options under `plugins.karpathy-llm` in `rnex.yaml` or `.local.rnex.ya
 ```yaml
 plugins:
   karpathy-llm:
+    # Directory paths relative to workspace root (defaults shown)
+    wiki_dir: wiki              # Directory for curated atomic markdown pages
+    raw_dir: raw                # Append-only directory for unmodified intake documents
+
     # Automated Git hook trigger for wiki verification
     # Options: git-post-merge, git-post-commit, git-pre-commit, git-pre-push, manual
     lint_trigger: git-post-merge
@@ -104,6 +108,8 @@ plugins:
 
 | Option | Type | Default | Description |
 |:---|:---|:---|:---|
+| `wiki_dir` | string | `wiki` | Directory containing curated atomic markdown pages. |
+| `raw_dir` | string | `raw` | Append-only directory for unmodified source intake documents. |
 | `lint_trigger` | string | `git-post-merge` | Git hook event that triggers wiki change detection (`git-post-merge`, `git-post-commit`, `git-pre-commit`, `git-pre-push`, `manual`). |
 | `notify_on_changes` | boolean | `true` | Show notification banner when changes are committed to `raw/` or `wiki/`. |
 | `enabled` | boolean | `true` | Enable or disable the plugin. Overridable in `.local.rnex.yaml`. |
@@ -140,25 +146,25 @@ my-workspace/
 │   └── plugins/
 │       └── karpathy-llm/
 │           ├── rules/
-│           │   └── behavioral.md    # 4 Cardinal principles & context engineering
+│           │   └── rnex-behavioral.md    # 4 Cardinal principles & context engineering
 │           ├── instructions/
-│           │   └── wiki-architecture.md # Schema, relations, and conventions
+│           │   └── rnex-wiki-architecture.md # Schema, relations, and conventions
 │           ├── workflows/
-│           │   ├── wiki-ingest.md   # Ingestion checklist
-│           │   └── wiki-lint.md     # Lint & integrity checklist
+│           │   ├── rnex-wiki-ingest.md   # Ingestion checklist
+│           │   └── rnex-wiki-lint.md     # Lint & integrity checklist
 │           ├── prompts/
-│           │   ├── wiki-ingest.md
-│           │   └── wiki-lint.md
+│           │   ├── rnex-wiki-ingest.md
+│           │   └── rnex-wiki-lint.md
 │           ├── skills/
-│           │   ├── wiki-ingest/
+│           │   ├── rnex-wiki-ingest/
 │           │   │   └── SKILL.md
-│           │   └── wiki-lint/
+│           │   └── rnex-wiki-lint/
 │           │       └── SKILL.md
 │           ├── agents/
-│           │   └── wiki-curator.agent.md
+│           │   └── rnex-wiki-curator.agent.md
 │           └── templates/
-│               ├── wiki-page.template.md
-│               └── LLM_WIKI.sample.md
+│               ├── rnex-wiki-page.template.md
+│               └── rnex-llm-wiki.sample.md
 └── rnex.yaml
 ```
 
@@ -167,8 +173,8 @@ my-workspace/
 ## Cross-Plugin Provider Mirroring
 
 Because Repo Nexus features decoupled cross-plugin asset discovery:
-- If [`copilot`](copilot.md) is enabled, `wiki-ingest` and `wiki-lint` prompts mirror to `.github/prompts/`, skills mirror to `.github/skills/`, and `wiki-curator.agent.md` mirrors to `.github/agents/`.
-- If [`claude`](claude.md) is enabled, `wiki-ingest` and `wiki-lint` mirror to `.claude/commands/`, `.claude/prompts/`, and `.claude/skills/`.
+- If [`copilot`](copilot.md) is enabled, `rnex-wiki-ingest` and `rnex-wiki-lint` prompts mirror to `.github/prompts/`, skills mirror to `.github/skills/`, and `rnex-wiki-curator.agent.md` mirrors to `.github/agents/`.
+- If [`claude`](claude.md) is enabled, `rnex-wiki-ingest` and `rnex-wiki-lint` mirror to `.claude/commands/`, `.claude/prompts/`, and `.claude/skills/`.
 - If [`gemini`](gemini.md), [`cursor`](cursor.md), or [`windsurf`](windsurf.md) is enabled, prompts, skills, and agents mirror into `.gemini/`, `.cursor/`, and `.windsurf/`.
 
 ---

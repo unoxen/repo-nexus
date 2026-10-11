@@ -22,7 +22,7 @@ _rnex_completions() {
       return 0
       ;;
     plugin)
-      COMPREPLY=( $(compgen -W "list info enable disable" -- "$cur") )
+      COMPREPLY=( $(compgen -W "list info enable install update disable" -- "$cur") )
       return 0
       ;;
     hooks)
@@ -89,7 +89,7 @@ _rnex() {
       case "$words[1]" in
         plugin)
           local -a plugin_cmds
-          plugin_cmds=('list:List plugins' 'info:Show plugin details' 'enable:Enable plugin' 'disable:Disable plugin')
+          plugin_cmds=('list:List plugins' 'info:Show plugin details' 'enable:Enable plugin' 'install:Install/enable plugin' 'update:Update enabled plugin(s)' 'disable:Disable plugin')
           _describe -t plugin_cmds 'plugin command' plugin_cmds
           ;;
         hooks)

@@ -3,39 +3,141 @@
  */
 
 :root {
-  --vp-c-brand-1: #3eaf7c;
-  --vp-c-brand-2: #33996b;
-  --vp-c-brand-3: #287a55;
-  --vp-c-brand-soft: rgba(62, 175, 124, 0.14);
+  --vp-c-brand-1: #10b981;
+  --vp-c-brand-2: #059669;
+  --vp-c-brand-3: #047857;
+  --vp-c-brand-soft: rgba(16, 185, 129, 0.12);
+
+  --vp-font-family-base: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
 }
 
 .dark {
-  --vp-c-brand-1: #42d392;
-  --vp-c-brand-2: #3eaf7c;
-  --vp-c-brand-3: #33996b;
-  --vp-c-brand-soft: rgba(66, 211, 146, 0.16);
+  --vp-c-brand-1: #34d399;
+  --vp-c-brand-2: #10b981;
+  --vp-c-brand-3: #059669;
+  --vp-c-brand-soft: rgba(52, 211, 153, 0.15);
 }
 
 /* Hero Section Enhancements */
 .VPHero .name {
-  background: linear-gradient(120deg, #42d392 30%, #38bdf8);
+  background: linear-gradient(135deg, #34d399 20%, #38bdf8 80%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
+  font-weight: 800;
+  letter-spacing: -0.03em;
 }
 
-/* Clean Terminal / Output styling */
-.vp-doc pre.language-text {
-  background-color: var(--vp-c-bg-alt);
-  border: 1px solid var(--vp-c-divider);
+.VPHero .tagline {
+  max-width: 640px;
+  line-height: 1.6;
 }
 
 /* Feature cards */
 .VPFeature {
+  border-radius: 12px !important;
   border: 1px solid var(--vp-c-divider) !important;
-  transition: border-color 0.25s, transform 0.25s !important;
+  background-color: var(--vp-c-bg-soft) !important;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.25s, box-shadow 0.25s !important;
 }
 
 .VPFeature:hover {
   border-color: var(--vp-c-brand-1) !important;
-  transform: translateY(-2px);
+  transform: translateY(-3px);
+  box-shadow: 0 12px 24px -10px var(--vp-c-brand-soft);
+}
+
+.VPFeature .icon {
+  font-size: 1.75rem;
+  margin-bottom: 0.75rem;
+}
+
+/* Home Quickstart Section */
+.home-quickstart-container {
+  max-width: 900px;
+  margin: 3.5rem auto 5rem;
+  padding: 0 1.5rem;
+}
+
+.home-quickstart-box {
+  background-color: var(--vp-c-bg-soft);
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 14px;
+  padding: 2.25rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+}
+
+.home-quickstart-header {
+  margin-bottom: 1.5rem;
+  text-align: left;
+}
+
+.home-quickstart-badge {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--vp-c-brand-1);
+  background-color: var(--vp-c-brand-soft);
+  padding: 0.2rem 0.6rem;
+  border-radius: 9999px;
+  margin-bottom: 0.75rem;
+}
+
+.home-quickstart-header h2 {
+  margin: 0 0 0.5rem;
+  border-top: none;
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--vp-c-text-1);
+}
+
+.home-quickstart-sub {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--vp-c-text-2);
+  line-height: 1.5;
+}
+
+/* Terminal & Pre Blocks */
+.vp-doc pre.language-text {
+  background-color: var(--vp-c-bg-alt);
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 8px;
+}
+
+.vp-doc div[class*='language-'] {
+  border-radius: 10px;
+}
+
+/* Tables styling */
+.vp-doc table {
+  border-collapse: separate;
+  border-spacing: 0;
+  border-radius: 8px;
+  border: 1px solid var(--vp-c-divider);
+  overflow: hidden;
+  margin: 1.5rem 0;
+  width: 100%;
+}
+
+.vp-doc th {
+  background-color: var(--vp-c-bg-soft);
+  font-weight: 600;
+  color: var(--vp-c-text-1);
+  padding: 0.75rem 1rem;
+}
+
+.vp-doc td {
+  padding: 0.75rem 1rem;
+  border-top: 1px solid var(--vp-c-divider);
+}
+
+.vp-doc tr:hover td {
+  background-color: var(--vp-c-bg-soft);
+}
+
+/* Admonition polish */
+.custom-block {
+  border-radius: 10px;
 }

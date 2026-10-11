@@ -4,4 +4,4 @@ description: Google Gemini and Antigravity integration (maintains GEMINI.md inst
 author: unoxen
 homepage: https://github.com/unoxen/repo-nexus
 instructions:
-  - instructions/gemini-integration.md: .rnex/plugins/gemini/instructions/gemini-integration.md
+  - instructions/rnex-gemini-integration.md: .rnex/plugins/gemini/instructions/rnex-gemini-integration.md

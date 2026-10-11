@@ -40,7 +40,7 @@ jobs:
       - name: Build VitePress Site
         run: npm run docs:build
         env:
-          BASE_URL: /rnex/
+          BASE_URL: /repo-nexus/
 
       - name: Upload Pages Artifact
         uses: actions/upload-pages-artifact@v3

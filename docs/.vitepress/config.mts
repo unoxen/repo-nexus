@@ -5,8 +5,8 @@ export default defineConfig({
   titleTemplate: ':title | rnex',
   description: 'Virtual Meta-Repo Companion for Multi-Repo Workspaces & Scoped AI Context',
 
-  // Dynamic base URL: defaults to '/rnex/' for GitHub Pages, '/' for root/custom domain
-  base: (process.env.BASE_URL as `/${string}/`) || '/rnex/',
+  // Dynamic base URL: defaults to '/repo-nexus/' for GitHub Pages, '/' for root/custom domain
+  base: (process.env.BASE_URL as `/${string}/`) || '/repo-nexus/',
 
   cleanUrls: true,
   lastUpdated: true,
@@ -19,7 +19,7 @@ export default defineConfig({
   ],
 
   sitemap: {
-    hostname: 'https://unoxen.github.io/rnex/'
+    hostname: 'https://unoxen.github.io/repo-nexus/'
   },
 
   head: [

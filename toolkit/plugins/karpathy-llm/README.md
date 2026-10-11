@@ -4,31 +4,31 @@ The **`karpathy-llm`** plugin packages Andrej Karpathy's agent behavioral princi
 
 No external vector databases, embedding pipelines, or MCP servers required — just interlinked markdown files with structured YAML frontmatter traversed natively by AI agents.
 
-Reference specification: [setup-karpathy-wiki.md](https://github.com/unoxen/ai-toolkit/blob/main/prompts/setup-karpathy-wiki.md) (also available locally in [`instructions/scaffolding-meta-prompt.md`](instructions/scaffolding-meta-prompt.md)).
+Reference specification: [setup-karpathy-wiki.md](https://github.com/unoxen/ai-toolkit/blob/main/prompts/setup-karpathy-wiki.md) (also available locally in [`instructions/rnex-scaffolding-meta-prompt.md`](instructions/rnex-scaffolding-meta-prompt.md)).
 
 ---
 
 ## What It Provides
 
-### 1. The 4 Cardinal Principles for Coding Agents (`rules/behavioral.md`)
+### 1. The 4 Cardinal Principles for Coding Agents (`rules/rnex-behavioral.md`)
 * **Think Before Coding:** Explicit assumptions, problem formulation, and trade-off evaluation before writing code.
 * **Simplicity First:** Minimal abstractions, readable implementations, and zero boilerplate bloat.
 * **Surgical Changes:** Minimal blast radius, preserved comments/docstrings, and tightly focused diffs.
 * **Goal-Driven Execution:** Upfront verification criteria, automated tests, and rigorous diff review.
 
-### 2. Multi-Repo Context Engineering & Autonomy (`rules/behavioral.md`)
+### 2. Multi-Repo Context Engineering & Autonomy (`rules/rnex-behavioral.md`)
 * Guidelines tailored for Repo Nexus workspaces respecting member repository autonomy and physical repository boundaries.
 
-### 3. Complete Karpathy LLM Wiki Architecture (`instructions/wiki-architecture.md`)
-* **`/raw/` Intake Directory:** Append-only directory where unmodified source material (articles, transcripts, docs, meeting notes) is deposited. Includes `.gitkeep`.
-* **`/wiki/` Curated Knowledge Base:** Interlinked atomic markdown pages, each with typed frontmatter relations (`sources`, `related`, `extends`, `contradicts`, `mentioned_in`).
-* **`/wiki/index.md` Navigation Index:** Master categorized catalog organizing atomic concepts, architecture decisions, and cross-project knowledge.
-* **`/wiki/hot.md` Rolling Context Cache:** High-density ~500-word orientation summary for rapid agent onboarding without full wiki scans (especially for codebase knowledge and second-brain wikis).
-* **`/wiki/_log.md` Audit Trail:** Append-only log recording every ingest and lint operation with timestamped details.
+### 3. Complete Karpathy LLM Wiki Architecture (`instructions/rnex-wiki-architecture.md`)
+* **Intake Directory (`raw_dir`, default: `raw/`):** Append-only directory where unmodified source material (articles, transcripts, docs, meeting notes) is deposited. Includes `.gitkeep`.
+* **Curated Knowledge Base (`wiki_dir`, default: `wiki/`):** Interlinked atomic markdown pages, each with typed frontmatter relations (`sources`, `related`, `extends`, `contradicts`, `mentioned_in`).
+* **Navigation Index (`<wiki_dir>/index.md`):** Master categorized catalog organizing atomic concepts, architecture decisions, and cross-project knowledge.
+* **Rolling Context Cache (`<wiki_dir>/hot.md`):** High-density ~500-word orientation summary for rapid agent onboarding without full wiki scans (especially for codebase knowledge and second-brain wikis).
+* **Audit Trail (`<wiki_dir>/_log.md`):** Append-only log recording every ingest and lint operation with timestamped details.
 
 ### 4. Standardized Agent Workflows (`workflows/`)
-* **`wiki-ingest.md` (8 Steps):** Decomposes raw source documents into 5–25 atomic wiki pages with frontmatter relations.
-* **`wiki-lint.md` (10 Steps):** Integrity audit protocol to validate paths, recompute `mentioned_in`, eliminate orphans, merge duplicates, audit inconsistencies, identify gaps, suggest source candidates, and rebuild indexes.
+* **`rnex-wiki-ingest.md` (8 Steps):** Decomposes raw source documents into 5–25 atomic wiki pages with frontmatter relations.
+* **`rnex-wiki-lint.md` (10 Steps):** Integrity audit protocol to validate paths, recompute `mentioned_in`, eliminate orphans, merge duplicates, audit inconsistencies, identify gaps, suggest source candidates, and rebuild indexes.
 
 ---
 
@@ -45,9 +45,9 @@ Enabling the plugin (`rnex plugin enable karpathy-llm`) performs an exact, zero-
 
 ### Phase 2: Evolutionary Growth & Domain Specialization (Usage Phase)
 Once initialized, the workspace structure organically evolves according to actual domain needs and source materials:
-* **Source Ingestion (`wiki-ingest`)**: As raw source documents are deposited into `/raw/` and ingested, atomic pages are generated. Users or agents can organize pages into categorical subfolders (e.g. `architecture/`, `decisions/`, `concepts/`, `projects/`) or keep them flat.
-* **Customizable Guidelines**: Teams can tailor `rules/behavioral.md` and `instructions/wiki-architecture.md` for their specific team conventions.
-* **Graph Maintenance (`wiki-lint`)**: The periodic lint workflow validates relation paths, updates `mentioned_in`, and rebuilds `index.md` and `hot.md` to match the evolved knowledge graph.
+* **Source Ingestion (`rnex-wiki-ingest`)**: As raw source documents are deposited into `/raw/` and ingested, atomic pages are generated. Users or agents can organize pages into categorical subfolders (e.g. `architecture/`, `decisions/`, `concepts/`, `projects/`) or keep them flat.
+* **Customizable Guidelines**: Teams can tailor `rules/rnex-behavioral.md` and `instructions/rnex-wiki-architecture.md` for their specific team conventions.
+* **Graph Maintenance (`rnex-wiki-lint`)**: The periodic lint workflow validates relation paths, updates `mentioned_in`, and rebuilds `index.md` and `hot.md` to match the evolved knowledge graph.
 
 ---
 
@@ -67,15 +67,15 @@ my-workspace/
 │   └── plugins/
 │       └── karpathy-llm/
 │           ├── instructions/
-│           │   └── wiki-architecture.md# LLM Wiki architecture & relation schema
+│           │   └── rnex-wiki-architecture.md# LLM Wiki architecture & relation schema
 │           ├── rules/
-│           │   └── behavioral.md    # Cardinal principles & context engineering
+│           │   └── rnex-behavioral.md    # Cardinal principles & context engineering
 │           ├── workflows/
-│           │   ├── wiki-ingest.md   # 8-step decomposition & ingestion workflow
-│           │   └── wiki-lint.md     # 10-step graph validation & maintenance workflow
+│           │   ├── rnex-wiki-ingest.md   # 8-step decomposition & ingestion workflow
+│           │   └── rnex-wiki-lint.md     # 10-step graph validation & maintenance workflow
 │           └── templates/
-│               ├── wiki-page.template.md# Atomic page template with typed relations
-│               └── LLM_WIKI.sample.md# Sample wiki walkthrough
+│               ├── rnex-wiki-page.template.md# Atomic page template with typed relations
+│               └── rnex-llm-wiki.sample.md# Sample wiki walkthrough
 └── rnex.yaml                        # Plugin configuration
 ```
 

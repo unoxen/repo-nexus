@@ -14,7 +14,7 @@ When an AI assistant is assigned a cross-repo or workspace-wide task, consult th
    - **When to use**: Auditing workspace status, verifying uncommitted changes, or syncing member repositories before releases.
 
 3. **[`rnex-wiki-ingest.md`](./rnex-wiki-ingest.md)**
-   - **Purpose**: Autonomous ingestion of intake materials from `/raw/` into atomic Karpathy LLM Wiki pages.
+   - **Purpose**: Autonomous ingestion of intake materials from configured raw intake directory into atomic Karpathy LLM Wiki pages.
    - **When to use**: Decomposing research papers, documentation, transcripts, or specifications into the knowledge base.
 
 4. **[`rnex-wiki-lint.md`](./rnex-wiki-lint.md)**

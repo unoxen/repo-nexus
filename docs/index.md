@@ -40,9 +40,13 @@ features:
     details: Run tests, linters, or git commands across all active repositories in sequence with rnex exec.
 ---
 
-<div class="quickstart-box" style="margin-top: 2rem;">
-
-## Quick Start in 60 Seconds
+<div class="home-quickstart-container">
+  <div class="home-quickstart-box">
+    <div class="home-quickstart-header">
+      <span class="home-quickstart-badge">QUICKSTART</span>
+      <h2>Get Started in 60 Seconds</h2>
+      <p class="home-quickstart-sub">Initialize a unified meta-repo workspace and connect member repositories in three commands.</p>
+    </div>
 
 ::: code-group
 
@@ -76,4 +80,5 @@ rnex --version
 
 :::
 
+  </div>
 </div>

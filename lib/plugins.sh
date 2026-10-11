@@ -8,12 +8,12 @@ find_plugin_dir() {
   _query="$1"
   _sdir="$(dirname "$SCRIPT_LOCATION")"
   for _cand in \
-    "$NEXUS_DIR/.rnex/plugins/$_query" \
-    "$NEXUS_DIR/.nexus/plugins/$_query" \
-    "$NEXUS_DIR/plugins/$_query" \
     "$NEXUS_DIR/toolkit/plugins/$_query" \
     "$SCRIPT_LOCATION/toolkit/plugins/$_query" \
-    "$_sdir/toolkit/plugins/$_query"; do
+    "$_sdir/toolkit/plugins/$_query" \
+    "$NEXUS_DIR/plugins/$_query" \
+    "$NEXUS_DIR/.rnex/plugins/$_query" \
+    "$NEXUS_DIR/.nexus/plugins/$_query"; do
     if [ -f "$_cand/plugin.yaml" ]; then
       printf '%s' "$_cand"
       return 0
@@ -26,12 +26,12 @@ list_all_available_plugin_dirs() {
   _sdir="$(dirname "$SCRIPT_LOCATION")"
   _dirs=""
   for _parent in \
+    "$NEXUS_DIR/toolkit/plugins" \
     "$SCRIPT_LOCATION/toolkit/plugins" \
     "$_sdir/toolkit/plugins" \
-    "$NEXUS_DIR/toolkit/plugins" \
+    "$NEXUS_DIR/plugins" \
     "$NEXUS_DIR/.rnex/plugins" \
-    "$NEXUS_DIR/.nexus/plugins" \
-    "$NEXUS_DIR/plugins"; do
+    "$NEXUS_DIR/.nexus/plugins"; do
     if [ -d "$_parent" ]; then
       for _sub in "$_parent"/*; do
         if [ -d "$_sub" ] && [ -f "$_sub/plugin.yaml" ]; then
@@ -90,8 +90,31 @@ plugin_list_templates() {
   ' "$_pdir/plugin.yaml"
 }
 
+karpathy_wiki_dir() {
+  _d="$(yaml_plugin_get "karpathy-llm" "wiki_dir" 2>/dev/null || true)"
+  _d="$(printf '%s' "$_d" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's#^/##' -e 's#/$##')"
+  if [ -n "$_d" ]; then
+    printf '%s' "$_d"
+  else
+    printf 'wiki'
+  fi
+}
+
+karpathy_raw_dir() {
+  _d="$(yaml_plugin_get "karpathy-llm" "raw_dir" 2>/dev/null || true)"
+  _d="$(printf '%s' "$_d" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's#^/##' -e 's#/$##')"
+  if [ -n "$_d" ]; then
+    printf '%s' "$_d"
+  else
+    printf 'raw'
+  fi
+}
+
 # Sync plugins into scoped directories: .rnex/plugins/<plugin-name>/
 sync_plugins() {
+  _wiki_dir="$(karpathy_wiki_dir)"
+  _raw_dir="$(karpathy_raw_dir)"
+
   yaml_list_plugins | while read -r _pname; do
     [ -n "$_pname" ] || continue
     _pdir="$(find_plugin_dir "$_pname" 2>/dev/null || true)"
@@ -104,15 +127,23 @@ sync_plugins() {
     if [ "$_pdir" != "$_scoped_dest" ]; then
       mkdir -p "$_scoped_dest"
 
-      # Copy rules, workflows, instructions, prompts, skills, agents into scoped plugin directory
-      for _sub in rules workflows instructions prompts skills agents; do
+      # Deterministically sync plugin asset directories (clean stale files)
+      for _sub in rules workflows instructions prompts skills agents templates; do
         if [ -d "$_pdir/$_sub" ]; then
+          rm -rf "$_scoped_dest/$_sub"
           mkdir -p "$_scoped_dest/$_sub"
-          cp -r "$_pdir/$_sub"/* "$_scoped_dest/$_sub"/ 2>/dev/null || true
+          cp -R "$_pdir/$_sub"/. "$_scoped_dest/$_sub"/ 2>/dev/null || true
+        else
+          rm -rf "$_scoped_dest/$_sub"
         fi
       done
+
+      # Copy plugin manifest and documentation
       if [ -f "$_pdir/plugin.yaml" ]; then
         cp "$_pdir/plugin.yaml" "$_scoped_dest/plugin.yaml"
+      fi
+      if [ -f "$_pdir/README.md" ]; then
+        cp "$_pdir/README.md" "$_scoped_dest/README.md"
       fi
     fi
 
@@ -123,12 +154,26 @@ sync_plugins() {
       _d="${_item#*:}"
       _s="$(printf '%s' "$_s" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
       _d="$(printf '%s' "$_d" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+
+      # Resolve dynamic destination placeholders for wiki and raw directories
+      _d="$(printf '%s' "$_d" | sed \
+        -e "s|{wiki_dir}|$_wiki_dir|g" \
+        -e "s|{raw_dir}|$_raw_dir|g" \
+        -e "s|^wiki/|${_wiki_dir}/|" \
+        -e "s|^raw/|${_raw_dir}/|")"
+
       _src_path="$_pdir/$_s"
       _dest_path="$NEXUS_DIR/$_d"
 
       if [ -f "$_src_path" ] && [ ! -f "$_dest_path" ]; then
         mkdir -p "$(dirname "$_dest_path")"
-        cp "$_src_path" "$_dest_path"
+        sed -e "s|{wiki_dir}|$_wiki_dir|g" \
+            -e "s|{raw_dir}|$_raw_dir|g" \
+            -e "s|/raw/|/$_raw_dir/|g" \
+            -e "s|raw/|$_raw_dir/|g" \
+            -e "s|/wiki/|/$_wiki_dir/|g" \
+            -e "s|wiki/|$_wiki_dir/|g" \
+            "$_src_path" > "$_dest_path"
         [ -x "$_src_path" ] && chmod +x "$_dest_path" 2>/dev/null || true
         log_ok "Initialized template: $_d"
       fi

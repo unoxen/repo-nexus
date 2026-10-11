@@ -22,6 +22,7 @@ plugins:
     instructions: true
     prompts: true
     skills: true
+    agents: true
 ```
 
 ## Options
@@ -31,4 +32,5 @@ plugins:
 | `instructions` | boolean | `true` | Maintain routing in `CLAUDE.md` |
 | `prompts` | boolean | `true` | Mirror prompts to `.claude/commands/` and `.claude/prompts/` |
 | `skills` | boolean | `true` | Mirror skills to `.claude/skills/<name>/SKILL.md` |
+| `agents` | boolean | `true` | Mirror custom agents to `.claude/agents/*.md` |
 | `enabled` | boolean | `true` | Set to `false` in `.local.rnex.yaml` to override team config |

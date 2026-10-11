@@ -93,6 +93,14 @@ cmd_plugin_info() {
     printf '  - prompts: true|false  (mirror prompts to .windsurf/prompts/; current: %s)\n' "$(windsurf_prompts_enabled && echo "true" || echo "false")"
     printf '  - skills: true|false  (mirror skills to .windsurf/skills/<name>/SKILL.md; current: %s)\n' "$(windsurf_skills_enabled && echo "true" || echo "false")"
     printf '  - agents: true|false  (mirror agents to .windsurf/agents/*.md; current: %s)\n' "$(windsurf_agents_enabled && echo "true" || echo "false")"
+  elif [ "$_name" = "karpathy-llm" ]; then
+    _cur_lt="$(yaml_plugin_get "karpathy-llm" "lint_trigger" 2>/dev/null || true)"
+    _cur_nc="$(yaml_plugin_get "karpathy-llm" "notify_on_changes" 2>/dev/null || true)"
+    printf '\n%bConfigurable Options (in rnex.yaml or .local.rnex.yaml):%b\n' "$_BOLD" "$_NC"
+    printf '  - wiki_dir: <dir>  (directory for curated markdown pages; current: %s)\n' "$(karpathy_wiki_dir)"
+    printf '  - raw_dir: <dir>   (directory for unmodified intake documents; current: %s)\n' "$(karpathy_raw_dir)"
+    printf '  - lint_trigger: git-post-merge|git-post-commit|git-pre-commit|git-pre-push|manual  (current: %s)\n' "${_cur_lt:-git-post-merge}"
+    printf '  - notify_on_changes: true|false  (show notification when raw/wiki changes are committed; current: %s)\n' "${_cur_nc:-true}"
   fi
 
   printf '\n%bScoped Directory:%b .rnex/plugins/%s\n' "$_BOLD" "$_NC" "$_name"
@@ -106,6 +114,15 @@ cmd_plugin_info() {
       _d="${_item#*:}"
       _s="$(printf '%s' "$_s" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
       _d="$(printf '%s' "$_d" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+      if [ "$_name" = "karpathy-llm" ]; then
+        _wiki_d="$(karpathy_wiki_dir)"
+        _raw_d="$(karpathy_raw_dir)"
+        _d="$(printf '%s' "$_d" | sed \
+          -e "s|{wiki_dir}|$_wiki_d|g" \
+          -e "s|{raw_dir}|$_raw_d|g" \
+          -e "s|^wiki/|${_wiki_d}/|" \
+          -e "s|^raw/|${_raw_d}/|")"
+      fi
       printf '  - %s → %s\n' "$_s" "$_d"
     done
   fi
@@ -224,14 +241,34 @@ cmd_rnex_dir() {
   esac
 }
 
+cmd_plugin_update() {
+  require_workspace
+  _pname="$1"
+  if [ -n "$_pname" ]; then
+    yaml_has_plugin "$_pname" || die "Plugin '$_pname' is not enabled in workspace"
+    _pdir="$(find_plugin_dir "$_pname" 2>/dev/null || true)"
+    [ -n "$_pdir" ] || die "Plugin '$_pname' not found."
+    log_info "Updating plugin '$_pname'..."
+    sync_plugins
+    cmd_fix
+    log_ok "Plugin '$_pname' updated"
+  else
+    log_info "Updating all enabled plugins..."
+    sync_plugins
+    cmd_fix
+    log_ok "All plugins updated"
+  fi
+}
+
 cmd_plugin() {
   _subcmd="${1:-list}"
   shift 2>/dev/null || true
   case "$_subcmd" in
-    list)    cmd_plugin_list "$@" ;;
-    info)    cmd_plugin_info "$@" ;;
-    enable)  cmd_plugin_enable "$@" ;;
-    disable) cmd_plugin_disable "$@" ;;
-    *)       die "Unknown plugin subcommand: $_subcmd (try 'rnex plugin list')" ;;
+    list)                      cmd_plugin_list "$@" ;;
+    info)                      cmd_plugin_info "$@" ;;
+    enable|install)            cmd_plugin_enable "$@" ;;
+    disable|uninstall|remove)  cmd_plugin_disable "$@" ;;
+    update|upgrade)            cmd_plugin_update "$@" ;;
+    *)                         die "Unknown plugin subcommand: $_subcmd (try 'rnex plugin list')" ;;
   esac
 }

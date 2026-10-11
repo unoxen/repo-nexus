@@ -9,7 +9,7 @@ _yaml_list_plugins_from_file() {
   [ -f "$_f" ] || return 0
   awk '
     /^plugins:[ ]*$/ || /^plugins:[ ]*#/ { p=1; next }
-    p && /^[^ #]/ { exit }
+    p && /^[^ #]/ { p=0 }
     p && /^  [a-zA-Z0-9_.-]+:/ {
       line = $0
       sub(/^[ ]*/, "", line)
@@ -353,7 +353,7 @@ _yaml_list_repos_from_file() {
   [ -f "$_f" ] || return 0
   awk '
     /^repos:[ ]*$/ || /^repos:[ ]*#/ { r=1; next }
-    r && /^[^ #]/ { exit }
+    r && /^[^ #]/ { r=0 }
     r && /^  [a-zA-Z0-9_.-]+:[ ]*(#.*)?$/ {
       line = $0
       sub(/^[ ]*/, "", line)

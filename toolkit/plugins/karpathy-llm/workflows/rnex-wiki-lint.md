@@ -6,16 +6,17 @@ Periodic health check and maintenance workflow to preserve wiki graph integrity,
 
 ## Lint & Maintenance Protocol
 
-1. **Verify Relation Paths:**
-   - For every page, verify that all paths in frontmatter relation fields (`related`, `extends`, `contradicts`, `sources`) resolve to existing files.
+1. **Resolve Configuration & Verify Paths:**
+   - Read `rnex.yaml` (and `.local.rnex.yaml` if present) to resolve the active `wiki_dir` (default: `wiki`) and `raw_dir` (default: `raw`) under `plugins.karpathy-llm`.
+   - For every page under `<wiki_dir>/`, verify that all paths in frontmatter relation fields (`related`, `extends`, `contradicts`, `sources`) resolve to existing files under `<wiki_dir>/` or `<raw_dir>/`.
    - Fix or flag broken paths.
 
 2. **Recompute `mentioned_in`:**
-   - Recompute `mentioned_in` for every page by scanning all other pages' relation fields and inline links.
+   - Recompute `mentioned_in` for every page under `<wiki_dir>/` by scanning all other pages' relation fields and inline links.
    - Update the field in frontmatter.
 
 3. **Find Orphaned Pages:**
-   - Detect pages not reachable from `index.md` or any `mentioned_in` field.
+   - Detect pages under `<wiki_dir>/` not reachable from `<wiki_dir>/index.md` or any `mentioned_in` field.
    - Add them to the index in their appropriate category.
 
 4. **Detect Duplicate or Overlapping Pages:**
@@ -31,16 +32,16 @@ Periodic health check and maintenance workflow to preserve wiki graph integrity,
    - Create stub pages or flag for future ingest.
 
 7. **Suggest Source Candidates:**
-   - Suggest source candidates from `/raw/` or external searches to fill identified knowledge gaps.
+   - Suggest source candidates from `<raw_dir>/` or external searches to fill identified knowledge gaps.
 
 8. **Rebuild Navigation Index:**
-   - Rebuild `/wiki/index.md` to reflect the current set of pages and categories accurately.
+   - Rebuild `<wiki_dir>/index.md` to reflect the current set of pages and categories accurately.
 
 9. **Update Hot Cache:**
-   - Update `/wiki/hot.md` if it exists, refreshing the rolling ~500-word orientation context.
+   - Update `<wiki_dir>/hot.md` if it exists, refreshing the rolling ~500-word orientation context.
 
 10. **Append Operation Log:**
-    - Append a lint summary to `/wiki/_log.md` detailing:
+    - Append a lint summary to `<wiki_dir>/_log.md` detailing:
       - Broken links fixed or flagged
       - `mentioned_in` updates
       - Orphans and duplicates resolved

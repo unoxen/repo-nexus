@@ -1,12 +1,13 @@
 # Karpathy LLM Wiki Ingestion Workflow
 
-Use this workflow to ingest source documents from `/raw/` into atomic, interconnected markdown pages in `/wiki/`.
+Use this workflow to ingest source documents from the configured raw intake directory into atomic, interconnected markdown pages in the curated wiki directory.
 
 ---
 
 ## 1. Intake Scanning
-1. Check `/raw/` for source materials (specs, notes, articles, PRDs) not yet recorded in `wiki/_log.md`.
-2. Inspect `wiki/index.md` and `wiki/hot.md` to understand existing concept groupings and naming conventions.
+1. Resolve `raw_dir` (default: `raw`) and `wiki_dir` (default: `wiki`) from `rnex.yaml` (or `.local.rnex.yaml`) under `plugins.karpathy-llm`.
+2. Check `<raw_dir>/` for source materials (specs, notes, articles, PRDs) not yet recorded in `<wiki_dir>/_log.md`.
+3. Inspect `<wiki_dir>/index.md` and `<wiki_dir>/hot.md` to understand existing concept groupings and naming conventions.
 
 ## 2. Atomic Decomposition
 1. Do NOT collapse an entire source document into a single wiki page.
@@ -26,6 +27,6 @@ Use this workflow to ingest source documents from `/raw/` into atomic, interconn
    ```
 
 ## 3. Index & Log Update
-1. Update `wiki/index.md` to categorize links to each newly created page.
-2. Update `wiki/hot.md` if high-priority architectural orientation changed.
-3. Append an entry to `wiki/_log.md` with timestamp, source ingested, and list of generated pages.
+1. Update `<wiki_dir>/index.md` to categorize links to each newly created page.
+2. Update `<wiki_dir>/hot.md` if high-priority architectural orientation changed.
+3. Append an entry to `<wiki_dir>/_log.md` with timestamp, source ingested, and list of generated pages.

@@ -4,4 +4,4 @@ description: Anthropic Claude Code integration (maintains CLAUDE.md instructions
 author: unoxen
 homepage: https://github.com/unoxen/repo-nexus
 instructions:
-  - instructions/claude-integration.md: .rnex/plugins/claude/instructions/claude-integration.md
+  - instructions/rnex-claude-integration.md: .rnex/plugins/claude/instructions/rnex-claude-integration.md

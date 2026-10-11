@@ -24,4 +24,4 @@ Master navigation index and control file for the Karpathy LLM Wiki. Use this ind
 * *(Key contributors, teams, organizations, and stakeholders)*
 
 ## Sources & Raw References
-* *(Catalog of ingested source materials from `/raw/`)*
+* *(Catalog of ingested source materials from `/{raw_dir}/`)*

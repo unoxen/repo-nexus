@@ -20,10 +20,10 @@ _create_hook_script() {
 # Managed automatically by rnex. Do not edit manually.
 
 _dir="\$(cd "\$(dirname "\$0")/../.." 2>/dev/null && pwd -P)"
-if command -v rnex >/dev/null 2>&1; then
-  rnex hooks run $_hook_type "\$@"
-elif [ -f "\$_dir/rnex" ]; then
+if [ -x "\$_dir/rnex" ]; then
   "\$_dir/rnex" hooks run $_hook_type "\$@"
+elif command -v rnex >/dev/null 2>&1; then
+  rnex hooks run $_hook_type "\$@"
 fi
 HOOK_EOF
 
@@ -161,9 +161,11 @@ cmd_hooks() {
           if yaml_has_plugin "karpathy-llm"; then
             _trigger="$(yaml_plugin_get "karpathy-llm" "lint_trigger")"
             if [ "$_trigger" = "git-post-merge" ] || [ "$_trigger" = "post-merge" ]; then
+              _wiki_dir="$(karpathy_wiki_dir)"
+              _raw_dir="$(karpathy_raw_dir)"
               _changed="$(git -C "$NEXUS_DIR" diff-tree -r --name-only ORIG_HEAD HEAD 2>/dev/null || true)"
-              if echo "$_changed" | grep -qE '^(raw/|wiki/)'; then
-                printf '%b[WIKI]%b Upstream changes detected in raw/ or wiki/ after merge.\n' "$_Y" "$_NC"
+              if echo "$_changed" | grep -qE "^(${_raw_dir}/|${_wiki_dir}/)"; then
+                printf '%b[WIKI]%b Upstream changes detected in %s/ or %s/ after merge.\n' "$_Y" "$_NC" "$_raw_dir" "$_wiki_dir"
               fi
             fi
           fi
@@ -176,10 +178,12 @@ cmd_hooks() {
           if yaml_has_plugin "karpathy-llm"; then
             _trigger="$(yaml_plugin_get "karpathy-llm" "lint_trigger")"
             if [ "$_trigger" = "git-post-commit" ] || [ "$_trigger" = "post-commit" ]; then
+              _wiki_dir="$(karpathy_wiki_dir)"
+              _raw_dir="$(karpathy_raw_dir)"
               _changed="$(git -C "$NEXUS_DIR" diff-tree -r --name-only --no-commit-id HEAD 2>/dev/null || true)"
-              if echo "$_changed" | grep -qE '^(raw/|wiki/)'; then
+              if echo "$_changed" | grep -qE "^(${_raw_dir}/|${_wiki_dir}/)"; then
                 _notify="$(yaml_plugin_get "karpathy-llm" "notify_on_changes")"
-                [ "$_notify" != "false" ] && printf '%b[WIKI]%b Changes committed to raw/ or wiki/. Run wiki-lint or wiki-ingest as needed.\n' "$_Y" "$_NC"
+                [ "$_notify" != "false" ] && printf '%b[WIKI]%b Changes committed to %s/ or %s/. Run wiki-lint or wiki-ingest as needed.\n' "$_Y" "$_NC" "$_raw_dir" "$_wiki_dir"
               fi
             fi
           fi
@@ -192,10 +196,12 @@ cmd_hooks() {
           if yaml_has_plugin "karpathy-llm"; then
             _trigger="$(yaml_plugin_get "karpathy-llm" "lint_trigger")"
             if [ "$_trigger" = "git-pre-commit" ] || [ "$_trigger" = "pre-commit" ]; then
+              _wiki_dir="$(karpathy_wiki_dir)"
+              _raw_dir="$(karpathy_raw_dir)"
               _staged="$(git -C "$NEXUS_DIR" diff --cached --name-only 2>/dev/null || true)"
-              if echo "$_staged" | grep -qE '^(raw/|wiki/)'; then
+              if echo "$_staged" | grep -qE "^(${_raw_dir}/|${_wiki_dir}/)"; then
                 _notify="$(yaml_plugin_get "karpathy-llm" "notify_on_changes")"
-                [ "$_notify" != "false" ] && printf '%b[WIKI]%b Pre-commit trigger: raw/ or wiki/ staged for commit.\n' "$_C" "$_NC"
+                [ "$_notify" != "false" ] && printf '%b[WIKI]%b Pre-commit trigger: %s/ or %s/ staged for commit.\n' "$_C" "$_NC" "$_raw_dir" "$_wiki_dir"
               fi
             fi
           fi
@@ -208,7 +214,8 @@ cmd_hooks() {
           if yaml_has_plugin "karpathy-llm"; then
             _trigger="$(yaml_plugin_get "karpathy-llm" "lint_trigger")"
             if [ "$_trigger" = "git-pre-push" ] || [ "$_trigger" = "pre-push" ]; then
-              printf '%b[WIKI]%b Pre-push trigger: verifying wiki changes.\n' "$_C" "$_NC"
+              _wiki_dir="$(karpathy_wiki_dir)"
+              printf '%b[WIKI]%b Pre-push trigger: verifying wiki changes in %s/.\n' "$_C" "$_NC" "$_wiki_dir"
             fi
           fi
           if [ -x "$NEXUS_DIR/.githooks/pre-push" ]; then

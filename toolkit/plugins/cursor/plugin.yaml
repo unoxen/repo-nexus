@@ -4,4 +4,4 @@ description: Cursor IDE integration (maintains .cursorrules and .cursor/rules, a
 author: unoxen
 homepage: https://github.com/unoxen/repo-nexus
 instructions:
-  - instructions/cursor-integration.md: .rnex/plugins/cursor/instructions/cursor-integration.md
+  - instructions/rnex-cursor-integration.md: .rnex/plugins/cursor/instructions/rnex-cursor-integration.md

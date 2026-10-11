@@ -4,4 +4,4 @@ description: GitHub Copilot integration (mirrors workspace prompts to .github/pr
 author: unoxen
 homepage: https://github.com/unoxen/repo-nexus
 instructions:
-  - instructions/copilot-integration.md: .rnex/plugins/copilot/instructions/copilot-integration.md
+  - instructions/rnex-copilot-integration.md: .rnex/plugins/copilot/instructions/rnex-copilot-integration.md

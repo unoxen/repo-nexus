@@ -72,7 +72,9 @@ cmd_help() {
   PLUGIN MANAGEMENT
     plugin [list]           List available and enabled plugins
     plugin info <name>      Show details of a plugin
-    plugin enable [--local] <name>   Enable plugin in workspace (scoped to .rnex/plugins/<name>/)
+    plugin enable [--local] <name>   Enable/install plugin in workspace (scoped to .rnex/plugins/<name>/)
+    plugin install [--local] <name>  Alias for plugin enable
+    plugin update [name]    Update enabled plugin(s) from source
     plugin disable [--local] <name>  Disable plugin from workspace
 
   EXAMPLES

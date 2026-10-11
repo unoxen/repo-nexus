@@ -45,7 +45,7 @@ Developer-authored instructions outside of these delimiters are strictly preserv
 | [`copilot`](copilot.md) | AI Provider | GitHub Copilot integration: mirrors prompts to `.github/prompts/`, skills to `.github/skills/`, custom agents to `.github/agents/`, and maintains `.github/copilot-instructions.md`. | [Read Guide](copilot.md) |
 | [`claude`](claude.md) | AI Provider | Anthropic Claude Code & Desktop integration: maintains `CLAUDE.md` and mirrors commands, prompts, skills, and agents to `.claude/`. | [Read Guide](claude.md) |
 | [`gemini`](gemini.md) | AI Provider | Google Gemini CLI & Antigravity IDE integration: maintains `GEMINI.md` and mirrors prompts, skills, and agents to `.gemini/`. | [Read Guide](gemini.md) |
-| [`cursor`](cursor.md) | AI Provider | Cursor IDE integration: maintains `.cursorrules` and `.cursor/rules/repo-nexus.mdc`, and mirrors prompts, skills, and agents to `.cursor/`. | [Read Guide](cursor.md) |
+| [`cursor`](cursor.md) | AI Provider | Cursor IDE integration: maintains `.cursorrules` and `.cursor/rules/rnex-context.mdc`, and mirrors prompts, skills, and agents to `.cursor/`. | [Read Guide](cursor.md) |
 | [`windsurf`](windsurf.md) | AI Provider | Windsurf IDE integration: maintains `.windsurfrules` and mirrors prompts, skills, and agents to `.windsurf/`. | [Read Guide](windsurf.md) |
 | [`karpathy-llm`](karpathy-llm.md) | Agent Knowledge & Principles | Andrej Karpathy's 4 cardinal principles for coding agents, multi-repo context engineering standards, and autonomous zero-dependency LLM Wiki architecture (`raw/`, `wiki/`). | [Read Guide](karpathy-llm.md) |
 

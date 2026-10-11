@@ -95,12 +95,21 @@ EOF
     _dest_pdir="$_r_rnex/plugins/$_pname"
     mkdir -p "$_dest_pdir"
 
-    # Copy rules/workflows/instructions/prompts/skills/agents into member plugin dir
-    for _sub in rules workflows instructions prompts skills agents; do
+    # Deterministically sync plugin asset directories into member repo
+    for _sub in rules workflows instructions prompts skills agents templates; do
       if [ -d "$_pdir/$_sub" ]; then
+        rm -rf "$_dest_pdir/$_sub"
         mkdir -p "$_dest_pdir/$_sub"
-        cp -r "$_pdir/$_sub"/* "$_dest_pdir/$_sub"/ 2>/dev/null || true
+        cp -R "$_pdir/$_sub"/. "$_dest_pdir/$_sub"/ 2>/dev/null || true
+      else
+        rm -rf "$_dest_pdir/$_sub"
       fi
     done
+    if [ -f "$_pdir/plugin.yaml" ]; then
+      cp "$_pdir/plugin.yaml" "$_dest_pdir/plugin.yaml"
+    fi
+    if [ -f "$_pdir/README.md" ]; then
+      cp "$_pdir/README.md" "$_dest_pdir/README.md"
+    fi
   done
 }

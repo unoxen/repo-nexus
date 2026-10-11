@@ -6,9 +6,10 @@ Universal workflow for decomposing and ingesting raw source materials into atomi
 
 ## Ingestion Protocol
 
-1. **Scan Intake:**
-   - Scan `/raw/` for source materials (articles, transcripts, documents, research notes, meeting logs) not yet recorded in `/wiki/_log.md`.
-   - All source material must reside in `/raw/` unmodified. Never write directly to `/wiki/` without ingesting.
+1. **Resolve Configuration & Scan Intake:**
+   - Read `rnex.yaml` (and `.local.rnex.yaml` if present) to resolve the active `raw_dir` (default: `raw`) and `wiki_dir` (default: `wiki`) under `plugins.karpathy-llm`.
+   - Scan `<raw_dir>/` for source materials (articles, transcripts, documents, research notes, meeting logs) not yet recorded in `<wiki_dir>/_log.md`.
+   - All source material must reside in `<raw_dir>/` unmodified. Never write directly to `<wiki_dir>/` without ingesting.
 
 2. **Read & Clarify:**
    - Read each source fully.
@@ -18,8 +19,8 @@ Universal workflow for decomposing and ingesting raw source materials into atomi
    - Decompose each source into atomic wiki pages — **one per distinct concept, person, organization, event, or theme** (or architecture decision/contract).
    - A single source document commonly produces **5–25 pages**. Never collapse an entire source into a single file.
    - Place pages according to workspace wiki organization:
-     - **Flat:** directly under `/wiki/` (e.g., `/wiki/<topic>.md`)
-     - **Structured:** in categorical subfolders:
+     - **Flat:** directly under `<wiki_dir>/` (e.g., `<wiki_dir>/<topic>.md`)
+     - **Structured:** in categorical subfolders within `<wiki_dir>/`:
        - Research → `concepts/`, `people/`, `organizations/`, `sources/`, `analysis/`
        - Second brain → `projects/`, `people/`, `decisions/`, `logs/`
        - Content archive → `sources/`, `people/`, `tools/`, `concepts/`
@@ -32,8 +33,8 @@ Universal workflow for decomposing and ingesting raw source materials into atomi
    title: ""
    tags: []
    last_updated: YYYY-MM-DD
-   # Typed relation fields — paths relative to /wiki/
-   sources: []          # /raw/ files this page was derived from
+   # Typed relation fields — paths relative to <wiki_dir>/ (or workspace root for raw sources)
+   sources: []          # <raw_dir>/ files this page was derived from
    related: []          # thematically related wiki pages
    extends: []          # pages this one builds upon or specialises
    contradicts: []      # pages with conflicting information
@@ -47,14 +48,14 @@ Universal workflow for decomposing and ingesting raw source materials into atomi
    - Add inline standard Markdown links (`[Label](./path.md)`) where contextually useful in prose.
 
 6. **Update Navigation Index:**
-   - Update `/wiki/index.md` with links to all new pages in their corresponding categorized sections.
+   - Update `<wiki_dir>/index.md` with links to all new pages in their corresponding categorized sections.
 
 7. **Update Hot Cache:**
-   - Update `/wiki/hot.md` if it exists with the rolling ~500-word orientation summary of active context.
+   - Update `<wiki_dir>/hot.md` if it exists with the rolling ~500-word orientation summary of active context.
 
 8. **Append Operation Log:**
-   - Append a timestamped entry to `/wiki/_log.md` detailing:
+   - Append a timestamped entry to `<wiki_dir>/_log.md` detailing:
      - Date & time
-     - Raw file processed
+     - Raw intake file processed
      - List of atomic pages generated
      - Any flagged follow-ups or knowledge gaps

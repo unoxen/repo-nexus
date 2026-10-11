@@ -4,4 +4,4 @@ description: Windsurf IDE integration (maintains .windsurfrules and mirrors work
 author: unoxen
 homepage: https://github.com/unoxen/repo-nexus
 instructions:
-  - instructions/windsurf-integration.md: .rnex/plugins/windsurf/instructions/windsurf-integration.md
+  - instructions/rnex-windsurf-integration.md: .rnex/plugins/windsurf/instructions/rnex-windsurf-integration.md

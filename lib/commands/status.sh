@@ -113,7 +113,10 @@ cmd_status() {
     printf '  %b✓%b %s %b(Cursor instructions)%b\n' "$_G" "$_NC" ".cursorrules" "$_DIM" "$_NC"
     _has_any_ai=1
   fi
-  if [ -f "$NEXUS_DIR/.cursor/rules/repo-nexus.mdc" ]; then
+  if [ -f "$NEXUS_DIR/.cursor/rules/rnex-context.mdc" ]; then
+    printf '  %b✓%b %s %b(Cursor MDC rule)%b\n' "$_G" "$_NC" ".cursor/rules/rnex-context.mdc" "$_DIM" "$_NC"
+    _has_any_ai=1
+  elif [ -f "$NEXUS_DIR/.cursor/rules/repo-nexus.mdc" ]; then
     printf '  %b✓%b %s %b(Cursor MDC rule)%b\n' "$_G" "$_NC" ".cursor/rules/repo-nexus.mdc" "$_DIM" "$_NC"
     _has_any_ai=1
   fi

@@ -112,7 +112,11 @@ plugins:
   #   prompts: true        # mirror prompts to .windsurf/prompts/ (default: true)
   #   skills: true         # mirror skills to .windsurf/skills/ (default: true)
   #   agents: true         # mirror custom agents to .windsurf/agents/ (default: true)
-  # karpathy-llm: {}
+  # karpathy-llm:
+  #   wiki_dir: wiki              # Directory for curated atomic markdown pages (default: wiki)
+  #   raw_dir: raw                # Append-only directory for unmodified intake documents (default: raw)
+  #   lint_trigger: git-post-merge # Git hook event: git-post-merge, git-post-commit, git-pre-commit, git-pre-push, manual
+  #   notify_on_changes: true     # Show notification when changes are committed to raw/ or wiki/
 
 # ------------------------------------------------------------------------------
 # repos — Member repositories managed by Repo Nexus

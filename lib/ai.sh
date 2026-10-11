@@ -60,7 +60,8 @@ AI_MARKER_START="<!-- REPO-NEXUS:START -->"
 AI_MARKER_END="<!-- REPO-NEXUS:END -->"
 
 get_rnex_instructions() {
-  cat <<'AGENTS_EOF'
+  _wiki_dir="$(karpathy_wiki_dir)"
+  cat <<AGENTS_EOF
 # Multi-Repo AI Workspace Context
 
 This workspace operates as a **Repo Nexus Virtual Meta-Repo** uniting independent repositories.
@@ -71,24 +72,24 @@ This workspace operates as a **Repo Nexus Virtual Meta-Repo** uniting independen
 
 Before answering the first task or making any task-specific tool call in a new session:
 
-1. **Read Configuration First (Highest Priority)**: Inspect and read `.local.rnex.yaml` (if present) and `rnex.yaml` to identify workspace structure (`repos_dir`), active member repositories (`repos/`), and enabled plugins.
-   - `.local.rnex.yaml` takes highest priority over `rnex.yaml`.
-   - Repositories are enabled by default unless explicitly marked `enabled: false`. Disabled repositories are excluded from active tasks.
-2. Inspect instructions for every enabled Repo Nexus plugin under `.rnex/plugins/<plugin-name>/`.
-3. If `wiki/` is present: read `wiki/hot.md` and `wiki/index.md` to orient on architecture and domain concepts.
+1. **Read Configuration First (Highest Priority)**: Inspect and read \`.local.rnex.yaml\` (if present) and \`rnex.yaml\` to identify workspace structure (\`repos_dir\`), active member repositories (\`repos/\`), and enabled plugins.
+   - \`.local.rnex.yaml\` takes highest priority over \`rnex.yaml\`.
+   - Repositories are enabled by default unless explicitly marked \`enabled: false\`. Disabled repositories are excluded from active tasks.
+2. Inspect instructions for every enabled Repo Nexus plugin under \`.rnex/plugins/<plugin-name>/\`.
+3. If \`${_wiki_dir}/\` is present: read \`${_wiki_dir}/hot.md\` and \`${_wiki_dir}/index.md\` to orient on architecture and domain concepts.
 4. Follow links from the index to wiki pages relevant to the request.
-5. Only then inspect member repositories (`repos/<name>/`) or produce an answer.
+5. Only then inspect member repositories (\`repos/<name>/\`) or produce an answer.
 
 This is a hard gate, not optional orientation. Complete it once per session and retain the resulting context; do not repeatedly reload these files.
 
 ## Prompts & Workflows
-For task-specific agent workflows (cross-repo features, workspace audits, wiki maintenance), inspect `.rnex/prompts/index.md`.
+For task-specific agent workflows (cross-repo features, workspace audits, wiki maintenance), inspect \`.rnex/prompts/index.md\`.
 
-## Member Repositories (`repos/<name>/`)
-Each member repository is an autonomous Git repository. For repository-specific instructions, inspect `repos/<name>/.rnex/`.
+## Member Repositories (\`repos/<name>/\`)
+Each member repository is an autonomous Git repository. For repository-specific instructions, inspect \`repos/<name>/.rnex/\`.
 
 ## Git Operations
-Commit and push changes directly within the respective member repository root (`repos/<name>/`).
+Commit and push changes directly within the respective member repository root (\`repos/<name>/\`).
 AGENTS_EOF
 }
 
@@ -571,6 +572,7 @@ clean_provider_prompts() {
 
   # Remove base toolkit prompts
   rm -f "$_sp_dir/rnex-setup-karpathy-wiki${_ext}" "$_sp_dir/setup-karpathy-wiki${_ext}" 2>/dev/null || true
+  rm -f "$_sp_dir/wiki-ingest${_ext}" "$_sp_dir/wiki-lint${_ext}" 2>/dev/null || true
   if [ -n "$_src_prompts" ]; then
     for _pfile in "$_src_prompts"/rnex-*.md; do
       [ -f "$_pfile" ] || continue
@@ -580,7 +582,7 @@ clean_provider_prompts() {
   fi
 
   # Remove plugin prompts & workflows
-  for _pdir in "$SCRIPT_LOCATION/toolkit/plugins"/* "$DIR/toolkit/plugins"/* "$NEXUS_DIR/.rnex/plugins"/*; do
+  for _pdir in "$SCRIPT_LOCATION/toolkit/plugins"/* "$NEXUS_DIR/toolkit/plugins"/* "$NEXUS_DIR/.rnex/plugins"/*; do
     [ -d "$_pdir" ] || continue
     for _sub in prompts workflows; do
       [ -d "$_pdir/$_sub" ] || continue
@@ -615,6 +617,7 @@ clean_provider_skills() {
   # Remove base toolkit skills
   rm -f "$_sk_dir/rnex-setup-karpathy-wiki/SKILL.md" "$_sk_dir/setup-karpathy-wiki/SKILL.md" 2>/dev/null || true
   rmdir "$_sk_dir/rnex-setup-karpathy-wiki" "$_sk_dir/setup-karpathy-wiki" 2>/dev/null || true
+  rm -rf "$_sk_dir/wiki-ingest" "$_sk_dir/wiki-lint" "$_sk_dir/wiki-curator" 2>/dev/null || true
   if [ -n "$_src_prompts" ]; then
     for _pfile in "$_src_prompts"/rnex-*.md; do
       [ -f "$_pfile" ] || continue
@@ -625,7 +628,7 @@ clean_provider_skills() {
   fi
 
   # Remove plugin skills, prompts, workflows, & agents as skills
-  for _pdir in "$SCRIPT_LOCATION/toolkit/plugins"/* "$DIR/toolkit/plugins"/* "$NEXUS_DIR/.rnex/plugins"/*; do
+  for _pdir in "$SCRIPT_LOCATION/toolkit/plugins"/* "$NEXUS_DIR/toolkit/plugins"/* "$NEXUS_DIR/.rnex/plugins"/*; do
     [ -d "$_pdir" ] || continue
     for _sub in skills prompts workflows agents; do
       [ -d "$_pdir/$_sub" ] || continue
@@ -688,8 +691,9 @@ clean_provider_agents() {
   _ag_dir="$1"
   _ext="${2:-.md}"
   [ -d "$_ag_dir" ] || return 0
+  rm -f "$_ag_dir/wiki-curator${_ext}" 2>/dev/null || true
 
-  for _pdir in "$SCRIPT_LOCATION/toolkit/plugins"/* "$DIR/toolkit/plugins"/* "$NEXUS_DIR/.rnex/plugins"/*; do
+  for _pdir in "$SCRIPT_LOCATION/toolkit/plugins"/* "$NEXUS_DIR/toolkit/plugins"/* "$NEXUS_DIR/.rnex/plugins"/*; do
     [ -d "$_pdir" ] || continue
     [ -d "$_pdir/agents" ] || continue
     for _afile in "$_pdir/agents"/*.md; do
@@ -820,11 +824,12 @@ sync_cursor() {
         printf -- '---\ndescription: Repo Nexus Virtual Meta-Repo routing protocol\nglobs: *\nalwaysApply: true\n---\n\n%s\n' "$AI_MARKER_START"
         cat "$_c_body"
         printf '\n%s\n' "$AI_MARKER_END"
-      } > "$NEXUS_DIR/.cursor/rules/repo-nexus.mdc"
+      } > "$NEXUS_DIR/.cursor/rules/rnex-context.mdc"
       rm -f "$_c_body"
+      rm -f "$NEXUS_DIR/.cursor/rules/repo-nexus.mdc" 2>/dev/null || true
     else
       clean_rnex_instructions "$NEXUS_DIR/.cursorrules"
-      rm -f "$NEXUS_DIR/.cursor/rules/repo-nexus.mdc" 2>/dev/null || true
+      rm -f "$NEXUS_DIR/.cursor/rules/rnex-context.mdc" "$NEXUS_DIR/.cursor/rules/repo-nexus.mdc" 2>/dev/null || true
       rmdir "$NEXUS_DIR/.cursor/rules" 2>/dev/null || true
     fi
 
@@ -847,7 +852,7 @@ sync_cursor() {
     fi
   else
     clean_rnex_instructions "$NEXUS_DIR/.cursorrules"
-    rm -f "$NEXUS_DIR/.cursor/rules/repo-nexus.mdc" 2>/dev/null || true
+    rm -f "$NEXUS_DIR/.cursor/rules/rnex-context.mdc" "$NEXUS_DIR/.cursor/rules/repo-nexus.mdc" 2>/dev/null || true
     rmdir "$NEXUS_DIR/.cursor/rules" 2>/dev/null || true
     clean_provider_prompts "$NEXUS_DIR/.cursor/prompts" ".md"
     clean_provider_skills "$NEXUS_DIR/.cursor/skills"
