@@ -385,7 +385,6 @@ AI assistants navigate workflows via the catalog index at `.rnex/prompts/index.m
 | [`rnex-workspace-audit.md`](../toolkit/prompts/rnex-workspace-audit.md) | Health, git dirty status, branch tracking, and configuration audit workflow. |
 | [`rnex-wiki-ingest.md`](../toolkit/prompts/rnex-wiki-ingest.md) | Autonomous ingestion of source docs from `/raw/` into Karpathy LLM Wiki pages. |
 | [`rnex-wiki-lint.md`](../toolkit/prompts/rnex-wiki-lint.md) | Link validation, backlink (`mentioned_in`) recalculation, and index rebuilding. |
-| [`rnex-setup-karpathy-wiki.md`](../toolkit/prompts/rnex-setup-karpathy-wiki.md) | Scaffolding prompt for Karpathy LLM Wiki architecture in any repository. |
 
 ---
 

@@ -1,3 +1,8 @@
+---
+title: Google Gemini & Antigravity Plugin
+description: Integrate Google Gemini CLI and Antigravity IDE with Repo Nexus, maintaining GEMINI.md and mirroring assets to .gemini/.
+---
+
 # Google Gemini & Antigravity Plugin
 
 The **`gemini`** plugin integrates Google Gemini CLI and Google Antigravity IDE into a Repo Nexus Virtual Meta-Repo.

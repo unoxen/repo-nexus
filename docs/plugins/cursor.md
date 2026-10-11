@@ -1,3 +1,8 @@
+---
+title: Cursor IDE Plugin
+description: Integrate Cursor IDE with Repo Nexus, maintain .cursorrules and MDC rules, and mirror prompts into .cursor/.
+---
+
 # Cursor IDE Plugin
 
 The **`cursor`** plugin integrates Cursor IDE and Cursor Agent Mode into a Repo Nexus Virtual Meta-Repo.

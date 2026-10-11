@@ -1,0 +1,41 @@
+/**
+ * Repo Nexus Custom VitePress Styles
+ */
+
+:root {
+  --vp-c-brand-1: #3eaf7c;
+  --vp-c-brand-2: #33996b;
+  --vp-c-brand-3: #287a55;
+  --vp-c-brand-soft: rgba(62, 175, 124, 0.14);
+}
+
+.dark {
+  --vp-c-brand-1: #42d392;
+  --vp-c-brand-2: #3eaf7c;
+  --vp-c-brand-3: #33996b;
+  --vp-c-brand-soft: rgba(66, 211, 146, 0.16);
+}
+
+/* Hero Section Enhancements */
+.VPHero .name {
+  background: linear-gradient(120deg, #42d392 30%, #38bdf8);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Clean Terminal / Output styling */
+.vp-doc pre.language-text {
+  background-color: var(--vp-c-bg-alt);
+  border: 1px solid var(--vp-c-divider);
+}
+
+/* Feature cards */
+.VPFeature {
+  border: 1px solid var(--vp-c-divider) !important;
+  transition: border-color 0.25s, transform 0.25s !important;
+}
+
+.VPFeature:hover {
+  border-color: var(--vp-c-brand-1) !important;
+  transform: translateY(-2px);
+}

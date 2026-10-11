@@ -1,3 +1,8 @@
+---
+title: Windsurf IDE Plugin
+description: Integrate Windsurf IDE and Cascade with Repo Nexus, maintain .windsurfrules and mirror prompts to .windsurf/.
+---
+
 # Windsurf IDE Plugin
 
 The **`windsurf`** plugin integrates Codeium's Windsurf IDE and Cascade into a Repo Nexus Virtual Meta-Repo.

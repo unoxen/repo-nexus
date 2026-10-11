@@ -1,0 +1,2 @@
+# Exclude VitePress config, cache, and dist from npm package
+docs/.vitepress/

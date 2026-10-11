@@ -1,3 +1,8 @@
+---
+title: Anthropic Claude Plugin
+description: Integrate Anthropic Claude Code and Claude Desktop with Repo Nexus, CLAUDE.md instructions, and .claude/ prompt mirroring.
+---
+
 # Anthropic Claude Plugin
 
 The **`claude`** plugin integrates Anthropic Claude Code CLI (`claude`) and Claude Desktop into a Repo Nexus Virtual Meta-Repo.

@@ -1,3 +1,8 @@
+---
+title: Karpathy LLM & Agent Knowledge Wiki Plugin
+description: Implement Andrej Karpathy's 4 cardinal principles for coding agents and autonomous zero-dependency LLM Wiki architecture in Repo Nexus.
+---
+
 # Karpathy LLM & Agent Knowledge Wiki Plugin
 
 The **`karpathy-llm`** plugin packages Andrej Karpathy's agent behavioral principles, multi-repo context engineering standards, and the autonomous **Karpathy LLM Wiki** knowledge architecture for AI coding assistants.

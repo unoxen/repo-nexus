@@ -12,3 +12,8 @@ node_modules/
 # Local machine-specific configuration
 .local.rnex.yaml
 .rnex.local.yaml
+
+# VitePress build artifacts & cache
+docs/.vitepress/dist/
+docs/.vitepress/cache/
+

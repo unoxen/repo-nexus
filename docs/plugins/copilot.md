@@ -1,3 +1,8 @@
+---
+title: GitHub Copilot Plugin
+description: Integrate GitHub Copilot with Repo Nexus, mirror prompts, skills, and agents directly into .github/copilot-instructions.md.
+---
+
 # GitHub Copilot Plugin
 
 The **`copilot`** plugin integrates GitHub Copilot (GitHub Copilot Chat in VS Code / JetBrains / Visual Studio, GitHub Copilot CLI, and Copilot Agent Mode) into a Repo Nexus Virtual Meta-Repo.

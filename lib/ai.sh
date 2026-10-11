@@ -392,6 +392,9 @@ sync_prompts() {
     cp -f "$_pfile" "$_dst_prompts/$_b"
   done
 
+  # Purge obsolete setup prompts from workspace prompts
+  rm -f "$_dst_prompts/rnex-setup-karpathy-wiki.md" "$_dst_prompts/setup-karpathy-wiki.md" 2>/dev/null || true
+
   sync_ai_providers
 }
 
@@ -400,6 +403,9 @@ sync_provider_prompts() {
   _ext="${2:-.md}"
   [ -n "$_src_prompts" ] || return 0
   mkdir -p "$_sp_dir"
+
+  # Purge obsolete setup prompts
+  rm -f "$_sp_dir/rnex-setup-karpathy-wiki${_ext}" "$_sp_dir/setup-karpathy-wiki${_ext}" 2>/dev/null || true
 
   # Base toolkit prompts
   for _pfile in "$_src_prompts"/rnex-*.md; do
@@ -457,6 +463,10 @@ sync_provider_prompts() {
 sync_provider_skills() {
   _sk_dir="$1"
   mkdir -p "$_sk_dir"
+
+  # Purge obsolete setup skills
+  rm -f "$_sk_dir/rnex-setup-karpathy-wiki/SKILL.md" "$_sk_dir/setup-karpathy-wiki/SKILL.md" 2>/dev/null || true
+  rmdir "$_sk_dir/rnex-setup-karpathy-wiki" "$_sk_dir/setup-karpathy-wiki" 2>/dev/null || true
 
   # Base toolkit skills
   for _pfile in "$_src_prompts"/rnex-*.md; do
@@ -560,6 +570,7 @@ clean_provider_prompts() {
   fi
 
   # Remove base toolkit prompts
+  rm -f "$_sp_dir/rnex-setup-karpathy-wiki${_ext}" "$_sp_dir/setup-karpathy-wiki${_ext}" 2>/dev/null || true
   if [ -n "$_src_prompts" ]; then
     for _pfile in "$_src_prompts"/rnex-*.md; do
       [ -f "$_pfile" ] || continue
@@ -602,6 +613,8 @@ clean_provider_skills() {
   fi
 
   # Remove base toolkit skills
+  rm -f "$_sk_dir/rnex-setup-karpathy-wiki/SKILL.md" "$_sk_dir/setup-karpathy-wiki/SKILL.md" 2>/dev/null || true
+  rmdir "$_sk_dir/rnex-setup-karpathy-wiki" "$_sk_dir/setup-karpathy-wiki" 2>/dev/null || true
   if [ -n "$_src_prompts" ]; then
     for _pfile in "$_src_prompts"/rnex-*.md; do
       [ -f "$_pfile" ] || continue

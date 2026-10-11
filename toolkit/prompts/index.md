@@ -20,7 +20,3 @@ When an AI assistant is assigned a cross-repo or workspace-wide task, consult th
 4. **[`rnex-wiki-lint.md`](./rnex-wiki-lint.md)**
    - **Purpose**: Deterministic graph audit, dead link validation, `mentioned_in` backlink reconciliation, and index rebuild.
    - **When to use**: Routine wiki maintenance, pre-commit validation, or after adding/renaming wiki pages.
-
-5. **[`rnex-setup-karpathy-wiki.md`](./rnex-setup-karpathy-wiki.md)**
-   - **Purpose**: Scaffolding a Karpathy LLM Wiki knowledge architecture in a workspace or standalone repository.
-   - **When to use**: Initializing `/raw/`, `/wiki/index.md`, `/wiki/hot.md`, and deterministic rule structures.

@@ -1,6 +1,6 @@
 {
   "name": "repo-nexus",
-  "version": "0.5.13",
+  "version": "0.5.14",
   "description": "Lightweight, zero-dependency Virtual Meta-Repo companion for multi-repo workspaces and shared AI context (no git submodules)",
   "bin": {
     "repo-nexus": "rnex",
@@ -8,7 +8,10 @@
   },
   "scripts": {
     "prepare": "git config core.hooksPath .githooks 2>/dev/null || true",
-    "test": "./tests/test_cli.sh"
+    "test": "./tests/test_cli.sh",
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs"
   },
   "files": [
     "rnex",
@@ -17,21 +20,26 @@
     "CHANGELOG.md",
     "LICENSE",
     "docs/",
+    "!docs/.vitepress/",
     "toolkit/"
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/nu-nenoi/repo-nexus.git"
+    "url": "git+https://github.com/unoxen/repo-nexus.git"
   },
   "bugs": {
-    "url": "https://github.com/nu-nenoi/repo-nexus/issues"
+    "url": "https://github.com/unoxen/repo-nexus/issues"
   },
-  "homepage": "https://github.com/nu-nenoi/repo-nexus#readme",
+  "homepage": "https://github.com/unoxen/repo-nexus#readme",
   "keywords": [
     "rnex",
     "repo-nexus",
     "multi-repo",
     "monorepo",
+    "meta-repo",
+    "harness",
+    "workspace",
+    "toolkit",
     "ai-agents",
     "agents.md",
     "cursor-rules",
@@ -41,18 +49,19 @@
     "plugins",
     "karpathy",
     "context-engineering",
-    "symlink",
-    "workspace",
     "developer-tools",
     "cli"
   ],
   "license": "MIT",
   "author": "Anton Shramkov",
   "engines": {
-    "node": ">=14"
+    "node": ">=24"
   },
   "os": [
     "darwin",
     "linux"
-  ]
+  ],
+  "devDependencies": {
+    "vitepress": "^1.6.0"
+  }
 }
