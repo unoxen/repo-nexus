@@ -12,7 +12,7 @@ A **simple, lightweight Virtual Meta-Repo companion** for multi-repo workspaces 
 - **No Git Submodules or Nested Git Collisions**: Member repositories are physically cloned into `./repos/` and strictly ignored by workspace Git. Each repository maintains its own standalone history, remotes, branches, and commits with zero submodule friction.
 - **Unified Workspace for AI Coding Assistants**: Open one root folder to give Cursor, Claude Code, GitHub Copilot, Codex, or Antigravity complete cross-service visibility.
 - **Two-Level Configuration as Source of Truth**: Shared team manifest in `rnex.yaml` with machine-specific overrides in `.local.rnex.yaml` (highest priority).
-- **OneCommand Team Onboarding**: Teammates clone the meta-repo and run `rnex clone` to clone and configure all member repos in seconds.
+- **One Command Team Onboarding**: Teammates clone the meta-repo and run `rnex clone` to clone and configure all member repos in seconds.
 - **Cross-Repo Batch Operations**: Run arbitrary commands across all active repositories with `rnex exec <command>`.
 - **Scoped Plugins & Context Packs**: Modular plugin packages scoped under `.rnex/plugins/<plugin-name>/` with support for domain directories (e.g. `raw/` and `wiki/` for `karpathy-llm`).
 - **Zero Dependencies**: Pure POSIX shell CLI (`rnex`). Works out of the box across macOS, Linux, and Windows (WSL/Git Bash).
