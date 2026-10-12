@@ -6,7 +6,7 @@ hero:
   text: "Virtual Meta-Repo Companion"
   tagline: "Unite independent repositories into a cohesive AI-enabled workspace, without dependencies, Git submodules or monorepo migrations."
   image:
-    src: /logo.png
+    src: /logo.jpg
     alt: Repo Nexus Logo
   actions:
     - theme: brand
