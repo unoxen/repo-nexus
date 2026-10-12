@@ -61,7 +61,9 @@ AI_MARKER_END="<!-- REPO-NEXUS:END -->"
 
 get_rnex_instructions() {
   _wiki_dir="$(karpathy_wiki_dir)"
-  cat <<AGENTS_EOF
+
+  if yaml_plugin_enabled "karpathy-llm"; then
+    cat <<AGENTS_EOF
 # Multi-Repo AI Workspace Context
 
 This workspace operates as a **Repo Nexus Virtual Meta-Repo** uniting independent repositories.
@@ -119,6 +121,55 @@ When workspace configuration, routing blocks, plugin assets, or member repositor
 ## Git Operations
 Commit and push changes directly within the respective member repository root (\`repos/<name>/\`).
 AGENTS_EOF
+  else
+    cat <<AGENTS_EOF
+# Multi-Repo AI Workspace Context
+
+This workspace operates as a **Repo Nexus Virtual Meta-Repo** uniting independent repositories.
+
+## Routing Protocol for AI Assistants
+
+### Mandatory Session Startup
+
+Before answering the first task or making any task-specific tool call in a new session, execute these steps in strict sequence:
+
+1. **Read Configuration First (Highest Priority)**: Inspect and read \`.local.rnex.yaml\` (if present) and \`rnex.yaml\` to identify workspace structure (\`repos_dir\`), active member repositories (\`repos/\`), and enabled plugins.
+   - \`.local.rnex.yaml\` takes highest priority over \`rnex.yaml\`.
+   - Repositories are enabled by default unless explicitly marked \`enabled: false\`. Disabled repositories are excluded from active tasks.
+2. **Plugin Instructions**: Inspect instructions for every enabled Repo Nexus plugin under \`.rnex/plugins/<plugin-name>/\`.
+3. **Targeted Member Repository Access Only**:
+   - Navigate directly to the specific files in \`repos/<name>/\` relevant to the user request.
+   - Never perform blind repository-wide scans or unbounded searches across \`repos/\`.
+
+This is a hard gate, not optional orientation. Complete it once per session and retain the resulting context; do not repeatedly reload these files.
+
+### Forbidden Startup Actions
+- ❌ **DO NOT** grep or search \`repos/\` as your first step.
+- ❌ **DO NOT** perform recursive tree exploration of member repositories.
+
+## Workspace Skills, Workflows & Rules
+Tools and agents operate on skills, workflows, instructions, and rules located under \`.rnex/\`:
+- **Skills**: Inspect \`.rnex/skills/\` and active plugin skills under \`.rnex/plugins/<plugin-name>/skills/\`.
+- **Workflows**: Inspect \`.rnex/workflows/\` and active plugin workflows under \`.rnex/plugins/<plugin-name>/workflows/\`.
+- **Rules & Instructions**: Inspect \`.rnex/rules/\`, \`.rnex/instructions/\`, and active plugin rules/instructions under \`.rnex/plugins/<plugin-name>/\`.
+
+## Subagents
+Autonomous subagents are defined under \`.rnex/agents/\` and active plugin agents under \`.rnex/plugins/<plugin-name>/agents/\`.
+- Subagents are kept in \`.rnex/\` and are not mirrored to external provider folders.
+- To execute a task requiring a subagent, adopt the role, operational persona, and constraints specified in the corresponding subagent definition file.
+
+## Member Repositories (\`repos/<name>/\`)
+Each member repository is an autonomous Git repository. For repository-specific instructions, inspect \`repos/<name>/.rnex/\`. Inspect only targeted files required for the task.
+
+## Workspace Maintenance
+When workspace configuration, routing blocks, plugin assets, or member repository structures require reconciliation or schema upgrades:
+- Run \`rnex fix\` (or its alias \`rnex update\` / \`rnex upgrade\`, which runs the unified fix reconciliation with upfront version checking).
+- Use \`rnex fix -y\` to non-destructively apply configuration version upgrades automatically.
+
+## Git Operations
+Commit and push changes directly within the respective member repository root (\`repos/<name>/\`).
+AGENTS_EOF
+  fi
 }
 
 merge_rnex_instructions() {
@@ -344,11 +395,18 @@ sync_rnex_base_assets() {
       cp -f "$_sk_dir"/* "$NEXUS_DIR/.rnex/skills/$_sk_name/" 2>/dev/null || true
     done
   fi
+
+  # Purge any legacy plugin assets that shouldn't be in base .rnex/
+  rm -rf "$NEXUS_DIR/.rnex/skills/rnex-setup-karpathy-wiki" "$NEXUS_DIR/.rnex/skills/setup-karpathy-wiki" 2>/dev/null || true
+  rm -rf "$NEXUS_DIR/.rnex/skills/rnex-wiki-ingest" "$NEXUS_DIR/.rnex/skills/rnex-wiki-lint" "$NEXUS_DIR/.rnex/skills/wiki-curator" 2>/dev/null || true
+  rm -f "$NEXUS_DIR/.rnex/workflows/rnex-wiki-ingest.md" "$NEXUS_DIR/.rnex/workflows/rnex-wiki-lint.md" "$NEXUS_DIR/.rnex/workflows/wiki-ingest.md" "$NEXUS_DIR/.rnex/workflows/wiki-lint.md" 2>/dev/null || true
+  rm -f "$NEXUS_DIR/.rnex/agents/rnex-wiki-curator.agent.md" "$NEXUS_DIR/.rnex/agents/wiki-curator.agent.md" 2>/dev/null || true
 }
 
 sync_prompts() {
   sync_rnex_base_assets
   sync_ai_providers
+  clean_disabled_plugins_prompts_all_providers
 }
 
 sync_provider_prompts() {
@@ -379,6 +437,28 @@ sync_provider_prompts() {
   # Purge obsolete setup prompts
   rm -f "$_sp_dir/rnex-setup-karpathy-wiki${_ext}" "$_sp_dir/setup-karpathy-wiki${_ext}" 2>/dev/null || true
   rm -f "$_sp_dir/wiki-ingest${_ext}" "$_sp_dir/wiki-lint${_ext}" 2>/dev/null || true
+
+  # Remove prompts belonging to disabled plugins from this provider directory
+  for _parent in "$SCRIPT_LOCATION/toolkit/plugins" "$(dirname "$SCRIPT_LOCATION")/toolkit/plugins" "$NEXUS_DIR/toolkit/plugins" "$NEXUS_DIR/.rnex/plugins"; do
+    [ -d "$_parent" ] || continue
+    for _pdir in "$_parent"/*; do
+      [ -d "$_pdir" ] || continue
+      _pname="$(basename "$_pdir")"
+      if ! yaml_plugin_enabled "$_pname"; then
+        for _sub in prompts workflows; do
+          [ -d "$_pdir/$_sub" ] || continue
+          for _pfile in "$_pdir/$_sub"/*.md; do
+            [ -f "$_pfile" ] || continue
+            _base="$(basename "$_pfile" .md)"
+            case "$_base" in
+              index|README) continue ;;
+            esac
+            rm -f "$_sp_dir/${_base}${_ext}" 2>/dev/null || true
+          done
+        done
+      fi
+    done
+  done
 
   # Base toolkit prompts (from prompts or workflows)
   if [ -n "$_src_prompts" ]; then
@@ -447,6 +527,53 @@ sync_provider_prompts() {
           } > "$_dst_file"
         done
       done
+    done
+  done
+}
+
+clean_plugin_prompts_across_providers() {
+  _pdir="$1"
+  [ -d "$_pdir" ] || return 0
+
+  for _sub in prompts workflows; do
+    [ -d "$_pdir/$_sub" ] || continue
+    for _pfile in "$_pdir/$_sub"/*.md; do
+      [ -f "$_pfile" ] || continue
+      _base="$(basename "$_pfile" .md)"
+      case "$_base" in
+        index|README) continue ;;
+      esac
+      rm -f "$NEXUS_DIR/.github/prompts/${_base}.prompt.md" 2>/dev/null || true
+      rm -f "$NEXUS_DIR/.claude/commands/${_base}.md" 2>/dev/null || true
+      rm -f "$NEXUS_DIR/.claude/prompts/${_base}.md" 2>/dev/null || true
+      rm -f "$NEXUS_DIR/.gemini/prompts/${_base}.prompt.md" 2>/dev/null || true
+      rm -f "$NEXUS_DIR/.cursor/prompts/${_base}.md" 2>/dev/null || true
+      rm -f "$NEXUS_DIR/.windsurf/prompts/${_base}.md" 2>/dev/null || true
+    done
+  done
+
+  rmdir "$NEXUS_DIR/.github/prompts" 2>/dev/null || true
+  rmdir "$NEXUS_DIR/.claude/commands" 2>/dev/null || true
+  rmdir "$NEXUS_DIR/.claude/prompts" 2>/dev/null || true
+  rmdir "$NEXUS_DIR/.gemini/prompts" 2>/dev/null || true
+  rmdir "$NEXUS_DIR/.cursor/prompts" 2>/dev/null || true
+  rmdir "$NEXUS_DIR/.windsurf/prompts" 2>/dev/null || true
+}
+
+clean_disabled_plugins_prompts_all_providers() {
+  _seen_plugins=" "
+  for _parent in "$SCRIPT_LOCATION/toolkit/plugins" "$(dirname "$SCRIPT_LOCATION")/toolkit/plugins" "$NEXUS_DIR/toolkit/plugins" "$NEXUS_DIR/.rnex/plugins"; do
+    [ -d "$_parent" ] || continue
+    for _pdir in "$_parent"/*; do
+      [ -d "$_pdir" ] || continue
+      _pname="$(basename "$_pdir")"
+      case "$_seen_plugins" in
+        *" $_pname "*) continue ;;
+      esac
+      _seen_plugins="${_seen_plugins}${_pname} "
+      if ! yaml_plugin_enabled "$_pname"; then
+        clean_plugin_prompts_across_providers "$_pdir"
+      fi
     done
   done
 }

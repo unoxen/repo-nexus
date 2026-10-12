@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Dynamic AI Instructions & Complete Plugin Deactivation in `rnex fix`**:
+  - [`get_rnex_instructions()`](file:///Users/admin/Projects/ai/repo-nexus/lib/ai.sh) dynamically evaluates whether `karpathy-llm` is enabled. When disabled or omitted from configuration, the Karpathy LLM Wiki mandatory gate alert, wiki orientation startup step, forbidden wiki actions, and wiki subagent references are omitted from [`AGENTS.md`](file:///Users/admin/Projects/ai/repo-nexus/AGENTS.md) and native provider instructions.
+  - `sync_plugins` automatically prunes scoped directories (`.rnex/plugins/<plugin>/`) from both the workspace root and member repositories whenever a plugin is marked `enabled: false` or omitted from config.
+  - Provider prompt mirrors across all supported assistants (`.github/prompts`, `.claude/commands`, `.claude/prompts`, `.gemini/prompts`, `.cursor/prompts`, `.windsurf/prompts`) are cleaned of prompts and workflows belonging to disabled plugins, while preserving base prompts and active plugin prompts.
+  - Hook dispatchers and `status` reports evaluate active enablement (`yaml_plugin_enabled`) rather than key presence, preventing disabled plugins from registering hook alerts or status indicators.
+  - User-authored content in wiki and intake directories is strictly preserved during plugin deactivation.
 - **Universal `AGENTS.md` & Native Provider Instructions Architecture**:
   - Maintained [`AGENTS.md`](file:///Users/admin/Projects/ai/repo-nexus/AGENTS.md) at the workspace root as the universal, cross-tool standard for workspace routing instructions.
   - Assistants that read `AGENTS.md` unconditionally (such as GitHub Copilot) rely directly on `AGENTS.md`, eliminating redundant instruction files (`.github/copilot-instructions.md`) and diverging contexts.

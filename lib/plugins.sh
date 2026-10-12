@@ -115,8 +115,24 @@ sync_plugins() {
   _wiki_dir="$(karpathy_wiki_dir)"
   _raw_dir="$(karpathy_raw_dir)"
 
+  # 1. Prune plugins that are disabled or no longer enabled in config
+  if [ -d "$NEXUS_DIR/.rnex/plugins" ]; then
+    for _existing in "$NEXUS_DIR/.rnex/plugins"/*; do
+      [ -d "$_existing" ] || continue
+      _pname="$(basename "$_existing")"
+      if ! yaml_plugin_enabled "$_pname"; then
+        clean_plugin_prompts_across_providers "$_existing"
+        rm -rf "$_existing"
+        log_ok "Removed disabled plugin scope: .rnex/plugins/$_pname"
+      fi
+    done
+    rmdir "$NEXUS_DIR/.rnex/plugins" 2>/dev/null || true
+  fi
+
+  # 2. Sync enabled plugins
   yaml_list_plugins | while read -r _pname; do
     [ -n "$_pname" ] || continue
+    yaml_plugin_enabled "$_pname" || continue
     _pdir="$(find_plugin_dir "$_pname" 2>/dev/null || true)"
     if [ -z "$_pdir" ]; then
       log_warn "Plugin '$_pname' declared in config but not found on disk"

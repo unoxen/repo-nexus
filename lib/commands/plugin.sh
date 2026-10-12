@@ -17,9 +17,12 @@ cmd_plugin_list() {
     _version="$(plugin_get_field "$_pdir" "version")"
     _desc="$(plugin_get_field "$_pdir" "description")"
 
-    if yaml_has_plugin "$_name"; then
+    if yaml_plugin_enabled "$_name"; then
       printf '  %b[enabled]%b   %b%-15s%b %b(v%s)%b - %s\n' \
         "$_G" "$_NC" "$_BOLD" "$_name" "$_NC" "$_DIM" "${_version:-0.1.0}" "$_NC" "$_desc"
+    elif yaml_has_plugin "$_name"; then
+      printf '  %b[disabled]%b  %b%-15s%b %b(v%s)%b - %s\n' \
+        "$_Y" "$_NC" "$_BOLD" "$_name" "$_NC" "$_DIM" "${_version:-0.1.0}" "$_NC" "$_desc"
     else
       printf '  %b[available]%b %b%-15s%b %b(v%s)%b - %s\n' \
         "$_DIM" "$_NC" "$_BOLD" "$_name" "$_NC" "$_DIM" "${_version:-0.1.0}" "$_NC" "$_desc"
@@ -50,7 +53,7 @@ cmd_plugin_info() {
   if yaml_plugin_enabled "$_name"; then
     _status="${_G}enabled${_NC}"
   elif yaml_has_plugin "$_name"; then
-    _status="${_DIM}disabled locally (${WORKSPACE_LOCAL_YAML})${_NC}"
+    _status="${_DIM}disabled in configuration${_NC}"
   else
     _status="${_DIM}available (not enabled)${_NC}"
   fi
@@ -179,24 +182,8 @@ cmd_plugin_disable() {
     log_ok "Plugin '$_name' disabled from workspace"
   fi
 
-  if ! yaml_plugin_enabled "$_name"; then
-    if [ -d "$NEXUS_DIR/.rnex/plugins/$_name" ]; then
-      rm -rf "$NEXUS_DIR/.rnex/plugins/$_name"
-      log_ok "Removed workspace plugin scope: .rnex/plugins/$_name"
-    fi
-
-    yaml_list_repos | while read -r _rname; do
-      _rpath="$(resolve_repo_path "$_rname")"
-      if [ -d "$_rpath/.rnex/plugins/$_name" ]; then
-        rm -rf "$_rpath/.rnex/plugins/$_name"
-      fi
-    done
-  fi
-
-  sync_prompts
-  if [ ! -f "$NEXUS_DIR/AGENTS.md" ]; then
-    merge_rnex_instructions "$NEXUS_DIR/AGENTS.md"
-  fi
+  sync_plugins
+  cmd_fix -q
   log_ok "Plugin '$_name' disabled from workspace"
 }
 

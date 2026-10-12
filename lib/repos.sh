@@ -86,17 +86,31 @@ EOF
     log_ok "Initialized .rnex in $(basename "$_repo_path")"
   fi
 
+  # Prune disabled plugins from member repo
+  if [ -d "$_r_rnex/plugins" ]; then
+    for _existing in "$_r_rnex/plugins"/*; do
+      [ -d "$_existing" ] || continue
+      _pname="$(basename "$_existing")"
+      if ! yaml_plugin_enabled "$_pname"; then
+        rm -rf "$_existing"
+      fi
+    done
+    rmdir "$_r_rnex/plugins" 2>/dev/null || true
+  fi
+
   # Sync scoped active plugins into member repo under .rnex/plugins/<plugin-name>/
   yaml_list_plugins | while read -r _pname; do
     [ -n "$_pname" ] || continue
+    yaml_plugin_enabled "$_pname" || continue
     _pdir="$(find_plugin_dir "$_pname" 2>/dev/null || true)"
     [ -n "$_pdir" ] || continue
 
     _dest_pdir="$_r_rnex/plugins/$_pname"
     mkdir -p "$_dest_pdir"
 
-    # Deterministically sync plugin asset directories into member repo
-    for _sub in rules workflows instructions prompts skills agents templates; do
+    # Deterministically sync plugin asset directories into member repo (no prompts in plugins)
+    rm -rf "${_dest_pdir:?}/prompts" 2>/dev/null || true
+    for _sub in rules workflows instructions skills agents templates; do
       if [ -d "$_pdir/$_sub" ]; then
         rm -rf "${_dest_pdir:?}/$_sub"
         mkdir -p "$_dest_pdir/$_sub"

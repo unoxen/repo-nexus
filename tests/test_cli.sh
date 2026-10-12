@@ -218,6 +218,8 @@ echo "$_agents_content" | grep -q ".rnex/plugins/<plugin-name>/" || { fail "AGEN
 echo "$_agents_content" | grep -q "Routing Protocol for AI Assistants" || { fail "AGENTS.md missing Routing Protocol heading"; exit 1; }
 ! echo "$_agents_content" | grep -qi "symlink" || { fail "AGENTS.md should not contain symlink mentions"; exit 1; }
 ! echo "$_agents_content" | grep -q "Think Before Coding" || { fail "AGENTS.md should not contain inlined plugin rules"; exit 1; }
+! echo "$_agents_content" | grep -q "MANDATORY GATE: DO NOT INSPECT" || { fail "AGENTS.md should not contain wiki mandatory gate when karpathy-llm is disabled"; exit 1; }
+! echo "$_agents_content" | grep -q "wiki/hot.md" || { fail "AGENTS.md should not reference wiki/hot.md when karpathy-llm is disabled"; exit 1; }
 pass
 
 # --------------------------------------------------------------------------
@@ -916,6 +918,67 @@ git -C "$TEST_KWIKI_WS" add intake/raw/paper.md
 git -C "$TEST_KWIKI_WS" commit -qm "Add intake document"
 _hook_output="$(cd "$TEST_KWIKI_WS" && ./rnex hooks run post-commit 2>&1)"
 echo "$_hook_output" | grep -q "intake/raw/ or docs/wiki/" || { fail "Git hook post-commit did not detect commit to intake/raw/: $_hook_output"; exit 1; }
+pass
+
+# --------------------------------------------------------------------------
+run_test "Disabling plugin in rnex.yaml followed by rnex fix cleanly removes instructions, assets, and prompts"
+# 1. Enable copilot with prompts: true so we can verify provider prompts cleanup
+cat <<'EOF_CFG2' > "$TEST_KWIKI_WS/rnex.yaml"
+plugins:
+  copilot:
+    prompts: true
+    workflows: true
+  karpathy-llm:
+    wiki_dir: docs/wiki
+    raw_dir: intake/raw
+EOF_CFG2
+
+(cd "$TEST_KWIKI_WS" && ./rnex fix >/dev/null)
+[ -f "$TEST_KWIKI_WS/.github/prompts/rnex-wiki-ingest.prompt.md" ] || { fail "Plugin prompt rnex-wiki-ingest was not mirrored to Copilot"; exit 1; }
+[ -f "$TEST_KWIKI_WS/.github/prompts/rnex-wiki-lint.prompt.md" ] || { fail "Plugin prompt rnex-wiki-lint was not mirrored to Copilot"; exit 1; }
+[ -d "$TEST_KWIKI_WS/.rnex/plugins/karpathy-llm" ] || { fail ".rnex/plugins/karpathy-llm missing while enabled"; exit 1; }
+_kw_active_agents="$(cat "$TEST_KWIKI_WS/AGENTS.md")"
+echo "$_kw_active_agents" | grep -q "docs/wiki/" || { fail "Active AGENTS.md missing docs/wiki/ routing"; exit 1; }
+
+# 2. Disable karpathy-llm via enabled: false in rnex.yaml
+cat <<'EOF_CFG3' > "$TEST_KWIKI_WS/rnex.yaml"
+plugins:
+  copilot:
+    prompts: true
+    workflows: true
+  karpathy-llm:
+    enabled: false
+    wiki_dir: docs/wiki
+    raw_dir: intake/raw
+EOF_CFG3
+
+# 3. Run rnex fix
+(cd "$TEST_KWIKI_WS" && ./rnex fix >/dev/null)
+
+# 4. Verify AGENTS.md no longer contains any wiki instructions or mandatory gate
+_kw_disabled_agents="$(cat "$TEST_KWIKI_WS/AGENTS.md")"
+! echo "$_kw_disabled_agents" | grep -q "MANDATORY GATE: DO NOT INSPECT" || { fail "AGENTS.md still contains wiki mandatory gate after disabling plugin"; exit 1; }
+! echo "$_kw_disabled_agents" | grep -q "docs/wiki" || { fail "AGENTS.md still references docs/wiki after disabling plugin"; exit 1; }
+! echo "$_kw_disabled_agents" | grep -q "rnex-wiki-curator" || { fail "AGENTS.md still references rnex-wiki-curator after disabling plugin"; exit 1; }
+echo "$_kw_disabled_agents" | grep -q "Read Configuration First" || { fail "AGENTS.md missing Read Configuration First"; exit 1; }
+
+# 5. Verify provider prompts from disabled plugin were removed, but base prompts kept
+[ ! -f "$TEST_KWIKI_WS/.github/prompts/rnex-wiki-ingest.prompt.md" ] || { fail "rnex-wiki-ingest.prompt.md still present after disabling plugin"; exit 1; }
+[ ! -f "$TEST_KWIKI_WS/.github/prompts/rnex-wiki-lint.prompt.md" ] || { fail "rnex-wiki-lint.prompt.md still present after disabling plugin"; exit 1; }
+[ -f "$TEST_KWIKI_WS/.github/prompts/rnex-cross-repo-feature.prompt.md" ] || { fail "Base prompt rnex-cross-repo-feature was incorrectly removed"; exit 1; }
+
+# 6. Verify .rnex/plugins/karpathy-llm scope was removed
+[ ! -d "$TEST_KWIKI_WS/.rnex/plugins/karpathy-llm" ] || { fail ".rnex/plugins/karpathy-llm still exists after fix"; exit 1; }
+
+# 7. Verify user wiki files remain intact
+[ -f "$TEST_KWIKI_WS/docs/wiki/index.md" ] || { fail "docs/wiki/index.md was deleted when plugin was disabled"; exit 1; }
+[ -f "$TEST_KWIKI_WS/docs/wiki/hot.md" ] || { fail "docs/wiki/hot.md was deleted when plugin was disabled"; exit 1; }
+[ -f "$TEST_KWIKI_WS/intake/raw/paper.md" ] || { fail "intake/raw/paper.md was deleted when plugin was disabled"; exit 1; }
+
+# 8. Verify plugin list and info report disabled
+_list_out="$(cd "$TEST_KWIKI_WS" && ./rnex plugin list 2>&1)"
+echo "$_list_out" | grep "karpathy-llm" | grep -q "disabled" || { fail "plugin list did not report karpathy-llm as disabled: $_list_out"; exit 1; }
+
 pass
 
 # ==========================================================================

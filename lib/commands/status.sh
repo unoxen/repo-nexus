@@ -64,7 +64,7 @@ cmd_status() {
     true|yes|1)
       if [ "$_gh_active" -eq 1 ]; then
         _active_trigger=""
-        if yaml_has_plugin "karpathy-llm"; then
+        if yaml_plugin_enabled "karpathy-llm"; then
           _active_trigger="$(yaml_plugin_get "karpathy-llm" "lint_trigger")"
         fi
         if [ -n "$_active_trigger" ]; then
@@ -79,7 +79,7 @@ cmd_status() {
     *)
       if [ "$_gh_active" -eq 1 ]; then
         _active_trigger=""
-        if yaml_has_plugin "karpathy-llm"; then
+        if yaml_plugin_enabled "karpathy-llm"; then
           _active_trigger="$(yaml_plugin_get "karpathy-llm" "lint_trigger")"
         fi
         if [ -n "$_active_trigger" ]; then

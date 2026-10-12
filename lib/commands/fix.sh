@@ -40,13 +40,16 @@ cmd_fix() {
   # 1. Ensure .gitignore ignores repos/, .rnex/, and local configs, and strips legacy counters
   reconcile_gitignore "$NEXUS_DIR"
 
-  # 2. Reconcile universal workspace instructions in AGENTS.md
+  # 2. Reconcile plugins (scopes, asset pruning for disabled plugins)
+  sync_plugins
+
+  # 3. Reconcile universal workspace instructions in AGENTS.md
   merge_rnex_instructions "$NEXUS_DIR/AGENTS.md"
 
-  # 3. Sync standard skills, workflows, and provider prompts
+  # 4. Sync standard skills, workflows, and provider prompts
   sync_prompts
 
-  # 4. Reconcile Git hooks according to configuration
+  # 5. Reconcile Git hooks according to configuration
   case "$GIT_HOOKS_CONFIG" in
     false|no|0)
       _cur_hp="$(git -C "$NEXUS_DIR" config --get core.hooksPath 2>/dev/null || true)"
@@ -81,9 +84,6 @@ cmd_fix() {
       fi
       ;;
   esac
-
-  # 5. Reconcile plugins
-  sync_plugins
 
   # 6. Reconcile member repos
   yaml_list_repos | while read -r _name; do

@@ -138,16 +138,16 @@ cmd_hooks() {
       done
 
       _active_trigger=""
-      if yaml_has_plugin "karpathy-llm"; then
+      if yaml_plugin_enabled "karpathy-llm"; then
         _active_trigger="$(yaml_plugin_get "karpathy-llm" "lint_trigger")"
+        printf '\n%bActive Plugin Triggers:%b\n' "$_BOLD" "$_NC"
+        if [ -n "$_active_trigger" ]; then
+          printf '  %b●%b karpathy-llm: %s\n' "$_G" "$_NC" "$_active_trigger"
+        else
+          printf '  %b○%b karpathy-llm: (manual only / no trigger set in rnex.yaml)\n' "$_DIM" "$_NC"
+        fi
+        printf '\n'
       fi
-      printf '\n%bActive Plugin Triggers:%b\n' "$_BOLD" "$_NC"
-      if [ -n "$_active_trigger" ]; then
-        printf '  %b●%b karpathy-llm: %s\n' "$_G" "$_NC" "$_active_trigger"
-      else
-        printf '  %b○%b karpathy-llm: (manual only / no trigger set in rnex.yaml)\n' "$_DIM" "$_NC"
-      fi
-      printf '\n'
       ;;
     run)
       shift
@@ -158,7 +158,7 @@ cmd_hooks() {
       case "$_hook_name" in
         post-merge)
           cmd_fix -y --quiet || true
-          if yaml_has_plugin "karpathy-llm"; then
+          if yaml_plugin_enabled "karpathy-llm"; then
             _trigger="$(yaml_plugin_get "karpathy-llm" "lint_trigger")"
             if [ "$_trigger" = "git-post-merge" ] || [ "$_trigger" = "post-merge" ]; then
               _wiki_dir="$(karpathy_wiki_dir)"
@@ -175,7 +175,7 @@ cmd_hooks() {
           return 0
           ;;
         post-commit)
-          if yaml_has_plugin "karpathy-llm"; then
+          if yaml_plugin_enabled "karpathy-llm"; then
             _trigger="$(yaml_plugin_get "karpathy-llm" "lint_trigger")"
             if [ "$_trigger" = "git-post-commit" ] || [ "$_trigger" = "post-commit" ]; then
               _wiki_dir="$(karpathy_wiki_dir)"
@@ -193,7 +193,7 @@ cmd_hooks() {
           return 0
           ;;
         pre-commit)
-          if yaml_has_plugin "karpathy-llm"; then
+          if yaml_plugin_enabled "karpathy-llm"; then
             _trigger="$(yaml_plugin_get "karpathy-llm" "lint_trigger")"
             if [ "$_trigger" = "git-pre-commit" ] || [ "$_trigger" = "pre-commit" ]; then
               _wiki_dir="$(karpathy_wiki_dir)"
@@ -211,7 +211,7 @@ cmd_hooks() {
           return 0
           ;;
         pre-push)
-          if yaml_has_plugin "karpathy-llm"; then
+          if yaml_plugin_enabled "karpathy-llm"; then
             _trigger="$(yaml_plugin_get "karpathy-llm" "lint_trigger")"
             if [ "$_trigger" = "git-pre-push" ] || [ "$_trigger" = "pre-push" ]; then
               _wiki_dir="$(karpathy_wiki_dir)"
