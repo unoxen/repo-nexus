@@ -26,8 +26,8 @@ export default defineConfig({
     ['meta', { name: 'og:type', content: 'website' }],
     ['meta', { name: 'og:site_name', content: 'Repo Nexus (rnex)' }],
     ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
-    ['link', { rel: 'icon', type: 'image/jpeg', href: `${base}logo.jpg` }],
-    ['link', { rel: 'alternate icon', type: 'image/jpeg', href: `${base}logo.jpg` }]
+    ['link', { rel: 'icon', type: 'image/png', href: `${base}logo.png` }],
+    ['link', { rel: 'alternate icon', type: 'image/png', href: `${base}logo.png` }]
   ],
 
   markdown: {
@@ -36,7 +36,7 @@ export default defineConfig({
 
   themeConfig: {
     siteTitle: 'Repo Nexus (rnex)',
-    logo: '/logo.jpg',
+    logo: '/logo.png',
 
     editLink: {
       pattern: 'https://github.com/unoxen/repo-nexus/edit/main/docs/:path',
