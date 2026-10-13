@@ -1,5 +1,5 @@
 # Repo Nexus workspace configuration
-# See docs/rnex.example.yaml for a comprehensive example with all options.
+# See templates/rnex.example.yaml for a comprehensive example with all options.
 
 version: 0.6.4
 

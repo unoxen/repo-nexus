@@ -86,6 +86,9 @@ setup_test_workspace() {
   if [ -d "$DIR/toolkit" ] && [ ! -d "$TEST_WORKSPACE/toolkit" ]; then
     cp -r "$DIR/toolkit" "$TEST_WORKSPACE/toolkit"
   fi
+  if [ -d "$DIR/templates" ] && [ ! -d "$TEST_WORKSPACE/templates" ]; then
+    cp -r "$DIR/templates" "$TEST_WORKSPACE/templates"
+  fi
 }
 
 report_results() {

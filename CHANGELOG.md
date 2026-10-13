@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - `06_plugins_advanced.sh`: Deterministic plugin updates, Karpathy LLM Wiki configurable paths (`wiki_dir`, `raw_dir`), and complete plugin deactivation with prompt cleanup.
   - Shared test harness `tests/test_helper.sh` provides dynamic repository root resolution, isolated workspace scaffolding, standardized assertion helpers (`run_test`, `pass`, `fail`), and standalone execution detection.
   - Backward-compatible runner `tests/test_cli.sh` executes all 36 tests sequentially and supports running individual suites by name or numeric prefix (e.g. `./tests/test_cli.sh 06`).
+- **Standardized Root `templates/` Directory**:
+  - Moved reference configuration and instruction templates ([`rnex.example.yaml`](file:///Users/admin/Projects/ai/repo-nexus/templates/rnex.example.yaml) and [`AGENTS.sample.md`](file:///Users/admin/Projects/ai/repo-nexus/templates/AGENTS.sample.md)) from `docs/` to root [`templates/`](file:///Users/admin/Projects/ai/repo-nexus/templates/).
+  - Pruned empty placeholder directory `toolkit/templates/`.
+  - Updated config pointers in [`rnex.yaml`](file:///Users/admin/Projects/ai/repo-nexus/rnex.yaml) and [`init.sh`](file:///Users/admin/Projects/ai/repo-nexus/lib/commands/init.sh), package distribution in [`package.json`](file:///Users/admin/Projects/ai/repo-nexus/package.json), and cleaned up VitePress exclusions in [`docs/.vitepress/config.mts`](file:///Users/admin/Projects/ai/repo-nexus/docs/.vitepress/config.mts).
 
 ## [0.6.7] - 2026-10-12
 

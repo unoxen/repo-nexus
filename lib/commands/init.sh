@@ -119,7 +119,7 @@ cmd_init() {
 
     cat > "$_target_yaml" <<YAML_EOF
 # Repo Nexus workspace configuration
-# See docs/rnex.example.yaml for a comprehensive example with all options.
+# See templates/rnex.example.yaml for a comprehensive example with all options.
 
 version: $RNEX_VERSION
 

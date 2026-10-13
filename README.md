@@ -133,9 +133,10 @@ repo-nexus/
 ├── rnex                            # CLI executable (POSIX shell)
 ├── AGENTS.md                       # Routing-only universal AI instructions
 ├── CHANGELOG.md                    # Release history and migration notes
-├── docs/
+├── templates/
 │   ├── AGENTS.sample.md            # Template for routing-only AGENTS.md
-│   ├── rnex.example.yaml           # Full config reference with examples
+│   └── rnex.example.yaml           # Full config reference with examples
+├── docs/
 │   ├── guide/                      # Architecture, workflows, and getting started
 │   ├── cli/                        # Comprehensive CLI reference manual
 │   ├── plugins/                    # Scoped plugin guides and specifications
@@ -144,11 +145,14 @@ repo-nexus/
 ├── .github/
 │   └── workflows/ci.yml            # GitHub Actions CI workflow
 ├── tests/
-│   └── test_cli.sh                 # Automated CLI test suite
-├── toolkit/                        # Shared plugins, prompts, and templates
-│   ├── plugins/
-│   │   └── karpathy-llm/           # Scoped Karpathy LLM plugin
-│   └── prompts/                    # Standardized AI operational prompts
+│   ├── test_cli.sh                 # Main test runner
+│   ├── test_helper.sh              # Shared test harness and utilities
+│   └── suites/                     # Modular test suites
+├── toolkit/                        # Built-in plugins, prompts, skills, and workflows
+│   ├── plugins/                    # Scoped workspace plugins
+│   ├── prompts/                    # Standardized AI operational prompts
+│   ├── skills/                     # Workspace skills
+│   └── workflows/                  # Workspace workflows
 └── README.md
 ```
 

@@ -13,10 +13,6 @@ export default defineConfig({
   cleanUrls: true,
   lastUpdated: true,
 
-  srcExclude: [
-    'AGENTS.sample.md'
-  ],
-
   sitemap: {
     hostname: `https://unoxen.github.io${base}`
   },
