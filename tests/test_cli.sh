@@ -48,6 +48,7 @@ fi
 _STANDALONE_RUN=0
 for suite in $SUITES; do
   [ -f "$suite" ] || continue
+  # shellcheck source=/dev/null
   . "$suite"
 done
 
