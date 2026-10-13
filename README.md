@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/github/license/unoxen/repo-nexus)](LICENSE)
 [![POSIX Compatible](https://img.shields.io/badge/POSIX-compatible-success)](#)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey)](#)
-[![CLI Reference](https://img.shields.io/badge/docs-site-blue.svg)](https://unoxen.github.io/repo-nexus/)
+[![Documentation Site](https://img.shields.io/badge/docs-site-blue.svg)](https://unoxen.github.io/repo-nexus/)
 
 A **simple, lightweight Virtual Meta-Repo companion** for multi-repo workspaces and shared AI context. It organizes independent repositories into a unified workspace and shares lean routing instructions (`AGENTS.md`) **without Git submodules, monorepo migrations, or symlink fragility**.
 
@@ -17,12 +17,16 @@ A **simple, lightweight Virtual Meta-Repo companion** for multi-repo workspaces 
 - **Scoped Plugins & Context Packs**: Modular plugin packages scoped under `.rnex/plugins/<plugin-name>/` with support for domain directories (e.g. `raw/` and `wiki/` for `karpathy-llm`).
 - **Zero Dependencies**: Pure POSIX shell CLI (`rnex`). Works out of the box across macOS, Linux, and Windows (WSL/Git Bash).
 
-> 💡 **Documentation:** Full documentation lives on the **[Documentation Site](https://unoxen.github.io/repo-nexus/)** (sources in [`docs/`](docs/)):
-> - **[Architecture](docs/guide/architecture.md)** and **[Why Repo Nexus?](docs/guide/why-repo-nexus.md)** — workspace layout and rationale
-> - **[CLI Reference](docs/cli/)** — all commands, flags, everyday usage, Git hooks, and shell completion
-> - **[Plugins Guide](docs/plugins/)** — built-in AI provider and domain plugins
-> - **[Configuration](docs/guide/configuration.md)** — `rnex.yaml` and `.local.rnex.yaml` schema
-> - **[FAQ](docs/faq/)** — architecture deep dives, Git workflows, and AI context strategies
+> 📖 **Documentation & Guides**
+>
+> Explore the comprehensive documentation, architecture guides, and interactive references on the **[Documentation Site](https://unoxen.github.io/repo-nexus/)**:
+>
+> - 🚀 **[Getting Started](https://unoxen.github.io/repo-nexus/guide/getting-started)** — Step-by-step onboarding walkthrough and workspace setup
+> - 📐 **[Architecture](https://unoxen.github.io/repo-nexus/guide/architecture)** & **[Why Repo Nexus?](https://unoxen.github.io/repo-nexus/guide/why-repo-nexus)** — Virtual Meta-Repo model, directory layout, and design rationale
+> - 💻 **[CLI Reference](https://unoxen.github.io/repo-nexus/cli/)** — Complete command syntax, global flags, batch execution (`rnex exec`), and Git hooks
+> - 🧩 **[Plugins Guide](https://unoxen.github.io/repo-nexus/plugins/)** — AI provider integrations (Claude, Copilot, Cursor, Gemini, Windsurf) and Karpathy LLM Wiki
+> - ⚙️ **[Configuration Schema](https://unoxen.github.io/repo-nexus/guide/configuration)** — Two-level `rnex.yaml` and `.local.rnex.yaml` specification
+> - ❓ **[Frequently Asked Questions (FAQ)](https://unoxen.github.io/repo-nexus/faq/)** — Common questions, Git submodule differences, and context strategies
 
 ---
 
