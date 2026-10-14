@@ -50,8 +50,9 @@ cmd_help() {
     init [-y] [--code-workspace [file]] [--hooks|--no-hooks] [--copilot] [--claude] [--gemini] [--cursor] [--windsurf] [dir]
                             Initialize a new Repo Nexus workspace (default: AGENTS.md)
     install [dir]           Install rnex & repo-nexus globally into ~/.local/bin (or custom dir)
-    fix [-y] [--quiet]      Reconcile workspace, upgrade configuration & routing, sync plugins & repos (aliases: sync, update, upgrade)
-    update [-y]             Part of fix: check version, upgrade schema, and reconcile workspace (alias: upgrade)
+    sync [--fix] [-y] [--quiet] Check workspace for inconsistencies (use --fix to reconcile workspace, upgrade configuration & routing, sync plugins & repos)
+    fix [-y] [--quiet]      (Deprecated: use 'rnex sync --fix') Reconcile workspace, upgrade configuration & routing, sync plugins & repos
+    update [-y]             Part of sync --fix: check version, upgrade schema, and reconcile workspace (alias: upgrade)
     upgrade [-y]            Alias for update
     hooks <install|uninstall|status> [--local]
                             Manage automated Git hooks (--local writes to .local.rnex.yaml)
@@ -87,8 +88,9 @@ cmd_help() {
     rnex enable analytics                       # Re-enable analytics repo
     rnex list                                   # List all member repos and active branches
     rnex status                                 # Inspect workspace configuration and health
-    rnex fix                                    # Reconcile all repos, plugins, and .rnex directories
-    rnex update                                 # Upgrade workspace configuration to newest version (part of fix)
+    rnex sync                                   # Check workspace for inconsistencies
+    rnex sync --fix                             # Reconcile all repos, plugins, and .rnex directories
+    rnex update                                 # Upgrade workspace configuration to newest version (part of sync --fix)
     rnex hooks install                          # Enable automated workspace Git hooks
     rnex completion zsh                         # Generate Zsh completion script
 

@@ -157,7 +157,7 @@ cmd_hooks() {
       require_workspace
       case "$_hook_name" in
         post-merge)
-          cmd_fix -y --quiet || true
+          cmd_sync --fix -y --quiet || true
           if yaml_plugin_enabled "karpathy-llm"; then
             _trigger="$(yaml_plugin_get "karpathy-llm" "lint_trigger")"
             if [ "$_trigger" = "git-post-merge" ] || [ "$_trigger" = "post-merge" ]; then

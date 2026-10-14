@@ -8,14 +8,14 @@
 #   2. Local Config (.local.rnex.yaml): Machine-specific (gitignored, highest priority),
 #      overrides enable/disable states, URLs, or local developer settings.
 #
-# Place it in your workspace root directory and run `rnex fix` to apply.
+# Place it in your workspace root directory and run `rnex sync --fix` to apply.
 #
 # For more information: https://github.com/unoxen/repo-nexus
 
 # ------------------------------------------------------------------------------
 # version — Workspace configuration schema version
 # ------------------------------------------------------------------------------
-# Used by `rnex fix` and `rnex update` to safely detect and reconcile configuration
+# Used by `rnex sync --fix` and `rnex update` to safely detect and reconcile configuration
 # and routing instructions across CLI releases.
 #
 version: 0.5.0

@@ -101,7 +101,8 @@ case "${1:-help}" in
   hooks)       shift; cmd_hooks "$@" ;;
   update|upgrade) shift; cmd_update "$@" ;;
   rnex-dir)    shift; cmd_rnex_dir "$@" ;;
-  fix|sync)    shift; cmd_fix "$@" ;;
+  sync)        shift; cmd_sync "$@" ;;
+  fix)         shift; cmd_fix "$@" ;;
   plugin)      shift; cmd_plugin "$@" ;;
   completion)  shift; cmd_completion "$@" ;;
   version|-v|--version) cmd_version ;;

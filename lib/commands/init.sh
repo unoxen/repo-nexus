@@ -98,7 +98,7 @@ cmd_init() {
   if [ -f "$_target_yaml" ]; then
     log_warn "Workspace configuration already exists at $_init_dir ($RNEX_CONFIG_FILE exists)"
     log_dim "To reconcile repos and plugins, run:"
-    log_dim "  rnex fix"
+    log_dim "  rnex sync --fix"
   else
     _init_plugins=""
     if [ "$_cli_copilot" = "true" ]; then

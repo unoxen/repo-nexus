@@ -39,10 +39,10 @@ plugins:
 
 ### Apply the Overrides
 
-Run `rnex fix` to reconcile your local configuration:
+Run `rnex sync --fix` to reconcile your local configuration:
 
 ```bash
-rnex fix
+rnex sync --fix
 ```
 
 ```text

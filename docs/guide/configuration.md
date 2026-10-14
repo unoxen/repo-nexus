@@ -90,7 +90,7 @@ plugins:
 | `version` | string | Current CLI version | Schema version compatibility check. |
 | `repos_dir` | string | `./repos` | Relative or absolute path where member repos are cloned. |
 | `code_workspace` | boolean \| string | `false` | Enables `.code-workspace` generation. Pass a string for custom filename. |
-| `git_hooks` | boolean | `true` | Configures `.rnex/hooks` as `core.hooksPath` during `rnex fix`. |
+| `git_hooks` | boolean | `true` | Configures `.rnex/hooks` as `core.hooksPath` during `rnex sync --fix`. |
 | `repos` | map | `{}` | Map of member repository specifications keyed by name. |
 | `plugins` | map | `{}` | Map of enabled plugins and their configuration options. |
 
@@ -124,9 +124,9 @@ plugins:
 After modifying configuration files directly, reconcile the workspace state:
 
 ```bash
-rnex fix
+rnex sync --fix
 ```
 
-::: tip Alias Available
-`rnex sync` is an identical alias for `rnex fix`. Both commands reconcile config, update directory structures, and regenerate instruction files.
+::: tip Audit vs. Reconcile
+Running `rnex sync` without `--fix` audits the workspace and logs any detected configuration inconsistencies without modifying files. Adding `--fix` applies the reconciliation.
 :::

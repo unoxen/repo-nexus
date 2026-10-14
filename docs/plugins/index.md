@@ -116,7 +116,7 @@ plugins:
 Whenever you modify plugin configuration manually, run:
 
 ```bash
-rnex fix
+rnex sync --fix
 ```
 
 to reconcile scoped directories, prompt assets, provider mirrors, and member `.rnex/` folders.

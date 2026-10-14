@@ -13,8 +13,8 @@ description: Fast reference cheatsheet for rnex commands, global options, enviro
 |:---|:---|:---|
 | [`rnex init`](workspace.md#rnex-init) | Workspace | Initialize a new Repo Nexus workspace. |
 | [`rnex status`](workspace.md#rnex-status) | Workspace | Inspect workspace health, clones, and AI instructions. |
-| [`rnex fix` / `sync`](workspace.md#rnex-fix-alias-sync) | Workspace | Reconcile config, routing, prompts, and plugins. |
-| [`rnex update` / `upgrade`](workspace.md#rnex-update-alias-upgrade) | Workspace | Part of fix: verify version, upgrade schema, and reconcile workspace. |
+| [`rnex sync`](workspace.md#rnex-sync) | Workspace | Check workspace consistency, or reconcile with `--fix`. |
+| [`rnex update` / `upgrade`](workspace.md#rnex-update-alias-upgrade) | Workspace | Part of sync --fix: verify version, upgrade schema, and reconcile workspace. |
 | [`rnex install`](workspace.md#rnex-install) | Workspace | Symlink `rnex` to `~/.local/bin`. |
 | [`rnex completion`](workspace.md#rnex-completion) | Workspace | Generate shell auto-completion for Zsh, Bash, or Fish. |
 | [`rnex version`](workspace.md#rnex-version) | Workspace | Display current installed CLI version. |
@@ -49,7 +49,7 @@ rnex [global-options] <command> [command-options] [arguments]
 
 ## Standardized Prompts Catalog
 
-Repo Nexus provides a standardized suite of operational prompt templates in `toolkit/prompts/` that sync to `.rnex/prompts/` during `rnex fix` or `rnex init`.
+Repo Nexus provides a standardized suite of operational prompt templates in `toolkit/prompts/` that sync to `.rnex/prompts/` during `rnex sync --fix` or `rnex init`.
 
 AI assistants navigate workflows via the catalog index at `.rnex/prompts/index.md`:
 

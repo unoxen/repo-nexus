@@ -63,8 +63,8 @@ _rnex() {
     'list:List member repositories'
     'status:Inspect workspace health and status'
     'rnex-dir:Toggle .rnex directory integration for a repo'
-    'fix:Reconcile workspace, plugins, and .rnex directories'
-    'sync:Alias for fix'
+    'sync:Check workspace consistency (use --fix to reconcile)'
+    'fix:(Deprecated: use sync --fix) Reconcile workspace and plugins'
     'update:Upgrade workspace configuration and routing instructions'
     'upgrade:Alias for update'
     'hooks:Manage automated Git hooks'
@@ -127,7 +127,8 @@ complete -c rnex -n "__fish_use_subcommand" -a enable -d "Enable a repository"
 complete -c rnex -n "__fish_use_subcommand" -a disable -d "Disable a repository"
 complete -c rnex -n "__fish_use_subcommand" -a list -d "List repositories"
 complete -c rnex -n "__fish_use_subcommand" -a status -d "Inspect workspace status"
-complete -c rnex -n "__fish_use_subcommand" -a fix -d "Reconcile workspace"
+complete -c rnex -n "__fish_use_subcommand" -a sync -d "Check workspace consistency (use --fix to reconcile)"
+complete -c rnex -n "__fish_use_subcommand" -a fix -d "(Deprecated) Reconcile workspace"
 complete -c rnex -n "__fish_use_subcommand" -a update -d "Upgrade workspace configuration"
 complete -c rnex -n "__fish_use_subcommand" -a upgrade -d "Upgrade workspace configuration"
 complete -c rnex -n "__fish_use_subcommand" -a hooks -d "Manage Git hooks"

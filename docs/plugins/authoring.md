@@ -46,7 +46,7 @@ A plugin can contain any of the following standard directories:
 | `agents/` | Autonomous subagent declarations (`*.agent.md`). | Scoped to `.rnex/plugins/<plugin>/agents/`. Ingested by agents via `AGENTS.md` subagent routing. |
 | `instructions/` | Markdown guidelines and domain principles. | Scoped to `.rnex/plugins/<plugin>/instructions/`. |
 | `rules/` | Coding rules and architectural constraints. | Scoped to `.rnex/plugins/<plugin>/rules/`. |
-| `templates/` | Starter configuration files copied during `rnex fix`. | Copied to mapped paths specified in `templates:`. |
+| `templates/` | Starter configuration files copied during `rnex sync --fix`. | Copied to mapped paths specified in `templates:`. |
 
 > [!NOTE]
 > All AI assistants share `AGENTS.md` at workspace root. Tools, skills, workflows, and subagents stay inside `.rnex/` and are not mirrored externally. Prompts are exclusively for user invocation through IDE prompt pickers (e.g. `.github/prompts/`, `.claude/commands/`).
@@ -64,6 +64,6 @@ A plugin can contain any of the following standard directories:
    ```
 4. Reconcile workspace state:
    ```bash
-   rnex fix
+   rnex sync --fix
    ```
 5. Verify that assets were correctly scoped into `.rnex/plugins/my-plugin/`.

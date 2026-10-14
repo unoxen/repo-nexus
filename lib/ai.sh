@@ -129,8 +129,8 @@ Each member repository is an autonomous Git repository. For repository-specific 
 
 ## Workspace Maintenance
 When workspace configuration, routing blocks, plugin assets, or member repository structures require reconciliation or schema upgrades:
-- Run \`rnex fix\` (or its alias \`rnex update\` / \`rnex upgrade\`, which runs the unified fix reconciliation with upfront version checking).
-- Use \`rnex fix -y\` to non-destructively apply configuration version upgrades automatically.
+- Run \`rnex sync --fix\` (or \`rnex sync\` to check for inconsistencies).
+- Use \`rnex sync --fix -y\` to non-destructively apply configuration version upgrades automatically.
 
 ## Git Operations
 Commit and push changes directly within the respective member repository root (\`repos/<name>/\`).
@@ -177,8 +177,8 @@ Each member repository is an autonomous Git repository. For repository-specific 
 
 ## Workspace Maintenance
 When workspace configuration, routing blocks, plugin assets, or member repository structures require reconciliation or schema upgrades:
-- Run \`rnex fix\` (or its alias \`rnex update\` / \`rnex upgrade\`, which runs the unified fix reconciliation with upfront version checking).
-- Use \`rnex fix -y\` to non-destructively apply configuration version upgrades automatically.
+- Run \`rnex sync --fix\` (or \`rnex sync\` to check for inconsistencies).
+- Use \`rnex sync --fix -y\` to non-destructively apply configuration version upgrades automatically.
 
 ## Git Operations
 Commit and push changes directly within the respective member repository root (\`repos/<name>/\`).

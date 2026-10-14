@@ -24,10 +24,10 @@ grep -q '.local.rnex.yaml' "$TEST_WORKSPACE/.gitignore" || { fail ".local.rnex.y
 pass
 
 # --------------------------------------------------------------------------
-run_test "Re-init warns and suggests fix"
+run_test "Re-init warns and suggests sync --fix"
 _reinit_output="$("$TEST_WORKSPACE/rnex" init -y "$TEST_WORKSPACE" 2>&1)"
 echo "$_reinit_output" | grep -qi "already" || { fail "No already-initialized warning"; exit 1; }
-echo "$_reinit_output" | grep -qi "fix" || { fail "No fix suggestion"; exit 1; }
+echo "$_reinit_output" | grep -q "rnex sync --fix" || { fail "No rnex sync --fix suggestion"; exit 1; }
 pass
 
 # --------------------------------------------------------------------------
@@ -72,10 +72,18 @@ rm -rf "$TEST_WORKSPACE/repos/test-app"
 pass
 
 # --------------------------------------------------------------------------
-run_test "Idempotent Fix (and sync alias)"
-"$TEST_WORKSPACE/rnex" fix >/dev/null
+run_test "Idempotent sync --fix (and deprecated fix alias)"
+_fix_out="$("$TEST_WORKSPACE/rnex" fix 2>&1)"
+echo "$_fix_out" | grep -q "deprecated" || { fail "rnex fix did not print deprecation warning"; exit 1; }
 [ -d "$TEST_WORKSPACE/repos/test-app/.rnex" ] || { fail ".rnex missing after fix"; exit 1; }
 "$TEST_WORKSPACE/rnex" sync >/dev/null
+# Verify dry-run sync audits inconsistencies without mutating files
+rm -f "$TEST_WORKSPACE/.ignore"
+_sync_out="$("$TEST_WORKSPACE/rnex" sync 2>&1 || true)"
+echo "$_sync_out" | grep -q "inconsistency" || { fail "rnex sync did not report missing .ignore"; exit 1; }
+[ ! -f "$TEST_WORKSPACE/.ignore" ] || { fail "rnex sync mutated files without --fix"; exit 1; }
+"$TEST_WORKSPACE/rnex" sync --fix >/dev/null
+[ -f "$TEST_WORKSPACE/.ignore" ] || { fail "rnex sync --fix did not recreate .ignore"; exit 1; }
 pass
 
 # --------------------------------------------------------------------------
