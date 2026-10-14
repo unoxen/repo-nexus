@@ -8,14 +8,16 @@ The curated wiki directory (`wiki_dir`, default: `wiki/`) and raw intake directo
 
 ---
 
-## 1. Operating Rules
+## 1. Operating Rules & Token Economy
 
 When working in a workspace with an active Karpathy LLM Wiki:
 
 - **Configuration Resolution**: Read `rnex.yaml` / `.local.rnex.yaml` to identify the active `raw_dir` (default: `raw`) and `wiki_dir` (default: `wiki`).
 - **Intake**: All source material (articles, transcripts, docs, notes) goes to `<raw_dir>/` unmodified. Never write directly to `<wiki_dir>/` without ingesting.
-- **Orientation**: Before answering domain questions, read `<wiki_dir>/index.md` to find relevant pages, then read only those pages. If `<wiki_dir>/hot.md` exists, read it first as a quick-orient step.
-- **Ingestion**: When files appear in `<raw_dir>/`, run the `rnex-wiki-ingest` workflow (`.rnex/plugins/karpathy-llm/workflows/rnex-wiki-ingest.md`). One source document typically produces many atomic pages (commonly 5–25 pages) — do not collapse a source into a single file.
+- **Orientation (Hot-Cache First)**: Read `<wiki_dir>/hot.md` for quick ~500-word orientation. Consult `<wiki_dir>/index.md` on demand only if the specific topic or contract is not covered in `hot.md`.
+- **Bounded Hot Cache**: `<wiki_dir>/hot.md` enforces a strict ~500-word ceiling with 3 structured sections: 1. Architecture & Repo Map, 2. Current Focus & Recent Ingests, 3. Key Contracts. Ingest and lint workflows must condense older context to prevent bloat.
+- **Annotated Indexing**: `<wiki_dir>/index.md` entries must maintain a single 1-line summary next to each atomic page link (e.g. `- [Auth Flow](auth.md): JWT validation and token rotation`) so agents pinpoint target pages in a single read without trial-and-error scanning.
+- **Ingestion**: When files appear in `<raw_dir>/`, run the `rnex-wiki-ingest` workflow (`.rnex/plugins/karpathy-llm/workflows/rnex-wiki-ingest.md`). One source document produces 5–25 atomic pages — never collapse a source into a single file.
 - **Maintenance**: Run the `rnex-wiki-lint` workflow (`.rnex/plugins/karpathy-llm/workflows/rnex-wiki-lint.md`) to validate paths, update `mentioned_in`, and preserve graph integrity.
 
 ---

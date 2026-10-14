@@ -34,11 +34,13 @@ Periodic health check and maintenance workflow to preserve wiki graph integrity,
 7. **Suggest Source Candidates:**
    - Suggest source candidates from `<raw_dir>/` or external searches to fill identified knowledge gaps.
 
-8. **Rebuild Navigation Index:**
+8. **Rebuild Navigation Index (Annotated Links):**
    - Rebuild `<wiki_dir>/index.md` to reflect the current set of pages and categories accurately.
+   - Ensure every page entry maintains a concise 1-line descriptive annotation.
 
-9. **Update Hot Cache:**
-   - Update `<wiki_dir>/hot.md` if it exists, refreshing the rolling ~500-word orientation context.
+9. **Update Hot Cache (Bounded ~500-Word Ceiling):**
+   - Refresh `<wiki_dir>/hot.md`, verifying the 3 structured sections (Architecture & Repo Map, Current Focus, Key Contracts).
+   - Ensure the total length remains strictly under ~500 words by pruning superseded entries.
 
 10. **Append Operation Log:**
     - Append a lint summary to `<wiki_dir>/_log.md` detailing:

@@ -47,11 +47,16 @@ Universal workflow for decomposing and ingesting raw source materials into atomi
    - Write a concise body with summary, key facts, and insights.
    - Add inline standard Markdown links (`[Label](./path.md)`) where contextually useful in prose.
 
-6. **Update Navigation Index:**
+6. **Update Navigation Index (Annotated Links):**
    - Update `<wiki_dir>/index.md` with links to all new pages in their corresponding categorized sections.
+   - Include a concise 1-line summary next to each link (e.g. `- [Concept Name](path.md): One-line summary of role or contract`) so agents pinpoint target pages in a single read without exploratory scanning.
 
-7. **Update Hot Cache:**
-   - Update `<wiki_dir>/hot.md` if it exists with the rolling ~500-word orientation summary of active context.
+7. **Update Hot Cache (Bounded ~500-Word Ceiling):**
+   - Update `<wiki_dir>/hot.md` with the rolling orientation summary across 3 structured sections:
+     1. **Architecture & Member Repo Map**: Active domain ownership per member repo.
+     2. **Current Focus & Recent Ingests**: Active topics from recent ingests.
+     3. **Key Contracts & Boundaries**: Critical cross-repo or subsystem rules.
+   - **Enforce Token Economy**: Keep `<wiki_dir>/hot.md` strictly under ~500 words. Condense or prune older focus items to prevent bloat.
 
 8. **Append Operation Log:**
    - Append a timestamped entry to `<wiki_dir>/_log.md` detailing:

@@ -1,11 +1,15 @@
 # Hot Context (Rolling ~500-Word Cache)
 
-> A compact overview of the most active and immediately relevant domain context. Agents read this file first for quick orientation without needing to parse the full wiki.
+> Fast orientation cache for AI agents. Read this file first for immediate domain context without loading the full wiki index. Strictly bounded under ~500 words.
 
-## Active Focus & System State
-* **Current State:** Karpathy LLM Wiki initialized.
-* **Recent Ingests:** None yet. Place raw sources into `/{raw_dir}/` and trigger `wiki-ingest`.
-* **Key Directives:**
-  1. Maintain atomic pages with typed frontmatter relations.
-  2. Update `/{wiki_dir}/index.md` and this hot cache upon new ingests.
-  3. Run `wiki-lint` workflow to audit and maintain graph integrity.
+## 1. Architecture & Member Repo Map
+* **Workspace Overview:** Karpathy LLM Wiki initialized.
+* **Member Repositories:** Map each member repo to its core responsibility and main entry point once active.
+
+## 2. Current Focus & Recent Ingests
+* **Active Tasks:** Wiki initialization complete.
+* **Recent Ingests:** None yet. Deposit source documents into `/{raw_dir}/` and run `rnex-wiki-ingest`.
+
+## 3. Key Contracts & Boundaries
+* **Atomic Pages:** Concepts live in discrete files with frontmatter relations (`sources`, `related`, `extends`, `mentioned_in`).
+* **Deep Knowledge:** For detailed RFCs, data contracts, and secondary concepts, consult `/{wiki_dir}/index.md` on demand.
