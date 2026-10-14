@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Replaced `rnex fix` with `rnex sync` (with optional `--fix` flag)**:
+  - `rnex sync` without `--fix` performs a dry-run audit, checking workspace configuration, `.gitignore`, `.ignore`, AI routing instructions (`AGENTS.md`, provider files), active/disabled plugin assets, member repository scaffolding, and multi-root workspace definitions, logging any inconsistencies without mutating files.
+  - `rnex sync --fix` (or `-f`) executes full workspace reconciliation, schema upgrades, prompt/workflow synchronization, and asset repairs.
+  - `rnex fix` is maintained as a deprecated backward-compatible alias for `rnex sync --fix`, displaying a deprecation notice directing users to `rnex sync --fix`.
+  - All workspace documentation, guides, prompt templates, and AI routing instructions updated to reference `rnex sync` and `rnex sync --fix`.
+
 ### Added
 - **Modular Test Suite Architecture**:
   - Decomposed monolithic `tests/test_cli.sh` (996 lines, 36 tests) into modular, single-responsibility test suites under `tests/suites/`:

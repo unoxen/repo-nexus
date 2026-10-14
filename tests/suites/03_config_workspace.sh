@@ -154,7 +154,7 @@ grep -q "code_workspace:[ ]*true" "$TEST_VS_WS/rnex.yaml" || { fail "code_worksp
 pass
 
 # --------------------------------------------------------------------------
-run_test "Version-aware upgrade in rnex fix and update/upgrade commands"
+run_test "Version-aware upgrade in rnex sync --fix and update/upgrade commands"
 TEST_UPGRADE_WS="$TEST_TMP/upgrade-workspace"
 mkdir -p "$TEST_UPGRADE_WS"
 cp "$CLI" "$TEST_UPGRADE_WS/rnex"
@@ -178,13 +178,18 @@ Legacy instructions without mandatory startup
 <!-- REPO-NEXUS:END -->
 OLD_AGENTS
 
+# rnex sync without --fix should detect version inconsistency without mutating
+_sync_audit="$(cd "$TEST_UPGRADE_WS" && ./rnex sync 2>&1 || true)"
+echo "$_sync_audit" | grep -q "older than CLI" || { fail "rnex sync did not audit version mismatch"; exit 1; }
+grep -q "ai_instructions:" "$TEST_UPGRADE_WS/rnex.yaml" || { fail "rnex sync without --fix mutated rnex.yaml"; exit 1; }
+
 # Fix with -y should detect missing/older version, upgrade config, and reconcile instructions
-(cd "$TEST_UPGRADE_WS" && ./rnex fix -y >/dev/null)
+(cd "$TEST_UPGRADE_WS" && ./rnex sync --fix -y >/dev/null)
 _ws_cli_ver="$("$TEST_UPGRADE_WS/rnex" version 2>&1 | awk '{print $NF}')"
-grep -q "version:[ ]*$_ws_cli_ver" "$TEST_UPGRADE_WS/rnex.yaml" || { fail "rnex fix -y did not add version $_ws_cli_ver to rnex.yaml"; exit 1; }
+grep -q "version:[ ]*$_ws_cli_ver" "$TEST_UPGRADE_WS/rnex.yaml" || { fail "rnex sync --fix -y did not add version $_ws_cli_ver to rnex.yaml"; exit 1; }
 ! grep -q "ai_instructions:" "$TEST_UPGRADE_WS/rnex.yaml" || { fail "ai_instructions should be stripped during upgrade"; exit 1; }
-grep -q "code_workspace:[ ]*false" "$TEST_UPGRADE_WS/rnex.yaml" || { fail "rnex fix -y did not populate missing code_workspace key"; exit 1; }
-grep -q "git_hooks:[ ]*false" "$TEST_UPGRADE_WS/rnex.yaml" || { fail "rnex fix -y did not populate missing git_hooks key"; exit 1; }
+grep -q "code_workspace:[ ]*false" "$TEST_UPGRADE_WS/rnex.yaml" || { fail "rnex sync --fix -y did not populate missing code_workspace key"; exit 1; }
+grep -q "git_hooks:[ ]*false" "$TEST_UPGRADE_WS/rnex.yaml" || { fail "rnex sync --fix -y did not populate missing git_hooks key"; exit 1; }
 grep -q "Mandatory Session Startup" "$TEST_UPGRADE_WS/AGENTS.md" || { fail "AGENTS.md not updated with Mandatory Session Startup"; exit 1; }
 grep -q "\.rnex/skills/" "$TEST_UPGRADE_WS/AGENTS.md" || { fail "AGENTS.md missing skills reference"; exit 1; }
 grep -q "Subagents" "$TEST_UPGRADE_WS/AGENTS.md" || { fail "AGENTS.md missing subagents reference"; exit 1; }
@@ -192,6 +197,9 @@ grep -q "Subagents" "$TEST_UPGRADE_WS/AGENTS.md" || { fail "AGENTS.md missing su
 # Running update when already at current version should report up to date
 _up_out="$(cd "$TEST_UPGRADE_WS" && ./rnex update 2>&1)"
 echo "$_up_out" | grep -q "already up to date" || { fail "rnex update did not report already up to date"; exit 1; }
+
+# Test deprecated rnex fix alias also works
+(cd "$TEST_UPGRADE_WS" && ./rnex fix -y >/dev/null)
 pass
 
 # --------------------------------------------------------------------------
