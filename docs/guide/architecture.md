@@ -14,7 +14,8 @@ A fully initialized Repo Nexus workspace is structured as follows:
 ```text
 my-workspace/
 ├── .git/                            # Meta-repo Git tracking (workspace config & docs only)
-├── .gitignore                       # Ensures repos/ and local overrides remain untracked
+├── .gitignore                       # Ensures repos/ and local overrides remain untracked by Git
+├── .ignore                          # Un-ignores repos/* for ripgrep, Claude Code, and search tools
 ├── rnex.yaml                        # Team-wide workspace declaration
 ├── .local.rnex.yaml                 # (Optional) Developer workstation overrides (gitignored)
 │
@@ -39,7 +40,7 @@ my-workspace/
 
 ## Core Architectural Pillars
 
-### 1. Member Repository Isolation (`./repos/`)
+### 1. Member Repository Isolation & AI Search Discovery (`./repos/`)
 Member repositories reside in `./repos/<name>/`. Each repository retains its own independent `.git` directory, remote tracking branches, tags, and commit history.
 
 ::: warning Never Commit `repos/` to Meta-Repo
@@ -50,6 +51,8 @@ repos/*
 ```
 Member repository files are never tracked or committed to the parent meta-repo.
 :::
+
+To ensure code search tools (ripgrep, Claude Code, VS Code search) and AI indexers (Cursor codebase indexing, Gemini CLI) can discover and index member code across repos, Repo Nexus automatically maintains un-ignore files (`.ignore`, `.cursorignore`, `.geminiignore`) with `!repos/*`. This allows AI assistants and search engines to index code while meta-repo Git remains completely clean.
 
 ### 2. The `.rnex/` Orchestration Directory
 The `.rnex/` directory holds active plugins, automation hooks, and the standardized prompt library:

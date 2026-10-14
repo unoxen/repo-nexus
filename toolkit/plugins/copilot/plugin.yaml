@@ -1,6 +1,6 @@
 name: copilot
 version: 0.5.1
-description: GitHub Copilot integration (mirrors workspace prompts to .github/prompts and skills to .github/skills)
+description: GitHub Copilot integration (mirrors workspace prompts to .github/prompts)
 author: unoxen
 homepage: https://github.com/unoxen/repo-nexus
 instructions:

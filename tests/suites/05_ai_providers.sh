@@ -138,6 +138,8 @@ git -C "$TEST_PROVIDERS_WS" init -q
 (cd "$TEST_PROVIDERS_WS" && ./rnex plugin enable gemini >/dev/null)
 (cd "$TEST_PROVIDERS_WS" && ./rnex fix -y --quiet >/dev/null)
 [ -f "$TEST_PROVIDERS_WS/GEMINI.md" ] || { fail "GEMINI.md missing after enabling gemini"; exit 1; }
+[ -f "$TEST_PROVIDERS_WS/.geminiignore" ] || { fail ".geminiignore missing after enabling gemini"; exit 1; }
+grep -q '!repos/\*' "$TEST_PROVIDERS_WS/.geminiignore" || { fail "!repos/* missing from .geminiignore"; exit 1; }
 [ -f "$TEST_PROVIDERS_WS/.gemini/prompts/rnex-cross-repo-feature.prompt.md" ] || { fail "Gemini prompts missing"; exit 1; }
 [ ! -d "$TEST_PROVIDERS_WS/.gemini/skills" ] || { fail "Gemini skills should not be created"; exit 1; }
 
@@ -146,6 +148,8 @@ git -C "$TEST_PROVIDERS_WS" init -q
 (cd "$TEST_PROVIDERS_WS" && ./rnex plugin enable windsurf >/dev/null)
 (cd "$TEST_PROVIDERS_WS" && ./rnex fix -y --quiet >/dev/null)
 [ -f "$TEST_PROVIDERS_WS/.cursorrules" ] || { fail ".cursorrules missing after enabling cursor"; exit 1; }
+[ -f "$TEST_PROVIDERS_WS/.cursorignore" ] || { fail ".cursorignore missing after enabling cursor"; exit 1; }
+grep -q '!repos/\*' "$TEST_PROVIDERS_WS/.cursorignore" || { fail "!repos/* missing from .cursorignore"; exit 1; }
 [ -f "$TEST_PROVIDERS_WS/.cursor/rules/rnex-context.mdc" ] || { fail ".cursor/rules/rnex-context.mdc missing"; exit 1; }
 [ -f "$TEST_PROVIDERS_WS/.cursor/prompts/rnex-cross-repo-feature.md" ] || { fail "Cursor prompts missing"; exit 1; }
 [ ! -d "$TEST_PROVIDERS_WS/.cursor/skills" ] || { fail "Cursor skills should not be created"; exit 1; }
@@ -168,7 +172,9 @@ echo "$_prov_status" | grep -q ".windsurf/prompts/" || { fail "Status did not re
 # Test user custom content preservation across provider instructions
 printf "# Custom Section\n" >> "$TEST_PROVIDERS_WS/CLAUDE.md"
 printf "# Gemini Custom\n" >> "$TEST_PROVIDERS_WS/GEMINI.md"
+printf "custom-gemini.log\n" >> "$TEST_PROVIDERS_WS/.geminiignore"
 printf "# Cursor Custom\n" >> "$TEST_PROVIDERS_WS/.cursorrules"
+printf "custom-cursor.log\n" >> "$TEST_PROVIDERS_WS/.cursorignore"
 printf "# Windsurf Custom\n" >> "$TEST_PROVIDERS_WS/.windsurfrules"
 (cd "$TEST_PROVIDERS_WS" && ./rnex fix -y --quiet >/dev/null)
 grep -q "# Custom Section" "$TEST_PROVIDERS_WS/CLAUDE.md" || { fail "Custom section lost in CLAUDE.md"; exit 1; }
@@ -256,6 +262,28 @@ grep -q "# Custom Section" "$TEST_PROVIDERS_WS/CLAUDE.md" || { fail "Custom cont
 grep -q "# Gemini Custom" "$TEST_PROVIDERS_WS/GEMINI.md" || { fail "Custom content lost from GEMINI.md"; exit 1; }
 grep -q "# Cursor Custom" "$TEST_PROVIDERS_WS/.cursorrules" || { fail "Custom content lost from .cursorrules"; exit 1; }
 grep -q "# Windsurf Custom" "$TEST_PROVIDERS_WS/.windsurfrules" || { fail "Custom content lost from .windsurfrules"; exit 1; }
+
+# Verify custom ignore files preserved custom entries with !repos/* stripped
+[ -f "$TEST_PROVIDERS_WS/.cursorignore" ] || { fail ".cursorignore deleted despite custom content"; exit 1; }
+! grep -q '!repos/\*' "$TEST_PROVIDERS_WS/.cursorignore" || { fail "!repos/* not stripped from .cursorignore"; exit 1; }
+grep -q "custom-cursor.log" "$TEST_PROVIDERS_WS/.cursorignore" || { fail "custom content lost in .cursorignore"; exit 1; }
+
+[ -f "$TEST_PROVIDERS_WS/.geminiignore" ] || { fail ".geminiignore deleted despite custom content"; exit 1; }
+! grep -q '!repos/\*' "$TEST_PROVIDERS_WS/.geminiignore" || { fail "!repos/* not stripped from .geminiignore"; exit 1; }
+grep -q "custom-gemini.log" "$TEST_PROVIDERS_WS/.geminiignore" || { fail "custom content lost in .geminiignore"; exit 1; }
+
+# Verify clean removal when no custom content exists
+rm -f "$TEST_PROVIDERS_WS/.cursorignore" "$TEST_PROVIDERS_WS/.geminiignore"
+(cd "$TEST_PROVIDERS_WS" && ./rnex plugin enable cursor >/dev/null)
+(cd "$TEST_PROVIDERS_WS" && ./rnex plugin enable gemini >/dev/null)
+(cd "$TEST_PROVIDERS_WS" && ./rnex fix -y --quiet >/dev/null)
+[ -f "$TEST_PROVIDERS_WS/.cursorignore" ] || { fail ".cursorignore not recreated"; exit 1; }
+[ -f "$TEST_PROVIDERS_WS/.geminiignore" ] || { fail ".geminiignore not recreated"; exit 1; }
+(cd "$TEST_PROVIDERS_WS" && ./rnex plugin disable cursor >/dev/null)
+(cd "$TEST_PROVIDERS_WS" && ./rnex plugin disable gemini >/dev/null)
+(cd "$TEST_PROVIDERS_WS" && ./rnex fix -y --quiet >/dev/null)
+[ ! -f "$TEST_PROVIDERS_WS/.cursorignore" ] || { fail ".cursorignore without custom content was not removed"; exit 1; }
+[ ! -f "$TEST_PROVIDERS_WS/.geminiignore" ] || { fail ".geminiignore without custom content was not removed"; exit 1; }
 pass
 
 if [ "${_STANDALONE_RUN:-0}" -eq 1 ]; then

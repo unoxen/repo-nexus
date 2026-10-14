@@ -173,9 +173,10 @@ my-workspace/
 ## Cross-Plugin Provider Mirroring
 
 Because Repo Nexus features decoupled cross-plugin asset discovery:
-- If [`copilot`](copilot.md) is enabled, `rnex-wiki-ingest` and `rnex-wiki-lint` prompts mirror to `.github/prompts/`, skills mirror to `.github/skills/`, and `rnex-wiki-curator.agent.md` mirrors to `.github/agents/`.
-- If [`claude`](claude.md) is enabled, `rnex-wiki-ingest` and `rnex-wiki-lint` mirror to `.claude/commands/`, `.claude/prompts/`, and `.claude/skills/`.
-- If [`gemini`](gemini.md), [`cursor`](cursor.md), or [`windsurf`](windsurf.md) is enabled, prompts, skills, and agents mirror into `.gemini/`, `.cursor/`, and `.windsurf/`.
+- If [`copilot`](copilot.md) is enabled, `rnex-wiki-ingest` and `rnex-wiki-lint` workflows mirror into `.github/prompts/`.
+- If [`claude`](claude.md) is enabled, `rnex-wiki-ingest` and `rnex-wiki-lint` workflows mirror into `.claude/commands/` and `.claude/prompts/`.
+- If [`gemini`](gemini.md), [`cursor`](cursor.md), or [`windsurf`](windsurf.md) is enabled, workflows mirror into `.gemini/`, `.cursor/`, and `.windsurf/` prompt pickers.
+- Skills and subagents (`rnex-wiki-curator.agent.md`) remain self-contained under `.rnex/` and are navigated via standard provider routing instructions (`AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `.cursorrules`).
 
 ---
 

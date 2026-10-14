@@ -52,6 +52,20 @@ GI_EOF
   if ! grep -qF ".rnex.local.yaml" "$_gi" 2>/dev/null; then
     printf '.rnex.local.yaml\n' >> "$_gi"
   fi
+
+  # Universal search tool ignore file (ripgrep, Claude Code, VS Code, Zed)
+  # Un-ignores member repositories for search tools while Git continues to ignore them
+  _ign="$_dir/.ignore"
+  if [ ! -f "$_ign" ]; then
+    cat > "$_ign" <<IGN_EOF
+# Member repos (un-ignored for ripgrep, Claude Code, VS Code, and search tools)
+!repos/*
+IGN_EOF
+    log_ok "Created .ignore (un-ignoring member repos for search tools)"
+  elif ! grep -q '!repos/\*' "$_ign" 2>/dev/null; then
+    printf '\n# Member repos (un-ignored for search tools)\n!repos/*\n' >> "$_ign"
+    log_dim "Added !repos/* to .ignore"
+  fi
 }
 
 # ---- AI Instructions Management (Routing-Only) ----------------------------
@@ -628,6 +642,22 @@ clean_provider_prompts() {
   rmdir "$_sp_dir" 2>/dev/null || true
 }
 
+clean_provider_ignore() {
+  _file="$1"
+  [ -f "$_file" ] || return 0
+  if grep -q '!repos/\*' "$_file" 2>/dev/null; then
+    _non_rnex="$(grep -vE '^[ ]*#.*(Cursor|Gemini|Repo Nexus|member repos)' "$_file" 2>/dev/null | grep -v '^!repos/\*' | tr -d " \t\r\n")"
+    if [ -z "$_non_rnex" ]; then
+      rm -f "$_file"
+      log_ok "Removed $(basename "$_file")"
+    else
+      _tmp="$(mktemp)"
+      grep -vE '(^[ ]*#.*(Cursor|Gemini|Repo Nexus|member repos)|!repos/\*)' "$_file" > "$_tmp" && mv "$_tmp" "$_file"
+      log_ok "Removed !repos/* un-ignore from $(basename "$_file")"
+    fi
+  fi
+}
+
 clean_provider_skills() {
   _sk_dir="$1"
   [ -d "$_sk_dir" ] || return 0
@@ -786,6 +816,18 @@ sync_claude() {
 
 sync_gemini() {
   if gemini_plugin_enabled; then
+    _gi="$NEXUS_DIR/.geminiignore"
+    if [ ! -f "$_gi" ]; then
+      cat > "$_gi" <<GI_EOF
+# Gemini CLI file discovery un-ignore for member repos
+!repos/*
+GI_EOF
+      log_ok "Created .geminiignore (enabling Gemini CLI file discovery for member repos)"
+    elif ! grep -q '!repos/\*' "$_gi" 2>/dev/null; then
+      printf '\n# Gemini CLI file discovery un-ignore for member repos\n!repos/*\n' >> "$_gi"
+      log_dim "Added !repos/* to .geminiignore"
+    fi
+
     if gemini_instructions_enabled; then
       merge_rnex_instructions "$NEXUS_DIR/GEMINI.md"
     else
@@ -798,6 +840,7 @@ sync_gemini() {
       clean_provider_prompts "$NEXUS_DIR/.gemini/prompts" ".prompt.md"
     fi
   else
+    clean_provider_ignore "$NEXUS_DIR/.geminiignore"
     clean_rnex_instructions "$NEXUS_DIR/GEMINI.md"
     clean_provider_prompts "$NEXUS_DIR/.gemini/prompts" ".prompt.md"
   fi
@@ -810,6 +853,18 @@ sync_gemini() {
 
 sync_cursor() {
   if cursor_plugin_enabled; then
+    _ci="$NEXUS_DIR/.cursorignore"
+    if [ ! -f "$_ci" ]; then
+      cat > "$_ci" <<CI_EOF
+# Cursor codebase indexing un-ignore for member repos
+!repos/*
+CI_EOF
+      log_ok "Created .cursorignore (enabling Cursor indexing for member repos)"
+    elif ! grep -q '!repos/\*' "$_ci" 2>/dev/null; then
+      printf '\n# Cursor codebase indexing un-ignore for member repos\n!repos/*\n' >> "$_ci"
+      log_dim "Added !repos/* to .cursorignore"
+    fi
+
     if cursor_instructions_enabled; then
       merge_rnex_instructions "$NEXUS_DIR/.cursorrules"
       mkdir -p "$NEXUS_DIR/.cursor/rules"
@@ -834,6 +889,7 @@ sync_cursor() {
       clean_provider_prompts "$NEXUS_DIR/.cursor/prompts" ".md"
     fi
   else
+    clean_provider_ignore "$NEXUS_DIR/.cursorignore"
     clean_rnex_instructions "$NEXUS_DIR/.cursorrules"
     rm -f "$NEXUS_DIR/.cursor/rules/rnex-context.mdc" "$NEXUS_DIR/.cursor/rules/repo-nexus.mdc" 2>/dev/null || true
     rmdir "$NEXUS_DIR/.cursor/rules" 2>/dev/null || true

@@ -26,6 +26,8 @@ grep -q "lint_trigger_counter" "$TEST_WORKSPACE/.gitignore" && { fail "Legacy li
 ! grep -q '^\.rnex/' "$TEST_WORKSPACE/.gitignore" || { fail ".rnex/ still present in .gitignore after fix"; exit 1; }
 grep -q 'repos/\*' "$TEST_WORKSPACE/.gitignore" || { fail "repos/* missing from .gitignore after fix"; exit 1; }
 grep -q '.local.rnex.yaml' "$TEST_WORKSPACE/.gitignore" || { fail ".local.rnex.yaml missing from .gitignore after fix"; exit 1; }
+[ -f "$TEST_WORKSPACE/.ignore" ] || { fail ".ignore missing after fix"; exit 1; }
+grep -q '!repos/\*' "$TEST_WORKSPACE/.ignore" || { fail "!repos/* missing from .ignore after fix"; exit 1; }
 pass
 
 # --------------------------------------------------------------------------

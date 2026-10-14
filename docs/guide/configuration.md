@@ -66,12 +66,12 @@ plugins:
   claude:
     instructions: true
     prompts: true
-    skills: true
-    agents: true
+    workflows: true
 
   cursor:
-    rules: true
+    instructions: true
     prompts: true
+    workflows: true
 
   # Knowledge & Agent Protocol Plugins
   karpathy-llm:
