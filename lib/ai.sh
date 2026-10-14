@@ -74,7 +74,7 @@ AI_MARKER_START="<!-- REPO-NEXUS:START -->"
 AI_MARKER_END="<!-- REPO-NEXUS:END -->"
 
 get_rnex_instructions() {
-  printf 'CRITICAL: You MUST read and strictly follow all instructions in `.rnex/ai-instructions.md` before executing any task or answering any query in this workspace.\n'
+  printf "CRITICAL: You MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\` before executing any task or answering any query in this workspace.\n"
 }
 
 build_ai_instructions() {

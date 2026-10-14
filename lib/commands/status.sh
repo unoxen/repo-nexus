@@ -31,7 +31,7 @@ cmd_status() {
     _vc_res=0
     version_cmp "$WORKSPACE_CONFIG_VERSION" "$RNEX_VERSION" || _vc_res=$?
     if [ "$_vc_res" -eq 2 ]; then
-      printf '  %b!%b Repo Config:   %s %b(v%s is older than CLI v%s; run "rnex sync")%b\n' "$_Y" "$_NC" "$WORKSPACE_YAML" "${WORKSPACE_CONFIG_VERSION:-0.0.0}" "$RNEX_VERSION" "$_NC"
+      printf '  %b!%b Repo Config:   %s %b(v%s is older than CLI v%s; run "rnex sync")%b\n' "$_Y" "$_NC" "$WORKSPACE_YAML" "$_DIM" "${WORKSPACE_CONFIG_VERSION:-0.0.0}" "$RNEX_VERSION" "$_NC"
     elif [ -n "$WORKSPACE_CONFIG_VERSION" ]; then
       printf '  %b●%b Repo Config:   %s %b(loaded, v%s)%b\n' "$_G" "$_NC" "$WORKSPACE_YAML" "$_DIM" "$WORKSPACE_CONFIG_VERSION" "$_NC"
     else
