@@ -25,6 +25,45 @@ find_workspace_dir() {
   return 1
 }
 
+# ---- Config Checksum & Sync Stamp -----------------------------------------
+
+get_config_sum() {
+  _dir="${1:-${NEXUS_DIR:-.}}"
+  ( cd "$_dir" 2>/dev/null && cksum rnex.yaml .local.rnex.yaml 2>/dev/null | cksum | awk '{print $1, $2}' )
+}
+
+update_sync_stamp() {
+  _dir="${1:-${NEXUS_DIR:-.}}"
+  mkdir -p "$_dir/.rnex"
+  if [ ! -f "$_dir/.rnex/.gitignore" ]; then
+    printf ".sync_stamp\n" > "$_dir/.rnex/.gitignore"
+  elif ! grep -q "^\.sync_stamp" "$_dir/.rnex/.gitignore" 2>/dev/null; then
+    printf ".sync_stamp\n" >> "$_dir/.rnex/.gitignore"
+  fi
+  get_config_sum "$_dir" > "$_dir/.rnex/.sync_stamp"
+}
+
+check_auto_sync() {
+  _ws="${NEXUS_DIR:-}"
+  if [ -z "$_ws" ]; then
+    if [ -f rnex.yaml ]; then
+      _ws="."
+    else
+      _ws="$(find_workspace_dir 2>/dev/null || true)"
+    fi
+  fi
+  [ -z "$_ws" ] && return 0
+  [ ! -f "$_ws/rnex.yaml" ] && return 0
+  _stamp="$_ws/.rnex/.sync_stamp"
+  if [ ! -f "$_stamp" ] || [ "$(get_config_sum "$_ws")" != "$(cat "$_stamp" 2>/dev/null)" ]; then
+    cmd_sync -y --quiet
+  fi
+}
+
+auto_sync_if_needed() {
+  check_auto_sync "$@"
+}
+
 require_workspace() {
   if [ -n "$CUSTOM_CONFIG" ]; then
     _cfg_path="$(resolve_path "$CUSTOM_CONFIG")"

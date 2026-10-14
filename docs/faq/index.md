@@ -150,7 +150,7 @@ Repo Nexus initializes an isolated `.rnex/` folder inside each member repository
 ### How are plugins structured and scoped?
 
 Plugins are strictly scoped under `.rnex/plugins/<plugin-name>/`.
-For example, the built-in `karpathy-llm` plugin places its rules, workflows, and instructions in `.rnex/plugins/karpathy-llm/`, while instantiating external functional directories (`raw/` for intake documents and `wiki/` for curated knowledge) as specified by its architecture.
+For example, the built-in `karpathy-llm` plugin places its rules, workflows, and instructions in `.rnex/plugins/karpathy-llm/`, while instantiating domain directories (`./docs` for intake documents and `.rnex/wiki` for curated knowledge) as specified by its architecture.
 
 ---
 

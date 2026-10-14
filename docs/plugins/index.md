@@ -52,7 +52,7 @@ Developer-authored instructions outside of these delimiters are strictly preserv
 | [`copilot`](copilot.md) | AI Provider | GitHub Copilot integration: mirrors prompts to `.github/prompts/*.prompt.md` and relies on `AGENTS.md` for routing. | [Read Guide](copilot.md) |
 | [`gemini`](gemini.md) | AI Provider | Google Gemini CLI & Antigravity IDE integration: maintains `GEMINI.md`, `.geminiignore`, and mirrors prompts to `.gemini/`. | [Read Guide](gemini.md) |
 | [`windsurf`](windsurf.md) | AI Provider | Windsurf IDE integration: maintains `.windsurfrules` and mirrors prompts to `.windsurf/`. | [Read Guide](windsurf.md) |
-| [`karpathy-llm`](karpathy-llm.md) | Knowledge & Rules | Andrej Karpathy's 4 cardinal principles for coding agents, multi-repo context engineering standards, and autonomous zero-dependency LLM Wiki architecture (`raw/`, `wiki/`). | [Read Guide](karpathy-llm.md) |
+| [`karpathy-llm`](karpathy-llm.md) | Knowledge & Rules | Andrej Karpathy's 4 cardinal principles for coding agents, multi-repo context engineering standards, and autonomous zero-dependency LLM Wiki architecture (`./docs`, `.rnex/wiki`). | [Read Guide](karpathy-llm.md) |
 
 ---
 
@@ -116,7 +116,7 @@ plugins:
 Whenever you modify plugin configuration manually, run:
 
 ```bash
-rnex sync --fix
+rnex sync
 ```
 
 to reconcile scoped directories, prompt assets, provider mirrors, and member `.rnex/` folders.

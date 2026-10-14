@@ -1,13 +1,13 @@
 {
   "name": "repo-nexus",
-  "version": "0.6.16",
+  "version": "0.7.0",
   "description": "Lightweight, zero-dependency Virtual Meta-Repo companion for multi-repo workspaces and shared AI context (no git submodules)",
   "bin": {
     "repo-nexus": "rnex",
     "rnex": "rnex"
   },
   "scripts": {
-    "prepare": "git config core.hooksPath .githooks 2>/dev/null || true",
+    "prepare": "git config core.hooksPath scripts/githooks 2>/dev/null || true",
     "test": "./tests/test_cli.sh",
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",
@@ -26,12 +26,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/unoxen/repo-nexus.git"
+    "url": "git+https://github.com/nu-nenoi/repo-nexus.git"
   },
   "bugs": {
-    "url": "https://github.com/unoxen/repo-nexus/issues"
+    "url": "https://github.com/nu-nenoi/repo-nexus/issues"
   },
-  "homepage": "https://unoxen.github.io/repo-nexus/",
+  "homepage": "https://nu-nenoi.github.io/repo-nexus/",
   "keywords": [
     "rnex",
     "repo-nexus",

@@ -79,7 +79,7 @@ This workspace operates as a Repo Nexus Virtual Meta-Repo uniting independent re
 ```
 
 ::: tip Preserving Custom Instructions
-Any custom guidelines, rules, or documentation authored outside the `<!-- REPO-NEXUS:START -->` and `<!-- REPO-NEXUS:END -->` markers are strictly preserved during `rnex sync --fix` or plugin synchronization.
+Any custom guidelines, rules, or documentation authored outside the `<!-- REPO-NEXUS:START -->` and `<!-- REPO-NEXUS:END -->` markers are strictly preserved during `rnex sync` or plugin synchronization.
 :::
 
 ### 5. Multi-Root IDE Workspaces

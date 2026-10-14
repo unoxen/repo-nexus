@@ -66,7 +66,7 @@ If a command fails in any repository, `rnex exec` exits immediately with that co
 Repo Nexus includes an automated hook runner configured via `core.hooksPath = .rnex/hooks`.
 
 ### Core Automated Hooks
-1. **`post-merge`**: When you pull updates to the meta-repo (`git pull`), the hook automatically executes `rnex sync --fix` to:
+1. **`post-merge`**: When you pull updates to the meta-repo (`git pull`), the hook automatically executes `rnex sync -y --quiet` if `rnex.yaml` changed to:
    * Clone newly declared member repositories.
    * Update AI routing instructions (`AGENTS.md`, etc.).
    * Sync plugin changes.

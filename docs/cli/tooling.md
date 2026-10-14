@@ -21,9 +21,10 @@ rnex hooks install [--local]
 ```
 
 #### Installed Hooks:
-* **`post-merge`**: Runs `rnex sync --fix -y --quiet` automatically whenever `git pull` or upstream merges occur, ensuring newly added repositories and plugin updates sync instantly.
+* **`post-merge`**: Runs `rnex sync -y --quiet` automatically whenever `git pull` or upstream merges change `rnex.yaml`, ensuring newly added repositories and plugin updates sync instantly.
+* **`post-checkout`**: Runs `rnex sync -y --quiet` automatically whenever `rnex.yaml` changes across branch checkouts.
 * **`post-commit`**: Alerts the user if documentation or wiki files were committed without running maintenance linters.
-* **`pre-commit`**: Runs pre-commit validation triggers declared by active plugins.
+* **`pre-commit`**: Runs `rnex sync -y --quiet` when configuration files are staged, and triggers plugin validation.
 * **`pre-push`**: Runs pre-push validation triggers before pushing to remote.
 
 ### `rnex hooks status`

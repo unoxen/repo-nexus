@@ -86,24 +86,47 @@ while [ "$i" -lt "$ORIG_COUNT" ]; do
 done
 
 case "${1:-help}" in
-  init)        shift; cmd_init "$@" ;;
-  install)     shift; cmd_install "$@" ;;
-  add)         shift; cmd_add "$@" ;;
-  clone)       shift; cmd_clone "$@" ;;
-  exec)        shift; cmd_exec "$@" ;;
-  remove)      shift; cmd_remove "$@" ;;
-  enable)      shift; cmd_enable "$@" ;;
-  disable)     shift; cmd_disable "$@" ;;
-  show)        shift; cmd_show "$@" ;;
-  hide)        shift; cmd_hide "$@" ;;
+  list|exec|clone|add|remove|enable|disable|plugin|rnex-dir|update|upgrade|hooks)
+    auto_sync_if_needed
+    ;;
+esac
+
+dispatch_action() {
+  _action="$1"
+  shift
+  run_hook "before_$_action" "$@"
+  case "$_action" in
+    init)        cmd_init "$@" ;;
+    install)     cmd_install "$@" ;;
+    add)         cmd_add "$@" ;;
+    clone)       cmd_clone "$@" ;;
+    exec)        cmd_exec "$@" ;;
+    remove)      cmd_remove "$@" ;;
+    enable)      cmd_enable "$@" ;;
+    disable)     cmd_disable "$@" ;;
+    rnex-dir)    cmd_rnex_dir "$@" ;;
+    sync)        cmd_sync "$@" ;;
+    update)      cmd_update "$@" ;;
+    upgrade)     cmd_upgrade "$@" ;;
+    hooks)       cmd_hooks "$@" ;;
+    plugin)      cmd_plugin "$@" ;;
+    *)           die "Unknown action: $_action" ;;
+  esac
+  _rc=$?
+  run_hook "after_$_action" "$@"
+  return $_rc
+}
+
+case "${1:-help}" in
+  init|install|add|clone|exec|remove|enable|disable|rnex-dir|sync|update|upgrade|hooks|plugin)
+    _cmd="$1"
+    shift
+    dispatch_action "$_cmd" "$@"
+    ;;
+  show)        shift; dispatch_action "enable" "$@" ;;
+  hide)        shift; dispatch_action "disable" "$@" ;;
   list)        shift; cmd_list "$@" ;;
   status)      shift; cmd_status "$@" ;;
-  hooks)       shift; cmd_hooks "$@" ;;
-  update|upgrade) shift; cmd_update "$@" ;;
-  rnex-dir)    shift; cmd_rnex_dir "$@" ;;
-  sync)        shift; cmd_sync "$@" ;;
-  fix)         shift; cmd_fix "$@" ;;
-  plugin)      shift; cmd_plugin "$@" ;;
   completion)  shift; cmd_completion "$@" ;;
   version|-v|--version) cmd_version ;;
   help|-h|--help) cmd_help ;;

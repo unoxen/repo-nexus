@@ -35,7 +35,7 @@ rnex --version
 
 ```sh [Standalone Shell Binary]
 # Direct POSIX download to /usr/local/bin (no Node.js required)
-curl -fsSL https://raw.githubusercontent.com/unoxen/repo-nexus/main/rnex -o /usr/local/bin/rnex
+curl -fsSL https://raw.githubusercontent.com/nu-nenoi/repo-nexus/main/rnex -o /usr/local/bin/rnex
 chmod +x /usr/local/bin/rnex
 
 # Verify installation

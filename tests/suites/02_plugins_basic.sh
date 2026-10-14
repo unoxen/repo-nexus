@@ -35,6 +35,7 @@ echo "$_pinfo_out" | grep -q ".rnex/plugins/karpathy-llm" || { fail ".rnex/plugi
 pass
 
 # --------------------------------------------------------------------------
+# --------------------------------------------------------------------------
 run_test "Plugin enable command scopes assets to .rnex/plugins/karpathy-llm/"
 "$TEST_WORKSPACE/rnex" plugin enable karpathy-llm >/dev/null
 grep -q "karpathy-llm" "$TEST_WORKSPACE/rnex.yaml" || { fail "karpathy-llm not in rnex.yaml"; exit 1; }
@@ -42,8 +43,8 @@ grep -q "karpathy-llm" "$TEST_WORKSPACE/rnex.yaml" || { fail "karpathy-llm not i
 [ -f "$TEST_WORKSPACE/.rnex/plugins/karpathy-llm/rules/rnex-behavioral.md" ] || { fail "rnex-behavioral.md missing in scoped plugin dir"; exit 1; }
 [ -f "$TEST_WORKSPACE/.rnex/plugins/karpathy-llm/instructions/rnex-wiki-architecture.md" ] || { fail "rnex-wiki-architecture.md missing in scoped plugin dir"; exit 1; }
 [ -d "$TEST_WORKSPACE/repos/test-app/.rnex/plugins/karpathy-llm" ] || { fail "Scoped plugin dir missing in member repo"; exit 1; }
-[ -f "$TEST_WORKSPACE/wiki/index.md" ] || { fail "wiki/index.md not initialized in workspace"; exit 1; }
-grep -q "title: Wiki Index" "$TEST_WORKSPACE/wiki/index.md" || { fail "wiki/index.md missing title: Wiki Index"; exit 1; }
+[ -f "$TEST_WORKSPACE/.rnex/wiki/index.md" ] || { fail ".rnex/wiki/index.md not initialized in workspace"; exit 1; }
+grep -q "title: Wiki Index" "$TEST_WORKSPACE/.rnex/wiki/index.md" || { fail ".rnex/wiki/index.md missing title: Wiki Index"; exit 1; }
 pass
 
 # --------------------------------------------------------------------------
@@ -52,21 +53,23 @@ run_test "Plugin disable command cleans up scoped plugin assets while preserving
 grep -q "karpathy-llm" "$TEST_WORKSPACE/rnex.yaml" && { fail "karpathy-llm still in rnex.yaml"; exit 1; }
 [ ! -d "$TEST_WORKSPACE/.rnex/plugins/karpathy-llm" ] || { fail "Scoped plugin dir still present in workspace"; exit 1; }
 [ ! -d "$TEST_WORKSPACE/repos/test-app/.rnex/plugins/karpathy-llm" ] || { fail "Scoped plugin dir still present in member repo"; exit 1; }
-[ -f "$TEST_WORKSPACE/wiki/index.md" ] || { fail "User wiki data was incorrectly deleted"; exit 1; }
+[ -f "$TEST_WORKSPACE/.rnex/wiki/index.md" ] || { fail "User wiki data was incorrectly deleted"; exit 1; }
 pass
 
 # --------------------------------------------------------------------------
-run_test "Routing-Only Instructions in AGENTS.md"
+run_test "Directive in AGENTS.md and compiled instructions in .rnex/ai-instructions.md"
 _agents_content="$(cat "$TEST_WORKSPACE/AGENTS.md")"
-echo "$_agents_content" | grep -q "Read Configuration First" || { fail "AGENTS.md missing Read Configuration First"; exit 1; }
-echo "$_agents_content" | grep -q ".local.rnex.yaml" || { fail "AGENTS.md missing .local.rnex.yaml"; exit 1; }
-echo "$_agents_content" | grep -q "Highest Priority" || { fail "AGENTS.md missing Highest Priority notice"; exit 1; }
-echo "$_agents_content" | grep -q ".rnex/plugins/<plugin-name>/" || { fail "AGENTS.md missing plugin routing"; exit 1; }
-echo "$_agents_content" | grep -q "Routing Protocol for AI Assistants" || { fail "AGENTS.md missing Routing Protocol heading"; exit 1; }
-! echo "$_agents_content" | grep -qi "symlink" || { fail "AGENTS.md should not contain symlink mentions"; exit 1; }
-! echo "$_agents_content" | grep -q "Think Before Coding" || { fail "AGENTS.md should not contain inlined plugin rules"; exit 1; }
-! echo "$_agents_content" | grep -q "MANDATORY GATE: DO NOT INSPECT" || { fail "AGENTS.md should not contain wiki mandatory gate when karpathy-llm is disabled"; exit 1; }
-! echo "$_agents_content" | grep -q "wiki/hot.md" || { fail "AGENTS.md should not reference wiki/hot.md when karpathy-llm is disabled"; exit 1; }
+echo "$_agents_content" | grep -q "CRITICAL: You MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\`" || { fail "AGENTS.md missing critical directive"; exit 1; }
+
+_ai_content="$(cat "$TEST_WORKSPACE/.rnex/ai-instructions.md")"
+echo "$_ai_content" | grep -q "Read Configuration First" || { fail ".rnex/ai-instructions.md missing Read Configuration First"; exit 1; }
+echo "$_ai_content" | grep -q ".local.rnex.yaml" || { fail ".rnex/ai-instructions.md missing .local.rnex.yaml"; exit 1; }
+echo "$_ai_content" | grep -q "Highest Priority" || { fail ".rnex/ai-instructions.md missing Highest Priority notice"; exit 1; }
+echo "$_ai_content" | grep -q ".rnex/plugins/<plugin-name>/" || { fail ".rnex/ai-instructions.md missing plugin routing"; exit 1; }
+echo "$_ai_content" | grep -q "Routing Protocol for AI Assistants" || { fail ".rnex/ai-instructions.md missing Routing Protocol heading"; exit 1; }
+! echo "$_ai_content" | grep -qi "symlink" || { fail ".rnex/ai-instructions.md should not contain symlink mentions"; exit 1; }
+! echo "$_ai_content" | grep -q "Think Before Coding" || { fail ".rnex/ai-instructions.md should not contain inlined plugin rules"; exit 1; }
+! echo "$_ai_content" | grep -q "MANDATORY GATE: DO NOT INSPECT" || { fail ".rnex/ai-instructions.md should not contain wiki mandatory gate when karpathy-llm is disabled"; exit 1; }
 pass
 
 if [ "${_STANDALONE_RUN:-0}" -eq 1 ]; then

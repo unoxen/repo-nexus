@@ -1,8 +1,13 @@
 name: karpathy-llm
 version: 0.5.1
 description: Andrej Karpathy's agent behavioral principles, context engineering guidelines, and autonomous LLM Wiki knowledge architecture
-author: unoxen
-homepage: https://github.com/unoxen/repo-nexus
+author: nu-nenoi
+homepage: https://github.com/nu-nenoi/repo-nexus
+config:
+  wiki_dir: .rnex/wiki
+  raw_dir: ./docs
+  lint_trigger: git-post-merge
+  notify_on_changes: true
 rules:
   - rules/rnex-behavioral.md: .rnex/plugins/karpathy-llm/rules/rnex-behavioral.md
   - workflows/rnex-wiki-ingest.md: .rnex/plugins/karpathy-llm/workflows/rnex-wiki-ingest.md
@@ -10,9 +15,9 @@ rules:
 instructions:
   - instructions/rnex-wiki-architecture.md: .rnex/plugins/karpathy-llm/instructions/rnex-wiki-architecture.md
 templates:
-  - templates/index.md: wiki/index.md
-  - templates/_log.md: wiki/_log.md
-  - templates/hot.md: wiki/hot.md
-  - templates/raw.gitkeep: raw/.gitkeep
+  - templates/index.md: {wiki_dir}/index.md
+  - templates/_log.md: {wiki_dir}/_log.md
+  - templates/hot.md: {wiki_dir}/hot.md
+  - templates/raw.gitkeep: {raw_dir}/.gitkeep
   - templates/rnex-wiki-page.sample.md: .rnex/plugins/karpathy-llm/templates/rnex-wiki-page.template.md
   - templates/rnex-llm-wiki.sample.md: .rnex/plugins/karpathy-llm/templates/rnex-llm-wiki.sample.md

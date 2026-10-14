@@ -98,7 +98,7 @@ cmd_init() {
   if [ -f "$_target_yaml" ]; then
     log_warn "Workspace configuration already exists at $_init_dir ($RNEX_CONFIG_FILE exists)"
     log_dim "To reconcile repos and plugins, run:"
-    log_dim "  rnex sync --fix"
+    log_dim "  rnex sync"
   else
     _init_plugins=""
     if [ "$_cli_copilot" = "true" ]; then
@@ -164,6 +164,7 @@ YAML_EOF
   WORKSPACE_YAML="$_target_yaml"
   WORKSPACE_LOCAL_YAML="$_init_dir/$RNEX_LOCAL_CONFIG_FILE"
   sync_plugins
+  build_ai_instructions "$_init_dir"
   sync_prompts
   WORKSPACE_LOCAL_YAML="$_orig_local_yaml"
   WORKSPACE_YAML="$_orig_yaml"
@@ -218,6 +219,10 @@ YAML_EOF
       log_dim "Skipping Git hooks setup (run 'rnex hooks install' later to enable)"
     fi
   fi
+
+  _write_auto_sync_script "$_init_dir"
+  _sync_ai_session_start_hooks "$_init_dir"
+  update_sync_stamp "$_init_dir"
 
   if [ "$_config_created" -eq 1 ]; then
     printf '\n'

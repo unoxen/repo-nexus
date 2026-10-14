@@ -1,7 +1,7 @@
 name: copilot
 version: 0.5.1
 description: GitHub Copilot integration (mirrors workspace prompts to .github/prompts)
-author: unoxen
-homepage: https://github.com/unoxen/repo-nexus
+author: nu-nenoi
+homepage: https://github.com/nu-nenoi/repo-nexus
 instructions:
   - instructions/rnex-copilot-integration.md: .rnex/plugins/copilot/instructions/rnex-copilot-integration.md

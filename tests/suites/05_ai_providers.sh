@@ -49,7 +49,7 @@ echo "$_cop_status" | grep -q "prompts=true" || { fail "Status did not report co
 
 # Enable karpathy-llm alongside copilot: workflows mirrored as prompts only
 (cd "$TEST_COPILOT_WS" && ./rnex plugin enable karpathy-llm >/dev/null)
-(cd "$TEST_COPILOT_WS" && ./rnex fix -y --quiet >/dev/null)
+(cd "$TEST_COPILOT_WS" && ./rnex sync -y --quiet >/dev/null)
 
 # Verify Karpathy workflows mirrored to .github/prompts/
 [ -f "$TEST_COPILOT_WS/.github/prompts/rnex-wiki-ingest.prompt.md" ] || { fail "rnex-wiki-ingest prompt not mirrored to .github/prompts/"; exit 1; }
@@ -69,15 +69,15 @@ mkdir -p "$TEST_COPILOT_WS/.github/prompts"
 echo "# User Prompt" > "$TEST_COPILOT_WS/.github/prompts/user-custom.prompt.md"
 echo "# Custom Developer Section" > "$TEST_COPILOT_WS/.github/copilot-instructions.md"
 
-# Simulate legacy mirrored skill and verify rnex fix purges it while keeping user files
+# Simulate legacy mirrored skill and verify rnex sync purges it while keeping user files
 mkdir -p "$TEST_COPILOT_WS/.github/skills/rnex-cross-repo-feature"
 echo "# Legacy Mirrored" > "$TEST_COPILOT_WS/.github/skills/rnex-cross-repo-feature/SKILL.md"
 mkdir -p "$TEST_COPILOT_WS/.github/agents"
 echo "# Legacy Agent" > "$TEST_COPILOT_WS/.github/agents/rnex-wiki-curator.agent.md"
 
-(cd "$TEST_COPILOT_WS" && ./rnex fix -y --quiet >/dev/null)
-[ ! -d "$TEST_COPILOT_WS/.github/skills/rnex-cross-repo-feature" ] || { fail "Legacy mirrored skill not cleaned up by fix"; exit 1; }
-[ ! -f "$TEST_COPILOT_WS/.github/agents/rnex-wiki-curator.agent.md" ] || { fail "Legacy mirrored agent not cleaned up by fix"; exit 1; }
+(cd "$TEST_COPILOT_WS" && ./rnex sync -y --quiet >/dev/null)
+[ ! -d "$TEST_COPILOT_WS/.github/skills/rnex-cross-repo-feature" ] || { fail "Legacy mirrored skill not cleaned up by sync"; exit 1; }
+[ ! -f "$TEST_COPILOT_WS/.github/agents/rnex-wiki-curator.agent.md" ] || { fail "Legacy mirrored agent not cleaned up by sync"; exit 1; }
 [ -f "$TEST_COPILOT_WS/.github/skills/user-custom-skill/SKILL.md" ] || { fail "User custom skill deleted"; exit 1; }
 [ -f "$TEST_COPILOT_WS/.github/agents/user-custom.agent.md" ] || { fail "User custom agent deleted"; exit 1; }
 [ -f "$TEST_COPILOT_WS/.github/prompts/user-custom.prompt.md" ] || { fail "User custom prompt deleted"; exit 1; }
@@ -97,14 +97,14 @@ plugins:
   karpathy-llm: {}
 repos:
 EOF
-(cd "$TEST_COPILOT_WS" && ./rnex fix -y --quiet >/dev/null)
+(cd "$TEST_COPILOT_WS" && ./rnex sync -y --quiet >/dev/null)
 [ ! -f "$TEST_COPILOT_WS/.github/prompts/rnex-cross-repo-feature.prompt.md" ] || { fail "Base prompts not cleaned up when prompts: false"; exit 1; }
 [ ! -f "$TEST_COPILOT_WS/.github/prompts/rnex-wiki-ingest.prompt.md" ] || { fail "Plugin prompts not cleaned up when prompts: false"; exit 1; }
 [ -f "$TEST_COPILOT_WS/.github/prompts/user-custom.prompt.md" ] || { fail "User prompt deleted when prompts: false"; exit 1; }
 
-# Disable copilot via local override and run fix
+# Disable copilot via local override and run sync
 (cd "$TEST_COPILOT_WS" && ./rnex plugin disable --local copilot >/dev/null)
-(cd "$TEST_COPILOT_WS" && ./rnex fix -y --quiet >/dev/null)
+(cd "$TEST_COPILOT_WS" && ./rnex sync -y --quiet >/dev/null)
 [ ! -f "$TEST_COPILOT_WS/.github/prompts/rnex-cross-repo-feature.prompt.md" ] || { fail "Prompts not cleaned up when copilot disabled locally"; exit 1; }
 
 # Verify custom user skills, agents, and prompts are preserved
@@ -136,7 +136,7 @@ git -C "$TEST_PROVIDERS_WS" init -q
 
 # Enable gemini plugin
 (cd "$TEST_PROVIDERS_WS" && ./rnex plugin enable gemini >/dev/null)
-(cd "$TEST_PROVIDERS_WS" && ./rnex fix -y --quiet >/dev/null)
+(cd "$TEST_PROVIDERS_WS" && ./rnex sync -y --quiet >/dev/null)
 [ -f "$TEST_PROVIDERS_WS/GEMINI.md" ] || { fail "GEMINI.md missing after enabling gemini"; exit 1; }
 [ -f "$TEST_PROVIDERS_WS/.geminiignore" ] || { fail ".geminiignore missing after enabling gemini"; exit 1; }
 grep -q '!repos/\*' "$TEST_PROVIDERS_WS/.geminiignore" || { fail "!repos/* missing from .geminiignore"; exit 1; }
@@ -146,7 +146,7 @@ grep -q '!repos/\*' "$TEST_PROVIDERS_WS/.geminiignore" || { fail "!repos/* missi
 # Enable cursor and windsurf plugins
 (cd "$TEST_PROVIDERS_WS" && ./rnex plugin enable cursor >/dev/null)
 (cd "$TEST_PROVIDERS_WS" && ./rnex plugin enable windsurf >/dev/null)
-(cd "$TEST_PROVIDERS_WS" && ./rnex fix -y --quiet >/dev/null)
+(cd "$TEST_PROVIDERS_WS" && ./rnex sync -y --quiet >/dev/null)
 [ -f "$TEST_PROVIDERS_WS/.cursorrules" ] || { fail ".cursorrules missing after enabling cursor"; exit 1; }
 [ -f "$TEST_PROVIDERS_WS/.cursorignore" ] || { fail ".cursorignore missing after enabling cursor"; exit 1; }
 grep -q '!repos/\*' "$TEST_PROVIDERS_WS/.cursorignore" || { fail "!repos/* missing from .cursorignore"; exit 1; }
@@ -176,7 +176,7 @@ printf "custom-gemini.log\n" >> "$TEST_PROVIDERS_WS/.geminiignore"
 printf "# Cursor Custom\n" >> "$TEST_PROVIDERS_WS/.cursorrules"
 printf "custom-cursor.log\n" >> "$TEST_PROVIDERS_WS/.cursorignore"
 printf "# Windsurf Custom\n" >> "$TEST_PROVIDERS_WS/.windsurfrules"
-(cd "$TEST_PROVIDERS_WS" && ./rnex fix -y --quiet >/dev/null)
+(cd "$TEST_PROVIDERS_WS" && ./rnex sync -y --quiet >/dev/null)
 grep -q "# Custom Section" "$TEST_PROVIDERS_WS/CLAUDE.md" || { fail "Custom section lost in CLAUDE.md"; exit 1; }
 grep -q "REPO-NEXUS:START" "$TEST_PROVIDERS_WS/CLAUDE.md" || { fail "REPO-NEXUS block missing in CLAUDE.md"; exit 1; }
 grep -q "# Gemini Custom" "$TEST_PROVIDERS_WS/GEMINI.md" || { fail "Custom section lost in GEMINI.md"; exit 1; }
@@ -224,7 +224,7 @@ echo "custom" > "$TEST_PROVIDERS_WS/.windsurf/agents/my-agent.md"
 (cd "$TEST_PROVIDERS_WS" && ./rnex plugin disable gemini >/dev/null)
 (cd "$TEST_PROVIDERS_WS" && ./rnex plugin disable cursor >/dev/null)
 (cd "$TEST_PROVIDERS_WS" && ./rnex plugin disable windsurf >/dev/null)
-(cd "$TEST_PROVIDERS_WS" && ./rnex fix -y --quiet >/dev/null)
+(cd "$TEST_PROVIDERS_WS" && ./rnex sync -y --quiet >/dev/null)
 
 [ -f "$TEST_PROVIDERS_WS/AGENTS.md" ] || { fail "AGENTS.md not preserved when all AI provider plugins disabled"; exit 1; }
 
@@ -276,12 +276,12 @@ grep -q "custom-gemini.log" "$TEST_PROVIDERS_WS/.geminiignore" || { fail "custom
 rm -f "$TEST_PROVIDERS_WS/.cursorignore" "$TEST_PROVIDERS_WS/.geminiignore"
 (cd "$TEST_PROVIDERS_WS" && ./rnex plugin enable cursor >/dev/null)
 (cd "$TEST_PROVIDERS_WS" && ./rnex plugin enable gemini >/dev/null)
-(cd "$TEST_PROVIDERS_WS" && ./rnex fix -y --quiet >/dev/null)
+(cd "$TEST_PROVIDERS_WS" && ./rnex sync -y --quiet >/dev/null)
 [ -f "$TEST_PROVIDERS_WS/.cursorignore" ] || { fail ".cursorignore not recreated"; exit 1; }
 [ -f "$TEST_PROVIDERS_WS/.geminiignore" ] || { fail ".geminiignore not recreated"; exit 1; }
 (cd "$TEST_PROVIDERS_WS" && ./rnex plugin disable cursor >/dev/null)
 (cd "$TEST_PROVIDERS_WS" && ./rnex plugin disable gemini >/dev/null)
-(cd "$TEST_PROVIDERS_WS" && ./rnex fix -y --quiet >/dev/null)
+(cd "$TEST_PROVIDERS_WS" && ./rnex sync -y --quiet >/dev/null)
 [ ! -f "$TEST_PROVIDERS_WS/.cursorignore" ] || { fail ".cursorignore without custom content was not removed"; exit 1; }
 [ ! -f "$TEST_PROVIDERS_WS/.geminiignore" ] || { fail ".geminiignore without custom content was not removed"; exit 1; }
 pass

@@ -78,7 +78,7 @@ sync_repo_rnex() {
     cat <<EOF > "$_r_rnex/README.md"
 # .rnex — Repo Nexus Workspace Integration
 
-This directory is managed by [Repo Nexus](https://github.com/unoxen/repo-nexus).
+This directory is managed by [Repo Nexus](https://github.com/nu-nenoi/repo-nexus).
 It stores documents, scripts, instructions, and workflows related to Repo Nexus for this member repository.
 
 AI tools operating at the Repo Nexus workspace level inspect this directory (\`repos/$_name/.rnex/\`) for repository-specific context and instructions.
@@ -110,17 +110,21 @@ EOF
 
     # Deterministically sync plugin asset directories into member repo (no prompts in plugins)
     rm -rf "${_dest_pdir:?}/prompts" 2>/dev/null || true
-    for _sub in rules workflows instructions skills agents templates; do
+    for _sub in rules workflows instructions skills agents templates hooks; do
       if [ -d "$_pdir/$_sub" ]; then
         rm -rf "${_dest_pdir:?}/$_sub"
         mkdir -p "$_dest_pdir/$_sub"
         cp -R "$_pdir/$_sub"/. "$_dest_pdir/$_sub"/ 2>/dev/null || true
+        [ "$_sub" = "hooks" ] && chmod +x "$_dest_pdir/hooks"/* 2>/dev/null || true
       else
         rm -rf "${_dest_pdir:?}/$_sub"
       fi
     done
     if [ -f "$_pdir/plugin.yaml" ]; then
       cp "$_pdir/plugin.yaml" "$_dest_pdir/plugin.yaml"
+    fi
+    if [ -f "$_pdir/instructions.md" ]; then
+      cp "$_pdir/instructions.md" "$_dest_pdir/instructions.md"
     fi
     if [ -f "$_pdir/README.md" ]; then
       cp "$_pdir/README.md" "$_dest_pdir/README.md"

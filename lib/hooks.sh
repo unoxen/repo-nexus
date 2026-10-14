@@ -4,6 +4,110 @@
 # lib/hooks.sh — Automated Git hooks management and event dispatch
 # ============================================================================
 
+# ---- Action Command Hook Dispatcher -----------------------------------------
+
+run_hook() {
+  _hook_phase_cmd="$1"
+  shift 2>/dev/null || true
+
+  _ws="${NEXUS_DIR:-}"
+  if [ -z "$_ws" ]; then
+    if [ -f rnex.yaml ]; then
+      _ws="."
+    else
+      _ws="$(find_workspace_dir 2>/dev/null || true)"
+    fi
+  fi
+  [ -z "$_ws" ] && return 0
+  [ ! -f "$_ws/rnex.yaml" ] && return 0
+
+  RNEX_ROOT="$(cd "$_ws" 2>/dev/null && pwd -P)"
+  RNEX_CONFIG_MERGED="$RNEX_ROOT/rnex.yaml"
+  _hook_cmd="${_hook_phase_cmd#*_}"
+  _hook_file="${_hook_phase_cmd}.sh"
+  RNEX_CMD="$_hook_cmd"
+  RNEX_ARGS="$*"
+  RNEX_QUIET="${_sync_quiet:-0}"
+
+  _old_nexus="$NEXUS_DIR"
+  NEXUS_DIR="$RNEX_ROOT"
+  _plugins="$(yaml_list_plugins 2>/dev/null || true)"
+
+  for _pname in $_plugins; do
+    [ -n "$_pname" ] || continue
+    yaml_plugin_enabled "$_pname" 2>/dev/null || continue
+
+    RNEX_PLUGIN_DIR="$RNEX_ROOT/.rnex/plugins/$_pname"
+    _hook_script="$RNEX_PLUGIN_DIR/hooks/$_hook_file"
+
+    if [ ! -f "$_hook_script" ]; then
+      _src_pdir="$(find_plugin_dir "$_pname" 2>/dev/null || true)"
+      if [ -n "$_src_pdir" ] && [ -f "$_src_pdir/hooks/$_hook_file" ]; then
+        _hook_script="$_src_pdir/hooks/$_hook_file"
+      fi
+    fi
+
+    if [ -f "$_hook_script" ]; then
+      chmod +x "$_hook_script" 2>/dev/null || true
+      (
+        export RNEX_ROOT RNEX_CONFIG_MERGED RNEX_PLUGIN_DIR RNEX_CMD RNEX_ARGS RNEX_QUIET
+        "$_hook_script" "$@"
+      ) || true
+    fi
+  done
+  NEXUS_DIR="$_old_nexus"
+}
+
+run_plugin_git_hooks() {
+  _hook_name="$1"
+  shift 2>/dev/null || true
+
+  _ws="${NEXUS_DIR:-}"
+  [ -z "$_ws" ] && return 0
+  [ ! -f "$_ws/rnex.yaml" ] && return 0
+
+  RNEX_ROOT="$(cd "$_ws" 2>/dev/null && pwd -P)"
+  RNEX_CONFIG_MERGED="$RNEX_ROOT/rnex.yaml"
+  RNEX_CMD="hooks"
+  RNEX_ARGS="$*"
+  RNEX_QUIET="${_sync_quiet:-0}"
+
+  _plugins="$(yaml_list_plugins 2>/dev/null || true)"
+  for _pname in $_plugins; do
+    [ -n "$_pname" ] || continue
+    yaml_plugin_enabled "$_pname" 2>/dev/null || continue
+
+    RNEX_PLUGIN_DIR="$RNEX_ROOT/.rnex/plugins/$_pname"
+    _h_cand=""
+    if [ -f "$RNEX_PLUGIN_DIR/hooks/git_${_hook_name}.sh" ]; then
+      _h_cand="$RNEX_PLUGIN_DIR/hooks/git_${_hook_name}.sh"
+    elif [ -f "$RNEX_PLUGIN_DIR/hooks/${_hook_name}.sh" ]; then
+      _h_cand="$RNEX_PLUGIN_DIR/hooks/${_hook_name}.sh"
+    fi
+
+    if [ -z "$_h_cand" ]; then
+      _src_pdir="$(find_plugin_dir "$_pname" 2>/dev/null || true)"
+      if [ -n "$_src_pdir" ]; then
+        if [ -f "$_src_pdir/hooks/git_${_hook_name}.sh" ]; then
+          _h_cand="$_src_pdir/hooks/git_${_hook_name}.sh"
+        elif [ -f "$_src_pdir/hooks/${_hook_name}.sh" ]; then
+          _h_cand="$_src_pdir/hooks/${_hook_name}.sh"
+        fi
+      fi
+    fi
+
+    if [ -n "$_h_cand" ] && [ -f "$_h_cand" ]; then
+      chmod +x "$_h_cand" 2>/dev/null || true
+      (
+        export RNEX_ROOT RNEX_CONFIG_MERGED RNEX_PLUGIN_DIR RNEX_CMD RNEX_ARGS RNEX_QUIET
+        "$_h_cand" "$@"
+      ) || true
+    fi
+  done
+}
+
+# ---- Git Hooks Management --------------------------------------------------
+
 _create_hook_script() {
   _dst="$1"
   _hook_type="$2"
@@ -47,6 +151,7 @@ cmd_hooks_install_dir() {
   _h_dir="$_ws_dir/.rnex/hooks"
   mkdir -p "$_h_dir"
   _create_hook_script "$_h_dir/post-merge" "post-merge"
+  _create_hook_script "$_h_dir/post-checkout" "post-checkout"
   _create_hook_script "$_h_dir/post-commit" "post-commit"
   _create_hook_script "$_h_dir/pre-commit" "pre-commit"
   _create_hook_script "$_h_dir/pre-push" "pre-push"
@@ -129,7 +234,7 @@ cmd_hooks() {
       fi
 
       printf '\n%bInstalled Hooks in .rnex/hooks/:%b\n' "$_BOLD" "$_NC"
-      for _h in "post-merge" "post-commit" "pre-commit" "pre-push"; do
+      for _h in "post-merge" "post-checkout" "post-commit" "pre-commit" "pre-push"; do
         if [ -f "$NEXUS_DIR/.rnex/hooks/$_h" ]; then
           printf '  %b✓%b %-15s %b(installed)%b\n' "$_G" "$_NC" "$_h" "$_DIM" "$_NC"
         else
@@ -137,17 +242,26 @@ cmd_hooks() {
         fi
       done
 
-      _active_trigger=""
-      if yaml_plugin_enabled "karpathy-llm"; then
-        _active_trigger="$(yaml_plugin_get "karpathy-llm" "lint_trigger")"
-        printf '\n%bActive Plugin Triggers:%b\n' "$_BOLD" "$_NC"
-        if [ -n "$_active_trigger" ]; then
-          printf '  %b●%b karpathy-llm: %s\n' "$_G" "$_NC" "$_active_trigger"
-        else
-          printf '  %b○%b karpathy-llm: (manual only / no trigger set in rnex.yaml)\n' "$_DIM" "$_NC"
+      _has_triggers=0
+      _plugins="$(yaml_list_plugins 2>/dev/null || true)"
+      for _pname in $_plugins; do
+        [ -n "$_pname" ] || continue
+        yaml_plugin_enabled "$_pname" 2>/dev/null || continue
+        _active_trigger="$(yaml_plugin_get "$_pname" "lint_trigger" 2>/dev/null || true)"
+        if [ -n "$_active_trigger" ] || [ -d "$NEXUS_DIR/.rnex/plugins/$_pname/hooks" ]; then
+          if [ "$_has_triggers" -eq 0 ]; then
+            printf '\n%bActive Plugin Triggers:%b\n' "$_BOLD" "$_NC"
+            _has_triggers=1
+          fi
+          if [ -n "$_active_trigger" ]; then
+            printf '  %b●%b %s: %s\n' "$_G" "$_NC" "$_pname" "$_active_trigger"
+          else
+            printf '  %b○%b %s: (manual only / no trigger set in rnex.yaml)\n' "$_DIM" "$_NC" "$_pname"
+          fi
         fi
-        printf '\n'
-      fi
+      done
+      [ "$_has_triggers" -eq 1 ] && printf '\n'
+      return 0
       ;;
     run)
       shift
@@ -157,68 +271,73 @@ cmd_hooks() {
       require_workspace
       case "$_hook_name" in
         post-merge)
-          cmd_sync --fix -y --quiet || true
-          if yaml_plugin_enabled "karpathy-llm"; then
-            _trigger="$(yaml_plugin_get "karpathy-llm" "lint_trigger")"
-            if [ "$_trigger" = "git-post-merge" ] || [ "$_trigger" = "post-merge" ]; then
-              _wiki_dir="$(karpathy_wiki_dir)"
-              _raw_dir="$(karpathy_raw_dir)"
-              _changed="$(git -C "$NEXUS_DIR" diff-tree -r --name-only ORIG_HEAD HEAD 2>/dev/null || true)"
-              if echo "$_changed" | grep -qE "^(${_raw_dir}/|${_wiki_dir}/)"; then
-                printf '%b[WIKI]%b Upstream changes detected in %s/ or %s/ after merge.\n' "$_Y" "$_NC" "$_raw_dir" "$_wiki_dir"
-              fi
-            fi
+          _cfg_changed=0
+          if [ ! -f "$NEXUS_DIR/.rnex/.sync_stamp" ] || [ "$(get_config_sum "$NEXUS_DIR")" != "$(cat "$NEXUS_DIR/.rnex/.sync_stamp" 2>/dev/null)" ]; then
+            _cfg_changed=1
+          elif git -C "$NEXUS_DIR" diff-tree -r --name-only ORIG_HEAD HEAD 2>/dev/null | grep -qE "(^rnex\.yaml$|^\.local\.rnex\.yaml$)"; then
+            _cfg_changed=1
           fi
-          if [ -x "$NEXUS_DIR/.githooks/post-merge" ]; then
+          if [ "$_cfg_changed" -eq 1 ]; then
+            cmd_sync -y --quiet || true
+          fi
+          run_plugin_git_hooks "post-merge" "$@"
+          if [ -x "$NEXUS_DIR/scripts/githooks/post-merge" ]; then
+            "$NEXUS_DIR/scripts/githooks/post-merge" "$@" || true
+          elif [ -x "$NEXUS_DIR/.githooks/post-merge" ]; then
             "$NEXUS_DIR/.githooks/post-merge" "$@" || true
           fi
           return 0
           ;;
-        post-commit)
-          if yaml_plugin_enabled "karpathy-llm"; then
-            _trigger="$(yaml_plugin_get "karpathy-llm" "lint_trigger")"
-            if [ "$_trigger" = "git-post-commit" ] || [ "$_trigger" = "post-commit" ]; then
-              _wiki_dir="$(karpathy_wiki_dir)"
-              _raw_dir="$(karpathy_raw_dir)"
-              _changed="$(git -C "$NEXUS_DIR" diff-tree -r --name-only --no-commit-id HEAD 2>/dev/null || true)"
-              if echo "$_changed" | grep -qE "^(${_raw_dir}/|${_wiki_dir}/)"; then
-                _notify="$(yaml_plugin_get "karpathy-llm" "notify_on_changes")"
-                [ "$_notify" != "false" ] && printf '%b[WIKI]%b Changes committed to %s/ or %s/. Run wiki-lint or wiki-ingest as needed.\n' "$_Y" "$_NC" "$_raw_dir" "$_wiki_dir"
-              fi
-            fi
+        post-checkout)
+          _cfg_changed=0
+          if [ ! -f "$NEXUS_DIR/.rnex/.sync_stamp" ] || [ "$(get_config_sum "$NEXUS_DIR")" != "$(cat "$NEXUS_DIR/.rnex/.sync_stamp" 2>/dev/null)" ]; then
+            _cfg_changed=1
+          elif [ -n "$1" ] && [ -n "$2" ] && git -C "$NEXUS_DIR" diff-tree -r --name-only "$1" "$2" 2>/dev/null | grep -qE "(^rnex\.yaml$|^\.local\.rnex\.yaml$)"; then
+            _cfg_changed=1
           fi
-          if [ -x "$NEXUS_DIR/.githooks/post-commit" ]; then
+          if [ "$_cfg_changed" -eq 1 ]; then
+            cmd_sync -y --quiet || true
+          fi
+          run_plugin_git_hooks "post-checkout" "$@"
+          if [ -x "$NEXUS_DIR/scripts/githooks/post-checkout" ]; then
+            "$NEXUS_DIR/scripts/githooks/post-checkout" "$@" || true
+          elif [ -x "$NEXUS_DIR/.githooks/post-checkout" ]; then
+            "$NEXUS_DIR/.githooks/post-checkout" "$@" || true
+          fi
+          return 0
+          ;;
+        post-commit)
+          run_plugin_git_hooks "post-commit" "$@"
+          if [ -x "$NEXUS_DIR/scripts/githooks/post-commit" ]; then
+            "$NEXUS_DIR/scripts/githooks/post-commit" "$@" || true
+          elif [ -x "$NEXUS_DIR/.githooks/post-commit" ]; then
             "$NEXUS_DIR/.githooks/post-commit" "$@" || true
           fi
           return 0
           ;;
         pre-commit)
-          if yaml_plugin_enabled "karpathy-llm"; then
-            _trigger="$(yaml_plugin_get "karpathy-llm" "lint_trigger")"
-            if [ "$_trigger" = "git-pre-commit" ] || [ "$_trigger" = "pre-commit" ]; then
-              _wiki_dir="$(karpathy_wiki_dir)"
-              _raw_dir="$(karpathy_raw_dir)"
-              _staged="$(git -C "$NEXUS_DIR" diff --cached --name-only 2>/dev/null || true)"
-              if echo "$_staged" | grep -qE "^(${_raw_dir}/|${_wiki_dir}/)"; then
-                _notify="$(yaml_plugin_get "karpathy-llm" "notify_on_changes")"
-                [ "$_notify" != "false" ] && printf '%b[WIKI]%b Pre-commit trigger: %s/ or %s/ staged for commit.\n' "$_C" "$_NC" "$_raw_dir" "$_wiki_dir"
-              fi
-            fi
+          _cfg_changed=0
+          if [ ! -f "$NEXUS_DIR/.rnex/.sync_stamp" ] || [ "$(get_config_sum "$NEXUS_DIR")" != "$(cat "$NEXUS_DIR/.rnex/.sync_stamp" 2>/dev/null)" ]; then
+            _cfg_changed=1
+          elif git -C "$NEXUS_DIR" diff --cached --name-only 2>/dev/null | grep -qE "(^rnex\.yaml$|^\.local\.rnex\.yaml$)"; then
+            _cfg_changed=1
           fi
-          if [ -x "$NEXUS_DIR/.githooks/pre-commit" ]; then
+          if [ "$_cfg_changed" -eq 1 ]; then
+            cmd_sync -y --quiet || true
+          fi
+          run_plugin_git_hooks "pre-commit" "$@"
+          if [ -x "$NEXUS_DIR/scripts/githooks/pre-commit" ]; then
+            "$NEXUS_DIR/scripts/githooks/pre-commit" "$@" || return $?
+          elif [ -x "$NEXUS_DIR/.githooks/pre-commit" ]; then
             "$NEXUS_DIR/.githooks/pre-commit" "$@" || return $?
           fi
           return 0
           ;;
         pre-push)
-          if yaml_plugin_enabled "karpathy-llm"; then
-            _trigger="$(yaml_plugin_get "karpathy-llm" "lint_trigger")"
-            if [ "$_trigger" = "git-pre-push" ] || [ "$_trigger" = "pre-push" ]; then
-              _wiki_dir="$(karpathy_wiki_dir)"
-              printf '%b[WIKI]%b Pre-push trigger: verifying wiki changes in %s/.\n' "$_C" "$_NC" "$_wiki_dir"
-            fi
-          fi
-          if [ -x "$NEXUS_DIR/.githooks/pre-push" ]; then
+          run_plugin_git_hooks "pre-push" "$@"
+          if [ -x "$NEXUS_DIR/scripts/githooks/pre-push" ]; then
+            "$NEXUS_DIR/scripts/githooks/pre-push" "$@" || return $?
+          elif [ -x "$NEXUS_DIR/.githooks/pre-push" ]; then
             "$NEXUS_DIR/.githooks/pre-push" "$@" || return $?
           fi
           return 0

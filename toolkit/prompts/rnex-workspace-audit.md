@@ -26,7 +26,7 @@ Use this prompt to audit workspace configuration integrity, member repository gi
 ## 3. Reconciliation & Remediation
 1. If any configuration issues, missing directories, or unlinked plugin assets are detected, run:
    ```sh
-   rnex sync --fix
+   rnex status --fix
    ```
 2. If member repositories declared in `rnex.yaml` are missing on disk, run:
    ```sh

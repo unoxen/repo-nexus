@@ -87,7 +87,7 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GPR_OWNER: ${{ github.repository_owner }}
         run: |
-          OWNER=$(echo "${GPR_OWNER:-unoxen}" | tr '[:upper:]' '[:lower:]')
+          OWNER=$(echo "${GPR_OWNER:-nu-nenoi}" | tr '[:upper:]' '[:lower:]')
           echo "Configuring GitHub Packages registry for @${OWNER}..."
           npm config set @${OWNER}:registry=https://npm.pkg.github.com
           npm config set //npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}
@@ -104,7 +104,7 @@ jobs:
               git checkout -f "$TAG" -q
               node -e '
                 const pkg = require("./package.json");
-                const owner = (process.env.GPR_OWNER || "unoxen").toLowerCase();
+                const owner = (process.env.GPR_OWNER || "nu-nenoi").toLowerCase();
                 pkg.name = `@${owner}/repo-nexus`;
                 pkg.publishConfig = { registry: "https://npm.pkg.github.com" };
                 require("fs").writeFileSync("./package.json", JSON.stringify(pkg, null, 2) + "\n");
@@ -119,7 +119,7 @@ jobs:
           # Scope and publish current HEAD version if not already published
           node -e '
             const pkg = require("./package.json");
-            const owner = (process.env.GPR_OWNER || "unoxen").toLowerCase();
+            const owner = (process.env.GPR_OWNER || "nu-nenoi").toLowerCase();
             pkg.name = `@${owner}/repo-nexus`;
             pkg.publishConfig = { registry: "https://npm.pkg.github.com" };
             require("fs").writeFileSync("./package.json", JSON.stringify(pkg, null, 2) + "\n");

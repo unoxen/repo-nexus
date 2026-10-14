@@ -8,14 +8,14 @@
 #   2. Local Config (.local.rnex.yaml): Machine-specific (gitignored, highest priority),
 #      overrides enable/disable states, URLs, or local developer settings.
 #
-# Place it in your workspace root directory and run `rnex sync --fix` to apply.
+# Place it in your workspace root directory and run `rnex sync` to apply.
 #
-# For more information: https://github.com/unoxen/repo-nexus
+# For more information: https://github.com/nu-nenoi/repo-nexus
 
 # ------------------------------------------------------------------------------
 # version — Workspace configuration schema version
 # ------------------------------------------------------------------------------
-# Used by `rnex sync --fix` and `rnex update` to safely detect and reconcile configuration
+# Used by `rnex sync` and `rnex update` to safely detect and reconcile configuration
 # and routing instructions across CLI releases.
 #
 version: 0.5.0
@@ -113,10 +113,10 @@ plugins:
   #   prompts: true        # mirror prompts to .windsurf/prompts/*.md (default: true)
   #   workflows: true      # mirror workflows as prompts (default: true)
   # karpathy-llm:
-  #   wiki_dir: wiki              # Directory for curated atomic markdown pages (default: wiki)
-  #   raw_dir: raw                # Append-only directory for unmodified intake documents (default: raw)
+  #   wiki_dir: .rnex/wiki        # Directory for curated atomic markdown pages (default: .rnex/wiki)
+  #   raw_dir: ./docs             # Append-only directory for unmodified intake documents (default: ./docs)
   #   lint_trigger: git-post-merge # Git hook event: git-post-merge, git-post-commit, git-pre-commit, git-pre-push, manual
-  #   notify_on_changes: true     # Show notification when changes are committed to raw/ or wiki/
+  #   notify_on_changes: true     # Show notification when changes are committed to ./docs or .rnex/wiki
 
 # ------------------------------------------------------------------------------
 # repos — Member repositories managed by Repo Nexus

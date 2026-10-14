@@ -7,7 +7,7 @@ Periodic health check and maintenance workflow to preserve wiki graph integrity,
 ## Lint & Maintenance Protocol
 
 1. **Resolve Configuration & Verify Paths:**
-   - Read `rnex.yaml` (and `.local.rnex.yaml` if present) to resolve the active `wiki_dir` (default: `wiki`) and `raw_dir` (default: `raw`) under `plugins.karpathy-llm`.
+   - Read `rnex.yaml` (and `.local.rnex.yaml` if present) to resolve the active `wiki_dir` (default: `.rnex/wiki`) and `raw_dir` (default: `./docs`) under `plugins.karpathy-llm`.
    - For every page under `<wiki_dir>/`, verify that all paths in frontmatter relation fields (`related`, `extends`, `contradicts`, `sources`) resolve to existing files under `<wiki_dir>/` or `<raw_dir>/`.
    - Fix or flag broken paths.
 
@@ -35,15 +35,15 @@ Periodic health check and maintenance workflow to preserve wiki graph integrity,
    - Suggest source candidates from `<raw_dir>/` or external searches to fill identified knowledge gaps.
 
 8. **Rebuild Navigation Index (Annotated Links):**
-   - Rebuild `<wiki_dir>/index.md` to reflect the current set of pages and categories accurately.
+   - Rebuild `<wiki_dir>/index.md` (default: `.rnex/wiki/index.md`) to reflect the current set of pages and categories accurately.
    - Ensure every page entry maintains a concise 1-line descriptive annotation.
 
 9. **Update Hot Cache (Bounded ~500-Word Ceiling):**
-   - Refresh `<wiki_dir>/hot.md`, verifying the 3 structured sections (Architecture & Repo Map, Current Focus, Key Contracts).
+   - Refresh `<wiki_dir>/hot.md` (default: `.rnex/wiki/hot.md`), verifying the 3 structured sections (Architecture & Repo Map, Current Focus, Key Contracts).
    - Ensure the total length remains strictly under ~500 words by pruning superseded entries.
 
 10. **Append Operation Log:**
-    - Append a lint summary to `<wiki_dir>/_log.md` detailing:
+    - Append a lint summary to `<wiki_dir>/_log.md` (default: `.rnex/wiki/_log.md`) detailing:
       - Broken links fixed or flagged
       - `mentioned_in` updates
       - Orphans and duplicates resolved

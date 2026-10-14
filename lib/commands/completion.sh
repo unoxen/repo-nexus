@@ -14,11 +14,19 @@ _rnex_completions() {
   COMPREPLY=()
   cur="${COMP_WORDS[COMP_CWORD]}"
   prev="${COMP_WORDS[COMP_CWORD-1]}"
-  commands="init install add clone exec remove enable disable list status rnex-dir fix sync update upgrade hooks plugin completion version help"
+  commands="init install add clone exec remove enable disable list sync status rnex-dir update upgrade hooks plugin completion version help"
 
   case "$prev" in
     rnex)
       COMPREPLY=( $(compgen -W "$commands" -- "$cur") )
+      return 0
+      ;;
+    sync)
+      COMPREPLY=( $(compgen -W "-y --yes -q --quiet --upgrade" -- "$cur") )
+      return 0
+      ;;
+    status)
+      COMPREPLY=()
       return 0
       ;;
     plugin)
@@ -43,6 +51,18 @@ _rnex_completions() {
 }
 complete -F _rnex_completions rnex
 complete -F _rnex_completions repo-nexus
+
+# Prompt hook for zero-fork auto-synchronization
+_rnex_auto_sync() {
+  [ -f rnex.yaml ] || return 0
+  if [ ! -f .rnex/.sync_stamp ] || [ rnex.yaml -nt .rnex/.sync_stamp ] || \
+     { [ -f .local.rnex.yaml ] && [ .local.rnex.yaml -nt .rnex/.sync_stamp ]; }; then
+    rnex sync -y --quiet
+  fi
+}
+if [[ ! "$PROMPT_COMMAND" =~ "_rnex_auto_sync" ]]; then
+  PROMPT_COMMAND="_rnex_auto_sync${PROMPT_COMMAND:+; $PROMPT_COMMAND}"
+fi
 EOF
       ;;
     zsh)
@@ -61,10 +81,9 @@ _rnex() {
     'enable:Enable a repository in active workspace'
     'disable:Disable a repository in workspace'
     'list:List member repositories'
-    'status:Inspect workspace health and status'
+    'sync:Reconcile workspace, plugins, prompts, and member .rnex directories'
+    'status:Inspect workspace health and status (read-only)'
     'rnex-dir:Toggle .rnex directory integration for a repo'
-    'sync:Check workspace consistency (use --fix to reconcile)'
-    'fix:(Deprecated: use sync --fix) Reconcile workspace and plugins'
     'update:Upgrade workspace configuration and routing instructions'
     'upgrade:Alias for update'
     'hooks:Manage automated Git hooks'
@@ -87,6 +106,13 @@ _rnex() {
       ;;
     args)
       case "$words[1]" in
+        sync)
+          local -a sync_opts
+          sync_opts=('(-y --yes)'{-y,--yes}'[Automatically answer yes to prompts]' '(-q --quiet)'{-q,--quiet}'[Suppress non-error output]' '--upgrade[Upgrade workspace configuration schema]')
+          _describe -t sync_opts 'sync option' sync_opts
+          ;;
+        status)
+          ;;
         plugin)
           local -a plugin_cmds
           plugin_cmds=('list:List plugins' 'info:Show plugin details' 'enable:Enable plugin' 'install:Install/enable plugin' 'update:Update enabled plugin(s)' 'disable:Disable plugin')
@@ -113,6 +139,16 @@ _rnex() {
 }
 
 _rnex "$@"
+
+# Prompt hook for zero-fork auto-synchronization
+_rnex_auto_sync() {
+  [ -f rnex.yaml ] || return 0
+  if [ ! -f .rnex/.sync_stamp ] || [ rnex.yaml -nt .rnex/.sync_stamp ] || \
+     { [ -f .local.rnex.yaml ] && [ .local.rnex.yaml -nt .rnex/.sync_stamp ]; }; then
+    rnex sync -y --quiet
+  fi
+}
+autoload -Uz add-zsh-hook 2>/dev/null && add-zsh-hook precmd _rnex_auto_sync || precmd_functions+=(_rnex_auto_sync)
 EOF
       ;;
     fish)
@@ -126,15 +162,24 @@ complete -c rnex -n "__fish_use_subcommand" -a remove -d "Remove a repository"
 complete -c rnex -n "__fish_use_subcommand" -a enable -d "Enable a repository"
 complete -c rnex -n "__fish_use_subcommand" -a disable -d "Disable a repository"
 complete -c rnex -n "__fish_use_subcommand" -a list -d "List repositories"
-complete -c rnex -n "__fish_use_subcommand" -a status -d "Inspect workspace status"
-complete -c rnex -n "__fish_use_subcommand" -a sync -d "Check workspace consistency (use --fix to reconcile)"
-complete -c rnex -n "__fish_use_subcommand" -a fix -d "(Deprecated) Reconcile workspace"
+complete -c rnex -n "__fish_use_subcommand" -a sync -d "Reconcile workspace, plugins, prompts, and repos"
+complete -c rnex -n "__fish_seen_subcommand_from sync" -l yes -s y -d "Automatically answer yes to prompts"
+complete -c rnex -n "__fish_seen_subcommand_from sync" -l quiet -s q -d "Suppress non-error output"
+complete -c rnex -n "__fish_seen_subcommand_from sync" -l upgrade -d "Upgrade workspace configuration schema"
+complete -c rnex -n "__fish_use_subcommand" -a status -d "Inspect workspace status (read-only)"
 complete -c rnex -n "__fish_use_subcommand" -a update -d "Upgrade workspace configuration"
 complete -c rnex -n "__fish_use_subcommand" -a upgrade -d "Upgrade workspace configuration"
 complete -c rnex -n "__fish_use_subcommand" -a hooks -d "Manage Git hooks"
 complete -c rnex -n "__fish_use_subcommand" -a plugin -d "Manage plugins"
 complete -c rnex -n "__fish_use_subcommand" -a completion -d "Generate completions"
 complete -c rnex -n "__fish_use_subcommand" -a version -d "Show version"
+
+function _rnex_auto_sync --on-event fish_prompt
+  test -f rnex.yaml; or return 0
+  if not test -f .rnex/.sync_stamp; or test rnex.yaml -nt .rnex/.sync_stamp; or test -f .local.rnex.yaml -a .local.rnex.yaml -nt .rnex/.sync_stamp
+    rnex sync -y --quiet
+  end
+end
 EOF
       ;;
     *)

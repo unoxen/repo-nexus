@@ -14,7 +14,7 @@ export default defineConfig({
   lastUpdated: true,
 
   sitemap: {
-    hostname: `https://unoxen.github.io${base}`
+    hostname: `https://nu-nenoi.github.io${base}`
   },
 
   head: [
@@ -34,7 +34,7 @@ export default defineConfig({
     logo: '/logo.svg',
 
     editLink: {
-      pattern: 'https://github.com/unoxen/repo-nexus/edit/main/docs/:path',
+      pattern: 'https://github.com/nu-nenoi/repo-nexus/edit/main/docs/:path',
       text: 'Edit this page on GitHub'
     },
 
@@ -130,7 +130,7 @@ export default defineConfig({
     },
 
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/unoxen/repo-nexus' },
+      { icon: 'github', link: 'https://github.com/nu-nenoi/repo-nexus' },
       { icon: 'npm', link: 'https://www.npmjs.com/package/repo-nexus' }
     ],
 

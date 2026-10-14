@@ -16,10 +16,10 @@ Do not hard-code any specific AI tool or harness into the wiki structure itself.
 
 Initialize the fixed baseline directories and control files:
 
-- **`/raw/`** — Append-only intake directory. Add `.gitkeep`. All original source material goes here unmodified.
-- **`/wiki/index.md`** — Master navigation index organizing links to atomic pages.
-- **`/wiki/hot.md`** — Rolling ~500-word orientation cache for quick agent onboarding.
-- **`/wiki/_log.md`** — Append-only operation log recording all ingest and lint runs.
+- **`./docs/`** — Append-only intake directory. Add `.gitkeep`. All original source material goes here unmodified.
+- **`.rnex/wiki/index.md`** — Master navigation index organizing links to atomic pages.
+- **`.rnex/wiki/hot.md`** — Rolling ~500-word orientation cache for quick agent onboarding.
+- **`.rnex/wiki/_log.md`** — Append-only operation log recording all ingest and lint runs.
 
 Do not create arbitrary or speculative subdirectories during initialization. Scaffolding is 100% deterministic. Domain subfolders and categories emerge organically during the source ingestion phase (`wiki-ingest`).
 
@@ -27,7 +27,7 @@ Do not create arbitrary or speculative subdirectories during initialization. Sca
 
 ### 2. Agent Rules & Routing
 
-- **Repo Nexus Workspaces**: Directories (`raw_dir`, default: `raw/`; `wiki_dir`, default: `wiki/`) are configured in `rnex.yaml` under `plugins.karpathy-llm`. Plugin assets are scoped under `.rnex/plugins/karpathy-llm/` (`rules/rnex-behavioral.md` and `instructions/rnex-wiki-architecture.md`). Agents resolve configuration dynamically.
+- **Repo Nexus Workspaces**: Directories (`raw_dir`, default: `./docs`; `wiki_dir`, default: `.rnex/wiki`) are configured in `rnex.yaml` under `plugins.karpathy-llm`. Plugin assets are scoped under `.rnex/plugins/karpathy-llm/` (`rules/rnex-behavioral.md` and `instructions/rnex-wiki-architecture.md`). Agents resolve configuration dynamically.
 - **Standalone Repositories**: Append the `## Karpathy Wiki Rules` section (see Section 4) to the primary AI instructions file (`AGENTS.md`, `CLAUDE.md`, `.cursorrules`, etc.), preserving all existing content.
 
 ---
@@ -80,9 +80,9 @@ In standalone repositories (outside Repo Nexus), append:
 ```markdown
 ## Karpathy Wiki Rules
 
-- **Intake**: All source material (articles, transcripts, docs, notes) goes to `/raw/` unmodified. Never write directly to `/wiki/` without ingesting.
-- **Orientation**: Before answering domain questions, read `/wiki/index.md` to find relevant pages, then read only those pages. If `hot.md` exists, read it first as a quick-orient step.
-- **Ingestion**: When files appear in `/raw/`, run the `wiki-ingest` workflow. One source document typically produces many atomic pages — do not collapse a source into a single file.
+- **Intake**: All source material (articles, transcripts, docs, notes) goes to `./docs/` (or configured `raw_dir`) unmodified. Never write directly to `.rnex/wiki/` without ingesting.
+- **Orientation**: Before answering domain questions, read `.rnex/wiki/hot.md` for rolling context, and consult `.rnex/wiki/index.md` on demand.
+- **Ingestion**: When files appear in `./docs/`, run the `wiki-ingest` workflow. One source document typically produces many atomic pages — do not collapse a source into a single file.
 - **Maintenance**: Run the `wiki-lint` workflow to validate paths, update `mentioned_in`, and preserve graph integrity.
 ```
 
@@ -93,14 +93,14 @@ In standalone repositories (outside Repo Nexus), append:
 Create workflow instruction files at `.agent/workflows/` (or `.agent/skills/` depending on the harness):
 
 **`wiki-ingest.md`**:
-1. Scan `/raw/` for files not yet recorded in `/wiki/_log.md`.
+1. Scan `./docs/` (or `<raw_dir>/`) for files not yet recorded in `.rnex/wiki/_log.md`.
 2. For each source, read it fully. If scope or depth is unclear, ask one round of clarifying questions before proceeding.
 3. Decompose into atomic wiki pages — one per distinct concept, person, organization, event, or theme. A single article commonly produces 5–25 pages.
 4. For each page, write the required frontmatter (including `sources`, `related`, `extends`, `contradicts`). Leave `mentioned_in` empty — lint maintains it.
 5. Write a concise body with inline links where contextually helpful.
-6. Update `/wiki/index.md` with links to all new pages.
-7. Update `/wiki/hot.md` if it exists.
-8. Append a timestamped entry to `/wiki/_log.md`.
+6. Update `.rnex/wiki/index.md` with links to all new pages.
+7. Update `.rnex/wiki/hot.md` if it exists.
+8. Append a timestamped entry to `.rnex/wiki/_log.md`.
 
 **`wiki-lint.md`**:
 1. For every page, verify that all paths in frontmatter relation fields (`related`, `extends`, `contradicts`, `sources`) resolve to existing files. Fix or flag broken paths.
@@ -109,10 +109,10 @@ Create workflow instruction files at `.agent/workflows/` (or `.agent/skills/` de
 4. Detect duplicate or heavily overlapping pages. Consolidate and update relations.
 5. Check for factual inconsistencies between pages in `contradicts` relations or covering the same topic.
 6. Identify knowledge gaps: concepts referenced in relation fields but lacking their own page. Create stub pages or flag for future ingest.
-7. Suggest source candidates from `/raw/` or external searches to fill gaps.
-8. Rebuild `/wiki/index.md` to reflect the current set of pages.
-9. Update `/wiki/hot.md` if it exists.
-10. Append a lint summary to `/wiki/_log.md`.
+7. Suggest source candidates from `./docs/` (or `<raw_dir>/`) or external searches to fill gaps.
+8. Rebuild `.rnex/wiki/index.md` to reflect the current set of pages.
+9. Update `.rnex/wiki/hot.md` if it exists.
+10. Append a lint summary to `.rnex/wiki/_log.md`.
 
 ---
 

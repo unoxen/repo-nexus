@@ -7,28 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-- **Replaced `rnex fix` with `rnex sync` (with optional `--fix` flag)**:
-  - `rnex sync` without `--fix` performs a dry-run audit, checking workspace configuration, `.gitignore`, `.ignore`, AI routing instructions (`AGENTS.md`, provider files), active/disabled plugin assets, member repository scaffolding, and multi-root workspace definitions, logging any inconsistencies without mutating files.
-  - `rnex sync --fix` (or `-f`) executes full workspace reconciliation, schema upgrades, prompt/workflow synchronization, and asset repairs.
-  - `rnex fix` is maintained as a deprecated backward-compatible alias for `rnex sync --fix`, displaying a deprecation notice directing users to `rnex sync --fix`.
-  - All workspace documentation, guides, prompt templates, and AI routing instructions updated to reference `rnex sync` and `rnex sync --fix`.
+## [0.6.16] - 2026-10-14
+
+### Removed
+- **`rnex fix` and `rnex status --fix`**: Removed in favor of `rnex sync` as the sole reconciliation command.
+- **Legacy Sample Instructions**: Removed `docs/AGENTS.sample.md` and replaced it with `docs/ai-instructions.sample.md` (and root `templates/ai-instructions.sample.md`).
+- **Core Plugin Decoupling**: Removed all hardcoded plugin references from `./rnex` core so the CLI is strictly plugin-agnostic.
 
 ### Added
-- **Modular Test Suite Architecture**:
-  - Decomposed monolithic `tests/test_cli.sh` (996 lines, 36 tests) into modular, single-responsibility test suites under `tests/suites/`:
-    - `01_core_cli.sh`: Workspace initialization, member repository lifecycle (`add`, `exec`, `enable`, `disable`, `clone`, `remove`), version inspection, and shell completion generators.
-    - `02_plugins_basic.sh`: Plugin discovery, inspection, activation, scoping under `.rnex/plugins/`, and delimited `AGENTS.md` routing.
-    - `03_config_workspace.sh`: Two-level configuration (`.local.rnex.yaml`), Git ignore reconciliation, status reporting, multi-root workspace generation, version-aware upgrade engine, and standardized skills/workflows synchronization.
-    - `04_git_hooks.sh`: Automated Git hooks installation, runtime status, workspace-level `git_hooks` configuration, execution dispatch, custom wrapper preservation, and repository `.githooks/` chaining.
-    - `05_ai_providers.sh`: AI provider plugins synchronization and surgical non-destructive cleanup across Copilot, Claude, Gemini, Cursor, and Windsurf.
-    - `06_plugins_advanced.sh`: Deterministic plugin updates, Karpathy LLM Wiki configurable paths (`wiki_dir`, `raw_dir`), and complete plugin deactivation with prompt cleanup.
-  - Shared test harness `tests/test_helper.sh` provides dynamic repository root resolution, isolated workspace scaffolding, standardized assertion helpers (`run_test`, `pass`, `fail`), and standalone execution detection.
-  - Backward-compatible runner `tests/test_cli.sh` executes all 36 tests sequentially and supports running individual suites by name or numeric prefix (e.g. `./tests/test_cli.sh 06`).
-- **Standardized Root `templates/` Directory**:
-  - Moved reference configuration and instruction templates ([`rnex.example.yaml`](file:///Users/admin/Projects/ai/repo-nexus/templates/rnex.example.yaml) and [`AGENTS.sample.md`](file:///Users/admin/Projects/ai/repo-nexus/templates/AGENTS.sample.md)) from `docs/` to root [`templates/`](file:///Users/admin/Projects/ai/repo-nexus/templates/).
-  - Pruned empty placeholder directory `toolkit/templates/`.
-  - Updated config pointers in [`rnex.yaml`](file:///Users/admin/Projects/ai/repo-nexus/rnex.yaml) and [`init.sh`](file:///Users/admin/Projects/ai/repo-nexus/lib/commands/init.sh), package distribution in [`package.json`](file:///Users/admin/Projects/ai/repo-nexus/package.json), and cleaned up VitePress exclusions in [`docs/.vitepress/config.mts`](file:///Users/admin/Projects/ai/repo-nexus/docs/.vitepress/config.mts).
+- **Plugin Lifecycle Hooks & Contract**: Added `before_<cmd>` and `after_<cmd>` hook execution across all mutating commands (`init`, `install`, `add`, `clone`, `exec`, `remove`, `enable`, `disable`, `rnex-dir`, `sync`, `update`, `hooks`, `plugin`) while bypassing read-only commands (`status`, `list`, `completion`).
+- **Compiled AI Instructions (`.rnex/ai-instructions.md`)**: `rnex sync` now compiles a unified instruction file inside `.rnex/` from the merged 2-level config (`rnex.yaml` + `.local.rnex.yaml`), base AI instructions template, and active plugin fragments.
+- **Event-Driven Auto-Sync**: Added checksum-based config drift detection (`.rnex/.sync_stamp`) that automatically runs `rnex sync --quiet` on any `rnex` CLI command or new AI session start without background file watchers. Includes shell prompt hook (`_rnex_auto_sync`) in `rnex completion` and Git hooks (`post-merge`, `post-checkout`, `pre-commit`).
+- **Contribution Guide**: Added `CONTRIBUTION.md` documenting POSIX shell standards, plugin contract rules, and test workflows.
+- **Modular Test Suite Architecture**: Decomposed monolithic test runner into modular test suites under `tests/suites/` (`01_core_cli.sh` through `06_plugins_advanced.sh`) with shared harness `tests/test_helper.sh`.
+- **Maintainer Release Hooks Relocation**: Relocated maintainer Git hooks from `.githooks/` into `scripts/githooks/` to ensure workspace root strictly encapsulates internal state in `.rnex/`.
+
+### Changed
+- **`rnex sync` Scope**: Synchronizes `rnex-*` prompts from `toolkit/prompts/` and `.rnex/` directories in both the nexus root and enabled member repositories (`repos/<name>/.rnex/`).
+- **Root AI Provider Files (`AGENTS.md`, `CLAUDE.md`)**: Simplified to contain only a single strict directive instructing agents to read and follow `.rnex/ai-instructions.md`.
+- **`karpathy-llm` Plugin Defaults & Hooks**: Migrated `karpathy-llm` to lifecycle hooks and changed default paths from `/wiki/` to `.rnex/wiki` (curated knowledge base) and from `/raw/` to `./docs` (raw intake).
+
+### Fixed
+- Unified GitHub repository URLs across `README.md`, `scripts/install.sh`, and the documentation site to canonical `nu-nenoi/repo-nexus`.
+- Removed legacy `symlinks` references from repository metadata.
+
 
 ## [0.6.7] - 2026-10-12
 

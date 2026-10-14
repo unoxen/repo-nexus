@@ -15,11 +15,11 @@ fi
 
 # ---- Logging ---------------------------------------------------------------
 
-log_ok()   { printf '%b[✓]%b %b\n' "$_G" "$_NC" "$1"; }
-log_warn() { printf '%b[!]%b %b\n' "$_Y" "$_NC" "$1"; }
+log_ok()   { [ "${RNEX_QUIET:-0}" -eq 1 ] || [ "${_sync_quiet:-0}" -eq 1 ] && return 0; printf '%b[✓]%b %b\n' "$_G" "$_NC" "$1"; }
+log_warn() { [ "${RNEX_QUIET:-0}" -eq 1 ] || [ "${_sync_quiet:-0}" -eq 1 ] && return 0; printf '%b[!]%b %b\n' "$_Y" "$_NC" "$1"; }
 log_err()  { printf '%b[✗]%b %b\n' "$_R" "$_NC" "$1" >&2; }
-log_info() { printf '%b[i]%b %b\n' "$_C" "$_NC" "$1"; }
-log_dim()  { printf '%b    %b%b\n' "$_DIM" "$1" "$_NC"; }
+log_info() { [ "${RNEX_QUIET:-0}" -eq 1 ] || [ "${_sync_quiet:-0}" -eq 1 ] && return 0; printf '%b[i]%b %b\n' "$_C" "$_NC" "$1"; }
+log_dim()  { [ "${RNEX_QUIET:-0}" -eq 1 ] || [ "${_sync_quiet:-0}" -eq 1 ] && return 0; printf '%b    %b%b\n' "$_DIM" "$1" "$_NC"; }
 die()      { log_err "$1"; exit 1; }
 
 # ---- Path Utilities --------------------------------------------------------

@@ -8,13 +8,31 @@ cmd_status() {
   require_workspace
   ensure_repos_dir
 
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      -f|--fix)
+        die "'rnex status --fix' is removed. Use 'rnex sync' to reconcile the workspace."
+        ;;
+      -y|--yes|-q|--quiet) ;;
+      *) ;;
+    esac
+    shift
+  done
+
+  # --------------------------------------------------------------------------
+  # Read-Only Inspection mode (rnex status)
+  # --------------------------------------------------------------------------
   printf '\n%b%s%b\n' "$_B" "Repo Nexus Workspace Status" "$_NC"
   printf '=%.0s' 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28
   printf '\n\n'
 
   printf '%bConfiguration:%b\n' "$_BOLD" "$_NC"
   if [ -f "$WORKSPACE_YAML" ]; then
-    if [ -n "$WORKSPACE_CONFIG_VERSION" ]; then
+    _vc_res=0
+    version_cmp "$WORKSPACE_CONFIG_VERSION" "$RNEX_VERSION" || _vc_res=$?
+    if [ "$_vc_res" -eq 2 ]; then
+      printf '  %b!%b Repo Config:   %s %b(v%s is older than CLI v%s; run "rnex sync")%b\n' "$_Y" "$_NC" "$WORKSPACE_YAML" "${WORKSPACE_CONFIG_VERSION:-0.0.0}" "$RNEX_VERSION" "$_NC"
+    elif [ -n "$WORKSPACE_CONFIG_VERSION" ]; then
       printf '  %b●%b Repo Config:   %s %b(loaded, v%s)%b\n' "$_G" "$_NC" "$WORKSPACE_YAML" "$_DIM" "$WORKSPACE_CONFIG_VERSION" "$_NC"
     else
       printf '  %b●%b Repo Config:   %s %b(loaded)%b\n' "$_G" "$_NC" "$WORKSPACE_YAML" "$_DIM" "$_NC"
@@ -32,6 +50,14 @@ cmd_status() {
     printf '  %b●%b Workspace:   %s\n' "$_DIM" "$_NC" "$CODE_WORKSPACE_FILE"
   fi
 
+  _stamp_file="$NEXUS_DIR/.rnex/.sync_stamp"
+  _cur_sum="$(get_config_sum "$NEXUS_DIR")"
+  if [ ! -f "$_stamp_file" ] || [ "$_cur_sum" != "$(cat "$_stamp_file" 2>/dev/null)" ]; then
+    printf '  %b!%b Sync Stamp:    workspace out of sync with configuration (run "rnex sync")\n' "$_Y" "$_NC"
+  else
+    printf '  %b✓%b Sync Stamp:    workspace synchronized with configuration\n' "$_G" "$_NC"
+  fi
+
   _gi="$NEXUS_DIR/.gitignore"
   _gi_repos=0; _gi_local=0; _gi_has_counter=0; _gi_has_rnex=0
   if [ -f "$_gi" ]; then
@@ -44,7 +70,7 @@ cmd_status() {
   if [ "$_gi_repos" -eq 1 ] && [ "$_gi_local" -eq 1 ] && [ "$_gi_has_counter" -eq 0 ] && [ "$_gi_has_rnex" -eq 0 ]; then
     printf '  %b✓%b Git Ignore:    repos/ and %s ignored in .gitignore\n' "$_G" "$_NC" "$RNEX_LOCAL_CONFIG_FILE"
   else
-    printf '  %b!%b Git Ignore:    recommend running "rnex sync --fix" to update .gitignore (repos/, local configs)\n' "$_Y" "$_NC"
+    printf '  %b!%b Git Ignore:    recommend running "rnex sync" to update .gitignore (repos/, local configs)\n' "$_Y" "$_NC"
   fi
 
   _hooks_path="$(git -C "$NEXUS_DIR" config --get core.hooksPath 2>/dev/null || true)"
@@ -56,7 +82,7 @@ cmd_status() {
   case "$GIT_HOOKS_CONFIG" in
     false|no|0)
       if [ "$_gh_active" -eq 1 ]; then
-        printf '  %b!%b Git Hooks:     active in Git, but disabled in config (git_hooks: false; run "rnex sync --fix" to reconcile)\n' "$_Y" "$_NC"
+        printf '  %b!%b Git Hooks:     active in Git, but disabled in config (git_hooks: false; run "rnex sync" to reconcile)\n' "$_Y" "$_NC"
       else
         printf '  %b○%b Git Hooks:     disabled in configuration (git_hooks: false)\n' "$_DIM" "$_NC"
       fi
@@ -73,7 +99,7 @@ cmd_status() {
           printf '  %b✓%b Git Hooks:     active (git_hooks: true, .rnex/hooks — post-merge auto-sync)\n' "$_G" "$_NC"
         fi
       else
-        printf '  %b!%b Git Hooks:     enabled in config (git_hooks: true), but not active in Git (run "rnex sync --fix")\n' "$_Y" "$_NC"
+        printf '  %b!%b Git Hooks:     enabled in config (git_hooks: true), but not active in Git (run "rnex sync")\n' "$_Y" "$_NC"
       fi
       ;;
     *)
@@ -96,10 +122,15 @@ cmd_status() {
   printf '\n'
 
   printf '%bWorkspace AI Context (Routing):%b\n' "$_BOLD" "$_NC"
-  if [ -f "$NEXUS_DIR/AGENTS.md" ]; then
-    printf '  %b✓%b %s %b(standard instructions)%b\n' "$_G" "$_NC" "AGENTS.md" "$_DIM" "$_NC"
+  if [ -f "$NEXUS_DIR/.rnex/ai-instructions.md" ]; then
+    printf '  %b✓%b %s %b(compiled AI instructions)%b\n' "$_G" "$_NC" ".rnex/ai-instructions.md" "$_DIM" "$_NC"
   else
-    printf '  %b✗%b %s %b(standard instructions — MISSING; run "rnex sync --fix" to create)%b\n' "$_R" "$_NC" "AGENTS.md" "$_R" "$_NC"
+    printf '  %b✗%b %s %b(compiled AI instructions — MISSING; run "rnex sync" to create)%b\n' "$_R" "$_NC" ".rnex/ai-instructions.md" "$_R" "$_NC"
+  fi
+  if [ -f "$NEXUS_DIR/AGENTS.md" ]; then
+    printf '  %b✓%b %s %b(standard instructions directive)%b\n' "$_G" "$_NC" "AGENTS.md" "$_DIM" "$_NC"
+  else
+    printf '  %b✗%b %s %b(standard instructions directive — MISSING; run "rnex sync" to create)%b\n' "$_R" "$_NC" "AGENTS.md" "$_R" "$_NC"
   fi
   if [ -f "$NEXUS_DIR/CLAUDE.md" ]; then
     printf '  %b✓%b %s %b(Claude instructions)%b\n' "$_G" "$_NC" "CLAUDE.md" "$_DIM" "$_NC"
@@ -117,7 +148,7 @@ cmd_status() {
     if [ -f "$NEXUS_DIR/$CODE_WORKSPACE_FILE" ]; then
       printf '  %b✓%b %s %b(VS Code / Cursor workspace)%b\n' "$_G" "$_NC" "$CODE_WORKSPACE_FILE" "$_DIM" "$_NC"
     else
-      printf '  %b✗%b %s %b(VS Code / Cursor workspace — MISSING; run "rnex sync --fix" to create)%b\n' "$_R" "$_NC" "$CODE_WORKSPACE_FILE" "$_R" "$_NC"
+      printf '  %b✗%b %s %b(VS Code / Cursor workspace — MISSING; run "rnex sync" to create)%b\n' "$_R" "$_NC" "$CODE_WORKSPACE_FILE" "$_R" "$_NC"
     fi
   fi
   for _found_cw in "$NEXUS_DIR"/*.code-workspace; do

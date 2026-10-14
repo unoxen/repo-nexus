@@ -1,11 +1,11 @@
 #!/bin/sh
 # ============================================================================
 # Repo Nexus (rnex) — Standalone Zero-Dependency Installer
-# https://github.com/unoxen/repo-nexus
+# https://github.com/nu-nenoi/repo-nexus
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/unoxen/repo-nexus/main/scripts/install.sh | sh
-#   wget -qO- https://raw.githubusercontent.com/unoxen/repo-nexus/main/scripts/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/nu-nenoi/repo-nexus/main/scripts/install.sh | sh
+#   wget -qO- https://raw.githubusercontent.com/nu-nenoi/repo-nexus/main/scripts/install.sh | sh
 # ============================================================================
 set -e
 
@@ -15,8 +15,8 @@ else
   _G='' _Y='' _C='' _BOLD='' _DIM='' _NC=''
 fi
 
-REPO_URL="https://github.com/unoxen/repo-nexus"
-TAR_URL="https://github.com/unoxen/repo-nexus/archive/refs/heads/main.tar.gz"
+REPO_URL="https://github.com/nu-nenoi/repo-nexus"
+TAR_URL="https://github.com/nu-nenoi/repo-nexus/archive/refs/heads/main.tar.gz"
 INSTALL_DIR="${RNEX_INSTALL_DIR:-$HOME/.local/share/repo-nexus}"
 BIN_DIR="${RNEX_BIN_DIR:-$HOME/.local/bin}"
 

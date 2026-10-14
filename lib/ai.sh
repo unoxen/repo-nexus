@@ -74,39 +74,31 @@ AI_MARKER_START="<!-- REPO-NEXUS:START -->"
 AI_MARKER_END="<!-- REPO-NEXUS:END -->"
 
 get_rnex_instructions() {
-  _wiki_dir="$(karpathy_wiki_dir)"
+  printf 'CRITICAL: You MUST read and strictly follow all instructions in `.rnex/ai-instructions.md` before executing any task or answering any query in this workspace.\n'
+}
 
-  if yaml_plugin_enabled "karpathy-llm"; then
-    cat <<AGENTS_EOF
-# Multi-Repo AI Workspace Context
+build_ai_instructions() {
+  _dir="${1:-$NEXUS_DIR}"
+  _ai_file="$_dir/.rnex/ai-instructions.md"
+  mkdir -p "$_dir/.rnex"
 
-This workspace operates as a **Repo Nexus Virtual Meta-Repo** uniting independent repositories.
+  _tmpl_file=""
+  for _cand in \
+    "$_dir/templates/ai-instructions.sample.md" \
+    "$SCRIPT_LOCATION/templates/ai-instructions.sample.md" \
+    "$(dirname "$SCRIPT_LOCATION")/templates/ai-instructions.sample.md" \
+    "$_dir/docs/ai-instructions.sample.md"; do
+    if [ -f "$_cand" ]; then
+      _tmpl_file="$_cand"
+      break
+    fi
+  done
 
-## Routing Protocol for AI Assistants
-
-### Mandatory Session Startup
-Execute in sequence before task execution:
-1. **Read Configuration First (Highest Priority)**: Read \`.local.rnex.yaml\` (if present) and \`rnex.yaml\` to identify active member repositories (\`repos/\`) and enabled plugins.
-2. **Wiki Quick-Orient**: Read \`${_wiki_dir}/hot.md\` for system architecture, member repository domain mapping, and active contracts. Consult \`${_wiki_dir}/index.md\` only on demand if the topic is not covered in \`hot.md\`.
-3. **Plugin & Skill Routing**: Inspect active plugin instructions under \`.rnex/plugins/<plugin-name>/\`, and tools under \`.rnex/skills/\` and \`.rnex/workflows/\` when relevant.
-4. **Targeted Member Repository Access Only**: Navigate directly to specific files in \`repos/<name>/\` identified by the wiki. Avoid blind repository-wide scans or unbounded searches across \`repos/\`.
-
-## Subagents
-Autonomous subagents are defined under \`.rnex/agents/\` and active plugin agents under \`.rnex/plugins/<plugin-name>/agents/\` (e.g. \`rnex-wiki-curator.agent.md\`).
-
-## Member Repositories (\`repos/<name>/\`)
-Each member repository is an autonomous Git repository. For repository-specific instructions, inspect \`repos/<name>/.rnex/\`. Inspect only targeted files required for the task.
-
-## Workspace Maintenance
-When workspace configuration, routing blocks, plugin assets, or member repository structures require reconciliation or schema upgrades:
-- Run \`rnex sync --fix\` (or \`rnex sync\` to check for inconsistencies).
-- Use \`rnex sync --fix -y\` to non-destructively apply configuration version upgrades automatically.
-
-## Git Operations
-Commit and push changes directly within the respective member repository root (\`repos/<name>/\`).
-AGENTS_EOF
+  _out_tmp="$(mktemp)"
+  if [ -n "$_tmpl_file" ]; then
+    cat "$_tmpl_file" > "$_out_tmp"
   else
-    cat <<AGENTS_EOF
+    cat > "$_out_tmp" <<'BASE_AI_EOF'
 # Multi-Repo AI Workspace Context
 
 This workspace operates as a **Repo Nexus Virtual Meta-Repo** uniting independent repositories.
@@ -115,25 +107,44 @@ This workspace operates as a **Repo Nexus Virtual Meta-Repo** uniting independen
 
 ### Mandatory Session Startup
 Execute in sequence before task execution:
-1. **Read Configuration First (Highest Priority)**: Read \`.local.rnex.yaml\` (if present) and \`rnex.yaml\` to identify active member repositories (\`repos/\`) and enabled plugins.
-2. **Plugin & Skill Routing**: Inspect active plugin instructions under \`.rnex/plugins/<plugin-name>/\`, and tools under \`.rnex/skills/\` and \`.rnex/workflows/\` when relevant.
-3. **Targeted Member Repository Access Only**: Navigate directly to specific files in \`repos/<name>/\` relevant to the user request. Avoid blind repository-wide scans or unbounded searches across \`repos/\`.
+1. **Read Configuration First (Highest Priority)**: Read `.local.rnex.yaml` (if present) and `rnex.yaml` to identify active member repositories (`repos/`) and enabled plugins.
+2. **Plugin & Skill Routing**: Inspect active plugin instructions under `.rnex/plugins/<plugin-name>/`, and tools under `.rnex/skills/` and `.rnex/workflows/` when relevant.
+3. **Targeted Member Repository Access Only**: Navigate directly to specific files in `repos/<name>/` relevant to the user request. Avoid blind repository-wide scans or unbounded searches across `repos/`.
 
 ## Subagents
-Autonomous subagents are defined under \`.rnex/agents/\` and active plugin agents under \`.rnex/plugins/<plugin-name>/agents/\`.
+Autonomous subagents are defined under `.rnex/agents/` and active plugin agents under `.rnex/plugins/<plugin-name>/agents/`.
 
-## Member Repositories (\`repos/<name>/\`)
-Each member repository is an autonomous Git repository. For repository-specific instructions, inspect \`repos/<name>/.rnex/\`. Inspect only targeted files required for the task.
+## Member Repositories (`repos/<name>/`)
+Each member repository is an autonomous Git repository. For repository-specific instructions, inspect `repos/<name>/.rnex/`. Inspect only targeted files required for the task.
 
 ## Workspace Maintenance
 When workspace configuration, routing blocks, plugin assets, or member repository structures require reconciliation or schema upgrades:
-- Run \`rnex sync --fix\` (or \`rnex sync\` to check for inconsistencies).
-- Use \`rnex sync --fix -y\` to non-destructively apply configuration version upgrades automatically.
+- Run `rnex sync` (or `rnex status` to check workspace health).
+- Use `rnex sync -y` to non-destructively apply configuration version upgrades automatically.
 
 ## Git Operations
-Commit and push changes directly within the respective member repository root (\`repos/<name>/\`).
-AGENTS_EOF
+Commit and push changes directly within the respective member repository root (`repos/<name>/`).
+BASE_AI_EOF
   fi
+
+  for _p in $(yaml_list_plugins 2>/dev/null || true); do
+    [ -n "$_p" ] || continue
+    yaml_plugin_enabled "$_p" 2>/dev/null || continue
+    _pdir="$(find_plugin_dir "$_p" 2>/dev/null || true)"
+    _p_instr=""
+    if [ -f "$_dir/.rnex/plugins/$_p/instructions.md" ]; then
+      _p_instr="$_dir/.rnex/plugins/$_p/instructions.md"
+    elif [ -n "$_pdir" ] && [ -f "$_pdir/instructions.md" ]; then
+      _p_instr="$_pdir/instructions.md"
+    fi
+
+    if [ -n "$_p_instr" ]; then
+      printf '\n\n' >> "$_out_tmp"
+      cat "$_p_instr" >> "$_out_tmp"
+    fi
+  done
+
+  mv "$_out_tmp" "$_ai_file"
 }
 
 merge_rnex_instructions() {
@@ -146,10 +157,20 @@ merge_rnex_instructions() {
     {
       printf '%s\n' "$AI_MARKER_START"
       cat "$_body_tmp"
-      printf '\n%s\n' "$AI_MARKER_END"
+      printf '%s\n' "$AI_MARKER_END"
     } > "$_dst"
     rm -f "$_body_tmp"
     log_ok "Created $(basename "$_dst") with Repo Nexus routing instructions"
+    return 0
+  fi
+
+  if grep -q "CRITICAL: You MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\`" "$_dst" 2>/dev/null && ! grep -qF "$AI_MARKER_START" "$_dst" 2>/dev/null; then
+    {
+      printf '%s\n' "$AI_MARKER_START"
+      cat "$_body_tmp"
+      printf '%s\n' "$AI_MARKER_END"
+    } > "$_dst"
+    rm -f "$_body_tmp"
     return 0
   fi
 

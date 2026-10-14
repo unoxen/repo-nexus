@@ -68,8 +68,8 @@ plugins:
     notify_on_changes: true
 EOF_CFG
 
-# Reconcile via rnex fix to initialize plugin templates with custom paths
-(cd "$TEST_KWIKI_WS" && ./rnex fix >/dev/null)
+# Reconcile via rnex sync to initialize plugin templates with custom paths
+(cd "$TEST_KWIKI_WS" && ./rnex sync -y >/dev/null)
 
 # Verify custom directories are created instead of default raw/ and wiki/
 [ -d "$TEST_KWIKI_WS/docs/wiki" ] || { fail "Custom docs/wiki directory was not created"; exit 1; }
@@ -88,10 +88,12 @@ grep -q "/intake/raw/" "$TEST_KWIKI_WS/docs/wiki/index.md" || { fail "docs/wiki/
 grep -q "/intake/raw/" "$TEST_KWIKI_WS/docs/wiki/hot.md" || { fail "docs/wiki/hot.md does not reference custom intake/raw/"; exit 1; }
 grep -q "/docs/wiki/" "$TEST_KWIKI_WS/docs/wiki/hot.md" || { fail "docs/wiki/hot.md does not reference custom docs/wiki/"; exit 1; }
 
-# Verify AGENTS.md routing reflects custom wiki_dir
+# Verify AGENTS.md maintains strict directive and .rnex/ai-instructions.md contains plugin instructions
 _kw_agents="$(cat "$TEST_KWIKI_WS/AGENTS.md")"
-echo "$_kw_agents" | grep -q "docs/wiki/" || { fail "AGENTS.md routing does not reference custom docs/wiki/"; exit 1; }
-echo "$_kw_agents" | grep -q "docs/wiki/hot.md" || { fail "AGENTS.md routing does not reference custom docs/wiki/hot.md"; exit 1; }
+echo "$_kw_agents" | grep -q "CRITICAL: You MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\`" || { fail "AGENTS.md missing strict directive"; exit 1; }
+_kw_ai_instructions="$(cat "$TEST_KWIKI_WS/.rnex/ai-instructions.md")"
+echo "$_kw_ai_instructions" | grep -q "Karpathy LLM Wiki Knowledge Architecture" || { fail "ai-instructions.md missing Karpathy instructions"; exit 1; }
+echo "$_kw_ai_instructions" | grep -q "wiki_dir" || { fail "ai-instructions.md missing wiki_dir guidance"; exit 1; }
 
 # Verify plugin info reports custom options and template mappings
 _kw_info="$(cd "$TEST_KWIKI_WS" && ./rnex plugin info karpathy-llm 2>&1)"
@@ -113,7 +115,7 @@ echo "$_hook_output" | grep -q "intake/raw/ or docs/wiki/" || { fail "Git hook p
 pass
 
 # --------------------------------------------------------------------------
-run_test "Disabling plugin in rnex.yaml followed by rnex fix cleanly removes instructions, assets, and prompts"
+run_test "Disabling plugin in rnex.yaml followed by rnex sync cleanly removes instructions, assets, and prompts"
 # 1. Enable copilot with prompts: true so we can verify provider prompts cleanup
 cat <<'EOF_CFG2' > "$TEST_KWIKI_WS/rnex.yaml"
 plugins:
@@ -125,12 +127,12 @@ plugins:
     raw_dir: intake/raw
 EOF_CFG2
 
-(cd "$TEST_KWIKI_WS" && ./rnex fix >/dev/null)
+(cd "$TEST_KWIKI_WS" && ./rnex sync -y >/dev/null)
 [ -f "$TEST_KWIKI_WS/.github/prompts/rnex-wiki-ingest.prompt.md" ] || { fail "Plugin prompt rnex-wiki-ingest was not mirrored to Copilot"; exit 1; }
 [ -f "$TEST_KWIKI_WS/.github/prompts/rnex-wiki-lint.prompt.md" ] || { fail "Plugin prompt rnex-wiki-lint was not mirrored to Copilot"; exit 1; }
 [ -d "$TEST_KWIKI_WS/.rnex/plugins/karpathy-llm" ] || { fail ".rnex/plugins/karpathy-llm missing while enabled"; exit 1; }
-_kw_active_agents="$(cat "$TEST_KWIKI_WS/AGENTS.md")"
-echo "$_kw_active_agents" | grep -q "docs/wiki/" || { fail "Active AGENTS.md missing docs/wiki/ routing"; exit 1; }
+_kw_active_ai="$(cat "$TEST_KWIKI_WS/.rnex/ai-instructions.md")"
+echo "$_kw_active_ai" | grep -q "Karpathy LLM Wiki Knowledge Architecture" || { fail "Active ai-instructions.md missing Karpathy instructions"; exit 1; }
 
 # 2. Disable karpathy-llm via enabled: false in rnex.yaml
 cat <<'EOF_CFG3' > "$TEST_KWIKI_WS/rnex.yaml"
@@ -144,15 +146,16 @@ plugins:
     raw_dir: intake/raw
 EOF_CFG3
 
-# 3. Run rnex fix
-(cd "$TEST_KWIKI_WS" && ./rnex fix >/dev/null)
+# 3. Run rnex sync
+(cd "$TEST_KWIKI_WS" && ./rnex sync -y >/dev/null)
 
-# 4. Verify AGENTS.md no longer contains any wiki instructions or mandatory gate
+# 4. Verify .rnex/ai-instructions.md no longer contains wiki instructions and AGENTS.md retains single directive
+_kw_disabled_ai="$(cat "$TEST_KWIKI_WS/.rnex/ai-instructions.md")"
+! echo "$_kw_disabled_ai" | grep -q "Karpathy LLM Wiki Knowledge Architecture" || { fail "ai-instructions.md still contains wiki instructions after disabling plugin"; exit 1; }
+echo "$_kw_disabled_ai" | grep -q "Read Configuration First" || { fail "ai-instructions.md missing Read Configuration First"; exit 1; }
+
 _kw_disabled_agents="$(cat "$TEST_KWIKI_WS/AGENTS.md")"
-! echo "$_kw_disabled_agents" | grep -q "MANDATORY GATE: DO NOT INSPECT" || { fail "AGENTS.md still contains wiki mandatory gate after disabling plugin"; exit 1; }
-! echo "$_kw_disabled_agents" | grep -q "docs/wiki" || { fail "AGENTS.md still references docs/wiki after disabling plugin"; exit 1; }
-! echo "$_kw_disabled_agents" | grep -q "rnex-wiki-curator" || { fail "AGENTS.md still references rnex-wiki-curator after disabling plugin"; exit 1; }
-echo "$_kw_disabled_agents" | grep -q "Read Configuration First" || { fail "AGENTS.md missing Read Configuration First"; exit 1; }
+echo "$_kw_disabled_agents" | grep -q "CRITICAL: You MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\`" || { fail "AGENTS.md missing strict directive"; exit 1; }
 
 # 5. Verify provider prompts from disabled plugin were removed, but base prompts kept
 [ ! -f "$TEST_KWIKI_WS/.github/prompts/rnex-wiki-ingest.prompt.md" ] || { fail "rnex-wiki-ingest.prompt.md still present after disabling plugin"; exit 1; }
@@ -160,7 +163,7 @@ echo "$_kw_disabled_agents" | grep -q "Read Configuration First" || { fail "AGEN
 [ -f "$TEST_KWIKI_WS/.github/prompts/rnex-cross-repo-feature.prompt.md" ] || { fail "Base prompt rnex-cross-repo-feature was incorrectly removed"; exit 1; }
 
 # 6. Verify .rnex/plugins/karpathy-llm scope was removed
-[ ! -d "$TEST_KWIKI_WS/.rnex/plugins/karpathy-llm" ] || { fail ".rnex/plugins/karpathy-llm still exists after fix"; exit 1; }
+[ ! -d "$TEST_KWIKI_WS/.rnex/plugins/karpathy-llm" ] || { fail ".rnex/plugins/karpathy-llm still exists after sync"; exit 1; }
 
 # 7. Verify user wiki files remain intact
 [ -f "$TEST_KWIKI_WS/docs/wiki/index.md" ] || { fail "docs/wiki/index.md was deleted when plugin was disabled"; exit 1; }

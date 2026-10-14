@@ -145,7 +145,7 @@ cmd_plugin_enable() {
   fi
 
   sync_plugins
-  cmd_sync --fix
+  cmd_sync
   log_ok "Plugin '$_name' active in workspace (.rnex/plugins/$_name)"
 }
 
@@ -183,7 +183,7 @@ cmd_plugin_disable() {
   fi
 
   sync_plugins
-  cmd_sync --fix -q
+  cmd_sync -q
   log_ok "Plugin '$_name' disabled from workspace"
 }
 
@@ -222,12 +222,12 @@ cmd_plugin_update() {
     [ -n "$_pdir" ] || die "Plugin '$_pname' not found."
     log_info "Updating plugin '$_pname'..."
     sync_plugins
-    cmd_sync --fix
-    log_ok "Plugin '$_pname' updated"
+    cmd_sync
+    log_ok "Plugin '$_name' updated"
   else
     log_info "Updating all enabled plugins..."
     sync_plugins
-    cmd_sync --fix
+    cmd_sync
     log_ok "All plugins updated"
   fi
 }

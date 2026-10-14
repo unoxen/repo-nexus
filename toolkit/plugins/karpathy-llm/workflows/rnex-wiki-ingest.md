@@ -7,8 +7,8 @@ Universal workflow for decomposing and ingesting raw source materials into atomi
 ## Ingestion Protocol
 
 1. **Resolve Configuration & Scan Intake:**
-   - Read `rnex.yaml` (and `.local.rnex.yaml` if present) to resolve the active `raw_dir` (default: `raw`) and `wiki_dir` (default: `wiki`) under `plugins.karpathy-llm`.
-   - Scan `<raw_dir>/` for source materials (articles, transcripts, documents, research notes, meeting logs) not yet recorded in `<wiki_dir>/_log.md`.
+   - Read `rnex.yaml` (and `.local.rnex.yaml` if present) to resolve the active `raw_dir` (default: `./docs`) and `wiki_dir` (default: `.rnex/wiki`) under `plugins.karpathy-llm`.
+   - Scan `<raw_dir>/` (default: `./docs`) for source materials (articles, transcripts, documents, research notes, meeting logs) not yet recorded in `<wiki_dir>/_log.md` (default: `.rnex/wiki/_log.md`).
    - All source material must reside in `<raw_dir>/` unmodified. Never write directly to `<wiki_dir>/` without ingesting.
 
 2. **Read & Clarify:**
@@ -48,18 +48,18 @@ Universal workflow for decomposing and ingesting raw source materials into atomi
    - Add inline standard Markdown links (`[Label](./path.md)`) where contextually useful in prose.
 
 6. **Update Navigation Index (Annotated Links):**
-   - Update `<wiki_dir>/index.md` with links to all new pages in their corresponding categorized sections.
+   - Update `<wiki_dir>/index.md` (default: `.rnex/wiki/index.md`) with links to all new pages in their corresponding categorized sections.
    - Include a concise 1-line summary next to each link (e.g. `- [Concept Name](path.md): One-line summary of role or contract`) so agents pinpoint target pages in a single read without exploratory scanning.
 
 7. **Update Hot Cache (Bounded ~500-Word Ceiling):**
-   - Update `<wiki_dir>/hot.md` with the rolling orientation summary across 3 structured sections:
+   - Update `<wiki_dir>/hot.md` (default: `.rnex/wiki/hot.md`) with the rolling orientation summary across 3 structured sections:
      1. **Architecture & Member Repo Map**: Active domain ownership per member repo.
      2. **Current Focus & Recent Ingests**: Active topics from recent ingests.
      3. **Key Contracts & Boundaries**: Critical cross-repo or subsystem rules.
    - **Enforce Token Economy**: Keep `<wiki_dir>/hot.md` strictly under ~500 words. Condense or prune older focus items to prevent bloat.
 
 8. **Append Operation Log:**
-   - Append a timestamped entry to `<wiki_dir>/_log.md` detailing:
+   - Append a timestamped entry to `<wiki_dir>/_log.md` (default: `.rnex/wiki/_log.md`) detailing:
      - Date & time
      - Raw intake file processed
      - List of atomic pages generated

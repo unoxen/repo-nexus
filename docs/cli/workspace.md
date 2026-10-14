@@ -47,35 +47,9 @@ rnex init -y --claude --hooks
 
 Performs comprehensive diagnostic and health checks across the workspace.
 
-### Syntax
-```sh
-rnex status
-```
-
-### What It Reports
-* **Configuration State**: Location and schema version of `rnex.yaml` and `.local.rnex.yaml`.
-* **Git Status**: Validation that `.gitignore` ignores `repos/` and local files, and whether `core.hooksPath` points to `.rnex/hooks`.
-* **AI Routing**: Status of universal `AGENTS.md`, `.rnex/skills/`, `.rnex/workflows/`, and provider prompts directories.
-* **Member Clones**: Health, branches, and `.rnex` state of every member repository.
-
-```bash
-rnex status
-```
-
-```text
-[rnex] Workspace root: /workspace
-[rnex] Config: rnex.yaml (.local.rnex.yaml loaded)
-[rnex] Repositories: 2 active, 0 disabled
-```
-
----
-
 ## `rnex sync`
 
-Synchronizes workspace assets, validates configuration, and audits or reconciles AI routing instructions, skills, workflows, active plugins, and member clones.
-
-- **Audit Mode (Default)**: When run without `--fix`, inspects workspace configuration, Git ignores, routing blocks, plugin assets, and member repositories, logging any issues or inconsistencies without mutating files.
-- **Reconcile Mode (`--fix`)**: Reconciles configuration schema, updates instruction files, synchronizes skills/workflows, mirrors operational prompts, and fixes inconsistencies.
+Reconciles workspace configuration, prompts, plugins, `.rnex/` harness directories, and compiles `.rnex/ai-instructions.md`. `rnex sync` is the sole reconciliation command in Repo Nexus (`rnex fix` and `rnex status --fix` are removed).
 
 ### Syntax
 ```sh
@@ -85,27 +59,41 @@ rnex sync [options]
 ### Options
 | Option | Shorthand | Type | Default | Description |
 |:---|:---|:---|:---|:---|
-| `--fix` | `-f` | boolean | `false` | Apply reconciliation fixes across workspace, routing, plugins, and repos. |
-| `--yes` | `-y` | boolean | `false` | Automatically confirm schema upgrades if prompted (used with `--fix`). |
+| `--yes` | `-y` | boolean | `false` | Automatically confirm schema upgrades if prompted. |
 | `--quiet` | `-q` | boolean | `false` | Quiet mode; suppresses non-error informational messages (ideal for hooks). |
-| `--upgrade` | | boolean | `false` | Explicitly trigger version upgrade reconciliation (implies `--fix`). |
 
-### Reconciliation Actions (with `--fix`)
+### Reconciliation Actions
 1. Upgrades configuration schema non-destructively if an older version is detected.
 2. Re-verifies `.gitignore` rules for `repos/` and local configs, and ensures `.ignore` contains `!repos/*`.
-3. Inserts or updates delimited routing blocks in universal `AGENTS.md` and active provider instruction files (`CLAUDE.md`, `GEMINI.md`, `.cursorrules`, `.windsurfrules`).
-4. Syncs base workflows to `.rnex/workflows/` and base skills to `.rnex/skills/`, purging any legacy `.rnex/prompts/`.
-5. Mirrors operational prompts to enabled AI providers (`.github/prompts/`, `.claude/commands/`, etc.).
-6. Re-syncs enabled plugin assets into `.rnex/plugins/` and member `repos/<name>/.rnex/`.
+3. Compiles `.rnex/ai-instructions.md` by combining the base template with active configuration and all enabled plugin `instructions.md` fragments. Writes single strict directive to top-level provider files (`AGENTS.md`, `CLAUDE.md`, etc.).
+4. Syncs operational prompts matching `rnex-*` from `toolkit/prompts/` to workspace and configured AI assistant prompt directories.
+5. Re-syncs enabled plugin assets into `.rnex/plugins/` and member `repos/<name>/.rnex/`.
+6. Dispatches plugin lifecycle hooks (`before_sync`, `after_sync`).
 7. Reconciles automated Git hooks in `.rnex/hooks/` against `git_hooks` config.
-8. Re-creates member `.rnex/` scaffolding in active repositories.
+8. Re-creates member `.rnex/` scaffolding in active repositories (`rnex_dir: true`).
 9. Updates multi-root `.code-workspace` folder mappings if configured.
+10. Generates `.rnex/bin/auto-sync.sh` and updates the checksum stamp in `.rnex/.sync_stamp`.
+
+---
+
+## `rnex status`
+
+Inspects workspace health and diagnostic information. `rnex status` is **strictly read-only** with no `--fix` flag.
+
+### Syntax
+```sh
+rnex status
+```
+
+### Execution
+* **Strictly Read-Only**: Inspects workspace health, active repos, loaded config files (`rnex.yaml` and `.local.rnex.yaml`), git hooks, and plugins.
+* **Sync Diagnostics**: Compares current config checksums against `.rnex/.sync_stamp` and suggests running `rnex sync` if configuration drift is detected.
 
 ---
 
 ## `rnex update` (alias: `upgrade`)
 
-Runs version verification and invokes the unified `rnex sync --fix` reconciliation engine to upgrade workspace configuration and routing instructions to match the installed CLI version.
+Runs version verification and invokes `rnex sync` to upgrade workspace configuration and routing instructions to match the installed CLI version.
 
 ### Syntax
 ```sh
@@ -120,9 +108,9 @@ rnex upgrade [options]
 | `--quiet` | `-q` | boolean | `false` | Suppress non-error informational messages. |
 
 ### Relationship with `rnex sync`
-`rnex update` is part of the `rnex sync` command family:
+`rnex update` delegates directly to `rnex sync`:
 * **Upfront Version Diagnostics**: Compares `version:` in `rnex.yaml` against the installed CLI version. If already matching, it reports that the workspace is up to date.
-* **Unified Reconciliation**: Delegates directly to `rnex sync --fix`, ensuring configuration schema upgrades, instruction updates (`AGENTS.md`, provider files), skills/workflows sync, and plugin reconciliation occur in a single, idempotent pass.
+* **Unified Reconciliation**: Delegates directly to `rnex sync`, ensuring configuration schema upgrades, instruction updates (`AGENTS.md`, `.rnex/ai-instructions.md`), prompts, and plugin reconciliation occur in a single, idempotent pass.
 * **Non-Destructive Migration**: Upgrades schema keys while preserving comments, indentation, and custom configurations.
 
 ---

@@ -95,12 +95,12 @@ grep -q "^git_hooks: true" "$TEST_LOCAL_HOOKS/rnex.yaml" || { fail "Base rnex.ya
 _loc_hp="$(git -C "$TEST_LOCAL_HOOKS" config --get core.hooksPath 2>/dev/null || true)"
 [ -z "$_loc_hp" ] || { fail "core.hooksPath still set after hooks uninstall --local"; exit 1; }
 
-# Simulate someone manually configuring core.hooksPath, then rnex fix should uninstall it based on local override
+# Simulate someone manually configuring core.hooksPath, then rnex sync should uninstall it based on local override
 git -C "$TEST_LOCAL_HOOKS" config core.hooksPath .rnex/hooks
 mkdir -p "$TEST_LOCAL_HOOKS/.rnex/hooks"
-(cd "$TEST_LOCAL_HOOKS" && ./rnex fix --quiet >/dev/null)
+(cd "$TEST_LOCAL_HOOKS" && ./rnex sync --quiet >/dev/null)
 _reconciled_hp="$(git -C "$TEST_LOCAL_HOOKS" config --get core.hooksPath 2>/dev/null || true)"
-[ -z "$_reconciled_hp" ] || { fail "rnex fix did not uninstall hooks when overridden by .local.rnex.yaml git_hooks: false"; exit 1; }
+[ -z "$_reconciled_hp" ] || { fail "rnex sync did not uninstall hooks when overridden by .local.rnex.yaml git_hooks: false"; exit 1; }
 
 # Re-enable hooks locally (--local)
 (cd "$TEST_LOCAL_HOOKS" && ./rnex hooks install --local >/dev/null)
@@ -108,15 +108,15 @@ grep -q "^git_hooks: true" "$TEST_LOCAL_HOOKS/.local.rnex.yaml" || { fail ".loca
 _loc_hp2="$(git -C "$TEST_LOCAL_HOOKS" config --get core.hooksPath 2>/dev/null || true)"
 [ "$_loc_hp2" = ".rnex/hooks" ] || { fail "hooks install --local did not set core.hooksPath"; exit 1; }
 
-# Simulate someone manually unsetting core.hooksPath, then rnex fix should reinstall it based on config
+# Simulate someone manually unsetting core.hooksPath, then rnex sync should reinstall it based on config
 git -C "$TEST_LOCAL_HOOKS" config --unset core.hooksPath
-(cd "$TEST_LOCAL_HOOKS" && ./rnex fix --quiet >/dev/null)
+(cd "$TEST_LOCAL_HOOKS" && ./rnex sync --quiet >/dev/null)
 _reconciled_hp2="$(git -C "$TEST_LOCAL_HOOKS" config --get core.hooksPath 2>/dev/null || true)"
-[ "$_reconciled_hp2" = ".rnex/hooks" ] || { fail "rnex fix did not reinstall hooks based on config"; exit 1; }
+[ "$_reconciled_hp2" = ".rnex/hooks" ] || { fail "rnex sync did not reinstall hooks based on config"; exit 1; }
 pass
 
 # --------------------------------------------------------------------------
-run_test "Git hooks: custom wrapper preservation, self-rewrite avoidance, and .githooks chaining"
+run_test "Git hooks: custom wrapper preservation, self-rewrite avoidance, and scripts/githooks chaining"
 TEST_WRAPPER_WS="$TEST_TMP/wrapper-hooks-ws"
 mkdir -p "$TEST_WRAPPER_WS"
 cp "$CLI" "$TEST_WRAPPER_WS/rnex"
@@ -135,21 +135,21 @@ echo "CUSTOM_WRAPPER_ACTIVE"
 WRAPPER_EOF
 chmod +x "$TEST_WRAPPER_WS/.rnex/hooks/post-commit"
 
-# Run fix to ensure custom wrapper is preserved
-(cd "$TEST_WRAPPER_WS" && ./rnex fix --quiet >/dev/null)
-grep -q "CUSTOM_WRAPPER_ACTIVE" "$TEST_WRAPPER_WS/.rnex/hooks/post-commit" || { fail "rnex fix overwrote custom wrapper in .rnex/hooks/post-commit"; exit 1; }
+# Run sync to ensure custom wrapper is preserved
+(cd "$TEST_WRAPPER_WS" && ./rnex sync --quiet >/dev/null)
+grep -q "CUSTOM_WRAPPER_ACTIVE" "$TEST_WRAPPER_WS/.rnex/hooks/post-commit" || { fail "rnex sync overwrote custom wrapper in .rnex/hooks/post-commit"; exit 1; }
 
-# 2. Existing .githooks chaining
-mkdir -p "$TEST_WRAPPER_WS/.githooks"
-cat <<GITHOOKS_EOF > "$TEST_WRAPPER_WS/.githooks/pre-commit"
+# 2. Existing scripts/githooks chaining
+mkdir -p "$TEST_WRAPPER_WS/scripts/githooks"
+cat <<GITHOOKS_EOF > "$TEST_WRAPPER_WS/scripts/githooks/pre-commit"
 #!/bin/sh
-echo "CHAINED_GITHOOKS_PRE_COMMIT" > "$TEST_WRAPPER_WS/githooks_marker"
+echo "CHAINED_SCRIPTS_GITHOOKS_PRE_COMMIT" > "$TEST_WRAPPER_WS/githooks_marker"
 GITHOOKS_EOF
-chmod +x "$TEST_WRAPPER_WS/.githooks/pre-commit"
+chmod +x "$TEST_WRAPPER_WS/scripts/githooks/pre-commit"
 
 (cd "$TEST_WRAPPER_WS" && ./rnex hooks run pre-commit >/dev/null)
-[ -f "$TEST_WRAPPER_WS/githooks_marker" ] || { fail "rnex hooks run pre-commit did not chain to .githooks/pre-commit"; exit 1; }
-grep -q "CHAINED_GITHOOKS_PRE_COMMIT" "$TEST_WRAPPER_WS/githooks_marker" || { fail "Chained .githooks/pre-commit did not execute properly"; exit 1; }
+[ -f "$TEST_WRAPPER_WS/githooks_marker" ] || { fail "rnex hooks run pre-commit did not chain to scripts/githooks/pre-commit"; exit 1; }
+grep -q "CHAINED_SCRIPTS_GITHOOKS_PRE_COMMIT" "$TEST_WRAPPER_WS/githooks_marker" || { fail "Chained scripts/githooks/pre-commit did not execute properly"; exit 1; }
 
 # 3. Avoidance of self-rewrite during hooks run post-merge
 # shellcheck disable=SC2012

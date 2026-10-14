@@ -96,17 +96,17 @@ karpathy_wiki_dir() {
   if [ -n "$_d" ]; then
     printf '%s' "$_d"
   else
-    printf 'wiki'
+    printf '.rnex/wiki'
   fi
 }
 
 karpathy_raw_dir() {
   _d="$(yaml_plugin_get "karpathy-llm" "raw_dir" 2>/dev/null || true)"
-  _d="$(printf '%s' "$_d" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's#^/##' -e 's#/$##')"
+  _d="$(printf '%s' "$_d" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's#^\./##' -e 's#^/##' -e 's#/$##')"
   if [ -n "$_d" ]; then
     printf '%s' "$_d"
   else
-    printf 'raw'
+    printf 'docs'
   fi
 }
 
@@ -145,19 +145,23 @@ sync_plugins() {
 
       # Deterministically sync plugin asset directories (clean stale files; no prompts in plugins)
       rm -rf "${_scoped_dest:?}/prompts" 2>/dev/null || true
-      for _sub in rules workflows instructions skills agents templates; do
+      for _sub in rules workflows instructions skills agents templates hooks; do
         if [ -d "$_pdir/$_sub" ]; then
           rm -rf "${_scoped_dest:?}/$_sub"
           mkdir -p "$_scoped_dest/$_sub"
           cp -R "$_pdir/$_sub"/. "$_scoped_dest/$_sub"/ 2>/dev/null || true
+          [ "$_sub" = "hooks" ] && chmod +x "$_scoped_dest/hooks"/* 2>/dev/null || true
         else
           rm -rf "${_scoped_dest:?}/$_sub"
         fi
       done
 
-      # Copy plugin manifest and documentation
+      # Copy plugin manifest, instructions, and documentation
       if [ -f "$_pdir/plugin.yaml" ]; then
         cp "$_pdir/plugin.yaml" "$_scoped_dest/plugin.yaml"
+      fi
+      if [ -f "$_pdir/instructions.md" ]; then
+        cp "$_pdir/instructions.md" "$_scoped_dest/instructions.md"
       fi
       if [ -f "$_pdir/README.md" ]; then
         cp "$_pdir/README.md" "$_scoped_dest/README.md"
