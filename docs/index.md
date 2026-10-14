@@ -17,7 +17,7 @@ hero:
       link: /cli/
     - theme: alt
       text: GitHub
-      link: https://github.com/nu-nenoi/repo-nexus
+      link: https://github.com/unoxen/repo-nexus
 
 features:
   - icon: ⚡
@@ -72,7 +72,7 @@ rnex clone
 
 ```sh [curl]
 # Download single executable binary directly
-curl -fsSL https://raw.githubusercontent.com/nu-nenoi/repo-nexus/main/rnex -o /usr/local/bin/rnex
+curl -fsSL https://raw.githubusercontent.com/unoxen/repo-nexus/main/rnex -o /usr/local/bin/rnex
 chmod +x /usr/local/bin/rnex
 rnex --version
 ```

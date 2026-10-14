@@ -1,8 +1,8 @@
 name: karpathy-llm
 version: 0.5.1
 description: Andrej Karpathy's agent behavioral principles, context engineering guidelines, and autonomous LLM Wiki knowledge architecture
-author: nu-nenoi
-homepage: https://github.com/nu-nenoi/repo-nexus
+author: unoxen
+homepage: https://github.com/unoxen/repo-nexus
 config:
   wiki_dir: .rnex/wiki
   raw_dir: ./docs

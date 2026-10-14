@@ -1,11 +1,11 @@
 # Repo Nexus (`rnex`)
 
-[![CI](https://github.com/nu-nenoi/repo-nexus/actions/workflows/ci.yml/badge.svg)](https://github.com/nu-nenoi/repo-nexus/actions/workflows/ci.yml)
+[![CI](https://github.com/unoxen/repo-nexus/actions/workflows/ci.yml/badge.svg)](https://github.com/unoxen/repo-nexus/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/repo-nexus.svg)](https://www.npmjs.com/package/repo-nexus)
-[![License: MIT](https://img.shields.io/github/license/nu-nenoi/repo-nexus)](LICENSE)
+[![License: MIT](https://img.shields.io/github/license/unoxen/repo-nexus)](LICENSE)
 [![POSIX Compatible](https://img.shields.io/badge/POSIX-compatible-success)](#)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey)](#)
-[![Documentation Site](https://img.shields.io/badge/docs-site-blue.svg)](https://nu-nenoi.github.io/repo-nexus/)
+[![Documentation Site](https://img.shields.io/badge/docs-site-blue.svg)](https://unoxen.github.io/repo-nexus/)
 
 A **simple, lightweight Virtual Meta-Repo companion** for multi-repo workspaces and shared AI context. It organizes independent repositories into a unified workspace and shares lean routing instructions (`AGENTS.md`) **without Git submodules, monorepo migrations, or symlink fragility**.
 
@@ -19,14 +19,14 @@ A **simple, lightweight Virtual Meta-Repo companion** for multi-repo workspaces 
 
 > 📖 **Documentation & Guides**
 >
-> Explore the comprehensive documentation, architecture guides, and interactive references on the **[Documentation Site](https://nu-nenoi.github.io/repo-nexus/)**:
+> Explore the comprehensive documentation, architecture guides, and interactive references on the **[Documentation Site](https://unoxen.github.io/repo-nexus/)**:
 >
-> - 🚀 **[Getting Started](https://nu-nenoi.github.io/repo-nexus/guide/getting-started)** — Step-by-step onboarding walkthrough and workspace setup
-> - 📐 **[Architecture](https://nu-nenoi.github.io/repo-nexus/guide/architecture)** & **[Why Repo Nexus?](https://nu-nenoi.github.io/repo-nexus/guide/why-repo-nexus)** — Virtual Meta-Repo model, directory layout, and design rationale
-> - 💻 **[CLI Reference](https://nu-nenoi.github.io/repo-nexus/cli/)** — Complete command syntax, global flags, batch execution (`rnex exec`), and Git hooks
-> - 🧩 **[Plugins Guide](https://nu-nenoi.github.io/repo-nexus/plugins/)** — AI provider integrations (Claude, Copilot, Cursor, Gemini, Windsurf) and Karpathy LLM Wiki
-> - ⚙️ **[Configuration Schema](https://nu-nenoi.github.io/repo-nexus/guide/configuration)** — Two-level `rnex.yaml` and `.local.rnex.yaml` specification
-> - ❓ **[Frequently Asked Questions (FAQ)](https://nu-nenoi.github.io/repo-nexus/faq/)** — Common questions, Git submodule differences, and context strategies
+> - 🚀 **[Getting Started](https://unoxen.github.io/repo-nexus/guide/getting-started)** — Step-by-step onboarding walkthrough and workspace setup
+> - 📐 **[Architecture](https://unoxen.github.io/repo-nexus/guide/architecture)** & **[Why Repo Nexus?](https://unoxen.github.io/repo-nexus/guide/why-repo-nexus)** — Virtual Meta-Repo model, directory layout, and design rationale
+> - 💻 **[CLI Reference](https://unoxen.github.io/repo-nexus/cli/)** — Complete command syntax, global flags, batch execution (`rnex exec`), and Git hooks
+> - 🧩 **[Plugins Guide](https://unoxen.github.io/repo-nexus/plugins/)** — AI provider integrations (Claude, Copilot, Cursor, Gemini, Windsurf) and Karpathy LLM Wiki
+> - ⚙️ **[Configuration Schema](https://unoxen.github.io/repo-nexus/guide/configuration)** — Two-level `rnex.yaml` and `.local.rnex.yaml` specification
+> - ❓ **[Frequently Asked Questions (FAQ)](https://unoxen.github.io/repo-nexus/faq/)** — Common questions, Git submodule differences, and context strategies
 
 ---
 
@@ -87,16 +87,16 @@ npm install -g repo-nexus
 ### Option 2: Standalone One-Liner (curl / wget — Zero Dependencies, No Node.js)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/nu-nenoi/repo-nexus/main/scripts/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/unoxen/repo-nexus/main/scripts/install.sh | sh
 # or
-wget -qO- https://raw.githubusercontent.com/nu-nenoi/repo-nexus/main/scripts/install.sh | sh
+wget -qO- https://raw.githubusercontent.com/unoxen/repo-nexus/main/scripts/install.sh | sh
 ```
 *(Downloads and links `rnex` and `repo-nexus` into `~/.local/bin` without requiring Node.js or npm)*
 
 ### Option 3: Native Installer (Clone & Install)
 
 ```bash
-git clone https://github.com/nu-nenoi/repo-nexus.git
+git clone https://github.com/unoxen/repo-nexus.git
 cd repo-nexus
 ./rnex install
 ```

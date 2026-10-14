@@ -28,7 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`karpathy-llm` Plugin Defaults & Hooks**: Migrated `karpathy-llm` to lifecycle hooks and changed default paths from `/wiki/` to `.rnex/wiki` (curated knowledge base) and from `/raw/` to `./docs` (raw intake).
 
 ### Fixed
-- Unified GitHub repository URLs across `README.md`, `scripts/install.sh`, and the documentation site to canonical `nu-nenoi/repo-nexus`.
+- Unified GitHub repository URLs across `README.md`, `scripts/install.sh`, and the documentation site to canonical `unoxen/repo-nexus`.
 - Removed legacy `symlinks` references from repository metadata.
 
 

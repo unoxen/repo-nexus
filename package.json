@@ -26,12 +26,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/nu-nenoi/repo-nexus.git"
+    "url": "git+https://github.com/unoxen/repo-nexus.git"
   },
   "bugs": {
-    "url": "https://github.com/nu-nenoi/repo-nexus/issues"
+    "url": "https://github.com/unoxen/repo-nexus/issues"
   },
-  "homepage": "https://nu-nenoi.github.io/repo-nexus/",
+  "homepage": "https://unoxen.github.io/repo-nexus/",
   "keywords": [
     "rnex",
     "repo-nexus",

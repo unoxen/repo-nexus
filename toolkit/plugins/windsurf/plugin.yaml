@@ -1,7 +1,7 @@
 name: windsurf
 version: 0.5.1
 description: Windsurf IDE integration (maintains .windsurfrules and mirrors workspace prompts)
-author: nu-nenoi
-homepage: https://github.com/nu-nenoi/repo-nexus
+author: unoxen
+homepage: https://github.com/unoxen/repo-nexus
 instructions:
   - instructions/rnex-windsurf-integration.md: .rnex/plugins/windsurf/instructions/rnex-windsurf-integration.md
