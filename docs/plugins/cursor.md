@@ -1,30 +1,31 @@
 ---
 title: Cursor IDE Plugin
-description: Integrate Cursor IDE with Repo Nexus, mirroring operational prompts to .cursor/prompts/.
+description: Integrate Cursor IDE with Repo Nexus, generating zero-logic user skill pointers in .cursor/rules/.
 ---
 
 # Cursor IDE Plugin
 
 The **`cursor`** plugin integrates Cursor IDE and Cursor Agent Mode into a Repo Nexus Virtual Meta-Repo.
 
-All AI assistants in Repo Nexus share [`AGENTS.md`](file:///Users/admin/Projects/ai/repo-nexus/AGENTS.md) at the workspace root as the single universal source of truth for routing. The `cursor` plugin mirrors human-facing operational prompts into `.cursor/prompts/*.md` with standard YAML frontmatter.
+All AI assistants in Repo Nexus share [`AGENTS.md`](file:///Users/admin/Projects/ai/repo-nexus/AGENTS.md) at the workspace root as the single universal source of truth for routing. When enabled, the `cursor` plugin generates zero-logic User Skill pointers into `.cursor/rules/` (e.g. `rnex-clone-sync.md`, `rnex-batch-exec.md`, `rnex-wiki-ingest.md`).
 
-Operational skills, workflows, rules, and subagents remain cleanly self-contained within `.rnex/` and active plugin directories (`.rnex/plugins/<plugin-name>/`).
+Operational skills, rules, and subagents remain cleanly encapsulated within `.rnex/skills/` and active plugin directories (`.rnex/plugins/<plugin-name>/`).
 
 ---
 
 ## Capabilities
 
-1. **Native Instructions & Rules Support**:
-   - Synchronizes Repo Nexus routing instructions to `.cursorrules` and `.cursor/rules/rnex-context.mdc` (`alwaysApply: true`) when `instructions: true` (default).
+1. **Zero-Logic User Skills (`.cursor/rules/rnex-*.md`)**:
+   - Generates lightweight user skill pointers prefixed with `rnex-` in `.cursor/rules/`.
+   - Contains zero inline heuristics—redirects Cursor directly to the underlying agentic skill protocols inside `.rnex/`.
+
+2. **Native Instructions & Rules Support**:
+   - Synchronizes Repo Nexus routing instructions to `.cursorrules` when `instructions: true` (default).
    - Preserves user custom rules and custom sections in `.cursorrules`.
 
-2. **Prompts Mirroring (`.cursor/prompts/*.md`)**:
-   - Converts standard Repo Nexus operational prompts (`rnex-cross-repo-feature`, `rnex-workspace-audit`) and active plugins' workflows into Cursor prompt templates with YAML frontmatter.
-
 3. **Subagent & Skill Execution**:
-   - Skills reside under `.rnex/skills/` and `.rnex/plugins/<plugin>/skills/`.
-   - Workflows reside under `.rnex/workflows/` and `.rnex/plugins/<plugin>/workflows/`.
+   - Core skills reside under `.rnex/skills/`.
+   - Plugin skills reside under `.rnex/plugins/<plugin>/skills/`.
    - Subagents reside under `.rnex/agents/` and `.rnex/plugins/<plugin>/agents/` and are invoked as subagents without external mirroring.
 
 ---
@@ -56,17 +57,15 @@ Configure options under `plugins.cursor` in `rnex.yaml` or `.local.rnex.yaml`:
 ```yaml
 plugins:
   cursor:
-    instructions: true   # Sync routing instructions to .cursorrules & .cursor/rules/ (default: true)
-    prompts: true        # Mirror prompts to .cursor/prompts/ (default: true)
-    workflows: true      # Mirror active plugin workflows as prompts (default: true)
+    instructions: true   # Sync routing instructions to .cursorrules (default: true)
+    skills: true         # Generate user skills in .cursor/rules/ (default: true)
     enabled: true        # Set to false to disable
 ```
 
 | Option | Type | Default | Description |
 |:---|:---|:---|:---|
-| `instructions` | boolean | `true` | Merge routing instructions into `.cursorrules` and `.cursor/rules/`. |
-| `prompts` | boolean | `true` | Mirror prompts to `.cursor/prompts/*.md`. |
-| `workflows` | boolean | `true` | Mirror plugin workflows into `.cursor/prompts/*.md`. |
+| `instructions` | boolean | `true` | Merge routing instructions into `.cursorrules`. |
+| `skills` | boolean | `true` | Generate user skill pointers in `.cursor/rules/rnex-*.md`. |
 | `enabled` | boolean | `true` | Enable or disable the plugin. Overridable in `.local.rnex.yaml`. |
 
 ---
@@ -80,18 +79,16 @@ my-workspace/
 ├── AGENTS.md                          # Universal workspace instructions & routing
 ├── .cursorrules                       # Cursor root instructions (if instructions: true)
 ├── .cursor/
-│   ├── rules/
-│   │   └── rnex-context.mdc           # Cursor alwaysApply routing rule
-│   └── prompts/
-│       ├── rnex-cross-repo-feature.md
-│       ├── rnex-workspace-audit.md
+│   └── rules/                         # Zero-logic User Skill pointers
+│       ├── rnex-clone-sync.md
+│       ├── rnex-batch-exec.md
+│       ├── rnex-workspace-status.md
 │       ├── rnex-wiki-ingest.md
 │       └── rnex-wiki-lint.md
 ├── .rnex/
-│   ├── skills/                        # Workspace operational skills
-│   ├── workflows/                     # Workspace workflows
+│   ├── skills/                        # Core workspace agentic skills
 │   └── plugins/
-│       └── karpathy-llm/              # Scoped plugin skills, workflows, and agents
+│       └── karpathy-llm/              # Scoped plugin skills and rules
 └── rnex.yaml
 ```
 
@@ -106,6 +103,6 @@ rnex plugin disable cursor
 ```
 
 Repo Nexus automatically performs surgical cleanup:
-- Removes auto-generated prompts under `.cursor/prompts/`.
-- Cleans up any legacy mirrored skills, agents, or instructions blocks.
-- Developer-created custom rules and prompts under `.cursor/` are preserved.
+- Removes auto-generated user skills under `.cursor/rules/rnex-*.md`.
+- Cleans up managed routing instructions in `.cursorrules`.
+- Developer-created custom rules under `.cursor/` are preserved.

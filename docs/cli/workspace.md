@@ -26,11 +26,10 @@ rnex init [options] [directory]
 | `--code-workspace` | | boolean \| string | `false` | Enable VS Code multi-root workspace file. Pass string for custom name. |
 | `--hooks` | | boolean | `true` (if git) | Force-enable automated Git hooks setup during initialization. |
 | `--no-hooks` | | boolean | `false` | Skip Git hooks configuration during initialization. |
-| `--claude` | | boolean | `false` | Enable Claude Code plugin (mirrors prompts to `.claude/commands/`). |
-| `--copilot` | | boolean | `false` | Enable GitHub Copilot plugin (mirrors prompts to `.github/prompts/`). |
-| `--cursor` | | boolean | `false` | Enable Cursor plugin (mirrors prompts to `.cursor/prompts/`). |
-| `--gemini` | | boolean | `false` | Enable Google Gemini plugin (mirrors prompts to `.gemini/prompts/`). |
-| `--windsurf` | | boolean | `false` | Enable Windsurf plugin (mirrors prompts to `.windsurf/prompts/`). |
+| `--claude` | | boolean | `false` | Enable Claude Code plugin (maintains `CLAUDE.md`, generates skills in `.claude/skills/`). |
+| `--cursor` | | boolean | `false` | Enable Cursor plugin (maintains `.cursorrules`, generates skills in `.cursor/rules/`). |
+| `--gemini` | | boolean | `false` | Enable Google Gemini plugin (maintains `GEMINI.md`, generates skills in `.gemini/skills/`). |
+| `--windsurf` | | boolean | `false` | Enable Windsurf plugin (maintains `.windsurfrules`, generates skills in `.windsurf/rules/`). |
 
 ### Examples
 ```bash
@@ -49,7 +48,7 @@ Performs comprehensive diagnostic and health checks across the workspace.
 
 ## `rnex sync`
 
-Reconciles workspace configuration, prompts, plugins, `.rnex/` harness directories, and compiles `.rnex/ai-instructions.md`. `rnex sync` is the sole reconciliation command in Repo Nexus (`rnex fix` and `rnex status --fix` are removed).
+Reconciles workspace configuration, skills, plugins, `.rnex/` harness directories, and compiles `.rnex/ai-instructions.md`. `rnex sync` is the sole reconciliation command in Repo Nexus (`rnex fix` and `rnex status --fix` are removed).
 
 ### Syntax
 ```sh
@@ -66,7 +65,7 @@ rnex sync [options]
 1. Upgrades configuration schema non-destructively if an older version is detected.
 2. Re-verifies `.gitignore` rules for `repos/` and local configs, and ensures `.ignore` contains `!repos/*`.
 3. Compiles `.rnex/ai-instructions.md` by combining the base template with active configuration and all enabled plugin `instructions.md` fragments. Writes single strict directive to top-level provider files (`AGENTS.md`, `CLAUDE.md`, etc.).
-4. Syncs operational prompts matching `rnex-*` from `toolkit/prompts/` to workspace and configured AI assistant prompt directories.
+4. Syncs core agentic skills from `toolkit/skills/` to `.rnex/skills/` and generates zero-logic User Skills (`rnex-*.md`) in active AI provider directories.
 5. Re-syncs enabled plugin assets into `.rnex/plugins/` and member `repos/<name>/.rnex/`.
 6. Dispatches plugin lifecycle hooks (`before_sync`, `after_sync`).
 7. Reconciles automated Git hooks in `.rnex/hooks/` against `git_hooks` config.

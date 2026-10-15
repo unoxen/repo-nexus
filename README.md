@@ -157,11 +157,9 @@ repo-nexus/
 │   ├── test_cli.sh                 # Main test runner
 │   ├── test_helper.sh              # Shared test harness and utilities
 │   └── suites/                     # Modular test suites
-├── toolkit/                        # Built-in plugins, prompts, skills, and workflows
+├── toolkit/                        # Built-in plugins and core agentic skills
 │   ├── plugins/                    # Scoped workspace plugins
-│   ├── prompts/                    # Standardized AI operational prompts
-│   ├── skills/                     # Workspace skills
-│   └── workflows/                  # Workspace workflows
+│   └── skills/                     # Core workspace agentic skills
 └── README.md
 ```
 

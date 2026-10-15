@@ -1,30 +1,31 @@
 ---
 title: Windsurf IDE Plugin
-description: Integrate Windsurf IDE and Cascade with Repo Nexus, mirroring operational prompts to .windsurf/prompts/.
+description: Integrate Windsurf IDE and Cascade with Repo Nexus, generating zero-logic user skill pointers in .windsurf/rules/.
 ---
 
 # Windsurf IDE Plugin
 
 The **`windsurf`** plugin integrates Codeium's Windsurf IDE and Cascade into a Repo Nexus Virtual Meta-Repo.
 
-All AI assistants in Repo Nexus share [`AGENTS.md`](file:///Users/admin/Projects/ai/repo-nexus/AGENTS.md) at the workspace root as the single universal source of truth for routing. The `windsurf` plugin mirrors human-facing operational prompts into `.windsurf/prompts/*.md` with standard YAML frontmatter.
+All AI assistants in Repo Nexus share [`AGENTS.md`](file:///Users/admin/Projects/ai/repo-nexus/AGENTS.md) at the workspace root as the single universal source of truth for routing. When enabled, the `windsurf` plugin generates zero-logic User Skill pointers into `.windsurf/rules/` (e.g. `rnex-clone-sync.md`, `rnex-batch-exec.md`, `rnex-wiki-ingest.md`).
 
-Operational skills, workflows, rules, and subagents remain cleanly self-contained within `.rnex/` and active plugin directories (`.rnex/plugins/<plugin-name>/`).
+Operational skills, rules, and subagents remain cleanly encapsulated within `.rnex/skills/` and active plugin directories (`.rnex/plugins/<plugin-name>/`).
 
 ---
 
 ## Capabilities
 
-1. **Native Instructions Support via `.windsurfrules`**:
+1. **Zero-Logic User Skills (`.windsurf/rules/rnex-*.md`)**:
+   - Generates lightweight user skill pointers prefixed with `rnex-` in `.windsurf/rules/`.
+   - Contains zero inline heuristics—redirects Cascade directly to the underlying agentic skill protocols inside `.rnex/`.
+
+2. **Native Instructions Support via `.windsurfrules`**:
    - Synchronizes Repo Nexus routing instructions to `.windsurfrules` when `instructions: true` (default).
    - Preserves user custom rules and custom sections in `.windsurfrules`.
 
-2. **Prompts Mirroring (`.windsurf/prompts/*.md`)**:
-   - Converts standard Repo Nexus operational prompts (`rnex-cross-repo-feature`, `rnex-workspace-audit`) and active plugins' workflows into Windsurf prompt files with YAML frontmatter.
-
 3. **Subagent & Skill Execution**:
-   - Skills reside under `.rnex/skills/` and `.rnex/plugins/<plugin>/skills/`.
-   - Workflows reside under `.rnex/workflows/` and `.rnex/plugins/<plugin>/workflows/`.
+   - Core skills reside under `.rnex/skills/`.
+   - Plugin skills reside under `.rnex/plugins/<plugin>/skills/`.
    - Subagents reside under `.rnex/agents/` and `.rnex/plugins/<plugin>/agents/` and are invoked as subagents without external mirroring.
 
 ---
@@ -57,16 +58,14 @@ Configure options under `plugins.windsurf` in `rnex.yaml` or `.local.rnex.yaml`:
 plugins:
   windsurf:
     instructions: true   # Sync routing instructions to .windsurfrules (default: true)
-    prompts: true        # Mirror prompts to .windsurf/prompts/ (default: true)
-    workflows: true      # Mirror active plugin workflows as prompts (default: true)
+    skills: true         # Generate user skills in .windsurf/rules/ (default: true)
     enabled: true        # Set to false to disable
 ```
 
 | Option | Type | Default | Description |
 |:---|:---|:---|:---|
 | `instructions` | boolean | `true` | Merge routing instructions into `.windsurfrules`. |
-| `prompts` | boolean | `true` | Mirror prompts to `.windsurf/prompts/*.md`. |
-| `workflows` | boolean | `true` | Mirror plugin workflows into `.windsurf/prompts/*.md`. |
+| `skills` | boolean | `true` | Generate user skill pointers in `.windsurf/rules/rnex-*.md`. |
 | `enabled` | boolean | `true` | Enable or disable the plugin. Overridable in `.local.rnex.yaml`. |
 
 ---
@@ -80,16 +79,16 @@ my-workspace/
 ├── AGENTS.md                          # Universal workspace instructions & routing
 ├── .windsurfrules                     # Windsurf instructions (if instructions: true)
 ├── .windsurf/
-│   └── prompts/
-│       ├── rnex-cross-repo-feature.md
-│       ├── rnex-workspace-audit.md
+│   └── rules/                         # Zero-logic User Skill pointers
+│       ├── rnex-clone-sync.md
+│       ├── rnex-batch-exec.md
+│       ├── rnex-workspace-status.md
 │       ├── rnex-wiki-ingest.md
 │       └── rnex-wiki-lint.md
 ├── .rnex/
-│   ├── skills/                        # Workspace operational skills
-│   ├── workflows/                     # Workspace workflows
+│   ├── skills/                        # Core workspace agentic skills
 │   └── plugins/
-│       └── karpathy-llm/              # Scoped plugin skills, workflows, and agents
+│       └── karpathy-llm/              # Scoped plugin skills and rules
 └── rnex.yaml
 ```
 
@@ -104,6 +103,6 @@ rnex plugin disable windsurf
 ```
 
 Repo Nexus automatically performs surgical cleanup:
-- Removes auto-generated prompts under `.windsurf/prompts/`.
-- Cleans up any legacy mirrored skills, agents, or instructions blocks.
+- Removes auto-generated user skills under `.windsurf/rules/rnex-*.md`.
+- Cleans up managed routing instructions in `.windsurfrules`.
 - Developer-created custom files under `.windsurf/` are preserved.

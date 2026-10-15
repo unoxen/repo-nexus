@@ -87,27 +87,26 @@ echo "$_status_out" | grep -q "Workspace AI Context" || { fail "Status did not s
 pass
 
 # --------------------------------------------------------------------------
-run_test "Enabling provider plugin creates instruction file, preserves AGENTS.md, and mirrors prompts only"
+run_test "Enabling provider plugin creates instruction file, preserves AGENTS.md, and creates User Skills"
 # Enable gemini plugin in workspace
 "$TEST_WORKSPACE/rnex" plugin enable gemini >/dev/null
 [ -f "$TEST_WORKSPACE/AGENTS.md" ] || { fail "AGENTS.md missing when gemini enabled"; exit 1; }
 [ -f "$TEST_WORKSPACE/GEMINI.md" ] || { fail "GEMINI.md missing when gemini enabled"; exit 1; }
-[ ! -d "$TEST_WORKSPACE/.gemini/skills" ] || { fail ".gemini/skills should not be created"; exit 1; }
-[ -d "$TEST_WORKSPACE/.gemini/prompts" ] || { fail ".gemini/prompts not created"; exit 1; }
-[ -f "$TEST_WORKSPACE/.gemini/prompts/rnex-cross-repo-feature.prompt.md" ] || { fail "rnex-cross-repo-feature missing in .gemini/prompts"; exit 1; }
+[ -d "$TEST_WORKSPACE/.gemini/skills" ] || { fail ".gemini/skills not created"; exit 1; }
+[ -f "$TEST_WORKSPACE/.gemini/skills/rnex-clone-sync.md" ] || { fail "rnex-clone-sync missing in .gemini/skills"; exit 1; }
 _status_fixed="$("$TEST_WORKSPACE/rnex" status 2>&1)"
 echo "$_status_fixed" | grep -q "AGENTS.md" || { fail "Status did not show AGENTS.md"; exit 1; }
 echo "$_status_fixed" | grep -q "GEMINI.md" || { fail "Status did not show GEMINI.md"; exit 1; }
-echo "$_status_fixed" | grep -q ".gemini/prompts/" || { fail "Status did not show .gemini/prompts/"; exit 1; }
-# Disable gemini plugin; AGENTS.md should remain intact, GEMINI.md cleaned, and prompts cleaned up
+echo "$_status_fixed" | grep -q ".gemini/skills/" || { fail "Status did not show .gemini/skills/"; exit 1; }
+# Disable gemini plugin; AGENTS.md should remain intact, GEMINI.md cleaned, and User Skills cleaned up
 "$TEST_WORKSPACE/rnex" plugin disable gemini >/dev/null
 [ ! -f "$TEST_WORKSPACE/GEMINI.md" ] || { fail "GEMINI.md was not cleaned up"; exit 1; }
 [ -f "$TEST_WORKSPACE/AGENTS.md" ] || { fail "AGENTS.md was removed after disabling provider plugin"; exit 1; }
-[ ! -f "$TEST_WORKSPACE/.gemini/prompts/rnex-cross-repo-feature.prompt.md" ] || { fail "Prompts not cleaned up after disabling gemini"; exit 1; }
+[ ! -f "$TEST_WORKSPACE/.gemini/skills/rnex-clone-sync.md" ] || { fail "User skills not cleaned up after disabling gemini"; exit 1; }
 pass
 
 # --------------------------------------------------------------------------
-run_test "Init with --claude flag sets up Claude plugin, universal AGENTS.md, CLAUDE.md, and mirrors prompts only"
+run_test "Init with --claude flag sets up Claude plugin, universal AGENTS.md, CLAUDE.md, and User Skills"
 TEST_AI_WS="$TEST_TMP/ai-workspace"
 mkdir -p "$TEST_AI_WS"
 cp "$CLI" "$TEST_AI_WS/rnex"
@@ -116,13 +115,12 @@ cp -r "$DIR/toolkit" "$TEST_AI_WS/toolkit"
 "$TEST_AI_WS/rnex" init -y --claude "$TEST_AI_WS" >/dev/null
 [ -f "$TEST_AI_WS/AGENTS.md" ] || { fail "AGENTS.md missing after init --claude"; exit 1; }
 [ -f "$TEST_AI_WS/CLAUDE.md" ] || { fail "CLAUDE.md missing after init --claude"; exit 1; }
-[ ! -d "$TEST_AI_WS/.claude/skills" ] || { fail ".claude/skills should not be created"; exit 1; }
+[ -d "$TEST_AI_WS/.claude/skills" ] || { fail ".claude/skills missing after init --claude"; exit 1; }
+[ -f "$TEST_AI_WS/.claude/skills/rnex-clone-sync.md" ] || { fail "rnex-clone-sync.md missing in .claude/skills"; exit 1; }
 grep -q "claude:" "$TEST_AI_WS/rnex.yaml" || { fail "claude plugin not enabled in rnex.yaml"; exit 1; }
 grep -q "CRITICAL: You MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\`" "$TEST_AI_WS/AGENTS.md" || { fail "AGENTS.md missing critical directive"; exit 1; }
 grep -q "CRITICAL: You MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\`" "$TEST_AI_WS/CLAUDE.md" || { fail "CLAUDE.md missing critical directive"; exit 1; }
 grep -q "Multi-Repo AI Workspace Context" "$TEST_AI_WS/.rnex/ai-instructions.md" || { fail ".rnex/ai-instructions.md missing Multi-Repo AI Workspace Context"; exit 1; }
-[ -d "$TEST_AI_WS/.claude/commands" ] || { fail ".claude/commands not created"; exit 1; }
-[ -f "$TEST_AI_WS/.claude/commands/rnex-cross-repo-feature.md" ] || { fail "rnex-cross-repo-feature.md missing in .claude/commands"; exit 1; }
 pass
 
 # --------------------------------------------------------------------------
@@ -204,20 +202,19 @@ echo "$_up_out" | grep -q "already up to date" || { fail "rnex update did not re
 pass
 
 # --------------------------------------------------------------------------
-run_test "Standardized skills and workflows synced to .rnex/skills/ and .rnex/workflows/, prompts purged from .rnex/"
+run_test "Core skills synced to .rnex/skills/*.md, prompts and workflows purged from .rnex/"
 [ ! -d "$TEST_WORKSPACE/.rnex/prompts" ] || { fail ".rnex/prompts directory should not exist"; exit 1; }
+[ ! -d "$TEST_WORKSPACE/.rnex/workflows" ] || { fail ".rnex/workflows directory should not exist"; exit 1; }
 [ -d "$TEST_WORKSPACE/.rnex/skills" ] || { fail ".rnex/skills directory was not created"; exit 1; }
-[ -f "$TEST_WORKSPACE/.rnex/skills/rnex-cross-repo-feature/SKILL.md" ] || { fail "rnex-cross-repo-feature skill missing"; exit 1; }
-[ -f "$TEST_WORKSPACE/.rnex/skills/rnex-workspace-audit/SKILL.md" ] || { fail "rnex-workspace-audit skill missing"; exit 1; }
-[ -d "$TEST_WORKSPACE/.rnex/workflows" ] || { fail ".rnex/workflows directory was not created"; exit 1; }
-[ -f "$TEST_WORKSPACE/.rnex/workflows/rnex-cross-repo-feature.md" ] || { fail "rnex-cross-repo-feature workflow missing"; exit 1; }
-[ -f "$TEST_WORKSPACE/.rnex/workflows/rnex-workspace-audit.md" ] || { fail "rnex-workspace-audit workflow missing"; exit 1; }
+[ -f "$TEST_WORKSPACE/.rnex/skills/clone-sync.md" ] || { fail "clone-sync skill missing"; exit 1; }
+[ -f "$TEST_WORKSPACE/.rnex/skills/batch-exec.md" ] || { fail "batch-exec skill missing"; exit 1; }
+[ -f "$TEST_WORKSPACE/.rnex/skills/workspace-status.md" ] || { fail "workspace-status skill missing"; exit 1; }
 # Verify member repos do not contain workspace prompts
 [ ! -d "$TEST_WORKSPACE/repos/test-app/.rnex/prompts" ] || { fail "Workspace prompts leaked into member repo .rnex"; exit 1; }
-# Verify status highlights workspace skills and workflows
+[ ! -d "$TEST_WORKSPACE/repos/test-app/.rnex/workflows" ] || { fail "Workspace workflows leaked into member repo .rnex"; exit 1; }
+# Verify status highlights workspace skills
 _status_prompts="$("$TEST_WORKSPACE/rnex" status 2>&1)"
 echo "$_status_prompts" | grep -q "workspace skills" || { fail "Status does not highlight workspace skills"; exit 1; }
-echo "$_status_prompts" | grep -q "workspace workflows" || { fail "Status does not highlight workspace workflows"; exit 1; }
 pass
 
 if [ "${_STANDALONE_RUN:-0}" -eq 1 ]; then

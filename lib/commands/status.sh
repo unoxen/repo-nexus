@@ -162,23 +162,17 @@ cmd_status() {
   if [ -d "$NEXUS_DIR/.rnex/skills" ]; then
     printf '  %b✓%b %s %b(workspace skills)%b\n' "$_G" "$_NC" ".rnex/skills/" "$_DIM" "$_NC"
   fi
-  if [ -d "$NEXUS_DIR/.rnex/workflows" ]; then
-    printf '  %b✓%b %s %b(workspace workflows)%b\n' "$_G" "$_NC" ".rnex/workflows/" "$_DIM" "$_NC"
+  if [ -d "$NEXUS_DIR/.cursor/rules" ] && ls "$NEXUS_DIR/.cursor/rules"/rnex-*.md >/dev/null 2>&1; then
+    printf '  %b✓%b %s %b(Cursor user skills)%b\n' "$_G" "$_NC" ".cursor/rules/" "$_DIM" "$_NC"
   fi
-  if [ -d "$NEXUS_DIR/.github/prompts" ]; then
-    printf '  %b✓%b %s %b(Copilot prompts)%b\n' "$_G" "$_NC" ".github/prompts/" "$_DIM" "$_NC"
+  if [ -d "$NEXUS_DIR/.claude/skills" ] && ls "$NEXUS_DIR/.claude/skills"/rnex-*.md >/dev/null 2>&1; then
+    printf '  %b✓%b %s %b(Claude user skills)%b\n' "$_G" "$_NC" ".claude/skills/" "$_DIM" "$_NC"
   fi
-  if [ -d "$NEXUS_DIR/.claude/commands" ] || [ -d "$NEXUS_DIR/.claude/prompts" ]; then
-    printf '  %b✓%b %s %b(Claude prompts/commands)%b\n' "$_G" "$_NC" ".claude/commands/" "$_DIM" "$_NC"
+  if [ -d "$NEXUS_DIR/.windsurf/rules" ] && ls "$NEXUS_DIR/.windsurf/rules"/rnex-*.md >/dev/null 2>&1; then
+    printf '  %b✓%b %s %b(Windsurf user skills)%b\n' "$_G" "$_NC" ".windsurf/rules/" "$_DIM" "$_NC"
   fi
-  if [ -d "$NEXUS_DIR/.gemini/prompts" ]; then
-    printf '  %b✓%b %s %b(Gemini prompts)%b\n' "$_G" "$_NC" ".gemini/prompts/" "$_DIM" "$_NC"
-  fi
-  if [ -d "$NEXUS_DIR/.cursor/prompts" ]; then
-    printf '  %b✓%b %s %b(Cursor prompts)%b\n' "$_G" "$_NC" ".cursor/prompts/" "$_DIM" "$_NC"
-  fi
-  if [ -d "$NEXUS_DIR/.windsurf/prompts" ]; then
-    printf '  %b✓%b %s %b(Windsurf prompts)%b\n' "$_G" "$_NC" ".windsurf/prompts/" "$_DIM" "$_NC"
+  if [ -d "$NEXUS_DIR/.gemini/skills" ] && ls "$NEXUS_DIR/.gemini/skills"/rnex-*.md >/dev/null 2>&1; then
+    printf '  %b✓%b %s %b(Gemini user skills)%b\n' "$_G" "$_NC" ".gemini/skills/" "$_DIM" "$_NC"
   fi
   printf '\n'
 
@@ -199,16 +193,10 @@ cmd_status() {
           printf '  %b●%b %-18s %b(v%s)%b %s\n' "$_G" "$_NC" "$_pname" "$_DIM" "${_ver:-0.1.0}" "$_NC" "${_desc:+- $_desc}"
           printf '    %bScoped directory: .rnex/plugins/%s%b\n' "$_DIM" "$_pname" "$_NC"
           case "$_pname" in
-            copilot)
-              printf '    %b↳ Options: prompts=%s, workflows=%s%b\n' "$_DIM" \
-                "$(provider_option_enabled "$_pname" "prompts" && echo "true" || echo "false")" \
-                "$(provider_option_enabled "$_pname" "workflows" && echo "true" || echo "false")" "$_NC"
-              ;;
             claude|gemini|cursor|windsurf)
-              printf '    %b↳ Options: instructions=%s, prompts=%s, workflows=%s%b\n' "$_DIM" \
+              printf '    %b↳ Options: instructions=%s, skills=%s%b\n' "$_DIM" \
                 "$(provider_option_enabled "$_pname" "instructions" && echo "true" || echo "false")" \
-                "$(provider_option_enabled "$_pname" "prompts" && echo "true" || echo "false")" \
-                "$(provider_option_enabled "$_pname" "workflows" && echo "true" || echo "false")" "$_NC"
+                "$(provider_option_enabled "$_pname" "skills" && echo "true" || echo "false")" "$_NC"
               ;;
           esac
         fi

@@ -104,7 +104,6 @@ cmd_sync() {
     _load_repos_dir
     _load_code_workspace
     _load_git_hooks
-    _load_copilot
     [ "$_sync_quiet" -eq 0 ] && log_ok "Upgraded workspace configuration and routing instructions to v$RNEX_VERSION"
   fi
 
@@ -123,8 +122,8 @@ cmd_sync() {
   # 4. Reconcile universal workspace instructions in AGENTS.md
   merge_rnex_instructions "$NEXUS_DIR/AGENTS.md"
 
-  # 5. Sync standard skills, workflows, and provider prompts / instructions
-  sync_prompts
+  # 5. Sync core agentic skills and active provider user skills
+  sync_skills
 
   # 6. Reconcile Git hooks according to configuration
   case "$GIT_HOOKS_CONFIG" in
@@ -191,7 +190,7 @@ cmd_sync() {
   run_hook "after_sync" "$@"
 
   if [ "$_sync_quiet" -eq 0 ]; then
-    log_ok "Sync complete — workspace, plugins, prompts, and member .rnex directories reconciled"
+    log_ok "Sync complete — workspace, plugins, skills, and member .rnex directories reconciled"
   fi
   return 0
 }

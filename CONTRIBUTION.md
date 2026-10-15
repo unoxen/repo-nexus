@@ -127,12 +127,26 @@ If provided, `instructions.md` is automatically concatenated into `.rnex/ai-inst
 
 ---
 
-## 4. Authoring Prompts (`toolkit/prompts/`)
+## 4. Authoring Skills (Two-Tier Skills Architecture)
 
-Operational prompts guide human developers and AI assistants through multi-repo workflows:
-- **Prefix Requirement**: All operational prompt filenames must begin with `rnex-` (e.g. `rnex-workspace-audit.md`, `rnex-cross-repo-feature.md`).
-- **Prompt Structure**: Include frontmatter with `name` and `description` to support automatic IDE prompt picker generation (`.github/prompts/*.prompt.md`, `.claude/commands/*.md`, `.gemini/prompts/*.prompt.md`, `.cursor/prompts/*.md`, `.windsurf/prompts/*.md`).
-- Prompts are automatically reconciled across provider directories whenever `rnex sync` runs.
+Repo Nexus enforces strict separation of skill ownership across two tiers:
+
+### 1. Core Workspace Agentic Skills (`toolkit/skills/`)
+Core skills provide fundamental meta-repo workflows and workspace automation:
+- Placed directly in `toolkit/skills/<skill-name>.md` (e.g. `clone-sync.md`, `batch-exec.md`, `workspace-status.md`).
+- During `rnex sync`, core skills are copied to `.rnex/skills/<skill-name>.md`.
+- Never place plugin-specific skills in `toolkit/skills/` or `.rnex/skills/`.
+
+### 2. Plugin-Owned Agentic Skills (`toolkit/plugins/<plugin>/skills/`)
+Functional plugins encapsulate their own agentic skills:
+- Placed in `toolkit/plugins/<plugin>/skills/<skill-name>.md` (e.g. `wiki-ingest.md`, `wiki-lint.md`).
+- During `rnex sync`, copied exclusively to `.rnex/plugins/<plugin>/skills/<skill-name>.md`.
+
+### 3. User Skill Generator & Plugin Contract API
+- **Zero-Logic User Skills**: Generated on the fly in active AI provider directories (`.cursor/rules/`, `.claude/skills/`, `.gemini/skills/`, `.windsurf/rules/`) with mandatory `rnex-` prefix (`rnex-<skill-name>.md`). They contain zero operational instructions—only a direct reference link to the underlying agentic skill inside `.rnex/`.
+- **Plugin Contract Helper Functions**:
+  - `rnex_register_user_skill <skill_name> <target_path_in_rnex>`: Called in `after_sync.sh` to generate the User Skill pointer.
+  - `rnex_unregister_user_skill <skill_name>`: Called in `before_plugin_disable.sh` to remove the User Skill pointer before plugin deactivation.
 
 ---
 

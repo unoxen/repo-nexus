@@ -7,7 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.6.16] - 2026-10-14
+### Added
+- **Two-Tier Skills Architecture**: Clean separation between core `rnex` skills (`toolkit/skills/*.md` -> `.rnex/skills/*.md`) and plugin-owned skills (`toolkit/plugins/<plugin>/skills/*.md` -> `.rnex/plugins/<plugin>/skills/*.md`).
+- **On-the-Fly User Skill Generator**: Generated in active AI provider directories (`.cursor/rules/`, `.claude/skills/`, `.gemini/skills/`, `.windsurf/rules/`) with mandatory `rnex-` prefix (`rnex-<name>.md`). User skills contain zero inline heuristics, linking solely to the target agentic skill protocol in `.rnex/`.
+- **Plugin Contract Helper API**: Added `rnex_register_user_skill` and `rnex_unregister_user_skill` helper functions exposed in hook subshell environments for plugin lifecycle management.
+- **Plugin Lifecycle Hooks**: Added `before_plugin_disable` hook dispatched by `rnex plugin disable <name>` and plugin pruning in `rnex sync` to unregister plugin-owned User Skills.
+
+### Removed
+- **Legacy Prompts & Workflows**: Completely removed `toolkit/prompts/`, `toolkit/workflows/`, and `.rnex/workflows/`.
+- **Copilot Local Prompt Harness**: Removed `toolkit/plugins/copilot/`, `--copilot` CLI flag, and prompt-mirroring harness logic in favor of native universal `AGENTS.md` reading.
 
 ### Removed
 - **`rnex fix` and `rnex status --fix`**: Removed in favor of `rnex sync` as the sole reconciliation command.

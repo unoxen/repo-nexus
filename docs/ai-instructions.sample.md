@@ -7,7 +7,7 @@ This workspace operates as a **Repo Nexus Virtual Meta-Repo** uniting independen
 ### Mandatory Session Startup
 Execute in sequence before task execution:
 1. **Read Configuration First (Highest Priority)**: Read `.local.rnex.yaml` (if present) and `rnex.yaml` to identify active member repositories (`repos/`) and enabled plugins.
-2. **Plugin & Skill Routing**: Inspect active plugin instructions under `.rnex/plugins/<plugin-name>/`, and tools under `.rnex/skills/` and `.rnex/workflows/` when relevant.
+2. **Plugin & Skill Routing**: Inspect active plugin instructions under `.rnex/plugins/<plugin-name>/`, and core agentic skills under `.rnex/skills/` when relevant.
 3. **Targeted Member Repository Access Only**: Navigate directly to specific files in `repos/<name>/` relevant to the user request. Avoid blind repository-wide scans or unbounded searches across `repos/`.
 
 ## Subagents

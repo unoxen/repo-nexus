@@ -345,204 +345,125 @@ sync_code_workspace() {
   fi
 }
 
-sync_copilot_instructions() {
-  _dst_ci="$NEXUS_DIR/.github/copilot-instructions.md"
-  clean_rnex_instructions "$_dst_ci"
-  rmdir "$NEXUS_DIR/.github" 2>/dev/null || true
-}
+# ---- Provider Skill Directory & User Skill Generator API -------------------
 
-sync_rnex_base_assets() {
-  _src_toolkit=""
-  if [ -d "$SCRIPT_LOCATION/toolkit" ]; then
-    _src_toolkit="$SCRIPT_LOCATION/toolkit"
-  elif [ -d "$(dirname "$SCRIPT_LOCATION")/toolkit" ]; then
-    _src_toolkit="$(dirname "$SCRIPT_LOCATION")/toolkit"
-  elif [ -d "$NEXUS_DIR/toolkit" ]; then
-    _src_toolkit="$NEXUS_DIR/toolkit"
-  fi
+write_rnex_env_script() {
+  _dir="${1:-$NEXUS_DIR}"
+  _bin_dir="$_dir/.rnex/bin"
+  mkdir -p "$_bin_dir"
+  _env_script="$_bin_dir/rnex-env.sh"
+  cat > "$_env_script" <<'ENV_EOF'
+#!/bin/sh
+# Repo Nexus Plugin & Skill Contract Environment
+export RNEX_ROOT="${RNEX_ROOT:-$(cd "$(dirname "$0")/../.." 2>/dev/null && pwd -P)}"
 
-  # Purge obsolete .rnex/prompts/ directory (prompts are only for IDE provider integration, never inside .rnex/)
-  rm -rf "$NEXUS_DIR/.rnex/prompts" 2>/dev/null || true
+if [ -z "$RNEX_PROVIDER_SKILL_DIRS" ]; then
+  _dirs=""
+  [ -d "$RNEX_ROOT/.cursor" ] && _dirs="${_dirs:+$_dirs }.cursor/rules"
+  [ -d "$RNEX_ROOT/.claude" ] && _dirs="${_dirs:+$_dirs }.claude/skills"
+  [ -d "$RNEX_ROOT/.windsurf" ] && _dirs="${_dirs:+$_dirs }.windsurf/rules"
+  [ -d "$RNEX_ROOT/.gemini" ] && _dirs="${_dirs:+$_dirs }.gemini/skills"
+  export RNEX_PROVIDER_SKILL_DIRS="$_dirs"
+fi
 
-  # Sync base workflows to .rnex/workflows/
-  if [ -n "$_src_toolkit" ] && [ -d "$_src_toolkit/workflows" ]; then
-    mkdir -p "$NEXUS_DIR/.rnex/workflows"
-    cp -f "$_src_toolkit"/workflows/*.md "$NEXUS_DIR/.rnex/workflows/" 2>/dev/null || true
-  fi
+rnex_register_user_skill() {
+  skill_name="$1"
+  target_path="$2"
+  for provider_dir in $RNEX_PROVIDER_SKILL_DIRS; do
+    mkdir -p "$RNEX_ROOT/$provider_dir"
+    cat << EOF > "$RNEX_ROOT/$provider_dir/rnex-${skill_name}.md"
+# User Skill: rnex-${skill_name}
 
-  # Sync base skills to .rnex/skills/
-  if [ -n "$_src_toolkit" ] && [ -d "$_src_toolkit/skills" ]; then
-    mkdir -p "$NEXUS_DIR/.rnex/skills"
-    for _sk_dir in "$_src_toolkit"/skills/*; do
-      [ -d "$_sk_dir" ] || continue
-      _sk_name="$(basename "$_sk_dir")"
-      mkdir -p "$NEXUS_DIR/.rnex/skills/$_sk_name"
-      cp -f "$_sk_dir"/* "$NEXUS_DIR/.rnex/skills/$_sk_name/" 2>/dev/null || true
-    done
-  fi
-
-  # Purge any legacy plugin assets that shouldn't be in base .rnex/
-  rm -rf "$NEXUS_DIR/.rnex/skills/rnex-setup-karpathy-wiki" "$NEXUS_DIR/.rnex/skills/setup-karpathy-wiki" 2>/dev/null || true
-  rm -rf "$NEXUS_DIR/.rnex/skills/rnex-wiki-ingest" "$NEXUS_DIR/.rnex/skills/rnex-wiki-lint" "$NEXUS_DIR/.rnex/skills/wiki-curator" 2>/dev/null || true
-  rm -f "$NEXUS_DIR/.rnex/workflows/rnex-wiki-ingest.md" "$NEXUS_DIR/.rnex/workflows/rnex-wiki-lint.md" "$NEXUS_DIR/.rnex/workflows/wiki-ingest.md" "$NEXUS_DIR/.rnex/workflows/wiki-lint.md" 2>/dev/null || true
-  rm -f "$NEXUS_DIR/.rnex/agents/rnex-wiki-curator.agent.md" "$NEXUS_DIR/.rnex/agents/wiki-curator.agent.md" 2>/dev/null || true
-}
-
-sync_prompts() {
-  sync_rnex_base_assets
-  sync_ai_providers
-  clean_disabled_plugins_prompts_all_providers
-}
-
-sync_provider_prompts() {
-  _sp_dir="$1"
-  _ext="${2:-.md}"
-
-  _src_prompts=""
-  if [ -d "$SCRIPT_LOCATION/toolkit/prompts" ]; then
-    _src_prompts="$SCRIPT_LOCATION/toolkit/prompts"
-  elif [ -d "$(dirname "$SCRIPT_LOCATION")/toolkit/prompts" ]; then
-    _src_prompts="$(dirname "$SCRIPT_LOCATION")/toolkit/prompts"
-  elif [ -d "$NEXUS_DIR/toolkit/prompts" ]; then
-    _src_prompts="$NEXUS_DIR/toolkit/prompts"
-  fi
-
-  _src_workflows=""
-  if [ -d "$SCRIPT_LOCATION/toolkit/workflows" ]; then
-    _src_workflows="$SCRIPT_LOCATION/toolkit/workflows"
-  elif [ -d "$(dirname "$SCRIPT_LOCATION")/toolkit/workflows" ]; then
-    _src_workflows="$(dirname "$SCRIPT_LOCATION")/toolkit/workflows"
-  elif [ -d "$NEXUS_DIR/toolkit/workflows" ]; then
-    _src_workflows="$NEXUS_DIR/toolkit/workflows"
-  fi
-
-  [ -n "$_src_prompts" ] || [ -n "$_src_workflows" ] || return 0
-  mkdir -p "$_sp_dir"
-
-  # Purge obsolete setup prompts
-  rm -f "$_sp_dir/rnex-setup-karpathy-wiki${_ext}" "$_sp_dir/setup-karpathy-wiki${_ext}" 2>/dev/null || true
-  rm -f "$_sp_dir/wiki-ingest${_ext}" "$_sp_dir/wiki-lint${_ext}" 2>/dev/null || true
-
-  # Remove prompts belonging to disabled plugins from this provider directory
-  for _parent in "$SCRIPT_LOCATION/toolkit/plugins" "$(dirname "$SCRIPT_LOCATION")/toolkit/plugins" "$NEXUS_DIR/toolkit/plugins" "$NEXUS_DIR/.rnex/plugins"; do
-    [ -d "$_parent" ] || continue
-    for _pdir in "$_parent"/*; do
-      [ -d "$_pdir" ] || continue
-      _pname="$(basename "$_pdir")"
-      if ! yaml_plugin_enabled "$_pname"; then
-        for _sub in prompts workflows; do
-          [ -d "$_pdir/$_sub" ] || continue
-          for _pfile in "$_pdir/$_sub"/*.md; do
-            [ -f "$_pfile" ] || continue
-            _base="$(basename "$_pfile" .md)"
-            case "$_base" in
-              index|README) continue ;;
-            esac
-            rm -f "$_sp_dir/${_base}${_ext}" 2>/dev/null || true
-          done
-        done
-      fi
-    done
+CRITICAL: Do not execute inline heuristics. Read and strictly follow the agentic skill protocol at:
+\`${target_path}\`
+EOF
   done
+}
 
-  # Base toolkit prompts (from prompts or workflows)
-  if [ -n "$_src_prompts" ]; then
-    for _pfile in "$_src_prompts"/rnex-*.md; do
-      [ -f "$_pfile" ] || continue
-      _pname="$(basename "$_pfile" .md)"
-      _desc="$(awk '
-        /^#/ { in_title=1; next }
-        in_title && /^[A-Za-z]/ { print; exit }
-      ' "$_pfile" 2>/dev/null)"
-      [ -n "$_desc" ] || _desc="Repo Nexus prompt for $_pname"
+rnex_unregister_user_skill() {
+  skill_name="$1"
+  for provider_dir in $RNEX_PROVIDER_SKILL_DIRS; do
+    rm -f "$RNEX_ROOT/$provider_dir/rnex-${skill_name}.md"
+  done
+}
+ENV_EOF
+  chmod +x "$_env_script"
+}
 
-      _dst_file="$_sp_dir/${_pname}${_ext}"
-      {
-        printf -- '---\nname: %s\ndescription: %s\n---\n\n' "$_pname" "$_desc"
-        cat "$_pfile"
-      } > "$_dst_file"
-    done
-  elif [ -n "$_src_workflows" ]; then
-    for _pfile in "$_src_workflows"/rnex-*.md; do
-      [ -f "$_pfile" ] || continue
-      _pname="$(basename "$_pfile" .md)"
-      _desc="$(awk '
-        /^#/ { in_title=1; next }
-        in_title && /^[A-Za-z]/ { print; exit }
-      ' "$_pfile" 2>/dev/null)"
-      [ -n "$_desc" ] || _desc="Repo Nexus prompt for $_pname"
+get_active_provider_skill_dirs() {
+  _dirs=""
+  if provider_option_enabled "cursor" "skills" 2>/dev/null; then
+    _dirs="${_dirs:+$_dirs }.cursor/rules"
+  fi
+  if provider_option_enabled "claude" "skills" 2>/dev/null; then
+    _dirs="${_dirs:+$_dirs }.claude/skills"
+  fi
+  if provider_option_enabled "windsurf" "skills" 2>/dev/null; then
+    _dirs="${_dirs:+$_dirs }.windsurf/rules"
+  fi
+  if provider_option_enabled "gemini" "skills" 2>/dev/null; then
+    _dirs="${_dirs:+$_dirs }.gemini/skills"
+  fi
+  printf '%s' "$_dirs"
+}
 
-      _dst_file="$_sp_dir/${_pname}${_ext}"
-      {
-        printf -- '---\nname: %s\ndescription: %s\n---\n\n' "$_pname" "$_desc"
-        cat "$_pfile"
-      } > "$_dst_file"
+# Usage: rnex_register_user_skill <skill_name> <target_path_in_rnex>
+rnex_register_user_skill() {
+  skill_name="$1"
+  target_path="$2"
+  _dirs="${RNEX_PROVIDER_SKILL_DIRS:-$(get_active_provider_skill_dirs)}"
+  _r="${NEXUS_DIR:-${RNEX_ROOT:-.}}"
+  for provider_dir in $_dirs; do
+    mkdir -p "$_r/$provider_dir"
+    cat << EOF > "$_r/$provider_dir/rnex-${skill_name}.md"
+# User Skill: rnex-${skill_name}
+
+CRITICAL: Do not execute inline heuristics. Read and strictly follow the agentic skill protocol at:
+\`${target_path}\`
+EOF
+  done
+}
+
+# Usage: rnex_unregister_user_skill <skill_name>
+rnex_unregister_user_skill() {
+  skill_name="$1"
+  _dirs="${RNEX_PROVIDER_SKILL_DIRS:-$(get_active_provider_skill_dirs)}"
+  _r="${NEXUS_DIR:-${RNEX_ROOT:-.}}"
+  for provider_dir in $_dirs; do
+    rm -f "$_r/$provider_dir/rnex-${skill_name}.md"
+  done
+}
+
+clean_provider_user_skills() {
+  _sk_dir="$1"
+  [ -d "$_sk_dir" ] || return 0
+  rm -f "$_sk_dir"/rnex-*.md 2>/dev/null || true
+  for _d in "$_sk_dir"/rnex-*; do
+    [ -d "$_d" ] || continue
+    rm -f "$_d/SKILL.md" 2>/dev/null || true
+    rmdir "$_d" 2>/dev/null || true
+  done
+  rmdir "$_sk_dir" 2>/dev/null || true
+}
+
+clean_provider_skills() {
+  clean_provider_user_skills "$1"
+}
+
+clean_plugin_user_skills() {
+  _pdir="$1"
+  [ -d "$_pdir" ] || return 0
+  if [ -d "$_pdir/skills" ]; then
+    for _sk_file in "$_pdir/skills"/*.md; do
+      [ -f "$_sk_file" ] || continue
+      _sk_name="$(basename "$_sk_file" .md)"
+      rnex_unregister_user_skill "$_sk_name"
     done
   fi
-
-  # Active plugins prompts & workflows
-  yaml_list_plugins | while read -r _pname; do
-    [ -n "$_pname" ] || continue
-    yaml_plugin_enabled "$_pname" || continue
-    case "$_pname" in
-      copilot|claude|gemini|cursor|windsurf) continue ;;
-    esac
-    _pdir="$(find_plugin_dir "$_pname" 2>/dev/null || true)"
-    [ -n "$_pdir" ] || continue
-
-    for _sub in workflows prompts; do
-      for _s_dir in "$_pdir/$_sub" "$NEXUS_DIR/.rnex/plugins/$_pname/$_sub"; do
-        [ -d "$_s_dir" ] || continue
-        for _pfile in "$_s_dir"/*.md; do
-          [ -f "$_pfile" ] || continue
-          _base="$(basename "$_pfile" .md)"
-          case "$_base" in
-            index|README) continue ;;
-          esac
-          _desc="$(awk '
-            /^#/ { in_title=1; next }
-            in_title && /^[A-Za-z]/ { print; exit }
-          ' "$_pfile" 2>/dev/null)"
-          [ -n "$_desc" ] || _desc="Prompt $_base from plugin $_pname"
-
-          _dst_file="$_sp_dir/${_base}${_ext}"
-          {
-            printf -- '---\nname: %s\ndescription: %s\n---\n\n' "$_base" "$_desc"
-            cat "$_pfile"
-          } > "$_dst_file"
-        done
-      done
-    done
-  done
 }
 
 clean_plugin_prompts_across_providers() {
-  _pdir="$1"
-  [ -d "$_pdir" ] || return 0
-
-  for _sub in prompts workflows; do
-    [ -d "$_pdir/$_sub" ] || continue
-    for _pfile in "$_pdir/$_sub"/*.md; do
-      [ -f "$_pfile" ] || continue
-      _base="$(basename "$_pfile" .md)"
-      case "$_base" in
-        index|README) continue ;;
-      esac
-      rm -f "$NEXUS_DIR/.github/prompts/${_base}.prompt.md" 2>/dev/null || true
-      rm -f "$NEXUS_DIR/.claude/commands/${_base}.md" 2>/dev/null || true
-      rm -f "$NEXUS_DIR/.claude/prompts/${_base}.md" 2>/dev/null || true
-      rm -f "$NEXUS_DIR/.gemini/prompts/${_base}.prompt.md" 2>/dev/null || true
-      rm -f "$NEXUS_DIR/.cursor/prompts/${_base}.md" 2>/dev/null || true
-      rm -f "$NEXUS_DIR/.windsurf/prompts/${_base}.md" 2>/dev/null || true
-    done
-  done
-
-  rmdir "$NEXUS_DIR/.github/prompts" 2>/dev/null || true
-  rmdir "$NEXUS_DIR/.claude/commands" 2>/dev/null || true
-  rmdir "$NEXUS_DIR/.claude/prompts" 2>/dev/null || true
-  rmdir "$NEXUS_DIR/.gemini/prompts" 2>/dev/null || true
-  rmdir "$NEXUS_DIR/.cursor/prompts" 2>/dev/null || true
-  rmdir "$NEXUS_DIR/.windsurf/prompts" 2>/dev/null || true
+  clean_plugin_user_skills "$1"
 }
 
 clean_disabled_plugins_prompts_all_providers() {
@@ -557,60 +478,10 @@ clean_disabled_plugins_prompts_all_providers() {
       esac
       _seen_plugins="${_seen_plugins}${_pname} "
       if ! yaml_plugin_enabled "$_pname"; then
-        clean_plugin_prompts_across_providers "$_pdir"
+        clean_plugin_user_skills "$_pdir"
       fi
     done
   done
-}
-
-clean_provider_prompts() {
-  _sp_dir="$1"
-  _ext="${2:-.md}"
-  [ -d "$_sp_dir" ] || return 0
-
-  _src_prompts=""
-  if [ -d "$SCRIPT_LOCATION/toolkit/prompts" ]; then
-    _src_prompts="$SCRIPT_LOCATION/toolkit/prompts"
-  elif [ -d "$(dirname "$SCRIPT_LOCATION")/toolkit/prompts" ]; then
-    _src_prompts="$(dirname "$SCRIPT_LOCATION")/toolkit/prompts"
-  elif [ -d "$NEXUS_DIR/toolkit/prompts" ]; then
-    _src_prompts="$NEXUS_DIR/toolkit/prompts"
-  fi
-
-  # Remove base toolkit prompts
-  rm -f "$_sp_dir/rnex-setup-karpathy-wiki${_ext}" "$_sp_dir/setup-karpathy-wiki${_ext}" 2>/dev/null || true
-  rm -f "$_sp_dir/wiki-ingest${_ext}" "$_sp_dir/wiki-lint${_ext}" 2>/dev/null || true
-  if [ -n "$_src_prompts" ]; then
-    for _pfile in "$_src_prompts"/rnex-*.md; do
-      [ -f "$_pfile" ] || continue
-      _pname="$(basename "$_pfile" .md)"
-      rm -f "$_sp_dir/${_pname}${_ext}" 2>/dev/null || true
-    done
-  fi
-
-  for _wfile in "$SCRIPT_LOCATION/toolkit/workflows"/rnex-*.md "$NEXUS_DIR/toolkit/workflows"/rnex-*.md; do
-    [ -f "$_wfile" ] || continue
-    _wname="$(basename "$_wfile" .md)"
-    rm -f "$_sp_dir/${_wname}${_ext}" 2>/dev/null || true
-  done
-
-  # Remove plugin prompts & workflows
-  for _pdir in "$SCRIPT_LOCATION/toolkit/plugins"/* "$NEXUS_DIR/toolkit/plugins"/* "$NEXUS_DIR/.rnex/plugins"/*; do
-    [ -d "$_pdir" ] || continue
-    for _sub in prompts workflows; do
-      [ -d "$_pdir/$_sub" ] || continue
-      for _pfile in "$_pdir/$_sub"/*.md; do
-        [ -f "$_pfile" ] || continue
-        _base="$(basename "$_pfile" .md)"
-        case "$_base" in
-          index|README) continue ;;
-        esac
-        rm -f "$_sp_dir/${_base}${_ext}" 2>/dev/null || true
-      done
-    done
-  done
-
-  rmdir "$_sp_dir" 2>/dev/null || true
 }
 
 clean_provider_ignore() {
@@ -629,45 +500,6 @@ clean_provider_ignore() {
   fi
 }
 
-clean_provider_skills() {
-  _sk_dir="$1"
-  [ -d "$_sk_dir" ] || return 0
-
-  # Remove base toolkit skills
-  rm -f "$_sk_dir/rnex-setup-karpathy-wiki/SKILL.md" "$_sk_dir/setup-karpathy-wiki/SKILL.md" 2>/dev/null || true
-  rmdir "$_sk_dir/rnex-setup-karpathy-wiki" "$_sk_dir/setup-karpathy-wiki" 2>/dev/null || true
-  rm -rf "$_sk_dir/wiki-ingest" "$_sk_dir/wiki-lint" "$_sk_dir/wiki-curator" 2>/dev/null || true
-
-  for _pfile in "$SCRIPT_LOCATION/toolkit/prompts"/rnex-*.md "$NEXUS_DIR/toolkit/prompts"/rnex-*.md \
-                "$SCRIPT_LOCATION/toolkit/workflows"/rnex-*.md "$NEXUS_DIR/toolkit/workflows"/rnex-*.md \
-                "$SCRIPT_LOCATION/toolkit/skills"/* "$NEXUS_DIR/toolkit/skills"/*; do
-    [ -e "$_pfile" ] || continue
-    _pname="$(basename "$_pfile" .md)"
-    rm -f "$_sk_dir/$_pname/SKILL.md" 2>/dev/null || true
-    rmdir "$_sk_dir/$_pname" 2>/dev/null || true
-  done
-
-  # Remove plugin skills, prompts, workflows, & agents as skills
-  for _pdir in "$SCRIPT_LOCATION/toolkit/plugins"/* "$NEXUS_DIR/toolkit/plugins"/* "$NEXUS_DIR/.rnex/plugins"/*; do
-    [ -d "$_pdir" ] || continue
-    for _sub in skills prompts workflows agents; do
-      [ -d "$_pdir/$_sub" ] || continue
-      for _s_entry in "$_pdir/$_sub"/*; do
-        [ -e "$_s_entry" ] || continue
-        _sname="$(basename "$_s_entry" .md)"
-        _sname="$(basename "$_sname" .agent.md)"
-        case "$_sname" in
-          index|README) continue ;;
-        esac
-        rm -f "$_sk_dir/$_sname/SKILL.md" 2>/dev/null || true
-        rmdir "$_sk_dir/$_sname" 2>/dev/null || true
-      done
-    done
-  done
-
-  rmdir "$_sk_dir" 2>/dev/null || true
-}
-
 clean_provider_agents() {
   _ag_dir="$1"
   _ext="${2:-.md}"
@@ -682,81 +514,49 @@ clean_provider_agents() {
       _aname="$(basename "$_afile" .agent.md)"
       _aname="$(basename "$_aname" .md)"
       rm -f "$_ag_dir/${_aname}${_ext}" 2>/dev/null || true
-      if [ "$_ag_dir" = "$NEXUS_DIR/.github/agents" ]; then
-        rm -f "$NEXUS_DIR/.github/skills/$_aname/SKILL.md" 2>/dev/null || true
-        rmdir "$NEXUS_DIR/.github/skills/$_aname" 2>/dev/null || true
-      fi
     done
   done
 
   rmdir "$_ag_dir" 2>/dev/null || true
 }
 
-clean_copilot_user_agent_skills() {
-  [ -d "$NEXUS_DIR/.github/skills" ] || return 0
-  [ -d "$NEXUS_DIR/.github/agents" ] || return 0
-
-  _plugin_agents=" "
-  for _pdir in "$SCRIPT_LOCATION/toolkit/plugins"/* "$NEXUS_DIR/toolkit/plugins"/* "$NEXUS_DIR/.rnex/plugins"/*; do
-    [ -d "$_pdir/agents" ] || continue
-    for _afile in "$_pdir/agents"/*.md; do
-      [ -f "$_afile" ] || continue
-      _aname="$(basename "$_afile" .agent.md)"
-      _aname="$(basename "$_aname" .md)"
-      _plugin_agents="${_plugin_agents}${_aname} "
-    done
-  done
-
-  for _ag_file in "$NEXUS_DIR/.github/agents"/*.agent.md; do
-    [ -f "$_ag_file" ] || continue
-    _aname="$(basename "$_ag_file" .agent.md)"
-    case "$_plugin_agents" in
-      *" ${_aname} "*) ;;
-      *)
-        _sk_file="$NEXUS_DIR/.github/skills/$_aname/SKILL.md"
-        if [ -f "$_sk_file" ] && cmp -s "$_ag_file" "$_sk_file"; then
-          _extra_files="$(find "$NEXUS_DIR/.github/skills/$_aname" -maxdepth 1 -type f ! -name "SKILL.md" 2>/dev/null || true)"
-          _extra_dirs="$(find "$NEXUS_DIR/.github/skills/$_aname" -mindepth 1 -type d 2>/dev/null || true)"
-          if [ -z "$_extra_files" ] && [ -z "$_extra_dirs" ]; then
-            rm -f "$_sk_file" 2>/dev/null || true
-            rmdir "$NEXUS_DIR/.github/skills/$_aname" 2>/dev/null || true
-          fi
-        fi
-        ;;
-    esac
-  done
-}
-
-clean_copilot_plugin_agents_as_skills() {
-  [ -d "$NEXUS_DIR/.github/skills" ] || return 0
-  for _pdir in "$SCRIPT_LOCATION/toolkit/plugins"/* "$NEXUS_DIR/toolkit/plugins"/* "$NEXUS_DIR/.rnex/plugins"/*; do
-    [ -d "$_pdir" ] || continue
-    [ -d "$_pdir/agents" ] || continue
-    for _afile in "$_pdir/agents"/*.md; do
-      [ -f "$_afile" ] || continue
-      _aname="$(basename "$_afile" .agent.md)"
-      _aname="$(basename "$_aname" .md)"
-      rm -f "$NEXUS_DIR/.github/skills/$_aname/SKILL.md" 2>/dev/null || true
-      rmdir "$NEXUS_DIR/.github/skills/$_aname" 2>/dev/null || true
-    done
-  done
-  rm -f "$NEXUS_DIR/.github/skills/wiki-curator/SKILL.md" 2>/dev/null || true
-  rmdir "$NEXUS_DIR/.github/skills/wiki-curator" 2>/dev/null || true
-}
-
-sync_copilot() {
-  if copilot_plugin_enabled && copilot_prompts_enabled; then
-    sync_provider_prompts "$NEXUS_DIR/.github/prompts" ".prompt.md"
-  else
-    clean_provider_prompts "$NEXUS_DIR/.github/prompts" ".prompt.md"
+sync_rnex_base_assets() {
+  _src_toolkit=""
+  if [ -d "$SCRIPT_LOCATION/toolkit" ]; then
+    _src_toolkit="$SCRIPT_LOCATION/toolkit"
+  elif [ -d "$(dirname "$SCRIPT_LOCATION")/toolkit" ]; then
+    _src_toolkit="$(dirname "$SCRIPT_LOCATION")/toolkit"
+  elif [ -d "$NEXUS_DIR/toolkit" ]; then
+    _src_toolkit="$NEXUS_DIR/toolkit"
   fi
 
-  clean_provider_skills "$NEXUS_DIR/.github/skills"
-  clean_copilot_user_agent_skills
-  clean_copilot_plugin_agents_as_skills
-  clean_provider_agents "$NEXUS_DIR/.github/agents" ".agent.md"
-  sync_copilot_instructions
-  rmdir "$NEXUS_DIR/.github" 2>/dev/null || true
+  # Purge obsolete .rnex/prompts/ and .rnex/workflows/
+  rm -rf "$NEXUS_DIR/.rnex/prompts" "$NEXUS_DIR/.rnex/workflows" 2>/dev/null || true
+
+  # Ensure .rnex/skills exists
+  mkdir -p "$NEXUS_DIR/.rnex/skills"
+
+  # Clean old skill subdirectories if any exist in .rnex/skills/
+  for _item in "$NEXUS_DIR/.rnex/skills"/*; do
+    [ -e "$_item" ] || continue
+    [ -d "$_item" ] && rm -rf "$_item"
+  done
+
+  # Sync base skills to .rnex/skills/
+  if [ -n "$_src_toolkit" ] && [ -d "$_src_toolkit/skills" ]; then
+    cp -f "$_src_toolkit"/skills/*.md "$NEXUS_DIR/.rnex/skills/" 2>/dev/null || true
+  fi
+
+  # Purge any plugin-specific skills from .rnex/skills/
+  rm -f "$NEXUS_DIR/.rnex/skills/wiki-ingest.md" "$NEXUS_DIR/.rnex/skills/wiki-lint.md" \
+        "$NEXUS_DIR/.rnex/skills/rnex-wiki-ingest.md" "$NEXUS_DIR/.rnex/skills/rnex-wiki-lint.md" 2>/dev/null || true
+
+  # Register core User Skills across active provider directories
+  for _sk_file in "$NEXUS_DIR/.rnex/skills"/*.md; do
+    [ -f "$_sk_file" ] || continue
+    _sk_name="$(basename "$_sk_file" .md)"
+    rnex_register_user_skill "$_sk_name" ".rnex/skills/${_sk_name}.md"
+  done
 }
 
 sync_claude() {
@@ -766,22 +566,14 @@ sync_claude() {
     else
       clean_rnex_instructions "$NEXUS_DIR/CLAUDE.md"
     fi
-
-    if claude_prompts_enabled; then
-      sync_provider_prompts "$NEXUS_DIR/.claude/commands" ".md"
-      sync_provider_prompts "$NEXUS_DIR/.claude/prompts" ".md"
-    else
-      clean_provider_prompts "$NEXUS_DIR/.claude/commands" ".md"
-      clean_provider_prompts "$NEXUS_DIR/.claude/prompts" ".md"
+    if ! claude_skills_enabled; then
+      clean_provider_user_skills "$NEXUS_DIR/.claude/skills"
     fi
   else
     clean_rnex_instructions "$NEXUS_DIR/CLAUDE.md"
-    clean_provider_prompts "$NEXUS_DIR/.claude/commands" ".md"
-    clean_provider_prompts "$NEXUS_DIR/.claude/prompts" ".md"
+    clean_provider_user_skills "$NEXUS_DIR/.claude/skills"
   fi
-
-  clean_provider_skills "$NEXUS_DIR/.claude/skills"
-  clean_provider_agents "$NEXUS_DIR/.claude/agents" ".md"
+  rm -rf "$NEXUS_DIR/.claude/commands" "$NEXUS_DIR/.claude/prompts" 2>/dev/null || true
   rmdir "$NEXUS_DIR/.claude" 2>/dev/null || true
 }
 
@@ -804,21 +596,15 @@ GI_EOF
     else
       clean_rnex_instructions "$NEXUS_DIR/GEMINI.md"
     fi
-
-    if gemini_prompts_enabled; then
-      sync_provider_prompts "$NEXUS_DIR/.gemini/prompts" ".prompt.md"
-    else
-      clean_provider_prompts "$NEXUS_DIR/.gemini/prompts" ".prompt.md"
+    if ! gemini_skills_enabled; then
+      clean_provider_user_skills "$NEXUS_DIR/.gemini/skills"
     fi
   else
     clean_provider_ignore "$NEXUS_DIR/.geminiignore"
     clean_rnex_instructions "$NEXUS_DIR/GEMINI.md"
-    clean_provider_prompts "$NEXUS_DIR/.gemini/prompts" ".prompt.md"
+    clean_provider_user_skills "$NEXUS_DIR/.gemini/skills"
   fi
-
-  clean_provider_skills "$NEXUS_DIR/.gemini/skills"
-  clean_provider_agents "$NEXUS_DIR/.gemini/agents" ".md"
-  rmdir "$NEXUS_DIR/.gemini/rules" 2>/dev/null || true
+  rm -rf "$NEXUS_DIR/.gemini/prompts" 2>/dev/null || true
   rmdir "$NEXUS_DIR/.gemini" 2>/dev/null || true
 }
 
@@ -851,24 +637,18 @@ CI_EOF
     else
       clean_rnex_instructions "$NEXUS_DIR/.cursorrules"
       rm -f "$NEXUS_DIR/.cursor/rules/rnex-context.mdc" "$NEXUS_DIR/.cursor/rules/repo-nexus.mdc" 2>/dev/null || true
-      rmdir "$NEXUS_DIR/.cursor/rules" 2>/dev/null || true
     fi
-
-    if cursor_prompts_enabled; then
-      sync_provider_prompts "$NEXUS_DIR/.cursor/prompts" ".md"
-    else
-      clean_provider_prompts "$NEXUS_DIR/.cursor/prompts" ".md"
+    if ! cursor_skills_enabled; then
+      clean_provider_user_skills "$NEXUS_DIR/.cursor/rules"
     fi
   else
     clean_provider_ignore "$NEXUS_DIR/.cursorignore"
     clean_rnex_instructions "$NEXUS_DIR/.cursorrules"
     rm -f "$NEXUS_DIR/.cursor/rules/rnex-context.mdc" "$NEXUS_DIR/.cursor/rules/repo-nexus.mdc" 2>/dev/null || true
-    rmdir "$NEXUS_DIR/.cursor/rules" 2>/dev/null || true
-    clean_provider_prompts "$NEXUS_DIR/.cursor/prompts" ".md"
+    clean_provider_user_skills "$NEXUS_DIR/.cursor/rules"
   fi
-
-  clean_provider_skills "$NEXUS_DIR/.cursor/skills"
-  clean_provider_agents "$NEXUS_DIR/.cursor/agents" ".md"
+  rm -rf "$NEXUS_DIR/.cursor/prompts" 2>/dev/null || true
+  rmdir "$NEXUS_DIR/.cursor/rules" 2>/dev/null || true
   rmdir "$NEXUS_DIR/.cursor" 2>/dev/null || true
 }
 
@@ -879,26 +659,38 @@ sync_windsurf() {
     else
       clean_rnex_instructions "$NEXUS_DIR/.windsurfrules"
     fi
-
-    if windsurf_prompts_enabled; then
-      sync_provider_prompts "$NEXUS_DIR/.windsurf/prompts" ".md"
-    else
-      clean_provider_prompts "$NEXUS_DIR/.windsurf/prompts" ".md"
+    if ! windsurf_skills_enabled; then
+      clean_provider_user_skills "$NEXUS_DIR/.windsurf/rules"
     fi
   else
     clean_rnex_instructions "$NEXUS_DIR/.windsurfrules"
-    clean_provider_prompts "$NEXUS_DIR/.windsurf/prompts" ".md"
+    clean_provider_user_skills "$NEXUS_DIR/.windsurf/rules"
   fi
-
-  clean_provider_skills "$NEXUS_DIR/.windsurf/skills"
-  clean_provider_agents "$NEXUS_DIR/.windsurf/agents" ".md"
+  rm -rf "$NEXUS_DIR/.windsurf/prompts" 2>/dev/null || true
+  rmdir "$NEXUS_DIR/.windsurf/rules" 2>/dev/null || true
   rmdir "$NEXUS_DIR/.windsurf" 2>/dev/null || true
 }
 
 sync_ai_providers() {
-  sync_copilot
+  # Clean legacy Copilot prompt harness if present
+  rm -rf "$NEXUS_DIR/.github/prompts" "$NEXUS_DIR/.github/copilot-instructions.md" 2>/dev/null || true
+  clean_provider_user_skills "$NEXUS_DIR/.github/skills"
+  clean_provider_agents "$NEXUS_DIR/.github/agents" ".agent.md"
+  rmdir "$NEXUS_DIR/.github" 2>/dev/null || true
+
   sync_claude
   sync_gemini
   sync_cursor
   sync_windsurf
 }
+
+sync_skills() {
+  write_rnex_env_script "$NEXUS_DIR"
+  sync_rnex_base_assets
+  sync_ai_providers
+}
+
+sync_prompts() {
+  sync_skills
+}
+

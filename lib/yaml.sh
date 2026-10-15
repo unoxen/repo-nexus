@@ -102,11 +102,6 @@ provider_plugin_enabled() {
   if yaml_plugin_enabled "$_p"; then
     return 0
   fi
-  if [ "$_p" = "copilot" ]; then
-    case "$COPILOT_CONFIG" in
-      true|yes|1) return 0 ;;
-    esac
-  fi
   return 1
 }
 
@@ -122,40 +117,29 @@ provider_option_enabled() {
   esac
 }
 
-copilot_plugin_enabled() { provider_plugin_enabled "copilot"; }
-copilot_prompts_enabled() { provider_option_enabled "copilot" "prompts"; }
-copilot_workflows_enabled() { provider_option_enabled "copilot" "workflows"; }
+copilot_plugin_enabled() { return 1; }
 copilot_skills_enabled() { return 1; }
 copilot_instructions_enabled() { return 1; }
 copilot_agents_enabled() { return 1; }
-copilot_agents_as_skills_enabled() { return 1; }
 
 claude_plugin_enabled() { provider_plugin_enabled "claude"; }
 claude_instructions_enabled() { provider_option_enabled "claude" "instructions"; }
-claude_prompts_enabled() { provider_option_enabled "claude" "prompts"; }
-claude_workflows_enabled() { provider_option_enabled "claude" "workflows"; }
-claude_skills_enabled() { return 1; }
+claude_skills_enabled() { provider_option_enabled "claude" "skills"; }
 claude_agents_enabled() { return 1; }
 
 gemini_plugin_enabled() { provider_plugin_enabled "gemini"; }
 gemini_instructions_enabled() { provider_option_enabled "gemini" "instructions"; }
-gemini_prompts_enabled() { provider_option_enabled "gemini" "prompts"; }
-gemini_workflows_enabled() { provider_option_enabled "gemini" "workflows"; }
-gemini_skills_enabled() { return 1; }
+gemini_skills_enabled() { provider_option_enabled "gemini" "skills"; }
 gemini_agents_enabled() { return 1; }
 
 cursor_plugin_enabled() { provider_plugin_enabled "cursor"; }
 cursor_instructions_enabled() { provider_option_enabled "cursor" "instructions"; }
-cursor_prompts_enabled() { provider_option_enabled "cursor" "prompts"; }
-cursor_workflows_enabled() { provider_option_enabled "cursor" "workflows"; }
-cursor_skills_enabled() { return 1; }
+cursor_skills_enabled() { provider_option_enabled "cursor" "skills"; }
 cursor_agents_enabled() { return 1; }
 
 windsurf_plugin_enabled() { provider_plugin_enabled "windsurf"; }
 windsurf_instructions_enabled() { provider_option_enabled "windsurf" "instructions"; }
-windsurf_prompts_enabled() { provider_option_enabled "windsurf" "prompts"; }
-windsurf_workflows_enabled() { provider_option_enabled "windsurf" "workflows"; }
-windsurf_skills_enabled() { return 1; }
+windsurf_skills_enabled() { provider_option_enabled "windsurf" "skills"; }
 windsurf_agents_enabled() { return 1; }
 
 has_ai_provider_plugin_enabled() {

@@ -20,9 +20,9 @@ git -C "$TEST_DET_WS" init -q
 
 "$TEST_DET_WS/rnex" init -y "$TEST_DET_WS" >/dev/null
 
-# 1. Verify all 6 plugins are available
+# 1. Verify all 5 plugins are available
 _list_out="$(cd "$TEST_DET_WS" && ./rnex plugin list 2>&1)"
-for _p in claude copilot cursor gemini karpathy-llm windsurf; do
+for _p in claude cursor gemini karpathy-llm windsurf; do
   echo "$_list_out" | grep -q "$_p" || { fail "Plugin $_p not in plugin list"; exit 1; }
   if [ "$_p" = "karpathy-llm" ]; then
     echo "$_list_out" | grep "$_p" | grep -E -q "\(v(0\.5\.1|1\.0\.0)\)" || { fail "Plugin $_p version unexpected"; exit 1; }
@@ -32,22 +32,22 @@ for _p in claude copilot cursor gemini karpathy-llm windsurf; do
 done
 
 # 2. Test 'rnex plugin install <name>' alias for enable
-(cd "$TEST_DET_WS" && ./rnex plugin install copilot >/dev/null)
-[ -d "$TEST_DET_WS/.rnex/plugins/copilot" ] || { fail "Plugin install did not create .rnex/plugins/copilot"; exit 1; }
-[ -f "$TEST_DET_WS/.rnex/plugins/copilot/instructions/rnex-copilot-integration.md" ] || { fail "rnex-copilot-integration.md missing"; exit 1; }
+(cd "$TEST_DET_WS" && ./rnex plugin install claude >/dev/null)
+[ -d "$TEST_DET_WS/.rnex/plugins/claude" ] || { fail "Plugin install did not create .rnex/plugins/claude"; exit 1; }
+[ -f "$TEST_DET_WS/.rnex/plugins/claude/instructions/rnex-claude-integration.md" ] || { fail "rnex-claude-integration.md missing"; exit 1; }
 
 # 3. Test deterministic update: inject a stale file into the installed plugin
-touch "$TEST_DET_WS/.rnex/plugins/copilot/instructions/stale-artifact.md"
-[ -f "$TEST_DET_WS/.rnex/plugins/copilot/instructions/stale-artifact.md" ] || { fail "Failed to create test stale file"; exit 1; }
+touch "$TEST_DET_WS/.rnex/plugins/claude/instructions/stale-artifact.md"
+[ -f "$TEST_DET_WS/.rnex/plugins/claude/instructions/stale-artifact.md" ] || { fail "Failed to create test stale file"; exit 1; }
 
-# 4. Run 'rnex plugin update copilot' and verify stale artifact was deterministically purged
-(cd "$TEST_DET_WS" && ./rnex plugin update copilot >/dev/null)
-[ ! -f "$TEST_DET_WS/.rnex/plugins/copilot/instructions/stale-artifact.md" ] || { fail "Stale artifact was not purged during deterministic plugin update"; exit 1; }
-[ -f "$TEST_DET_WS/.rnex/plugins/copilot/instructions/rnex-copilot-integration.md" ] || { fail "rnex-copilot-integration.md missing after update"; exit 1; }
+# 4. Run 'rnex plugin update claude' and verify stale artifact was deterministically purged
+(cd "$TEST_DET_WS" && ./rnex plugin update claude >/dev/null)
+[ ! -f "$TEST_DET_WS/.rnex/plugins/claude/instructions/stale-artifact.md" ] || { fail "Stale artifact was not purged during deterministic plugin update"; exit 1; }
+[ -f "$TEST_DET_WS/.rnex/plugins/claude/instructions/rnex-claude-integration.md" ] || { fail "rnex-claude-integration.md missing after update"; exit 1; }
 
 # 5. Run global 'rnex plugin update'
 (cd "$TEST_DET_WS" && ./rnex plugin update >/dev/null)
-[ -f "$TEST_DET_WS/.rnex/plugins/copilot/plugin.yaml" ] || { fail "plugin.yaml missing after global plugin update"; exit 1; }
+[ -f "$TEST_DET_WS/.rnex/plugins/claude/plugin.yaml" ] || { fail "plugin.yaml missing after global plugin update"; exit 1; }
 pass
 
 # --------------------------------------------------------------------------
@@ -119,21 +119,22 @@ echo "$_hook_output" | grep -q "intake/raw/ or docs/wiki/" || { fail "Git hook p
 pass
 
 # --------------------------------------------------------------------------
-run_test "Disabling plugin in rnex.yaml followed by rnex sync cleanly removes instructions, assets, and prompts"
-# 1. Enable copilot with prompts: true so we can verify provider prompts cleanup
+run_test "Disabling plugin in rnex.yaml followed by rnex sync cleanly removes instructions, assets, and User Skills"
+# 1. Enable claude with skills: true so we can verify provider User Skills cleanup
 cat <<'EOF_CFG2' > "$TEST_KWIKI_WS/rnex.yaml"
 plugins:
-  copilot:
-    prompts: true
-    workflows: true
+  claude:
+    instructions: true
+    skills: true
   karpathy-llm:
     wiki_dir: docs/wiki
     raw_dir: intake/raw
 EOF_CFG2
 
 (cd "$TEST_KWIKI_WS" && ./rnex sync -y >/dev/null)
-[ -f "$TEST_KWIKI_WS/.github/prompts/rnex-wiki-ingest.prompt.md" ] || { fail "Plugin prompt rnex-wiki-ingest was not mirrored to Copilot"; exit 1; }
-[ -f "$TEST_KWIKI_WS/.github/prompts/rnex-wiki-lint.prompt.md" ] || { fail "Plugin prompt rnex-wiki-lint was not mirrored to Copilot"; exit 1; }
+[ -f "$TEST_KWIKI_WS/.claude/skills/rnex-wiki-ingest.md" ] || { fail "Plugin User Skill rnex-wiki-ingest was not generated in claude"; exit 1; }
+[ -f "$TEST_KWIKI_WS/.claude/skills/rnex-wiki-lint.md" ] || { fail "Plugin User Skill rnex-wiki-lint was not generated in claude"; exit 1; }
+[ -f "$TEST_KWIKI_WS/.claude/skills/rnex-clone-sync.md" ] || { fail "Core User Skill rnex-clone-sync missing in claude"; exit 1; }
 [ -d "$TEST_KWIKI_WS/.rnex/plugins/karpathy-llm" ] || { fail ".rnex/plugins/karpathy-llm missing while enabled"; exit 1; }
 _kw_active_ai="$(cat "$TEST_KWIKI_WS/.rnex/ai-instructions.md")"
 echo "$_kw_active_ai" | grep -q "Karpathy LLM Wiki Knowledge Architecture" || { fail "Active ai-instructions.md missing Karpathy instructions"; exit 1; }
@@ -141,9 +142,9 @@ echo "$_kw_active_ai" | grep -q "Karpathy LLM Wiki Knowledge Architecture" || { 
 # 2. Disable karpathy-llm via enabled: false in rnex.yaml
 cat <<'EOF_CFG3' > "$TEST_KWIKI_WS/rnex.yaml"
 plugins:
-  copilot:
-    prompts: true
-    workflows: true
+  claude:
+    instructions: true
+    skills: true
   karpathy-llm:
     enabled: false
     wiki_dir: docs/wiki
@@ -161,10 +162,10 @@ echo "$_kw_disabled_ai" | grep -q "Read Configuration First" || { fail "ai-instr
 _kw_disabled_agents="$(cat "$TEST_KWIKI_WS/AGENTS.md")"
 echo "$_kw_disabled_agents" | grep -q "CRITICAL: You MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\`" || { fail "AGENTS.md missing strict directive"; exit 1; }
 
-# 5. Verify provider prompts from disabled plugin were removed, but base prompts kept
-[ ! -f "$TEST_KWIKI_WS/.github/prompts/rnex-wiki-ingest.prompt.md" ] || { fail "rnex-wiki-ingest.prompt.md still present after disabling plugin"; exit 1; }
-[ ! -f "$TEST_KWIKI_WS/.github/prompts/rnex-wiki-lint.prompt.md" ] || { fail "rnex-wiki-lint.prompt.md still present after disabling plugin"; exit 1; }
-[ -f "$TEST_KWIKI_WS/.github/prompts/rnex-cross-repo-feature.prompt.md" ] || { fail "Base prompt rnex-cross-repo-feature was incorrectly removed"; exit 1; }
+# 5. Verify provider User Skills from disabled plugin were removed, but core skills kept
+[ ! -f "$TEST_KWIKI_WS/.claude/skills/rnex-wiki-ingest.md" ] || { fail "rnex-wiki-ingest.md still present after disabling plugin"; exit 1; }
+[ ! -f "$TEST_KWIKI_WS/.claude/skills/rnex-wiki-lint.md" ] || { fail "rnex-wiki-lint.md still present after disabling plugin"; exit 1; }
+[ -f "$TEST_KWIKI_WS/.claude/skills/rnex-clone-sync.md" ] || { fail "Core User Skill rnex-clone-sync was incorrectly removed"; exit 1; }
 
 # 6. Verify .rnex/plugins/karpathy-llm scope was removed
 [ ! -d "$TEST_KWIKI_WS/.rnex/plugins/karpathy-llm" ] || { fail ".rnex/plugins/karpathy-llm still exists after sync"; exit 1; }
@@ -217,6 +218,27 @@ grep -q "Mock Member Repo" "$TEST_HOOK_WS/.rnex/wiki/raw/README_mock-member-repo
 [ -f "$TEST_HOOK_WS/.rnex/wiki/raw/intake-note.md" ] || { fail ".rnex/wiki/raw/intake-note.md missing after rnex sync"; exit 1; }
 grep -q "Intake Note" "$TEST_HOOK_WS/.rnex/wiki/raw/intake-note.md" || { fail "Content mismatch in synced intake note"; exit 1; }
 
+# 5b. Confirm member repository README ingested into atomic wiki page
+[ -f "$TEST_HOOK_WS/.rnex/wiki/repo-mock-member-repo.md" ] || { fail "repo-mock-member-repo.md missing after wiki ingest"; exit 1; }
+grep -q 'title: "Member Repo: mock-member-repo"' "$TEST_HOOK_WS/.rnex/wiki/repo-mock-member-repo.md" || { fail "Frontmatter title missing in repo-mock-member-repo.md"; exit 1; }
+grep -q 'tags: \[member-repo, mock-member-repo\]' "$TEST_HOOK_WS/.rnex/wiki/repo-mock-member-repo.md" || { fail "Frontmatter tags missing in repo-mock-member-repo.md"; exit 1; }
+grep -q 'sources: \["repos/mock-member-repo/README.md"\]' "$TEST_HOOK_WS/.rnex/wiki/repo-mock-member-repo.md" || { fail "Frontmatter sources missing in repo-mock-member-repo.md"; exit 1; }
+grep -q "This is a mock repository README." "$TEST_HOOK_WS/.rnex/wiki/repo-mock-member-repo.md" || { fail "Summary missing in repo-mock-member-repo.md"; exit 1; }
+
+# 5c. Confirm registration in navigation index (index.md)
+[ -f "$TEST_HOOK_WS/.rnex/wiki/index.md" ] || { fail ".rnex/wiki/index.md missing"; exit 1; }
+grep -q "repo-mock-member-repo\.md" "$TEST_HOOK_WS/.rnex/wiki/index.md" || { fail "repo-mock-member-repo.md not indexed in index.md"; exit 1; }
+grep -q "Member Repo: mock-member-repo" "$TEST_HOOK_WS/.rnex/wiki/index.md" || { fail "Member repo title not in index.md"; exit 1; }
+
+# 5d. Confirm registration in hot cache (hot.md)
+[ -f "$TEST_HOOK_WS/.rnex/wiki/hot.md" ] || { fail ".rnex/wiki/hot.md missing"; exit 1; }
+grep -q "mock-member-repo" "$TEST_HOOK_WS/.rnex/wiki/hot.md" || { fail "mock-member-repo missing from hot.md"; exit 1; }
+grep -q "repos/mock-member-repo/" "$TEST_HOOK_WS/.rnex/wiki/hot.md" || { fail "repos/mock-member-repo/ missing from hot.md"; exit 1; }
+
+# 5e. Confirm operation log entry (_log.md)
+[ -f "$TEST_HOOK_WS/.rnex/wiki/_log.md" ] || { fail ".rnex/wiki/_log.md missing"; exit 1; }
+grep -q "Member Repo Ingest: mock-member-repo" "$TEST_HOOK_WS/.rnex/wiki/_log.md" || { fail "Ingest log missing from _log.md"; exit 1; }
+
 # 6. Verify disabled member repo READMEs are not synced
 mkdir -p "$TEST_HOOK_WS/repos/disabled-member-repo"
 printf '# Disabled Repo\n' > "$TEST_HOOK_WS/repos/disabled-member-repo/README.md"
@@ -250,33 +272,115 @@ chmod +x "$TEST_HOOK_WS/.rnex/plugins/karpathy-llm/hooks/before_sync.sh"
 [ -f "$TEST_HOOK_WS/before_sync_marker" ] || { fail "before_sync lifecycle hook was not executed by rnex sync"; exit 1; }
 grep -q "BEFORE_SYNC_FIRED" "$TEST_HOOK_WS/before_sync_marker" || { fail "before_sync marker content mismatch"; exit 1; }
 
+# 9. Verify rnex init with karpathy plugin performs wiki ingest for member repos
+TEST_INIT_KW_WS="$TEST_TMP/karpathy-init-ingest-ws"
+mkdir -p "$TEST_INIT_KW_WS/repos/seed-repo"
+printf '# Seed Repo\nSeed repository description.\n' > "$TEST_INIT_KW_WS/repos/seed-repo/README.md"
+cp "$CLI" "$TEST_INIT_KW_WS/rnex"
+chmod +x "$TEST_INIT_KW_WS/rnex"
+cp -r "$DIR/toolkit" "$TEST_INIT_KW_WS/toolkit"
+cp "$DIR/package.json" "$TEST_INIT_KW_WS/package.json"
+git -C "$TEST_INIT_KW_WS" init -q
+
+"$TEST_INIT_KW_WS/rnex" init -y --karpathy "$TEST_INIT_KW_WS" >/dev/null
+[ -f "$TEST_INIT_KW_WS/.rnex/wiki/repo-seed-repo.md" ] || { fail "seed-repo was not ingested during rnex init with karpathy plugin"; exit 1; }
+grep -q "Seed Repo" "$TEST_INIT_KW_WS/.rnex/wiki/repo-seed-repo.md" || { fail "seed-repo content mismatch after init ingest"; exit 1; }
+grep -q "repo-seed-repo\.md" "$TEST_INIT_KW_WS/.rnex/wiki/index.md" || { fail "seed-repo not registered in index.md after init"; exit 1; }
+grep -q "seed-repo" "$TEST_INIT_KW_WS/.rnex/wiki/hot.md" || { fail "seed-repo not registered in hot.md after init"; exit 1; }
+
+# 10. Verify rnex add with karpathy plugin performs wiki ingest for newly added member repo
+mkdir -p "$TEST_HOOK_WS/external/added-repo"
+git -C "$TEST_HOOK_WS/external/added-repo" init -q
+printf '# Added Member Repo\nNewly added member repository via rnex add.\n' > "$TEST_HOOK_WS/external/added-repo/README.md"
+git -C "$TEST_HOOK_WS/external/added-repo" config user.email "test@example.com"
+git -C "$TEST_HOOK_WS/external/added-repo" config user.name "Test User"
+git -C "$TEST_HOOK_WS/external/added-repo" add README.md
+git -C "$TEST_HOOK_WS/external/added-repo" commit -qm "Initial commit"
+
+(cd "$TEST_HOOK_WS" && ./rnex add added-repo "$TEST_HOOK_WS/external/added-repo" >/dev/null)
+[ -f "$TEST_HOOK_WS/.rnex/wiki/repo-added-repo.md" ] || { fail "added-repo was not ingested during rnex add with karpathy plugin"; exit 1; }
+grep -q "Added Member Repo" "$TEST_HOOK_WS/.rnex/wiki/repo-added-repo.md" || { fail "added-repo content mismatch in wiki page"; exit 1; }
+grep -q "repo-added-repo\.md" "$TEST_HOOK_WS/.rnex/wiki/index.md" || { fail "added-repo not registered in index.md"; exit 1; }
+grep -q "added-repo" "$TEST_HOOK_WS/.rnex/wiki/hot.md" || { fail "added-repo not registered in hot.md"; exit 1; }
+grep -q "Member Repo Ingest: added-repo" "$TEST_HOOK_WS/.rnex/wiki/_log.md" || { fail "added-repo not logged in _log.md"; exit 1; }
+
 pass
 
 # --------------------------------------------------------------------------
-run_test "Strict decoupling of prompt operations and behavioral instructions (rnex-wiki-lint and rnex-wiki-ingest)"
-# 1. Assert rnex-wiki-lint.md and rnex-wiki-ingest.md prompts exist with plugin prefix
-[ -f "$DIR/toolkit/prompts/rnex-wiki-lint.md" ] || { fail "toolkit/prompts/rnex-wiki-lint.md missing"; exit 1; }
-[ -f "$DIR/toolkit/prompts/rnex-wiki-ingest.md" ] || { fail "toolkit/prompts/rnex-wiki-ingest.md missing"; exit 1; }
-[ ! -f "$DIR/toolkit/prompts/rnex-lint.md" ] || { fail "Deprecated un-prefixed rnex-lint.md still exists"; exit 1; }
-[ ! -f "$DIR/toolkit/prompts/rnex-ingest.md" ] || { fail "Deprecated un-prefixed rnex-ingest.md still exists"; exit 1; }
+run_test "Strict separation of core skills, plugin skills, and zero-logic User Skill generator"
+# 1. Assert toolkit/prompts/ and toolkit/workflows/ do not exist
+[ ! -d "$DIR/toolkit/prompts" ] || { fail "toolkit/prompts/ directory still exists"; exit 1; }
+[ ! -d "$DIR/toolkit/workflows" ] || { fail "toolkit/workflows/ directory still exists"; exit 1; }
 
-# 2. Check routing dispatches to workflows, behavioral rules, and ai-instructions
-grep -q "\.rnex/plugins/karpathy-llm/workflows/rnex-wiki-lint\.md" "$DIR/toolkit/prompts/rnex-wiki-lint.md" || { fail "rnex-wiki-lint.md does not route to rnex-wiki-lint.md"; exit 1; }
-grep -q "\.rnex/plugins/karpathy-llm/rules/rnex-behavioral\.md" "$DIR/toolkit/prompts/rnex-wiki-lint.md" || { fail "rnex-wiki-lint.md does not route to rnex-behavioral.md"; exit 1; }
-grep -q "\.rnex/ai-instructions\.md" "$DIR/toolkit/prompts/rnex-wiki-lint.md" || { fail "rnex-wiki-lint.md does not route to ai-instructions.md"; exit 1; }
+# 2. Assert core skills exist exclusively in toolkit/skills/
+[ -f "$DIR/toolkit/skills/clone-sync.md" ] || { fail "toolkit/skills/clone-sync.md missing"; exit 1; }
+[ -f "$DIR/toolkit/skills/batch-exec.md" ] || { fail "toolkit/skills/batch-exec.md missing"; exit 1; }
+[ -f "$DIR/toolkit/skills/workspace-status.md" ] || { fail "toolkit/skills/workspace-status.md missing"; exit 1; }
+[ ! -f "$DIR/toolkit/skills/wiki-ingest.md" ] || { fail "Plugin skill wiki-ingest.md leaked into core toolkit/skills/"; exit 1; }
+[ ! -f "$DIR/toolkit/skills/wiki-lint.md" ] || { fail "Plugin skill wiki-lint.md leaked into core toolkit/skills/"; exit 1; }
 
-grep -q "\.rnex/plugins/karpathy-llm/workflows/rnex-wiki-ingest\.md" "$DIR/toolkit/prompts/rnex-wiki-ingest.md" || { fail "rnex-wiki-ingest.md does not route to rnex-wiki-ingest.md"; exit 1; }
-grep -q "\.rnex/plugins/karpathy-llm/rules/rnex-behavioral\.md" "$DIR/toolkit/prompts/rnex-wiki-ingest.md" || { fail "rnex-wiki-ingest.md does not route to rnex-behavioral.md"; exit 1; }
-grep -q "\.rnex/ai-instructions\.md" "$DIR/toolkit/prompts/rnex-wiki-ingest.md" || { fail "rnex-wiki-ingest.md does not route to ai-instructions.md"; exit 1; }
+# 3. Assert plugin skills exist in toolkit/plugins/karpathy-llm/skills/
+[ -f "$DIR/toolkit/plugins/karpathy-llm/skills/wiki-ingest.md" ] || { fail "toolkit/plugins/karpathy-llm/skills/wiki-ingest.md missing"; exit 1; }
+[ -f "$DIR/toolkit/plugins/karpathy-llm/skills/wiki-lint.md" ] || { fail "toolkit/plugins/karpathy-llm/skills/wiki-lint.md missing"; exit 1; }
 
-# 3. Ensure no inline heuristics or code patterns exist inside task descriptors
-! grep -q "mentioned_in: \[\]" "$DIR/toolkit/prompts/rnex-wiki-lint.md" || { fail "rnex-wiki-lint.md contains inline frontmatter schema heuristics"; exit 1; }
-! grep -q "contradicts: \[\]" "$DIR/toolkit/prompts/rnex-wiki-lint.md" || { fail "rnex-wiki-lint.md contains inline frontmatter schema heuristics"; exit 1; }
-! grep -q '```' "$DIR/toolkit/prompts/rnex-wiki-lint.md" || { fail "rnex-wiki-lint.md contains inlined code patterns"; exit 1; }
+# 4. In a synced workspace with claude and karpathy-llm:
+TEST_SEPARATION_WS="$TEST_TMP/skills-separation-ws"
+mkdir -p "$TEST_SEPARATION_WS"
+cp "$CLI" "$TEST_SEPARATION_WS/rnex"
+chmod +x "$TEST_SEPARATION_WS/rnex"
+cp -r "$DIR/toolkit" "$TEST_SEPARATION_WS/toolkit"
+cp "$DIR/package.json" "$TEST_SEPARATION_WS/package.json"
+git -C "$TEST_SEPARATION_WS" init -q
 
-! grep -q "mentioned_in: \[\]" "$DIR/toolkit/prompts/rnex-wiki-ingest.md" || { fail "rnex-wiki-ingest.md contains inline frontmatter schema heuristics"; exit 1; }
-! grep -q "contradicts: \[\]" "$DIR/toolkit/prompts/rnex-wiki-ingest.md" || { fail "rnex-wiki-ingest.md contains inline frontmatter schema heuristics"; exit 1; }
-! grep -q '```' "$DIR/toolkit/prompts/rnex-wiki-ingest.md" || { fail "rnex-wiki-ingest.md contains inlined code patterns"; exit 1; }
+cat <<EOF > "$TEST_SEPARATION_WS/rnex.yaml"
+version: 0.6.16
+repos_dir: ./repos
+code_workspace: false
+git_hooks: false
+plugins:
+  claude:
+    instructions: true
+    skills: true
+  karpathy-llm: {}
+repos:
+EOF
+
+(cd "$TEST_SEPARATION_WS" && ./rnex sync -y >/dev/null)
+
+# Verify core skills in .rnex/skills/
+[ -f "$TEST_SEPARATION_WS/.rnex/skills/clone-sync.md" ] || { fail "clone-sync.md missing in .rnex/skills/"; exit 1; }
+[ ! -f "$TEST_SEPARATION_WS/.rnex/skills/wiki-ingest.md" ] || { fail "wiki-ingest leaked into .rnex/skills/"; exit 1; }
+[ ! -f "$TEST_SEPARATION_WS/.rnex/skills/wiki-lint.md" ] || { fail "wiki-lint leaked into .rnex/skills/"; exit 1; }
+
+# Verify plugin skills in .rnex/plugins/karpathy-llm/skills/
+[ -f "$TEST_SEPARATION_WS/.rnex/plugins/karpathy-llm/skills/wiki-ingest.md" ] || { fail "wiki-ingest.md missing in plugin skills/"; exit 1; }
+[ -f "$TEST_SEPARATION_WS/.rnex/plugins/karpathy-llm/skills/wiki-lint.md" ] || { fail "wiki-lint.md missing in plugin skills/"; exit 1; }
+
+# Verify User Skills generated in .claude/skills/
+for _s in clone-sync batch-exec workspace-status wiki-ingest wiki-lint; do
+  _usk="$TEST_SEPARATION_WS/.claude/skills/rnex-${_s}.md"
+  [ -f "$_usk" ] || { fail "User skill rnex-${_s}.md missing in .claude/skills/"; exit 1; }
+  grep -q "CRITICAL: Do not execute inline heuristics" "$_usk" || { fail "User skill rnex-${_s} missing strict directive"; exit 1; }
+  ! grep -q '```' "$_usk" || { fail "User skill rnex-${_s} contains inlined code patterns"; exit 1; }
+done
+
+# Verify target paths in User Skills
+grep -q "\.rnex/skills/clone-sync\.md" "$TEST_SEPARATION_WS/.claude/skills/rnex-clone-sync.md" || { fail "rnex-clone-sync target path wrong"; exit 1; }
+grep -q "\.rnex/plugins/karpathy-llm/skills/wiki-ingest\.md" "$TEST_SEPARATION_WS/.claude/skills/rnex-wiki-ingest.md" || { fail "rnex-wiki-ingest target path wrong"; exit 1; }
+grep -q "\.rnex/plugins/karpathy-llm/skills/wiki-lint\.md" "$TEST_SEPARATION_WS/.claude/skills/rnex-wiki-lint.md" || { fail "rnex-wiki-lint target path wrong"; exit 1; }
+
+# 5. Disable karpathy-llm via CLI command and verify unregistration
+(cd "$TEST_SEPARATION_WS" && ./rnex plugin disable karpathy-llm >/dev/null)
+(cd "$TEST_SEPARATION_WS" && ./rnex sync -y >/dev/null)
+
+# Plugin user skills unregistered
+[ ! -f "$TEST_SEPARATION_WS/.claude/skills/rnex-wiki-ingest.md" ] || { fail "rnex-wiki-ingest.md not unregistered after plugin disable"; exit 1; }
+[ ! -f "$TEST_SEPARATION_WS/.claude/skills/rnex-wiki-lint.md" ] || { fail "rnex-wiki-lint.md not unregistered after plugin disable"; exit 1; }
+
+# Core user skills preserved
+[ -f "$TEST_SEPARATION_WS/.claude/skills/rnex-clone-sync.md" ] || { fail "rnex-clone-sync.md deleted after disabling unrelated plugin"; exit 1; }
+[ -f "$TEST_SEPARATION_WS/.claude/skills/rnex-batch-exec.md" ] || { fail "rnex-batch-exec.md deleted after disabling unrelated plugin"; exit 1; }
+[ -f "$TEST_SEPARATION_WS/.claude/skills/rnex-workspace-status.md" ] || { fail "rnex-workspace-status.md deleted after disabling unrelated plugin"; exit 1; }
 
 pass
 

@@ -7,34 +7,35 @@ description: Practical walkthrough of executing cross-cutting features, workspac
 
 One of the greatest challenges with AI coding assistants in multi-repo setups is context isolation: agents operating inside one repository cannot easily coordinate changes across upstream or downstream services.
 
-Repo Nexus equips AI assistants with standardized cross-repo skills and workflows located in `.rnex/skills/` and `.rnex/workflows/`, routed directly through universal `AGENTS.md`.
+Repo Nexus equips AI assistants with standardized cross-repo agentic skills located in `.rnex/skills/` and active plugin directories (`.rnex/plugins/<plugin>/skills/`), routed directly through universal `AGENTS.md`.
 
 ---
 
-## Workspace Skills & Workflows
+## Two-Tier Skills Architecture
 
-When a workspace is initialized, Repo Nexus seeds `.rnex/skills/` and `.rnex/workflows/` with specialized agent workflow templates:
+When a workspace is initialized, Repo Nexus maintains core agentic skills in `.rnex/skills/` alongside plugin-owned skills in `.rnex/plugins/<plugin>/skills/`:
 
-| Workflow / Skill | Target Agent Goal |
-|:---|:---|
-| `rnex-cross-repo-feature` | Implement an end-to-end feature across backend, frontend, and shared contracts. |
-| `rnex-workspace-audit` | Audit git status, unpushed branches, dirty files, and schema health. |
-| `rnex-wiki-ingest` | Ingest raw intake documents into atomic Karpathy LLM Wiki pages. |
-| `rnex-wiki-lint` | Validate markdown links, compute backlinks, and update the master index. |
+| Skill | Category | Target Agent Goal | Protocol Path |
+|:---|:---|:---|:---|
+| `clone-sync` | Core | Automated clone, setup, and synchronization of member repositories. | `.rnex/skills/clone-sync.md` |
+| `batch-exec` | Core | Cross-repository batch commands, parallel execution, and verification. | `.rnex/skills/batch-exec.md` |
+| `workspace-status` | Core | Workspace health check, git dirty status, branch tracking, and configuration audit. | `.rnex/skills/workspace-status.md` |
+| `wiki-ingest` | Plugin (`karpathy-llm`) | Ingest raw intake documents into atomic Karpathy LLM Wiki pages. | `.rnex/plugins/karpathy-llm/skills/wiki-ingest.md` |
+| `wiki-lint` | Plugin (`karpathy-llm`) | Validate markdown links, compute backlinks, and update the master index. | `.rnex/plugins/karpathy-llm/skills/wiki-lint.md` |
 
-When provider plugins (such as `copilot`, `claude`, `gemini`, `cursor`, or `windsurf`) are enabled with `prompts: true`, these workflows are automatically mirrored into the respective native prompt pickers (e.g. `.github/prompts/`, `.claude/commands/`, `.gemini/prompts/`, `.cursor/prompts/`, `.windsurf/prompts/`).
+When provider plugins (such as `claude`, `gemini`, `cursor`, or `windsurf`) are enabled with `skills: true`, zero-logic User Skill pointers (`rnex-<skill-name>.md`) are generated directly into the respective native provider directories (`.cursor/rules/`, `.claude/skills/`, `.gemini/skills/`, `.windsurf/rules/`).
 
 ---
 
-## Executing a Cross-Repo Feature
+## Executing a Cross-Repo Batch Feature
 
-### 1. Invoke the Workflow in Your AI Assistant
-In your AI assistant (Copilot Chat, Claude Code, Gemini/Antigravity, Cursor, Windsurf), run or type:
+### 1. Invoke the Skill in Your AI Assistant
+In your AI assistant (Claude Code, Gemini/Antigravity, Cursor, Windsurf), run or type:
 
 ```text
-Follow the workflow in .rnex/workflows/rnex-cross-repo-feature.md to add OAuth2 login support across backend and web-client.
+Follow the skill protocol in .rnex/skills/batch-exec.md to run tests across backend and web-client.
 ```
-*(Or select `rnex-cross-repo-feature` directly from your IDE's prompt picker or slash commands.)*
+*(Or invoke `rnex-batch-exec` directly from your IDE's skill/rules list.)*
 
 ### 2. Autonomous Execution Sequence
 The agent follows a 4-stage protocol:

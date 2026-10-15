@@ -35,9 +35,9 @@ rnex sync [-y|--yes] [-q|--quiet]
 ### Reconciliation Actions
 1. **Config Version Upgrade**: Detects schema drift and non-destructively upgrades `rnex.yaml` if older than the installed CLI version.
 2. **Git Ignore & Search Indexing**: Reconciles `.gitignore` (ignoring `repos/*` and `.local.rnex.yaml`) and `.ignore` (un-ignoring `repos/*` for search tools).
-3. **Plugin Sync**: Prunes disabled plugins and deterministically copies enabled plugin assets, rules, workflows, templates, and executable lifecycle hooks into `.rnex/plugins/<plugin-name>/`.
+3. **Plugin Sync**: Prunes disabled plugins and deterministically copies enabled plugin assets, rules, skills, templates, and executable lifecycle hooks into `.rnex/plugins/<plugin-name>/`.
 4. **Compiled AI Instructions**: Compiles `.rnex/ai-instructions.md` by combining the base template with active configuration and all enabled plugin `instructions.md` fragments. Top-level provider files (`AGENTS.md`, `CLAUDE.md`, etc.) receive only a single strict directive pointing to `.rnex/ai-instructions.md`.
-5. **Prompt Sync**: Copies all operational prompts matching `rnex-*` from `toolkit/prompts/` into configured AI assistant directories (Claude, Gemini, Cursor, Windsurf, Copilot) and workspace prompt directories.
+5. **Skill Reconciliation & User Skill Generation**: Copies core agentic skills from `toolkit/skills/` to `.rnex/skills/`, and generates lightweight, zero-logic User Skills (prefixed with `rnex-`) in configured AI assistant directories (`.cursor/rules/`, `.claude/skills/`, `.gemini/skills/`, `.windsurf/rules/`) pointing directly to `.rnex/skills/` or plugin skill directories.
 6. **Harness Sync**: Reconciles root `.rnex/` and member repository harnesses (`repos/<name>/.rnex/`) for all enabled member repositories where `rnex_dir: true`.
 7. **Git Hooks**: Installs or reconciles workspace Git hooks in `.rnex/hooks` when `git_hooks: true`.
 8. **Multi-Root Workspace**: Synchronizes `.code-workspace` folder mappings when `code_workspace: true`.
@@ -66,13 +66,14 @@ toolkit/plugins/<plugin-name>/
 ├── hooks/                       # POSIX /bin/sh hook scripts (chmod +x)
 │   ├── after_sync.sh            # Executes after workspace reconciliation
 │   ├── after_init.sh            # Executes after workspace initialization
+│   ├── before_plugin_disable.sh # Executes before plugin disable/removal
 │   └── before_remove.sh         # Executes before member repo removal
 ├── rules/                       # AI assistant behavioral rules
-├── workflows/                   # Standardized agent workflow procedures
+├── skills/                      # Plugin-owned agentic skills (e.g. wiki-ingest.md)
 └── templates/                   # Default files and scaffold templates
 ```
 
-### Environment Context Passed to Hooks
+### Environment Context & Helper Functions
 Every lifecycle hook receives the following environment variables:
 
 | Variable | Description |
@@ -80,9 +81,14 @@ Every lifecycle hook receives the following environment variables:
 | `RNEX_ROOT` | Absolute path to the Repo Nexus workspace root directory. |
 | `RNEX_CONFIG_MERGED` | Path to the active workspace configuration (`rnex.yaml`). |
 | `RNEX_PLUGIN_DIR` | Path to the scoped plugin directory (`.rnex/plugins/<plugin-name>`). |
+| `RNEX_PROVIDER_SKILL_DIRS` | Space-separated list of active provider skill directories. |
 | `RNEX_CMD` | The command being executed (e.g., `sync`, `init`, `add`). |
 | `RNEX_ARGS` | Arguments passed to the command. |
 | `RNEX_QUIET` | Set to `1` when `--quiet` was passed, `0` otherwise. |
+
+Hooks have access to POSIX helper functions for managing User Skill pointers:
+- `rnex_register_user_skill <skill_name> <target_path_in_rnex>`: Generates a zero-logic user skill pointer (`rnex-<skill_name>.md`) in active provider directories linking to the target skill protocol.
+- `rnex_unregister_user_skill <skill_name>`: Removes the `rnex-<skill_name>.md` user skill pointer from all active provider directories.
 
 ### Karpathy LLM Wiki Plugin
 The `karpathy-llm` plugin uses lifecycle hooks to manage its domain directories:

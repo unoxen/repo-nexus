@@ -47,19 +47,19 @@ rnex [global-options] <command> [command-options] [arguments]
 
 ---
 
-## Standardized Prompts Catalog
+## Agentic Skills Catalog
 
-Repo Nexus provides a standardized suite of operational prompt templates in `toolkit/prompts/` that sync during `rnex sync` or `rnex init`.
+Repo Nexus provides a standardized suite of agentic skills in `toolkit/skills/` (core) and `toolkit/plugins/<plugin>/skills/` (plugins).
 
-AI assistants navigate workflows via the catalog index at `.rnex/prompts/index.md`:
+AI assistants navigate skills via `AGENTS.md` and direct skill protocol paths:
 
-| Prompt File | Purpose |
-|:---|:---|
-| `index.md` | Master catalog indexing all available workflows and prompts. |
-| `rnex-cross-repo-feature.md` | Structured workflow for implementing cross-cutting features across multiple repos. |
-| `rnex-workspace-audit.md` | Health, git dirty status, branch tracking, and configuration audit workflow. |
-| `rnex-wiki-ingest.md` | Autonomous ingestion of source docs from `/raw/` into Karpathy LLM Wiki pages. |
-| `rnex-wiki-lint.md` | Link validation, backlink (`mentioned_in`) recalculation, and index rebuilding. |
+| Skill | Category | Purpose | Protocol Path |
+|:---|:---|:---|:---|
+| `clone-sync` | Core | Automated clone, setup, and synchronization of member repositories. | `.rnex/skills/clone-sync.md` |
+| `batch-exec` | Core | Cross-repository batch commands, parallel execution, and verification. | `.rnex/skills/batch-exec.md` |
+| `workspace-status` | Core | Workspace health check, git dirty status, branch tracking, and configuration audit. | `.rnex/skills/workspace-status.md` |
+| `wiki-ingest` | Plugin (`karpathy-llm`) | Autonomous ingestion of source docs into atomic Karpathy LLM Wiki pages. | `.rnex/plugins/karpathy-llm/skills/wiki-ingest.md` |
+| `wiki-lint` | Plugin (`karpathy-llm`) | Link validation, backlink recalculation, and index rebuilding. | `.rnex/plugins/karpathy-llm/skills/wiki-lint.md` |
 
 ---
 

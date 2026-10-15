@@ -54,6 +54,7 @@ cmd_add() {
     [ "$_enabled" = "false" ] && yaml_set_local "$_name" "enabled" "false"
     sync_repo_rnex "$_name"
     sync_code_workspace
+    run_hook "after_sync" "$@"
     printf '\n'
     log_ok "Registered repo '${_name}' in $(basename "$WORKSPACE_LOCAL_YAML")"
     return 0
@@ -70,6 +71,7 @@ cmd_add() {
       [ "$_enabled" = "false" ] && yaml_set "$_name" "enabled" "false"
       sync_repo_rnex "$_name"
       sync_code_workspace
+      run_hook "after_sync" "$@"
       printf '\n'
       log_ok "Updated repo '${_name}' in $(basename "$WORKSPACE_YAML")"
       return 0
@@ -79,6 +81,7 @@ cmd_add() {
   yaml_add_repo "$_name" "$_url" "$_rnex_dir" "$_enabled"
   sync_repo_rnex "$_name"
   sync_code_workspace
+  run_hook "after_sync" "$@"
   printf '\n'
   log_ok "Registered and added repo '${_name}'"
 }
@@ -123,6 +126,7 @@ cmd_clone() {
     fi
   done
   sync_code_workspace
+  run_hook "after_sync" "$@"
   printf '\n'
 }
 
@@ -181,6 +185,7 @@ cmd_enable() {
   fi
   sync_repo_rnex "$_name"
   sync_code_workspace
+  run_hook "after_sync" "$@"
 }
 
 cmd_disable() {
@@ -230,6 +235,7 @@ cmd_remove() {
     log_ok "Unregistered repo '$_name'"
   fi
   sync_code_workspace
+  run_hook "after_sync" "$@"
 }
 
 cmd_list() {

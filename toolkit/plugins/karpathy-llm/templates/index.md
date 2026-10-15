@@ -13,6 +13,9 @@ Master navigation index for the Karpathy LLM Wiki. Agents query this index on de
 * **Rolling Cache:** [`hot.md`](./hot.md) — Fast ~500-word orientation cache (read first on startup).
 * **Operation Log:** [`_log.md`](./_log.md) — Timestamped ingest & maintenance history.
 
+## Member Repositories
+* *(Active member repositories with 1-line architecture summaries will be indexed here during ingestion)*
+
 ## Architecture & Concepts
 * *(Atomic concept and system architecture pages with 1-line summaries will be indexed here during ingestion)*
 

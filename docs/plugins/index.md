@@ -19,12 +19,11 @@ When a plugin is enabled, its rules, instructions, workflows, prompts, and skill
 ### 2. Member Repository Isolation
 Active plugins are mirrored into each active member repository under `repos/<name>/.rnex/plugins/<plugin-name>/`. When an AI assistant operates inside a specific member repository, it has full local access to the workspace's shared instructions and rules without breaking repository autonomy.
 
-### 3. Decoupled Cross-Plugin Asset Discovery
+### 3. Decoupled Two-Tier Skills Architecture
 Repo Nexus decouples functional plugins from AI provider plugins:
-- **Functional Plugins** (such as [`karpathy-llm`](karpathy-llm.md)) declare operational prompts, skills, custom agents, and behavioral guidelines.
-- **Provider Plugins** (such as [`copilot`](copilot.md), [`claude`](claude.md), [`gemini`](gemini.md), [`cursor`](cursor.md), and [`windsurf`](windsurf.md)) automatically scan all active plugins and mirror human-facing prompts and workflows into the provider's native format (`.github/prompts/`, `.claude/commands/`, `.gemini/prompts/`, `.cursor/prompts/`, `.windsurf/prompts/`). Skills, workflows, and subagents remain self-contained under `.rnex/`.
-
-Adding a new workflow or prompt to any functional plugin automatically makes it available across all enabled AI provider tools without manual duplication.
+- **Core Skills (`toolkit/skills/` $\rightarrow$ `.rnex/skills/`)**: Workspace-level capabilities owned by Repo Nexus core.
+- **Plugin Skills (`toolkit/plugins/<plugin>/skills/` $\rightarrow$ `.rnex/plugins/<plugin>/skills/`)**: Scoped domain skills owned exclusively by individual plugins.
+- **User Skills (`rnex-<name>.md`)**: Provider plugins (`claude`, `gemini`, `cursor`, and `windsurf`) generate zero-logic user skill pointers in active provider directories (`.cursor/rules/`, `.claude/skills/`, `.gemini/skills/`, `.windsurf/rules/`) that redirect AI assistants directly to the underlying agentic skills in `.rnex/`.
 
 ### 4. Non-Destructive Delimited Merging
 When plugins update root instruction files (`AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `.cursorrules`, `.windsurfrules`), Repo Nexus isolates auto-managed routing between explicit delimiters:
@@ -47,11 +46,10 @@ Developer-authored instructions outside of these delimiters are strictly preserv
 
 | Plugin | Category | Description | Documentation |
 |:---|:---|:---|:---|
-| [`claude`](claude.md) | AI Provider | Anthropic Claude Code & Desktop integration: maintains `CLAUDE.md` and mirrors commands and prompts to `.claude/`. | [Read Guide](claude.md) |
-| [`cursor`](cursor.md) | AI Provider | Cursor IDE integration: maintains `.cursorrules`, `.cursor/rules/rnex-context.mdc`, `.cursorignore`, and mirrors prompts to `.cursor/`. | [Read Guide](cursor.md) |
-| [`copilot`](copilot.md) | AI Provider | GitHub Copilot integration: mirrors prompts to `.github/prompts/*.prompt.md` and relies on `AGENTS.md` for routing. | [Read Guide](copilot.md) |
-| [`gemini`](gemini.md) | AI Provider | Google Gemini CLI & Antigravity IDE integration: maintains `GEMINI.md`, `.geminiignore`, and mirrors prompts to `.gemini/`. | [Read Guide](gemini.md) |
-| [`windsurf`](windsurf.md) | AI Provider | Windsurf IDE integration: maintains `.windsurfrules` and mirrors prompts to `.windsurf/`. | [Read Guide](windsurf.md) |
+| [`claude`](claude.md) | AI Provider | Anthropic Claude Code & Desktop integration: maintains `CLAUDE.md` and generates user skills in `.claude/skills/`. | [Read Guide](claude.md) |
+| [`cursor`](cursor.md) | AI Provider | Cursor IDE integration: maintains `.cursorrules`, `.cursorignore`, and generates user skills in `.cursor/rules/`. | [Read Guide](cursor.md) |
+| [`gemini`](gemini.md) | AI Provider | Google Gemini CLI & Antigravity IDE integration: maintains `GEMINI.md`, `.geminiignore`, and generates user skills in `.gemini/skills/`. | [Read Guide](gemini.md) |
+| [`windsurf`](windsurf.md) | AI Provider | Windsurf IDE integration: maintains `.windsurfrules` and generates user skills in `.windsurf/rules/`. | [Read Guide](windsurf.md) |
 | [`karpathy-llm`](karpathy-llm.md) | Knowledge & Rules | Andrej Karpathy's 4 cardinal principles for coding agents, multi-repo context engineering standards, and autonomous zero-dependency LLM Wiki architecture (`./docs`, `.rnex/wiki`). | [Read Guide](karpathy-llm.md) |
 
 ---

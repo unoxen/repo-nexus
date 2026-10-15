@@ -41,15 +41,15 @@ A plugin can contain any of the following standard directories:
 
 | Subdirectory | Purpose | Behavior |
 |:---|:---|:---|
-| `workflows/` | Multi-step agent procedural checklists and workflows. | Maintained under `.rnex/plugins/<plugin>/workflows/` and mirrored to provider prompt pickers when `prompts: true`. |
-| `skills/` | Agent skills with `SKILL.md` definitions. | Scoped to `.rnex/plugins/<plugin>/skills/`. Ingested by agents via `AGENTS.md` routing. |
+| `skills/` | Plugin-owned agentic skills (`<skill-name>.md`). | Scoped to `.rnex/plugins/<plugin>/skills/`. Registered as User Skills via `rnex_register_user_skill`. |
+| `rules/` | Coding rules and architectural constraints. | Scoped to `.rnex/plugins/<plugin>/rules/`. |
 | `agents/` | Autonomous subagent declarations (`*.agent.md`). | Scoped to `.rnex/plugins/<plugin>/agents/`. Ingested by agents via `AGENTS.md` subagent routing. |
 | `instructions/` | Markdown guidelines and domain principles. | Scoped to `.rnex/plugins/<plugin>/instructions/`. |
-| `rules/` | Coding rules and architectural constraints. | Scoped to `.rnex/plugins/<plugin>/rules/`. |
+| `hooks/` | Lifecycle hook scripts (`after_sync.sh`, `before_plugin_disable.sh`). | Executed during workspace events. Register/unregister User Skills. |
 | `templates/` | Starter configuration files copied during `rnex sync`. | Copied to mapped paths specified in `templates:`. |
 
 > [!NOTE]
-> All AI assistants share `AGENTS.md` at workspace root. Tools, skills, workflows, and subagents stay inside `.rnex/` and are not mirrored externally. Prompts are exclusively for user invocation through IDE prompt pickers (e.g. `.github/prompts/`, `.claude/commands/`).
+> All AI assistants share `AGENTS.md` at workspace root. Agentic skills, rules, and subagents stay inside `.rnex/` and are not mirrored externally. Active provider plugins expose zero-logic User Skill pointers (`rnex-<name>.md`) in active provider directories (`.cursor/rules/`, `.claude/skills/`, etc.) linking directly to the agentic skill protocols inside `.rnex/`.
 
 ---
 

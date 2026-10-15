@@ -13,13 +13,13 @@ It requires **zero external vector databases, embedding pipelines, or heavy MCP 
 
 ## What It Provides
 
-### 1. The 4 Cardinal Principles for Coding Agents (`rules/rnex-behavioral.md`)
+### 1. The 4 Cardinal Principles for Coding Agents (`rules/behavioral.md`)
 - **Think Before Coding**: State explicit assumptions, formulate the problem clearly, and evaluate trade-offs before touching code.
 - **Simplicity First**: Minimal abstractions, readable implementations, and zero boilerplate bloat. Avoid premature optimization or speculative generalization.
 - **Surgical Changes**: Minimize blast radius. Modify only what is strictly necessary, preserve existing comments/docstrings, and produce clean, reviewable diffs.
 - **Goal-Driven Execution**: Define upfront verification criteria, write/run automated tests, and review diffs rigorously before completing tasks.
 
-### 2. Multi-Repo Context Engineering & Autonomy (`rules/rnex-behavioral.md`)
+### 2. Multi-Repo Context Engineering & Autonomy (`rules/behavioral.md`)
 - Guidelines tailored specifically for multi-repo virtual workspaces:
   - Always read workspace configuration (`.local.rnex.yaml` and `rnex.yaml`) first.
   - Respect member repository autonomy (`repos/<name>/`).
@@ -146,20 +146,13 @@ my-workspace/
 │   └── plugins/
 │       └── karpathy-llm/
 │           ├── rules/
-│           │   └── rnex-behavioral.md    # 4 Cardinal principles & context engineering
-│           ├── instructions/
-│           │   └── rnex-wiki-architecture.md # Schema, relations, and conventions
-│           ├── workflows/
-│           │   ├── rnex-wiki-ingest.md   # Ingestion checklist
-│           │   └── rnex-wiki-lint.md     # Lint & integrity checklist
-│           ├── prompts/
-│           │   ├── rnex-wiki-ingest.md
-│           │   └── rnex-wiki-lint.md
+│           │   └── behavioral.md         # 4 Cardinal principles & context engineering
 │           ├── skills/
-│           │   ├── rnex-wiki-ingest/
-│           │   │   └── SKILL.md
-│           │   └── rnex-wiki-lint/
-│           │       └── SKILL.md
+│           │   ├── wiki-ingest.md        # Agentic skill for wiki ingestion
+│           │   └── wiki-lint.md          # Agentic skill for wiki linting
+│           ├── hooks/
+│           │   ├── after_sync.sh         # Reconciles wiki intake & registers user skills
+│           │   └── before_plugin_disable.sh # Unregisters user skills
 │           ├── agents/
 │           │   └── rnex-wiki-curator.agent.md
 │           └── templates/
@@ -170,13 +163,15 @@ my-workspace/
 
 ---
 
-## Cross-Plugin Provider Mirroring
+## User Skills & Provider Integration
 
-Because Repo Nexus features decoupled cross-plugin asset discovery:
-- If [`copilot`](copilot.md) is enabled, `rnex-wiki-ingest` and `rnex-wiki-lint` workflows mirror into `.github/prompts/`.
-- If [`claude`](claude.md) is enabled, `rnex-wiki-ingest` and `rnex-wiki-lint` workflows mirror into `.claude/commands/` and `.claude/prompts/`.
-- If [`gemini`](gemini.md), [`cursor`](cursor.md), or [`windsurf`](windsurf.md) is enabled, workflows mirror into `.gemini/`, `.cursor/`, and `.windsurf/` prompt pickers.
-- Skills and subagents (`rnex-wiki-curator.agent.md`) remain self-contained under `.rnex/` and are navigated via standard provider routing instructions (`AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `.cursorrules`).
+The `karpathy-llm` plugin encapsulates its agentic skills in `.rnex/plugins/karpathy-llm/skills/`:
+- `wiki-ingest.md`
+- `wiki-lint.md`
+
+During `rnex sync`, its `after_sync.sh` lifecycle hook automatically registers zero-logic User Skill pointers (`rnex-wiki-ingest.md` and `rnex-wiki-lint.md`) across all enabled AI provider directories (`.cursor/rules/`, `.claude/skills/`, `.gemini/skills/`, `.windsurf/rules/`).
+
+When running `rnex plugin disable karpathy-llm`, its `before_plugin_disable.sh` lifecycle hook automatically unregisters the User Skills from all provider directories, while keeping core workspace skills intact.
 
 ---
 

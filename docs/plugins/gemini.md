@@ -1,30 +1,31 @@
 ---
 title: Google Gemini & Antigravity Plugin
-description: Integrate Google Gemini and Antigravity IDE with Repo Nexus, mirroring operational prompts to .gemini/prompts/.
+description: Integrate Google Gemini and Antigravity IDE with Repo Nexus, generating zero-logic user skill pointers in .gemini/skills/.
 ---
 
 # Google Gemini & Antigravity Plugin
 
 The **`gemini`** plugin integrates Google Gemini CLI and Google Antigravity IDE into a Repo Nexus Virtual Meta-Repo.
 
-All AI assistants in Repo Nexus share [`AGENTS.md`](file:///Users/admin/Projects/ai/repo-nexus/AGENTS.md) at the workspace root as the single universal source of truth for routing. The `gemini` plugin mirrors human-facing operational prompts into `.gemini/prompts/*.prompt.md` with standard YAML frontmatter.
+All AI assistants in Repo Nexus share [`AGENTS.md`](file:///Users/admin/Projects/ai/repo-nexus/AGENTS.md) at the workspace root as the single universal source of truth for routing. When enabled, the `gemini` plugin generates zero-logic User Skill pointers into `.gemini/skills/` (e.g. `rnex-clone-sync.md`, `rnex-batch-exec.md`, `rnex-wiki-ingest.md`).
 
-Operational skills, workflows, rules, and subagents remain cleanly self-contained within `.rnex/` and active plugin directories (`.rnex/plugins/<plugin-name>/`).
+Operational skills, rules, and subagents remain cleanly encapsulated within `.rnex/skills/` and active plugin directories (`.rnex/plugins/<plugin-name>/`).
 
 ---
 
 ## Capabilities
 
-1. **Native Instructions Support via `GEMINI.md`**:
+1. **Zero-Logic User Skills (`.gemini/skills/rnex-*.md`)**:
+   - Generates lightweight user skill pointers prefixed with `rnex-` in `.gemini/skills/`.
+   - Contains zero inline heuristics—redirects Gemini/Antigravity directly to the underlying agentic skill protocols inside `.rnex/`.
+
+2. **Native Instructions Support via `GEMINI.md`**:
    - Synchronizes Repo Nexus routing instructions to `GEMINI.md` (when `instructions: true`, default) for native support by the Google Gemini CLI.
    - Preserves user-defined custom sections in `GEMINI.md` across updates.
 
-2. **Prompts Mirroring (`.gemini/prompts/*.prompt.md`)**:
-   - Converts standard Repo Nexus operational prompts (`rnex-cross-repo-feature`, `rnex-workspace-audit`) and active plugins' workflows into Gemini prompt files with YAML frontmatter.
-
 3. **Subagent & Skill Execution**:
-   - Skills reside under `.rnex/skills/` and `.rnex/plugins/<plugin>/skills/`.
-   - Workflows reside under `.rnex/workflows/` and `.rnex/plugins/<plugin>/workflows/`.
+   - Core skills reside under `.rnex/skills/`.
+   - Plugin skills reside under `.rnex/plugins/<plugin>/skills/`.
    - Subagents reside under `.rnex/agents/` and `.rnex/plugins/<plugin>/agents/` and are invoked as subagents without external mirroring.
 
 ---
@@ -57,16 +58,14 @@ Configure options under `plugins.gemini` in `rnex.yaml` or `.local.rnex.yaml`:
 plugins:
   gemini:
     instructions: true   # Sync routing instructions to GEMINI.md (default: true)
-    prompts: true        # Mirror prompts to .gemini/prompts/ (default: true)
-    workflows: true      # Mirror active plugin workflows as prompts (default: true)
+    skills: true         # Generate user skills in .gemini/skills/ (default: true)
     enabled: true        # Set to false to disable
 ```
 
 | Option | Type | Default | Description |
 |:---|:---|:---|:---|
 | `instructions` | boolean | `true` | Merge routing instructions into `GEMINI.md`. |
-| `prompts` | boolean | `true` | Mirror prompts to `.gemini/prompts/*.prompt.md`. |
-| `workflows` | boolean | `true` | Mirror active plugin workflows into `.gemini/prompts/*.prompt.md`. |
+| `skills` | boolean | `true` | Generate user skill pointers in `.gemini/skills/rnex-*.md`. |
 | `enabled` | boolean | `true` | Enable or disable the plugin. Overridable in `.local.rnex.yaml`. |
 
 ---
@@ -80,16 +79,16 @@ my-workspace/
 ├── AGENTS.md                          # Universal workspace instructions & routing
 ├── GEMINI.md                          # Gemini-specific instructions (if instructions: true)
 ├── .gemini/
-│   └── prompts/
-│       ├── rnex-cross-repo-feature.prompt.md
-│       ├── rnex-workspace-audit.prompt.md
-│       ├── rnex-wiki-ingest.prompt.md
-│       └── rnex-wiki-lint.prompt.md
+│   └── skills/                        # Zero-logic User Skill pointers
+│       ├── rnex-clone-sync.md
+│       ├── rnex-batch-exec.md
+│       ├── rnex-workspace-status.md
+│       ├── rnex-wiki-ingest.md
+│       └── rnex-wiki-lint.md
 ├── .rnex/
-│   ├── skills/                        # Workspace operational skills
-│   ├── workflows/                     # Workspace workflows
+│   ├── skills/                        # Core workspace agentic skills
 │   └── plugins/
-│       └── karpathy-llm/              # Scoped plugin skills, workflows, and agents
+│       └── karpathy-llm/              # Scoped plugin skills and rules
 └── rnex.yaml
 ```
 
@@ -104,6 +103,6 @@ rnex plugin disable gemini
 ```
 
 Repo Nexus automatically performs surgical cleanup:
-- Removes auto-generated prompts under `.gemini/prompts/`.
-- Cleans up any legacy mirrored skills, agents, or instructions blocks.
+- Removes auto-generated user skills under `.gemini/skills/rnex-*.md`.
+- Cleans up managed routing instructions in `GEMINI.md`.
 - Developer-created files under `.gemini/` that do not originate from Repo Nexus are preserved.

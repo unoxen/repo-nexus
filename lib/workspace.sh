@@ -77,7 +77,6 @@ require_workspace() {
     _load_repos_dir
     _load_code_workspace
     _load_git_hooks
-    _load_copilot
     log_info "Using workspace at ${_BOLD}$NEXUS_DIR${_NC} ${_DIM}(via config: $WORKSPACE_YAML)${_NC}"
     return 0
   fi
@@ -107,7 +106,6 @@ require_workspace() {
   _load_repos_dir
   _load_code_workspace
   _load_git_hooks
-  _load_copilot
 
   log_info "Using workspace at ${_BOLD}$NEXUS_DIR${_NC} ${_DIM}($(basename "$WORKSPACE_YAML") found)${_NC}"
 }
@@ -185,18 +183,6 @@ _load_git_hooks() {
   fi
   _gh="$(echo "$_gh" | tr -d " \t\r\n'\"")"
   GIT_HOOKS_CONFIG="$_gh"
-}
-
-_load_copilot() {
-  _cp=""
-  if [ -f "$WORKSPACE_LOCAL_YAML" ]; then
-    _cp="$(awk '/^(copilot|copilot_sync):/ { sub(/^[a-zA-Z0-9_]+:[ ]*/, ""); sub(/[ ]*#.*/, ""); val=$0 } END { if (val) print val }' "$WORKSPACE_LOCAL_YAML")"
-  fi
-  if [ -z "$_cp" ] && [ -f "$WORKSPACE_YAML" ]; then
-    _cp="$(awk '/^(copilot|copilot_sync):/ { sub(/^[a-zA-Z0-9_]+:[ ]*/, ""); sub(/[ ]*#.*/, ""); val=$0 } END { if (val) print val }' "$WORKSPACE_YAML")"
-  fi
-  _cp="$(echo "$_cp" | tr -d " \t\r\n'\"")"
-  COPILOT_CONFIG="$_cp"
 }
 
 upgrade_workspace_config() {

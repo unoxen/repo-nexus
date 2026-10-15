@@ -17,12 +17,10 @@ config:
   notify_on_changes: true
 
 rules:
-  - rules/rnex-behavioral.md: .rnex/plugins/karpathy-llm/rules/rnex-behavioral.md
   - rules/behavioral.md: .rnex/plugins/karpathy-llm/rules/behavioral.md
-  - workflows/rnex-wiki-ingest.md: .rnex/plugins/karpathy-llm/workflows/rnex-wiki-ingest.md
-  - workflows/wiki-ingest.md: .rnex/plugins/karpathy-llm/workflows/wiki-ingest.md
-  - workflows/rnex-wiki-lint.md: .rnex/plugins/karpathy-llm/workflows/rnex-wiki-lint.md
-  - workflows/wiki-lint.md: .rnex/plugins/karpathy-llm/workflows/wiki-lint.md
+skills:
+  - skills/wiki-ingest.md: .rnex/plugins/karpathy-llm/skills/wiki-ingest.md
+  - skills/wiki-lint.md: .rnex/plugins/karpathy-llm/skills/wiki-lint.md
 instructions:
   - instructions/rnex-wiki-architecture.md: .rnex/plugins/karpathy-llm/instructions/rnex-wiki-architecture.md
 templates:

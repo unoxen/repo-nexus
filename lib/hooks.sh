@@ -21,23 +21,24 @@ run_hook() {
   [ -z "$_ws" ] && return 0
   [ ! -f "$_ws/rnex.yaml" ] && return 0
 
-  RNEX_ROOT="$(cd "$_ws" 2>/dev/null && pwd -P)"
-  RNEX_CONFIG_MERGED="$RNEX_ROOT/rnex.yaml"
+  _hook_root="$(cd "$_ws" 2>/dev/null && pwd -P)"
+  _hook_config_merged="$_hook_root/rnex.yaml"
   _hook_cmd="${_hook_phase_cmd#*_}"
   _hook_file="${_hook_phase_cmd}.sh"
-  RNEX_CMD="$_hook_cmd"
-  RNEX_ARGS="$*"
-  RNEX_QUIET="${_sync_quiet:-0}"
+  _hook_args="$*"
+  _hook_quiet="${_sync_quiet:-0}"
 
   _old_nexus="$NEXUS_DIR"
-  NEXUS_DIR="$RNEX_ROOT"
+  NEXUS_DIR="$_hook_root"
   _plugins="$(yaml_list_plugins 2>/dev/null || true)"
+  _skill_dirs="$(get_active_provider_skill_dirs 2>/dev/null || true)"
+  NEXUS_DIR="$_old_nexus"
 
   for _pname in $_plugins; do
     [ -n "$_pname" ] || continue
     yaml_plugin_enabled "$_pname" 2>/dev/null || continue
 
-    RNEX_PLUGIN_DIR="$RNEX_ROOT/.rnex/plugins/$_pname"
+    RNEX_PLUGIN_DIR="$_hook_root/.rnex/plugins/$_pname"
     _hook_script="$RNEX_PLUGIN_DIR/hooks/$_hook_file"
 
     if [ ! -f "$_hook_script" ]; then
@@ -50,12 +51,113 @@ run_hook() {
     if [ -f "$_hook_script" ]; then
       chmod +x "$_hook_script" 2>/dev/null || true
       (
-        export RNEX_ROOT RNEX_CONFIG_MERGED RNEX_PLUGIN_DIR RNEX_CMD RNEX_ARGS RNEX_QUIET
-        "$_hook_script" "$@"
+        RNEX_ROOT="$_hook_root"
+        RNEX_CONFIG_MERGED="$_hook_config_merged"
+        RNEX_CMD="$_hook_cmd"
+        RNEX_ARGS="$_hook_args"
+        RNEX_QUIET="$_hook_quiet"
+        RNEX_PROVIDER_SKILL_DIRS="$_skill_dirs"
+        export RNEX_ROOT RNEX_CONFIG_MERGED RNEX_PLUGIN_DIR RNEX_CMD RNEX_ARGS RNEX_QUIET RNEX_PROVIDER_SKILL_DIRS
+        rnex_register_user_skill() {
+          skill_name="$1"
+          target_path="$2"
+          for provider_dir in $RNEX_PROVIDER_SKILL_DIRS; do
+            mkdir -p "$RNEX_ROOT/$provider_dir"
+            cat << EOF > "$RNEX_ROOT/$provider_dir/rnex-${skill_name}.md"
+# User Skill: rnex-${skill_name}
+
+CRITICAL: Do not execute inline heuristics. Read and strictly follow the agentic skill protocol at:
+\`${target_path}\`
+EOF
+          done
+        }
+
+        rnex_unregister_user_skill() {
+          skill_name="$1"
+          for provider_dir in $RNEX_PROVIDER_SKILL_DIRS; do
+            rm -f "$RNEX_ROOT/$provider_dir/rnex-${skill_name}.md"
+          done
+        }
+        set -- "$@"
+        . "$_hook_script"
       ) || true
     fi
   done
   NEXUS_DIR="$_old_nexus"
+}
+
+run_plugin_hook() {
+  _target_plugin="$1"
+  _hook_phase_cmd="$2"
+  shift 2 2>/dev/null || true
+
+  _ws="${NEXUS_DIR:-}"
+  if [ -z "$_ws" ]; then
+    if [ -f rnex.yaml ]; then
+      _ws="."
+    else
+      _ws="$(find_workspace_dir 2>/dev/null || true)"
+    fi
+  fi
+  [ -z "$_ws" ] && return 0
+  [ ! -f "$_ws/rnex.yaml" ] && return 0
+
+  _hook_root="$(cd "$_ws" 2>/dev/null && pwd -P)"
+  _hook_config_merged="$_hook_root/rnex.yaml"
+  _hook_file="${_hook_phase_cmd}.sh"
+  _hook_cmd="${_hook_phase_cmd#*_}"
+  _hook_args="$*"
+  _hook_quiet="${_sync_quiet:-0}"
+
+  _old_nexus="$NEXUS_DIR"
+  NEXUS_DIR="$_hook_root"
+  _skill_dirs="$(get_active_provider_skill_dirs 2>/dev/null || true)"
+  NEXUS_DIR="$_old_nexus"
+
+  RNEX_PLUGIN_DIR="$_hook_root/.rnex/plugins/$_target_plugin"
+  _hook_script="$RNEX_PLUGIN_DIR/hooks/$_hook_file"
+
+  if [ ! -f "$_hook_script" ]; then
+    _src_pdir="$(find_plugin_dir "$_target_plugin" 2>/dev/null || true)"
+    if [ -n "$_src_pdir" ] && [ -f "$_src_pdir/hooks/$_hook_file" ]; then
+      _hook_script="$_src_pdir/hooks/$_hook_file"
+    fi
+  fi
+
+  if [ -f "$_hook_script" ]; then
+    chmod +x "$_hook_script" 2>/dev/null || true
+    (
+      RNEX_ROOT="$_hook_root"
+      RNEX_CONFIG_MERGED="$_hook_config_merged"
+      RNEX_CMD="$_hook_cmd"
+      RNEX_ARGS="$_hook_args"
+      RNEX_QUIET="$_hook_quiet"
+      RNEX_PROVIDER_SKILL_DIRS="$_skill_dirs"
+      export RNEX_ROOT RNEX_CONFIG_MERGED RNEX_PLUGIN_DIR RNEX_CMD RNEX_ARGS RNEX_QUIET RNEX_PROVIDER_SKILL_DIRS
+      rnex_register_user_skill() {
+        skill_name="$1"
+        target_path="$2"
+        for provider_dir in $RNEX_PROVIDER_SKILL_DIRS; do
+          mkdir -p "$RNEX_ROOT/$provider_dir"
+          cat << EOF > "$RNEX_ROOT/$provider_dir/rnex-${skill_name}.md"
+# User Skill: rnex-${skill_name}
+
+CRITICAL: Do not execute inline heuristics. Read and strictly follow the agentic skill protocol at:
+\`${target_path}\`
+EOF
+        done
+      }
+
+      rnex_unregister_user_skill() {
+        skill_name="$1"
+        for provider_dir in $RNEX_PROVIDER_SKILL_DIRS; do
+          rm -f "$RNEX_ROOT/$provider_dir/rnex-${skill_name}.md"
+        done
+      }
+      set -- "$@"
+      . "$_hook_script"
+    ) || true
+  fi
 }
 
 run_plugin_git_hooks() {

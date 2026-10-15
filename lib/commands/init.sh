@@ -10,7 +10,6 @@ cmd_init() {
   _cli_code_workspace=""
   _cli_hooks=""
   _cli_no_hooks=0
-  _cli_copilot=""
   _cli_claude=""
   _cli_gemini=""
   _cli_cursor=""
@@ -22,8 +21,7 @@ cmd_init() {
       -y|--yes) _non_interactive=1 ;;
       --hooks) _cli_hooks="true" ;;
       --no-hooks) _cli_no_hooks=1; _cli_hooks="false" ;;
-      --copilot) _cli_copilot="true" ;;
-      --no-copilot) _cli_copilot="false" ;;
+      --copilot|--no-copilot) ;; # Legacy flag ignored
       --claude) _cli_claude="true" ;;
       --no-claude) _cli_claude="false" ;;
       --gemini) _cli_gemini="true" ;;
@@ -104,20 +102,17 @@ cmd_init() {
     log_dim "  rnex sync"
   else
     _init_plugins=""
-    if [ "$_cli_copilot" = "true" ]; then
-      _init_plugins="${_init_plugins}  copilot:\n    prompts: true\n    workflows: true\n"
-    fi
     if [ "$_cli_claude" = "true" ]; then
-      _init_plugins="${_init_plugins}  claude:\n    instructions: true\n    prompts: true\n    workflows: true\n"
+      _init_plugins="${_init_plugins}  claude:\n    instructions: true\n    skills: true\n"
     fi
     if [ "$_cli_gemini" = "true" ]; then
-      _init_plugins="${_init_plugins}  gemini:\n    instructions: true\n    prompts: true\n    workflows: true\n"
+      _init_plugins="${_init_plugins}  gemini:\n    instructions: true\n    skills: true\n"
     fi
     if [ "$_cli_cursor" = "true" ]; then
-      _init_plugins="${_init_plugins}  cursor:\n    instructions: true\n    prompts: true\n    workflows: true\n"
+      _init_plugins="${_init_plugins}  cursor:\n    instructions: true\n    skills: true\n"
     fi
     if [ "$_cli_windsurf" = "true" ]; then
-      _init_plugins="${_init_plugins}  windsurf:\n    instructions: true\n    prompts: true\n    workflows: true\n"
+      _init_plugins="${_init_plugins}  windsurf:\n    instructions: true\n    skills: true\n"
     fi
     if [ "$_cli_karpathy" = "true" ]; then
       _init_plugins="${_init_plugins}  karpathy-llm:\n    raw_dir: \"./docs\"\n    wiki_dir: \".rnex/wiki\"\n    lint_trigger: \"manual\"\n"
@@ -169,9 +164,10 @@ YAML_EOF
   NEXUS_DIR="$_init_dir"
   WORKSPACE_YAML="$_target_yaml"
   WORKSPACE_LOCAL_YAML="$_init_dir/$RNEX_LOCAL_CONFIG_FILE"
+  sync_rnex_base_assets
   sync_plugins
   build_ai_instructions "$_init_dir"
-  sync_prompts
+  sync_skills
   WORKSPACE_LOCAL_YAML="$_orig_local_yaml"
   WORKSPACE_YAML="$_orig_yaml"
   NEXUS_DIR="$_orig_nexus"
@@ -229,6 +225,18 @@ YAML_EOF
   _write_auto_sync_script "$_init_dir"
   _sync_ai_session_start_hooks "$_init_dir"
   update_sync_stamp "$_init_dir"
+
+  # Dispatch after_init plugin lifecycle hook
+  _orig_nexus="$NEXUS_DIR"
+  _orig_yaml="$WORKSPACE_YAML"
+  _orig_local_yaml="$WORKSPACE_LOCAL_YAML"
+  NEXUS_DIR="$_init_dir"
+  WORKSPACE_YAML="$_target_yaml"
+  WORKSPACE_LOCAL_YAML="$_init_dir/$RNEX_LOCAL_CONFIG_FILE"
+  run_hook "after_init" "$@"
+  WORKSPACE_LOCAL_YAML="$_orig_local_yaml"
+  WORKSPACE_YAML="$_orig_yaml"
+  NEXUS_DIR="$_orig_nexus"
 
   if [ "$_config_created" -eq 1 ]; then
     printf '\n'

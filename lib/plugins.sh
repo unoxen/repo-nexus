@@ -121,7 +121,8 @@ sync_plugins() {
       [ -d "$_existing" ] || continue
       _pname="$(basename "$_existing")"
       if ! yaml_plugin_enabled "$_pname"; then
-        clean_plugin_prompts_across_providers "$_existing"
+        run_plugin_hook "$_pname" "before_plugin_disable"
+        clean_plugin_user_skills "$_existing"
         rm -rf "$_existing"
         log_ok "Removed disabled plugin scope: .rnex/plugins/$_pname"
       fi

@@ -67,18 +67,17 @@ cmd_plugin_info() {
   printf '%bLocation:%b     %s\n' "$_BOLD" "$_NC" "$_pdir"
 
   case "$_name" in
-    copilot|claude|gemini|cursor|windsurf)
-      _prompt_target=""
+    claude|gemini|cursor|windsurf)
+      _skill_target=""
       case "$_name" in
-        copilot) _prompt_target=".github/prompts/*.prompt.md" ;;
-        claude) _prompt_target=".claude/commands/ and .claude/prompts/" ;;
-        gemini) _prompt_target=".gemini/prompts/*.prompt.md" ;;
-        cursor) _prompt_target=".cursor/prompts/*.md" ;;
-        windsurf) _prompt_target=".windsurf/prompts/*.md" ;;
+        claude) _skill_target=".claude/skills/" ;;
+        gemini) _skill_target=".gemini/skills/" ;;
+        cursor) _skill_target=".cursor/rules/" ;;
+        windsurf) _skill_target=".windsurf/rules/" ;;
       esac
       printf '\n%bConfigurable Options (in rnex.yaml or .local.rnex.yaml):%b\n' "$_BOLD" "$_NC"
-      printf '  - prompts: true|false  (mirror prompts to %s; current: %s)\n' "$_prompt_target" "$(provider_option_enabled "$_name" "prompts" && echo "true" || echo "false")"
-      printf '  - workflows: true|false  (mirror workflows; current: %s)\n' "$(provider_option_enabled "$_name" "workflows" && echo "true" || echo "false")"
+      printf '  - instructions: true|false  (maintain provider instructions; current: %s)\n' "$(provider_option_enabled "$_name" "instructions" && echo "true" || echo "false")"
+      printf '  - skills: true|false        (generate user skills in %s; current: %s)\n' "$_skill_target" "$(provider_option_enabled "$_name" "skills" && echo "true" || echo "false")"
       ;;
   esac
   if [ "$_name" = "karpathy-llm" ]; then
@@ -168,6 +167,9 @@ cmd_plugin_disable() {
     _n="$(plugin_get_field "$_pdir" "name")"
     [ -n "$_n" ] && _name="$_n"
   fi
+
+  # Dispatch before_plugin_disable plugin lifecycle hook
+  run_plugin_hook "$_name" "before_plugin_disable"
 
   if [ "$_is_local" -eq 1 ]; then
     if _yaml_list_plugins_from_file "$WORKSPACE_YAML" | grep -qx "$_name" 2>/dev/null; then

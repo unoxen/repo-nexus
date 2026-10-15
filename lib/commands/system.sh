@@ -63,10 +63,10 @@ cmd_help() {
     -v, --version           Show version
 
   WORKSPACE & SYSTEM SETUP
-    init [-y] [--code-workspace [file]] [--hooks|--no-hooks] [--copilot] [--claude] [--gemini] [--cursor] [--windsurf] [dir]
+    init [-y] [--code-workspace [file]] [--hooks|--no-hooks] [--claude] [--gemini] [--cursor] [--windsurf] [dir]
                             Initialize a new Repo Nexus workspace (default: AGENTS.md)
     install [dir]           Install rnex & repo-nexus globally into ~/.local/bin (or custom dir)
-    sync [-y] [--quiet]     Reconcile workspace, plugins, prompts, member .rnex directories, and compile AI instructions
+    sync [-y] [--quiet]     Reconcile workspace, plugins, skills, member .rnex directories, and compile AI instructions
     status                  Inspect workspace health, active repos, loaded config, git hooks, and plugins (read-only)
     update [-y]             Check version, upgrade schema, and reconcile workspace (alias: upgrade)
     upgrade [-y]            Alias for update
@@ -103,7 +103,7 @@ cmd_help() {
     rnex enable analytics                       # Re-enable analytics repo
     rnex list                                   # List all member repos and active branches
     rnex status                                 # Inspect workspace configuration and health
-    rnex sync                                   # Reconcile all repos, plugins, prompts, and .rnex directories
+    rnex sync                                   # Reconcile all repos, plugins, skills, and .rnex directories
     rnex update                                 # Upgrade workspace configuration to newest version
     rnex hooks install                          # Enable automated workspace Git hooks
     rnex completion zsh                         # Generate Zsh completion script
