@@ -403,7 +403,7 @@ rnex_generate_user_skill() {
     case "$provider_dir" in
       *rules*)
         mkdir -p "$_r/$provider_dir"
-        rm -rf "$_r/$provider_dir/${full_name}" 2>/dev/null || true
+        rm -rf "${_r:?}/${provider_dir:?}/${full_name:?}" 2>/dev/null || true
         cat << EOF > "$_r/$provider_dir/${full_name}.md"
 # User Skill: ${full_name}
 
@@ -449,10 +449,10 @@ rnex_unregister_user_skill() {
   _r="${RNEX_ROOT:-.}"
   for provider_dir in $_dirs; do
     rm -f "$_r/$provider_dir/${full_name}.md"
-    rm -rf "$_r/$provider_dir/${full_name}"
+    rm -rf "${_r:?}/${provider_dir:?}/${full_name:?}"
     if [ -n "$plugin_name" ]; then
       rm -f "$_r/$provider_dir/rnex-${skill_name}.md"
-      rm -rf "$_r/$provider_dir/rnex-${skill_name}"
+      rm -rf "${_r:?}/${provider_dir:?}/rnex-${skill_name:?}"
     fi
   done
 }
@@ -515,7 +515,7 @@ rnex_generate_user_skill() {
     case "$provider_dir" in
       *rules*)
         mkdir -p "$_r/$provider_dir"
-        rm -rf "$_r/$provider_dir/${full_name}" 2>/dev/null || true
+        rm -rf "${_r:?}/${provider_dir:?}/${full_name:?}" 2>/dev/null || true
         cat << EOF > "$_r/$provider_dir/${full_name}.md"
 # User Skill: ${full_name}
 
@@ -564,10 +564,10 @@ rnex_unregister_user_skill() {
   _r="${NEXUS_DIR:-${RNEX_ROOT:-.}}"
   for provider_dir in $_dirs; do
     rm -f "$_r/$provider_dir/${full_name}.md"
-    rm -rf "$_r/$provider_dir/${full_name}"
+    rm -rf "${_r:?}/${provider_dir:?}/${full_name:?}"
     if [ -n "$plugin_name" ]; then
       rm -f "$_r/$provider_dir/rnex-${skill_name}.md"
-      rm -rf "$_r/$provider_dir/rnex-${skill_name}"
+      rm -rf "${_r:?}/${provider_dir:?}/rnex-${skill_name:?}"
     fi
   done
 }

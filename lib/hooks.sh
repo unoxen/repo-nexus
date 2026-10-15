@@ -88,7 +88,7 @@ run_hook() {
             case "$provider_dir" in
               *rules*)
                 mkdir -p "$RNEX_ROOT/$provider_dir"
-                rm -rf "$RNEX_ROOT/$provider_dir/${full_name}" 2>/dev/null || true
+                rm -rf "${RNEX_ROOT:?}/${provider_dir:?}/${full_name:?}" 2>/dev/null || true
                 cat << EOF > "$RNEX_ROOT/$provider_dir/${full_name}.md"
 # User Skill: ${full_name}
 
@@ -134,10 +134,10 @@ EOF
           fi
           for provider_dir in $RNEX_PROVIDER_SKILL_DIRS; do
             rm -f "$RNEX_ROOT/$provider_dir/${full_name}.md"
-            rm -rf "$RNEX_ROOT/$provider_dir/${full_name}"
+            rm -rf "${RNEX_ROOT:?}/${provider_dir:?}/${full_name:?}"
             if [ -n "$plugin_name" ]; then
               rm -f "$RNEX_ROOT/$provider_dir/rnex-${skill_name}.md"
-              rm -rf "$RNEX_ROOT/$provider_dir/rnex-${skill_name}"
+              rm -rf "${RNEX_ROOT:?}/${provider_dir:?}/rnex-${skill_name:?}"
             fi
           done
         }
@@ -228,7 +228,7 @@ run_plugin_hook() {
           case "$provider_dir" in
             *rules*)
               mkdir -p "$RNEX_ROOT/$provider_dir"
-              rm -rf "$RNEX_ROOT/$provider_dir/${full_name}" 2>/dev/null || true
+              rm -rf "${RNEX_ROOT:?}/${provider_dir:?}/${full_name:?}" 2>/dev/null || true
               cat << EOF > "$RNEX_ROOT/$provider_dir/${full_name}.md"
 # User Skill: ${full_name}
 
@@ -274,10 +274,10 @@ EOF
         fi
         for provider_dir in $RNEX_PROVIDER_SKILL_DIRS; do
           rm -f "$RNEX_ROOT/$provider_dir/${full_name}.md"
-          rm -rf "$RNEX_ROOT/$provider_dir/${full_name}"
+          rm -rf "${RNEX_ROOT:?}/${provider_dir:?}/${full_name:?}"
           if [ -n "$plugin_name" ]; then
             rm -f "$RNEX_ROOT/$provider_dir/rnex-${skill_name}.md"
-            rm -rf "$RNEX_ROOT/$provider_dir/rnex-${skill_name}"
+            rm -rf "${RNEX_ROOT:?}/${provider_dir:?}/rnex-${skill_name:?}"
           fi
         done
       }
