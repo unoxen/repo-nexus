@@ -197,6 +197,18 @@ ingest_member_readme() {
     _needs_gen=1
   fi
 
+  # Determine navigation reference (avoid linking to missing navigation pages)
+  _nav_target="index.md"
+  _nav_label="Wiki Index"
+  _nav_related="[]"
+  _nav_extends="[]"
+  if [ -f "$_wiki_path/member-repositories.md" ]; then
+    _nav_target="member-repositories.md"
+    _nav_label="Member Repositories"
+    _nav_related='["member-repositories.md"]'
+    _nav_extends='["member-repositories.md"]'
+  fi
+
   if [ "$_needs_gen" -eq 1 ]; then
     cat > "$_target_page" <<PAGE_EOF
 ---
@@ -204,8 +216,8 @@ title: "Member Repo: ${_m_repo}"
 tags: [member-repo, ${_m_repo}]
 last_updated: ${_today}
 sources: ["${_rel_source}"]
-related: ["member-repositories.md"]
-extends: ["member-repositories.md"]
+related: ${_nav_related}
+extends: ${_nav_extends}
 contradicts: []
 mentioned_in: ["index.md", "hot.md"]
 ---
@@ -221,7 +233,7 @@ ${_m_summary}
 * **Management:** Tracked as an autonomous Git member repository in Repo Nexus.
 
 ## Contextual Links
-* See [Member Repositories](./member-repositories.md) for workspace member repository lifecycle.
+* See [${_nav_label}](./${_nav_target}) for workspace member repository catalog.
 PAGE_EOF
 
     # Append to Operation Log (_log.md)
@@ -277,8 +289,17 @@ LOG_EOF
 
   # 5. Register in hot cache (hot.md) under Section 1 if not already present
   if [ -f "$_wiki_path/hot.md" ] && ! grep -q "${_rel_loc}" "$_wiki_path/hot.md"; then
+    # Ultra-concise summary for bounded hot cache (~500-word ceiling)
+    _hot_summary="$(printf '%s' "$_m_summary" | sed -e 's/[.?!][[:space:]].*//' -e 's/[.?!]$//' | awk '{
+      out=""
+      for (i=1; i<=NF && i<=7; i++) {
+        out = (out == "") ? $i : out " " $i
+      }
+      print out
+    }')"
+    [ -z "$_hot_summary" ] && _hot_summary="Member repository"
+    _hot_line="* **${_m_repo} (\`${_rel_loc}\`):** ${_hot_summary}."
     _tmp_hot="$(mktemp)"
-    _hot_line="* **${_m_repo} (\`${_rel_loc}\`):** ${_m_summary}"
     if LINE="$_hot_line" awk '
       /^## 1\. Architecture & Member Repo Map/ {
         print
@@ -345,3 +366,34 @@ if [ -d "$RNEX_ROOT/$REPOS_DIR" ]; then
     done
   done
 fi
+
+# 3. Enforce strict ~500-word ceiling on hot.md (condense Section 1 if needed)
+if [ -f "$_wiki_path/hot.md" ]; then
+  _hot_words="$(wc -w < "$_wiki_path/hot.md" 2>/dev/null || echo 0)"
+  if [ "$_hot_words" -gt 480 ]; then
+    _num_repos="$(grep -cE '^\* \*\*[a-zA-Z0-9_.-]+ \(`?repos/' "$_wiki_path/hot.md" 2>/dev/null || echo 0)"
+    if [ "$_num_repos" -gt 3 ]; then
+      _repo_names="$(grep -E '^\* \*\*[a-zA-Z0-9_.-]+ \(`?repos/' "$_wiki_path/hot.md" | sed -e 's/^\* \*\*//' -e 's/ .*//' | tr '\n' ', ' | sed -e 's/, $//')"
+      _clean_repos="$(printf '%s' "$REPOS_DIR" | sed -e 's#^\./##' -e 's#^/##' -e 's#/$##')"
+      _tmp_b="$(mktemp)"
+      if awk -v rnames="$_repo_names" -v nrepos="$_num_repos" -v rdir="$_clean_repos" '
+        BEGIN { in_s1=0; replaced=0 }
+        /^## 1\. Architecture & Member Repo Map/ { in_s1=1; print; next }
+        in_s1 && /^## / { in_s1=0 }
+        in_s1 && /^\* \*\*[a-zA-Z0-9_.-]+ \(`?repos\// {
+          if (!replaced) {
+            print "* **Member Repositories (" nrepos " repos):** Autonomous repositories under `" rdir "/`: " rnames ". See [Wiki Index](./index.md#member-repositories) for individual architecture pages."
+            replaced=1
+          }
+          next
+        }
+        { print }
+      ' "$_wiki_path/hot.md" > "$_tmp_b"; then
+        mv "$_tmp_b" "$_wiki_path/hot.md"
+      else
+        rm -f "$_tmp_b"
+      fi
+    fi
+  fi
+fi
+

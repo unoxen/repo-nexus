@@ -224,6 +224,8 @@ grep -q 'title: "Member Repo: mock-member-repo"' "$TEST_HOOK_WS/.rnex/wiki/repo-
 grep -q 'tags: \[member-repo, mock-member-repo\]' "$TEST_HOOK_WS/.rnex/wiki/repo-mock-member-repo.md" || { fail "Frontmatter tags missing in repo-mock-member-repo.md"; exit 1; }
 grep -q 'sources: \["repos/mock-member-repo/README.md"\]' "$TEST_HOOK_WS/.rnex/wiki/repo-mock-member-repo.md" || { fail "Frontmatter sources missing in repo-mock-member-repo.md"; exit 1; }
 grep -q "This is a mock repository README." "$TEST_HOOK_WS/.rnex/wiki/repo-mock-member-repo.md" || { fail "Summary missing in repo-mock-member-repo.md"; exit 1; }
+! grep -q "member-repositories.md" "$TEST_HOOK_WS/.rnex/wiki/repo-mock-member-repo.md" || { fail "Missing navigation page member-repositories.md was referenced"; exit 1; }
+grep -q "See \[Wiki Index\](\./index.md)" "$TEST_HOOK_WS/.rnex/wiki/repo-mock-member-repo.md" || { fail "Did not reference real navigation index.md"; exit 1; }
 
 # 5c. Confirm registration in navigation index (index.md)
 [ -f "$TEST_HOOK_WS/.rnex/wiki/index.md" ] || { fail ".rnex/wiki/index.md missing"; exit 1; }
@@ -304,6 +306,14 @@ grep -q "repo-added-repo\.md" "$TEST_HOOK_WS/.rnex/wiki/index.md" || { fail "add
 grep -q "added-repo" "$TEST_HOOK_WS/.rnex/wiki/hot.md" || { fail "added-repo not registered in hot.md"; exit 1; }
 grep -q "Member Repo Ingest: added-repo" "$TEST_HOOK_WS/.rnex/wiki/_log.md" || { fail "added-repo not logged in _log.md"; exit 1; }
 
+# 11. Verify scaling across 15 member repositories strictly preserves the ~500-word ceiling on hot.md
+for _i in $(seq 1 14); do
+  mkdir -p "$TEST_HOOK_WS/repos/repo-$_i"
+  printf '# Repository %s\nAutonomous microservice %s responsible for dedicated business domain tasks.\n' "$_i" "$_i" > "$TEST_HOOK_WS/repos/repo-$_i/README.md"
+done
+(cd "$TEST_HOOK_WS" && ./rnex sync -y >/dev/null)
+_hot_wc="$(wc -w < "$TEST_HOOK_WS/.rnex/wiki/hot.md")"
+[ "$_hot_wc" -le 500 ] || { fail "hot.md word count ($_hot_wc) exceeded 500-word ceiling with 15 repositories"; exit 1; }
 pass
 
 # --------------------------------------------------------------------------

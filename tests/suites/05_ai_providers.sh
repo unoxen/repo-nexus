@@ -183,7 +183,22 @@ rm -f "$TEST_PROVIDERS_WS/.cursorignore" "$TEST_PROVIDERS_WS/.geminiignore"
 (cd "$TEST_PROVIDERS_WS" && ./rnex plugin disable gemini >/dev/null)
 (cd "$TEST_PROVIDERS_WS" && ./rnex sync -y --quiet >/dev/null)
 [ ! -f "$TEST_PROVIDERS_WS/.cursorignore" ] || { fail ".cursorignore without custom content was not removed"; exit 1; }
-[ ! -f "$TEST_PROVIDERS_WS/.geminiignore" ] || { fail ".geminiignore without custom content was not removed"; exit 1; }
+# Verify custom Copilot instructions in .github/copilot-instructions.md are strictly preserved
+mkdir -p "$TEST_PROVIDERS_WS/.github"
+cat <<'EOF_COPILOT' > "$TEST_PROVIDERS_WS/.github/copilot-instructions.md"
+<!-- REPO-NEXUS:START -->
+# Repo Nexus routing block
+<!-- REPO-NEXUS:END -->
+
+# My Custom Copilot Developer Rules
+1. Never hallucinate.
+2. Maintain clean architecture.
+EOF_COPILOT
+
+(cd "$TEST_PROVIDERS_WS" && ./rnex sync -y --quiet >/dev/null)
+[ -f "$TEST_PROVIDERS_WS/.github/copilot-instructions.md" ] || { fail ".github/copilot-instructions.md with custom content was deleted"; exit 1; }
+grep -q "My Custom Copilot Developer Rules" "$TEST_PROVIDERS_WS/.github/copilot-instructions.md" || { fail "Custom Copilot developer rules lost after rnex sync"; exit 1; }
+! grep -q "REPO-NEXUS:START" "$TEST_PROVIDERS_WS/.github/copilot-instructions.md" || { fail "Legacy REPO-NEXUS block not stripped from .github/copilot-instructions.md"; exit 1; }
 pass
 
 if [ "${_STANDALONE_RUN:-0}" -eq 1 ]; then

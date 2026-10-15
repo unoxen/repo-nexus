@@ -672,11 +672,11 @@ sync_windsurf() {
 }
 
 sync_ai_providers() {
-  # Clean legacy Copilot prompt harness if present
-  rm -rf "$NEXUS_DIR/.github/prompts" "$NEXUS_DIR/.github/copilot-instructions.md" 2>/dev/null || true
+  # Clean legacy Copilot prompt harness and skills if present, strictly preserving custom Copilot instructions
+  rm -rf "$NEXUS_DIR/.github/prompts" 2>/dev/null || true
+  clean_rnex_instructions "$NEXUS_DIR/.github/copilot-instructions.md"
   clean_provider_user_skills "$NEXUS_DIR/.github/skills"
   clean_provider_agents "$NEXUS_DIR/.github/agents" ".agent.md"
-  rmdir "$NEXUS_DIR/.github" 2>/dev/null || true
 
   sync_claude
   sync_gemini
