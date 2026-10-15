@@ -109,7 +109,7 @@ jobs:
                 pkg.publishConfig = { registry: "https://npm.pkg.github.com" };
                 require("fs").writeFileSync("./package.json", JSON.stringify(pkg, null, 2) + "\n");
               '
-              npm publish --registry=https://npm.pkg.github.com || echo "Skipping ${TAG_VER}..."
+              npm publish --registry=https://npm.pkg.github.com --tag "v${TAG_VER}" || echo "Skipping ${TAG_VER}..."
               git checkout -f "$CURRENT_COMMIT" -q
             fi
           done
