@@ -5,7 +5,7 @@ description: Modular plugin architecture for Repo Nexus, multi-provider AI conte
 
 # Plugin Ecosystem
 
-Repo Nexus includes an extensible, modular plugin engine designed to equip multi-repo workspaces with AI assistant integrations, standardized prompts, agent workflows, and shared context protocols.
+Repo Nexus includes an extensible, modular plugin engine designed to equip multi-repo workspaces with AI assistant integrations, standardized skills, agent workflows, and shared context protocols.
 
 Each plugin is self-contained and managed declaratively via `rnex.yaml` or workstation-specific overrides in `.local.rnex.yaml`.
 
@@ -14,7 +14,7 @@ Each plugin is self-contained and managed declaratively via `rnex.yaml` or works
 ## Core Architecture
 
 ### 1. Scoped Isolation (`.rnex/plugins/<plugin-name>/`)
-When a plugin is enabled, its rules, instructions, workflows, prompts, and skills are scoped directly under `.rnex/plugins/<plugin-name>/`. This keeps workspace root directories clean, avoids naming collisions between plugins, and ensures version-controlled tracking of active extensions.
+When a plugin is enabled, its rules, instructions, workflows, and skills are scoped directly under `.rnex/plugins/<plugin-name>/`. This keeps workspace root directories clean, avoids naming collisions between plugins, and ensures version-controlled tracking of active extensions.
 
 ### 2. Member Repository Isolation
 Active plugins are mirrored into each active member repository under `repos/<name>/.rnex/plugins/<plugin-name>/`. When an AI assistant operates inside a specific member repository, it has full local access to the workspace's shared instructions and rules without breaking repository autonomy.
@@ -98,12 +98,11 @@ plugins:
   # AI Provider Plugins
   claude:
     instructions: true
-    prompts: true
-    workflows: true
+    skills: true
 
-  copilot:
-    prompts: true
-    workflows: true
+  gemini:
+    instructions: true
+    skills: true
 
   # Functional / Knowledge Plugins
   karpathy-llm:

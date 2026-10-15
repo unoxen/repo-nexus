@@ -81,7 +81,7 @@ _rnex() {
     'enable:Enable a repository in active workspace'
     'disable:Disable a repository in workspace'
     'list:List member repositories'
-    'sync:Reconcile workspace, plugins, prompts, and member .rnex directories'
+    'sync:Reconcile workspace, plugins, skills, and member .rnex directories'
     'status:Inspect workspace health and status (read-only)'
     'rnex-dir:Toggle .rnex directory integration for a repo'
     'update:Upgrade workspace configuration and routing instructions'
@@ -162,7 +162,7 @@ complete -c rnex -n "__fish_use_subcommand" -a remove -d "Remove a repository"
 complete -c rnex -n "__fish_use_subcommand" -a enable -d "Enable a repository"
 complete -c rnex -n "__fish_use_subcommand" -a disable -d "Disable a repository"
 complete -c rnex -n "__fish_use_subcommand" -a list -d "List repositories"
-complete -c rnex -n "__fish_use_subcommand" -a sync -d "Reconcile workspace, plugins, prompts, and repos"
+complete -c rnex -n "__fish_use_subcommand" -a sync -d "Reconcile workspace, plugins, skills, and repos"
 complete -c rnex -n "__fish_seen_subcommand_from sync" -l yes -s y -d "Automatically answer yes to prompts"
 complete -c rnex -n "__fish_seen_subcommand_from sync" -l quiet -s q -d "Suppress non-error output"
 complete -c rnex -n "__fish_seen_subcommand_from sync" -l upgrade -d "Upgrade workspace configuration schema"

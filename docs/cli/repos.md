@@ -125,5 +125,5 @@ Toggles member-level context projection inside `repos/<name>/.rnex/`.
 rnex rnex-dir <enable|disable> <name>
 ```
 
-* When enabled, workspace prompts and plugin context are projected into `repos/<name>/.rnex/` for localized AI assistants.
+* When enabled, workspace skills and plugin context are projected into `repos/<name>/.rnex/` for localized AI assistants.
 * When disabled, the repository root remains completely pristine.

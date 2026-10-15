@@ -65,13 +65,11 @@ plugins:
   # AI Provider Plugins
   claude:
     instructions: true
-    prompts: true
-    workflows: true
+    skills: true
 
   cursor:
     instructions: true
-    prompts: true
-    workflows: true
+    skills: true
 
   # Knowledge & Agent Protocol Plugins
   karpathy-llm:

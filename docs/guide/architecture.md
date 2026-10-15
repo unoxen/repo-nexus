@@ -22,7 +22,7 @@ my-workspace/
 ├── .rnex/                           # Workspace orchestration directory (tracked)
 │   ├── hooks/                       # Core workspace Git hooks (e.g. post-merge auto-sync)
 │   ├── plugins/                     # Enabled plugin instructions, skills, and agents
-│   └── prompts/                     # Standardized prompt library (audit, refactor, etc.)
+│   └── skills/                      # Core workspace agentic skills (clone-sync, batch-exec, etc.)
 │
 ├── repos/                           # Autonomous member repository clones (gitignored)
 │   ├── backend/                     # Standard Git repository (remote: api.git)
@@ -55,15 +55,15 @@ Member repository files are never tracked or committed to the parent meta-repo.
 To ensure code search tools (ripgrep, Claude Code, VS Code search) and AI indexers (Cursor codebase indexing, Gemini CLI) can discover and index member code across repos, Repo Nexus automatically maintains un-ignore files (`.ignore`, `.cursorignore`, `.geminiignore`) with `!repos/*`. This allows AI assistants and search engines to index code while meta-repo Git remains completely clean.
 
 ### 2. The `.rnex/` Orchestration Directory
-The `.rnex/` directory holds active plugins, automation hooks, and the standardized prompt library:
-* **`.rnex/prompts/`**: Reusable markdown prompts for common cross-repo workflows (workspace audit, cross-repo refactors, architecture summaries).
-* **`.rnex/plugins/`**: Isolated directory per enabled plugin (`.rnex/plugins/<plugin-name>/`), preventing naming collisions between plugins.
+The `.rnex/` directory encapsulates active plugins, automation hooks, and agentic skills:
+* **`.rnex/skills/`**: Core workspace-wide agentic skills owned by `rnex` (`clone-sync.md`, `batch-exec.md`, `workspace-status.md`).
+* **`.rnex/plugins/`**: Isolated directory per enabled plugin (`.rnex/plugins/<plugin-name>/`), encapsulating plugin-owned skills, rules, and agents without naming collisions.
 
 ### 3. Member Repository Context Mirroring
 When an AI assistant (such as Claude Code, Cursor, or Gemini) operates inside a specific member repository (`repos/backend/`), it cannot inspect files outside that repository's root.
 
 Repo Nexus solves this through **automated context projection**:
-* Active plugins and shared prompts are mirrored into `repos/<name>/.rnex/`.
+* Active plugins and workspace skills are mirrored into `repos/<name>/.rnex/`.
 * Local instruction files (`repos/<name>/.rnex/instructions.md`) provide member-level awareness of the parent meta-repo.
 * Member autonomy is preserved without duplicating maintenance.
 

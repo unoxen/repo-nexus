@@ -45,7 +45,7 @@ rnex hooks uninstall [--local]
 
 ## Plugin Management
 
-Plugins provide AI routing rules, standardized prompts, agent workflows, and shared context protocols.
+Plugins provide AI routing rules, standardized skills, agent workflows, and shared context protocols.
 
 ### `rnex plugin list`
 Displays all available plugins distributed with `rnex` and indicates whether they are enabled.

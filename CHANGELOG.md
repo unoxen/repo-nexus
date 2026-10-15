@@ -5,39 +5,47 @@ All notable changes to Repo Nexus (`rnex`) will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.7.5] - 2026-10-15
 
 ### Added
-- **Two-Tier Skills Architecture**: Clean separation between core `rnex` skills (`toolkit/skills/*.md` -> `.rnex/skills/*.md`) and plugin-owned skills (`toolkit/plugins/<plugin>/skills/*.md` -> `.rnex/plugins/<plugin>/skills/*.md`).
-- **On-the-Fly User Skill Generator**: Generated in active AI provider directories (`.cursor/rules/`, `.claude/skills/`, `.gemini/skills/`, `.windsurf/rules/`) with mandatory `rnex-` prefix (`rnex-<name>.md`). User skills contain zero inline heuristics, linking solely to the target agentic skill protocol in `.rnex/`.
-- **Plugin Contract Helper API**: Added `rnex_register_user_skill` and `rnex_unregister_user_skill` helper functions exposed in hook subshell environments for plugin lifecycle management.
-- **Plugin Lifecycle Hooks**: Added `before_plugin_disable` hook dispatched by `rnex plugin disable <name>` and plugin pruning in `rnex sync` to unregister plugin-owned User Skills.
-
-### Removed
-- **Legacy Prompts & Workflows**: Completely removed `toolkit/prompts/`, `toolkit/workflows/`, and `.rnex/workflows/`.
-- **Copilot Local Prompt Harness**: Removed `toolkit/plugins/copilot/`, `--copilot` CLI flag, and prompt-mirroring harness logic in favor of native universal `AGENTS.md` reading.
-
-### Removed
-- **`rnex fix` and `rnex status --fix`**: Removed in favor of `rnex sync` as the sole reconciliation command.
-- **Legacy Sample Instructions**: Removed `docs/AGENTS.sample.md` and replaced it with `docs/ai-instructions.sample.md` (and root `templates/ai-instructions.sample.md`).
-- **Core Plugin Decoupling**: Removed all hardcoded plugin references from `./rnex` core so the CLI is strictly plugin-agnostic.
-
-### Added
-- **Plugin Lifecycle Hooks & Contract**: Added `before_<cmd>` and `after_<cmd>` hook execution across all mutating commands (`init`, `install`, `add`, `clone`, `exec`, `remove`, `enable`, `disable`, `rnex-dir`, `sync`, `update`, `hooks`, `plugin`) while bypassing read-only commands (`status`, `list`, `completion`).
-- **Compiled AI Instructions (`.rnex/ai-instructions.md`)**: `rnex sync` now compiles a unified instruction file inside `.rnex/` from the merged 2-level config (`rnex.yaml` + `.local.rnex.yaml`), base AI instructions template, and active plugin fragments.
-- **Event-Driven Auto-Sync**: Added checksum-based config drift detection (`.rnex/.sync_stamp`) that automatically runs `rnex sync --quiet` on any `rnex` CLI command or new AI session start without background file watchers. Includes shell prompt hook (`_rnex_auto_sync`) in `rnex completion` and Git hooks (`post-merge`, `post-checkout`, `pre-commit`).
-- **Contribution Guide**: Added `CONTRIBUTION.md` documenting POSIX shell standards, plugin contract rules, and test workflows.
-- **Modular Test Suite Architecture**: Decomposed monolithic test runner into modular test suites under `tests/suites/` (`01_core_cli.sh` through `06_plugins_advanced.sh`) with shared harness `tests/test_helper.sh`.
-- **Maintainer Release Hooks Relocation**: Relocated maintainer Git hooks from `.githooks/` into `scripts/githooks/` to ensure workspace root strictly encapsulates internal state in `.rnex/`.
+- **Strict Separation of Core `rnex` Skills and Plugin Skills**:
+  - Core agentic skills live exclusively in `toolkit/skills/*.md` and sync strictly to `.rnex/skills/*.md` (`clone-sync.md`, `batch-exec.md`, `workspace-status.md`).
+  - Plugin-owned skills live strictly inside `toolkit/plugins/<plugin>/skills/*.md` and sync strictly to `.rnex/plugins/<plugin>/skills/*.md` (e.g. `wiki-ingest.md`, `wiki-lint.md`).
+  - Strict isolation guarantee: plugin skills are never placed in `.rnex/skills/`, and core skills are never placed in plugin directories.
+- **On-the-Fly Zero-Logic User Skill Generator**:
+  - Generates lightweight User Skill pointers prefixed with `rnex-` (`rnex-<name>.md`) into active AI provider directories (`.cursor/rules/`, `.claude/skills/`, `.gemini/skills/`, `.windsurf/rules/`).
+  - Contains zero inline operational heuristics—only a strict reference link directing AI assistants to the agentic protocol in `.rnex/`.
+- **Plugin Contract Helper API**:
+  - Added `rnex_register_user_skill <name> <path>` and `rnex_unregister_user_skill <name>` POSIX helper functions exported in `.rnex/bin/rnex-env.sh` and sourced in hook subshells.
+  - Dynamically evaluates `RNEX_PROVIDER_SKILL_DIRS` based on enabled AI provider plugins (`skills: true`).
+- **Provider Plugin Configuration (`skills: true`)**:
+  - Added native `skills: true` configuration support across `claude`, `gemini`, `cursor`, and `windsurf` plugins.
+- **Plugin Lifecycle Hooks Contract**:
+  - Added `before_<cmd>` and `after_<cmd>` hook execution across all mutating commands while bypassing read-only commands (`status`, `list`, `completion`).
+  - Added `before_plugin_disable` hook dispatched by `rnex plugin disable <name>` and plugin pruning in `rnex sync` to unregister plugin-owned User Skills.
+- **Compiled AI Instructions (`.rnex/ai-instructions.md`)**:
+  - `rnex sync` compiles a unified instruction file inside `.rnex/` from merged 2-level config, base template, and active plugin instruction fragments.
+- **Event-Driven Auto-Sync**:
+  - Checksum-based config drift detection (`.rnex/.sync_stamp`) that runs `rnex sync --quiet` automatically on any mutating command, `rnex list`, shell prompt hooks (`_rnex_auto_sync`), AI session startup (`SessionStart` hook), and Git hooks (`post-merge`, `post-checkout`, `pre-commit`).
+- **Modular Test Suite Architecture**:
+  - Decomposed test runner into modular test suites under `tests/suites/` (`01_core_cli.sh` through `06_plugins_advanced.sh`) with shared harness `tests/test_helper.sh`.
 
 ### Changed
-- **`rnex sync` Scope**: Synchronizes `rnex-*` prompts from `toolkit/prompts/` and `.rnex/` directories in both the nexus root and enabled member repositories (`repos/<name>/.rnex/`).
-- **Root AI Provider Files (`AGENTS.md`, `CLAUDE.md`)**: Simplified to contain only a single strict directive instructing agents to read and follow `.rnex/ai-instructions.md`.
-- **`karpathy-llm` Plugin Defaults & Hooks**: Migrated `karpathy-llm` to lifecycle hooks and changed default paths from `/wiki/` to `.rnex/wiki` (curated knowledge base) and from `/raw/` to `./docs` (raw intake).
+- **Provider Plugin Options**: Deprecated and replaced legacy `prompts: true` and `workflows: true` options with `instructions: true` and `skills: true`.
+- **Root AI Provider Directives**: Standardized `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `.cursorrules`, and `.windsurfrules` to route AI assistants cleanly to `.rnex/ai-instructions.md`.
+- **Karpathy LLM Wiki Architecture**:
+  - Moved workflows to plugin agentic skills under `toolkit/plugins/karpathy-llm/skills/`.
+  - Added dynamic navigation index fallback: generated repository pages (`repo-<name>.md`) reference `index.md` when specialized navigation pages are absent.
+  - Added hot cache word count ceiling: automatically bounds `.rnex/wiki/hot.md` to $\le 480$ words and collapses catalog links when workspace metadata expands across $>10$ repositories.
 
 ### Fixed
-- Unified GitHub repository URLs across `README.md`, `scripts/install.sh`, and the documentation site to canonical `unoxen/repo-nexus`.
-- Removed legacy `symlinks` references from repository metadata.
+- **Custom Copilot Instructions Preservation**: Fixed non-destructive cleanup in `lib/ai.sh` to strictly preserve custom developer guidelines authored in `.github/copilot-instructions.md` outside `REPO-NEXUS` delimiters.
+- **Documentation & Manifest Consistency**: Purged obsolete `prompts` and `workflows` references across plugin manifests (`plugin.yaml`), READMEs, CLI docs, configuration guides, and `lib/yaml.sh`.
+
+### Removed
+- **Legacy Prompts & Workflows**: Completely purged `toolkit/prompts/`, `toolkit/workflows/`, and obsolete `.rnex/prompts/` and `.rnex/workflows/` runtime directories.
+- **Copilot Local Prompt Harness**: Removed `toolkit/plugins/copilot/`, `--copilot` flag, and prompt-mirroring harness in favor of universal `AGENTS.md` and native Copilot instruction reading.
+- **`rnex fix` and `rnex status --fix`**: Permanently removed in favor of `rnex sync` as the single idempotent reconciliation command.
 
 
 ## [0.6.7] - 2026-10-12

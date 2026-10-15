@@ -12,7 +12,7 @@ description: Fast reference cheatsheet for rnex commands, global options, enviro
 | Command | Category | Description |
 |:---|:---|:---|
 | [`rnex init`](workspace.md#rnex-init) | Workspace | Initialize a new Repo Nexus workspace. |
-| [`rnex sync`](workspace.md#rnex-sync) | Workspace | Single reconciliation command: sync prompts, .rnex/ harness, and compile AI instructions. |
+| [`rnex sync`](workspace.md#rnex-sync) | Workspace | Single reconciliation command: sync skills, .rnex/ harness, and compile AI instructions. |
 | [`rnex status`](workspace.md#rnex-status) | Workspace | Strictly read-only: inspect workspace health, active repos, loaded config, and plugins. |
 | [`rnex update` / `upgrade`](workspace.md#rnex-update-alias-upgrade) | Workspace | Check configuration version and upgrade schema (delegates to `rnex sync`). |
 | [`rnex install`](workspace.md#rnex-install) | Workspace | Symlink `rnex` to `~/.local/bin`. |

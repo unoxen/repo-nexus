@@ -109,7 +109,7 @@ rnex upgrade [options]
 ### Relationship with `rnex sync`
 `rnex update` delegates directly to `rnex sync`:
 * **Upfront Version Diagnostics**: Compares `version:` in `rnex.yaml` against the installed CLI version. If already matching, it reports that the workspace is up to date.
-* **Unified Reconciliation**: Delegates directly to `rnex sync`, ensuring configuration schema upgrades, instruction updates (`AGENTS.md`, `.rnex/ai-instructions.md`), prompts, and plugin reconciliation occur in a single, idempotent pass.
+* **Unified Reconciliation**: Delegates directly to `rnex sync`, ensuring configuration schema upgrades, instruction updates (`AGENTS.md`, `.rnex/ai-instructions.md`), skills, and plugin reconciliation occur in a single, idempotent pass.
 * **Non-Destructive Migration**: Upgrades schema keys while preserving comments, indentation, and custom configurations.
 
 ---

@@ -51,9 +51,9 @@ repos:
     enabled: true
 
 plugins:
-  copilot:
+  claude:
     instructions: true
-    prompts: true
+    skills: true
 ```
 
 ---

@@ -91,8 +91,7 @@ toolkit/plugins/<name>/
 │   ├── git_post-merge.sh        # Executed on Git post-merge events
 │   └── git_pre-commit.sh        # Executed on Git pre-commit events
 ├── rules/                       # Optional: Coding rules (*.md)
-├── workflows/                   # Optional: Multi-step workflows (*.md)
-├── skills/                      # Optional: Specialized agent skills (*/SKILL.md)
+├── skills/                      # Optional: Plugin-owned agentic skills (*.md)
 ├── agents/                      # Optional: Autonomous subagent declarations (*.agent.md)
 └── templates/                   # Optional: Functional templates copied during rnex sync
 ```

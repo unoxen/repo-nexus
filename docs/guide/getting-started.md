@@ -64,7 +64,7 @@ rnex init -y
 [rnex] Initializing Repo Nexus workspace in /Users/dev/my-workspace...
 [rnex] Created rnex.yaml (version 0.5.13)
 [rnex] Created ./repos/ directory
-[rnex] Created .rnex/ and standardized prompts
+[rnex] Created .rnex/ and standardized skills
 [rnex] Reconciled .gitignore
 [rnex] Workspace initialized successfully.
 ```

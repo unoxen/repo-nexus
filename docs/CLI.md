@@ -7,7 +7,7 @@ Lightweight zero-dependency Virtual Meta-Repo companion for multi-repo workspace
 | Command | Syntax | Description |
 |:---|:---|:---|
 | `init` | `rnex init [-y] [--claude] [--copilot] [--gemini] [--cursor] [--windsurf] [--code-workspace]` | Initialize a new workspace, create `rnex.yaml`, `.rnex/`, `.ignore`, and minimal AI instructions. |
-| `sync` | `rnex sync [-y] [--quiet]` | **Single reconciliation command**: syncs prompts, `.rnex/` harness, plugins, and compiles `.rnex/ai-instructions.md`. |
+| `sync` | `rnex sync [-y] [--quiet]` | **Single reconciliation command**: syncs skills, `.rnex/` harness, plugins, and compiles `.rnex/ai-instructions.md`. |
 | `status` | `rnex status` | **Strictly read-only**: inspect workspace health, active repos, loaded config, git hooks, sync stamp, and plugins. |
 | `add` | `rnex add <name> <git-url> [--local]` | Register a new member repository and clone into `./repos/<name>`. |
 | `clone` | `rnex clone` | Clone all declared member repositories missing from disk. |

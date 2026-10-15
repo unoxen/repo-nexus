@@ -5,7 +5,7 @@ A built-in Repo Nexus plugin providing bidirectional alignment and operational p
 ## Capabilities
 
 1. **Instructions Integration**: Generates and maintains `.cursorrules` and `.cursor/rules/rnex-context.mdc` with Repo Nexus routing instructions while preserving custom instructions outside delimiters.
-2. **Prompts Mirroring**: Standardized Repo Nexus prompts (`rnex-cross-repo-feature`, `rnex-workspace-audit`, etc.) and active plugins' workflows are mirrored into `.cursor/prompts/*.md`.
+2. **User Skills Generation**: Standardized Repo Nexus core skills and active plugins' skills are mirrored as zero-logic User Skill pointers (`rnex-<name>.md`) in `.cursor/rules/`.
 3. **Codebase Indexing Un-Ignore**: Maintains `.cursorignore` (`!repos/*`) so Cursor's semantic indexing engine indexes code across member repositories.
 
 ## Usage
@@ -20,8 +20,7 @@ Or configure options in `rnex.yaml` or `.local.rnex.yaml`:
 plugins:
   cursor:
     instructions: true
-    prompts: true
-    workflows: true
+    skills: true
 ```
 
 ## Options
@@ -29,6 +28,5 @@ plugins:
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `instructions` | boolean | `true` | Maintain routing in `.cursorrules` & `.cursor/rules/` |
-| `prompts` | boolean | `true` | Mirror prompts to `.cursor/prompts/` |
-| `workflows` | boolean | `true` | Mirror workflows to `.cursor/prompts/` |
+| `skills` | boolean | `true` | Generate user skills in `.cursor/rules/` |
 | `enabled` | boolean | `true` | Set to `false` in `.local.rnex.yaml` to override team config |

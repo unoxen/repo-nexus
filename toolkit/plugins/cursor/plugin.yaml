@@ -1,6 +1,6 @@
 name: cursor
 version: 0.5.1
-description: Cursor IDE integration (maintains .cursorrules and .cursor/rules, and mirrors workspace prompts)
+description: Cursor IDE integration (maintains .cursorrules and generates user skills in .cursor/rules/)
 author: unoxen
 homepage: https://github.com/unoxen/repo-nexus
 instructions:

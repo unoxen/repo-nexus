@@ -261,34 +261,18 @@ yaml_enable_plugin() {
   if ! _yaml_list_plugins_from_file "$_target_file" | grep -qx "$_name" 2>/dev/null; then
     _tmp="$(mktemp)"
     case "$_name" in
-      copilot)
-        awk -v name="$_name" '
-          /^plugins:[ ]*$/ || /^plugins:[ ]*#/ {
-            print
-            printf "  %s:\n    prompts: true\n    workflows: true\n", name
-            added=1
-            next
-          }
-          { print }
-          END {
-            if (!added) {
-              printf "plugins:\n  %s:\n    prompts: true\n    workflows: true\n", name
-            }
-          }
-        ' "$_target_file" > "$_tmp" && mv "$_tmp" "$_target_file"
-        ;;
       claude|gemini|cursor|windsurf)
         awk -v name="$_name" '
           /^plugins:[ ]*$/ || /^plugins:[ ]*#/ {
             print
-            printf "  %s:\n    instructions: true\n    prompts: true\n    workflows: true\n", name
+            printf "  %s:\n    instructions: true\n    skills: true\n", name
             added=1
             next
           }
           { print }
           END {
             if (!added) {
-              printf "plugins:\n  %s:\n    instructions: true\n    prompts: true\n    workflows: true\n", name
+              printf "plugins:\n  %s:\n    instructions: true\n    skills: true\n", name
             }
           }
         ' "$_target_file" > "$_tmp" && mv "$_tmp" "$_target_file"

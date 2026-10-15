@@ -28,7 +28,7 @@ features:
     details: Autonomous member repositories clone directly into ./repos/ while remaining independent Git repositories. No detached HEAD hell.
   - icon: 🤖
     title: Scoped AI Context Mirroring
-    details: Automatically projects shared routing rules, prompts, and skills into Claude Code, Cursor, Copilot, Gemini, and Windsurf formats.
+    details: Automatically projects shared routing rules, instructions, and skills into Claude Code, Cursor, Copilot, Gemini, and Windsurf formats.
   - icon: 🧠
     title: Karpathy LLM Wiki Architecture
     details: Built-in support for Andrej Karpathy's 4 cardinal principles for coding agents, context engineering, and autonomous LLM wikis.

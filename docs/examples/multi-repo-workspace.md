@@ -51,9 +51,10 @@ repos:
 plugins:
   claude:
     instructions: true
-    prompts: true
+    skills: true
   cursor:
-    rules: true
+    instructions: true
+    skills: true
 ```
 
 ---
