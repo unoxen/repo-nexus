@@ -359,6 +359,7 @@ export RNEX_ROOT="${RNEX_ROOT:-$(cd "$(dirname "$0")/../.." 2>/dev/null && pwd -
 
 if [ -z "$RNEX_PROVIDER_SKILL_DIRS" ]; then
   _dirs=""
+  [ -d "$RNEX_ROOT/.github/skills" ] && _dirs="${_dirs:+$_dirs }.github/skills"
   [ -d "$RNEX_ROOT/.cursor" ] && _dirs="${_dirs:+$_dirs }.cursor/rules"
   [ -d "$RNEX_ROOT/.claude" ] && _dirs="${_dirs:+$_dirs }.claude/skills"
   [ -d "$RNEX_ROOT/.windsurf" ] && _dirs="${_dirs:+$_dirs }.windsurf/rules"
@@ -392,6 +393,9 @@ ENV_EOF
 
 get_active_provider_skill_dirs() {
   _dirs=""
+  if provider_option_enabled "copilot" "skills" 2>/dev/null; then
+    _dirs="${_dirs:+$_dirs }.github/skills"
+  fi
   if provider_option_enabled "cursor" "skills" 2>/dev/null; then
     _dirs="${_dirs:+$_dirs }.cursor/rules"
   fi
@@ -671,13 +675,28 @@ sync_windsurf() {
   rmdir "$NEXUS_DIR/.windsurf" 2>/dev/null || true
 }
 
-sync_ai_providers() {
-  # Clean legacy Copilot prompt harness and skills if present, strictly preserving custom Copilot instructions
-  rm -rf "$NEXUS_DIR/.github/prompts" 2>/dev/null || true
-  clean_rnex_instructions "$NEXUS_DIR/.github/copilot-instructions.md"
-  clean_provider_user_skills "$NEXUS_DIR/.github/skills"
+sync_copilot() {
+  if copilot_plugin_enabled; then
+    if copilot_instructions_enabled; then
+      mkdir -p "$NEXUS_DIR/.github"
+      merge_rnex_instructions "$NEXUS_DIR/.github/copilot-instructions.md"
+    else
+      clean_rnex_instructions "$NEXUS_DIR/.github/copilot-instructions.md"
+    fi
+    if ! copilot_skills_enabled; then
+      clean_provider_user_skills "$NEXUS_DIR/.github/skills"
+    fi
+  else
+    clean_rnex_instructions "$NEXUS_DIR/.github/copilot-instructions.md"
+    clean_provider_user_skills "$NEXUS_DIR/.github/skills"
+  fi
   clean_provider_agents "$NEXUS_DIR/.github/agents" ".agent.md"
+  rm -rf "$NEXUS_DIR/.github/prompts" 2>/dev/null || true
+  rmdir "$NEXUS_DIR/.github" 2>/dev/null || true
+}
 
+sync_ai_providers() {
+  sync_copilot
   sync_claude
   sync_gemini
   sync_cursor

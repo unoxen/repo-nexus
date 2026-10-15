@@ -199,6 +199,20 @@ EOF_COPILOT
 [ -f "$TEST_PROVIDERS_WS/.github/copilot-instructions.md" ] || { fail ".github/copilot-instructions.md with custom content was deleted"; exit 1; }
 grep -q "My Custom Copilot Developer Rules" "$TEST_PROVIDERS_WS/.github/copilot-instructions.md" || { fail "Custom Copilot developer rules lost after rnex sync"; exit 1; }
 ! grep -q "REPO-NEXUS:START" "$TEST_PROVIDERS_WS/.github/copilot-instructions.md" || { fail "Legacy REPO-NEXUS block not stripped from .github/copilot-instructions.md"; exit 1; }
+
+# Verify enabling copilot plugin manages .github/copilot-instructions.md and .github/skills/
+(cd "$TEST_PROVIDERS_WS" && ./rnex plugin enable copilot >/dev/null)
+(cd "$TEST_PROVIDERS_WS" && ./rnex sync -y --quiet >/dev/null)
+grep -q "REPO-NEXUS:START" "$TEST_PROVIDERS_WS/.github/copilot-instructions.md" || { fail "REPO-NEXUS block not merged when copilot enabled"; exit 1; }
+grep -q "My Custom Copilot Developer Rules" "$TEST_PROVIDERS_WS/.github/copilot-instructions.md" || { fail "Custom rules lost when copilot merged"; exit 1; }
+[ -f "$TEST_PROVIDERS_WS/.github/skills/rnex-batch-exec.md" ] || { fail "User skills not generated in .github/skills/ when copilot enabled"; exit 1; }
+
+# Verify disabling copilot cleans routing block and user skills while preserving custom instructions
+(cd "$TEST_PROVIDERS_WS" && ./rnex plugin disable copilot >/dev/null)
+(cd "$TEST_PROVIDERS_WS" && ./rnex sync -y --quiet >/dev/null)
+! grep -q "REPO-NEXUS:START" "$TEST_PROVIDERS_WS/.github/copilot-instructions.md" || { fail "REPO-NEXUS block not stripped after copilot disabled"; exit 1; }
+grep -q "My Custom Copilot Developer Rules" "$TEST_PROVIDERS_WS/.github/copilot-instructions.md" || { fail "Custom Copilot rules lost after copilot disabled"; exit 1; }
+[ ! -f "$TEST_PROVIDERS_WS/.github/skills/rnex-batch-exec.md" ] || { fail "User skills not cleaned from .github/skills/ after copilot disabled"; exit 1; }
 pass
 
 if [ "${_STANDALONE_RUN:-0}" -eq 1 ]; then

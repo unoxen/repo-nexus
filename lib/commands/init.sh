@@ -21,7 +21,8 @@ cmd_init() {
       -y|--yes) _non_interactive=1 ;;
       --hooks) _cli_hooks="true" ;;
       --no-hooks) _cli_no_hooks=1; _cli_hooks="false" ;;
-      --copilot|--no-copilot) ;; # Legacy flag ignored
+      --copilot) _cli_copilot="true" ;;
+      --no-copilot) _cli_copilot="false" ;;
       --claude) _cli_claude="true" ;;
       --no-claude) _cli_claude="false" ;;
       --gemini) _cli_gemini="true" ;;
@@ -102,6 +103,9 @@ cmd_init() {
     log_dim "  rnex sync"
   else
     _init_plugins=""
+    if [ "$_cli_copilot" = "true" ]; then
+      _init_plugins="${_init_plugins}  copilot:\n    instructions: true\n    skills: true\n"
+    fi
     if [ "$_cli_claude" = "true" ]; then
       _init_plugins="${_init_plugins}  claude:\n    instructions: true\n    skills: true\n"
     fi
@@ -149,6 +153,7 @@ YAML_EOF
   [ -f "$_init_dir/GEMINI.md" ] && merge_rnex_instructions "$_init_dir/GEMINI.md"
   [ -f "$_init_dir/.cursorrules" ] && merge_rnex_instructions "$_init_dir/.cursorrules"
   [ -f "$_init_dir/.windsurfrules" ] && merge_rnex_instructions "$_init_dir/.windsurfrules"
+  [ -f "$_init_dir/.github/copilot-instructions.md" ] && merge_rnex_instructions "$_init_dir/.github/copilot-instructions.md"
 
   # ---- 3. Create repos directory with .gitkeep -----------------------------
   _repos_dir="$_init_dir/repos"

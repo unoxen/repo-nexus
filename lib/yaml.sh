@@ -117,9 +117,9 @@ provider_option_enabled() {
   esac
 }
 
-copilot_plugin_enabled() { return 1; }
-copilot_skills_enabled() { return 1; }
-copilot_instructions_enabled() { return 1; }
+copilot_plugin_enabled() { provider_plugin_enabled "copilot"; }
+copilot_instructions_enabled() { provider_option_enabled "copilot" "instructions"; }
+copilot_skills_enabled() { provider_option_enabled "copilot" "skills"; }
 copilot_agents_enabled() { return 1; }
 
 claude_plugin_enabled() { provider_plugin_enabled "claude"; }
@@ -143,7 +143,7 @@ windsurf_skills_enabled() { provider_option_enabled "windsurf" "skills"; }
 windsurf_agents_enabled() { return 1; }
 
 has_ai_provider_plugin_enabled() {
-  for _ap in claude gemini cursor windsurf; do
+  for _ap in copilot claude gemini cursor windsurf; do
     if provider_plugin_enabled "$_ap"; then
       return 0
     fi
@@ -261,7 +261,7 @@ yaml_enable_plugin() {
   if ! _yaml_list_plugins_from_file "$_target_file" | grep -qx "$_name" 2>/dev/null; then
     _tmp="$(mktemp)"
     case "$_name" in
-      claude|gemini|cursor|windsurf)
+      copilot|claude|gemini|cursor|windsurf)
         awk -v name="$_name" '
           /^plugins:[ ]*$/ || /^plugins:[ ]*#/ {
             print
