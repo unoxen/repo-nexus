@@ -1,6 +1,6 @@
 ---
 title: Wiki Index
-last_updated: YYYY-MM-DD
+last_updated: 2026-10-15
 ---
 
 # Wiki Index
@@ -14,16 +14,17 @@ Master navigation index for the Karpathy LLM Wiki. Agents query this index on de
 * **Operation Log:** [`_log.md`](./_log.md) — Timestamped ingest & maintenance history.
 
 ## Architecture & Concepts
-* *(Atomic concept and system architecture pages with 1-line summaries will be indexed here during ingestion)*
+* [`virtual-meta-repo.md`](./virtual-meta-repo.md): Central architectural model unifying independent git repositories without submodules or symlink fragility.
+* [`context-engineering.md`](./context-engineering.md): AI routing protocol, single directive in `AGENTS.md`, and modular instruction routing.
+* [`karpathy-llm-wiki.md`](./karpathy-llm-wiki.md): Compounding knowledge base architecture, hot cache, master index, and frontmatter relations.
+* [`plugin-system.md`](./plugin-system.md): Scoped plugin architecture in `.rnex/plugins/<name>/` with declarative manifests and lifecycle hooks.
 
-## Decisions & ADRs
-* *(Architecture decision records, interface contracts, and technical trade-offs)*
+## Configuration & Lifecycle
+* [`two-level-configuration.md`](./two-level-configuration.md): Two-level configuration hierarchy combining `rnex.yaml` with local `.local.rnex.yaml` overrides.
+* [`workspace-lifecycle.md`](./workspace-lifecycle.md): Workspace lifecycle, declarative health checks (`rnex status`), and reconciliation (`rnex sync`).
+* [`git-hooks-lifecycle.md`](./git-hooks-lifecycle.md): Native workspace git hooks in `.rnex/hooks/` with dynamic plugin trigger dispatch.
 
-## Runbooks & Operations
-* *(Operational procedures, workflows, and team conventions)*
-
-## People & Organizations
-* *(Key contributors, teams, organizations, and stakeholders)*
-
-## Sources & Raw References
-* *(Catalog of ingested source materials from `/docs/`)*
+## Tooling & Operations
+* [`member-repositories.md`](./member-repositories.md): Autonomous Git repository management under `repos/<name>/` and physical clone lifecycle.
+* [`batch-operations.md`](./batch-operations.md): Cross-repository batch execution engine (`rnex exec`) across all enabled member repositories.
+* [`ide-provider-mirroring.md`](./ide-provider-mirroring.md): Scoped prompt and instruction mirroring across Claude, Copilot, Cursor, Gemini, and Windsurf.

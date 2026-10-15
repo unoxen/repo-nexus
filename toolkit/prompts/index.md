@@ -13,10 +13,11 @@ When an AI assistant is assigned a cross-repo or workspace-wide task, consult th
    - **Purpose**: Cross-repository health, git status, branch tracking, and configuration validation.
    - **When to use**: Auditing workspace status, verifying uncommitted changes, or syncing member repositories before releases.
 
-3. **[`rnex-ingest.md`](./rnex-ingest.md)** (alias: [`rnex-wiki-ingest.md`](./rnex-wiki-ingest.md))
+3. **[`rnex-wiki-ingest.md`](./rnex-wiki-ingest.md)**
    - **Purpose**: Autonomous ingestion of intake materials from configured raw intake directory into atomic Karpathy LLM Wiki pages.
    - **When to use**: Decomposing research papers, documentation, transcripts, or specifications into the knowledge base.
 
-4. **[`rnex-lint.md`](./rnex-lint.md)** (alias: [`rnex-wiki-lint.md`](./rnex-wiki-lint.md))
+4. **[`rnex-wiki-lint.md`](./rnex-wiki-lint.md)**
    - **Purpose**: Deterministic graph audit, dead link validation, `mentioned_in` backlink reconciliation, and index rebuild.
    - **When to use**: Routine wiki maintenance, pre-commit validation, or after adding/renaming wiki pages.
+

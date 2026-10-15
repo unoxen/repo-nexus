@@ -228,31 +228,55 @@ EOF_DIS
 (cd "$TEST_HOOK_WS" && ./rnex sync -y >/dev/null)
 [ ! -f "$TEST_HOOK_WS/.rnex/wiki/raw/README_disabled-member-repo.md" ] || { fail "Disabled repository README should not be synced"; exit 1; }
 
+# 7. Verify an adjacent enabled repository is NOT affected by the disabled repository entry
+mkdir -p "$TEST_HOOK_WS/repos/adjacent-enabled-repo"
+printf '# Adjacent Enabled Repo\n' > "$TEST_HOOK_WS/repos/adjacent-enabled-repo/README.md"
+cat <<'EOF_ADJ' >> "$TEST_HOOK_WS/rnex.yaml"
+  adjacent-enabled-repo:
+    url: ./repos/adjacent-enabled-repo
+EOF_ADJ
+(cd "$TEST_HOOK_WS" && ./rnex sync -y >/dev/null)
+[ -f "$TEST_HOOK_WS/.rnex/wiki/raw/README_adjacent-enabled-repo.md" ] || { fail "Adjacent enabled repository README was not copied due to nearby disabled repo bleed"; exit 1; }
+grep -q "Adjacent Enabled Repo" "$TEST_HOOK_WS/.rnex/wiki/raw/README_adjacent-enabled-repo.md" || { fail "Content mismatch in adjacent enabled repo README"; exit 1; }
+
+# 8. Verify before_sync plugin lifecycle hook execution
+mkdir -p "$TEST_HOOK_WS/.rnex/plugins/karpathy-llm/hooks"
+cat <<'EOF_BS' > "$TEST_HOOK_WS/.rnex/plugins/karpathy-llm/hooks/before_sync.sh"
+#!/bin/sh
+printf 'BEFORE_SYNC_FIRED' > "$RNEX_ROOT/before_sync_marker"
+EOF_BS
+chmod +x "$TEST_HOOK_WS/.rnex/plugins/karpathy-llm/hooks/before_sync.sh"
+(cd "$TEST_HOOK_WS" && ./rnex sync -y >/dev/null)
+[ -f "$TEST_HOOK_WS/before_sync_marker" ] || { fail "before_sync lifecycle hook was not executed by rnex sync"; exit 1; }
+grep -q "BEFORE_SYNC_FIRED" "$TEST_HOOK_WS/before_sync_marker" || { fail "before_sync marker content mismatch"; exit 1; }
+
 pass
 
 # --------------------------------------------------------------------------
-run_test "Strict decoupling of prompt operations and behavioral instructions (rnex-lint and rnex-ingest)"
-# 1. Assert rnex-lint.md and rnex-ingest.md prompts exist
-[ -f "$DIR/toolkit/prompts/rnex-lint.md" ] || { fail "toolkit/prompts/rnex-lint.md missing"; exit 1; }
-[ -f "$DIR/toolkit/prompts/rnex-ingest.md" ] || { fail "toolkit/prompts/rnex-ingest.md missing"; exit 1; }
+run_test "Strict decoupling of prompt operations and behavioral instructions (rnex-wiki-lint and rnex-wiki-ingest)"
+# 1. Assert rnex-wiki-lint.md and rnex-wiki-ingest.md prompts exist with plugin prefix
+[ -f "$DIR/toolkit/prompts/rnex-wiki-lint.md" ] || { fail "toolkit/prompts/rnex-wiki-lint.md missing"; exit 1; }
+[ -f "$DIR/toolkit/prompts/rnex-wiki-ingest.md" ] || { fail "toolkit/prompts/rnex-wiki-ingest.md missing"; exit 1; }
+[ ! -f "$DIR/toolkit/prompts/rnex-lint.md" ] || { fail "Deprecated un-prefixed rnex-lint.md still exists"; exit 1; }
+[ ! -f "$DIR/toolkit/prompts/rnex-ingest.md" ] || { fail "Deprecated un-prefixed rnex-ingest.md still exists"; exit 1; }
 
 # 2. Check routing dispatches to workflows, behavioral rules, and ai-instructions
-grep -q "\.rnex/plugins/karpathy-llm/workflows/wiki-lint\.md" "$DIR/toolkit/prompts/rnex-lint.md" || { fail "rnex-lint.md does not route to wiki-lint.md"; exit 1; }
-grep -q "\.rnex/plugins/karpathy-llm/rules/behavioral\.md" "$DIR/toolkit/prompts/rnex-lint.md" || { fail "rnex-lint.md does not route to behavioral.md"; exit 1; }
-grep -q "\.rnex/ai-instructions\.md" "$DIR/toolkit/prompts/rnex-lint.md" || { fail "rnex-lint.md does not route to ai-instructions.md"; exit 1; }
+grep -q "\.rnex/plugins/karpathy-llm/workflows/rnex-wiki-lint\.md" "$DIR/toolkit/prompts/rnex-wiki-lint.md" || { fail "rnex-wiki-lint.md does not route to rnex-wiki-lint.md"; exit 1; }
+grep -q "\.rnex/plugins/karpathy-llm/rules/rnex-behavioral\.md" "$DIR/toolkit/prompts/rnex-wiki-lint.md" || { fail "rnex-wiki-lint.md does not route to rnex-behavioral.md"; exit 1; }
+grep -q "\.rnex/ai-instructions\.md" "$DIR/toolkit/prompts/rnex-wiki-lint.md" || { fail "rnex-wiki-lint.md does not route to ai-instructions.md"; exit 1; }
 
-grep -q "\.rnex/plugins/karpathy-llm/workflows/wiki-ingest\.md" "$DIR/toolkit/prompts/rnex-ingest.md" || { fail "rnex-ingest.md does not route to wiki-ingest.md"; exit 1; }
-grep -q "\.rnex/plugins/karpathy-llm/rules/behavioral\.md" "$DIR/toolkit/prompts/rnex-ingest.md" || { fail "rnex-ingest.md does not route to behavioral.md"; exit 1; }
-grep -q "\.rnex/ai-instructions\.md" "$DIR/toolkit/prompts/rnex-ingest.md" || { fail "rnex-ingest.md does not route to ai-instructions.md"; exit 1; }
+grep -q "\.rnex/plugins/karpathy-llm/workflows/rnex-wiki-ingest\.md" "$DIR/toolkit/prompts/rnex-wiki-ingest.md" || { fail "rnex-wiki-ingest.md does not route to rnex-wiki-ingest.md"; exit 1; }
+grep -q "\.rnex/plugins/karpathy-llm/rules/rnex-behavioral\.md" "$DIR/toolkit/prompts/rnex-wiki-ingest.md" || { fail "rnex-wiki-ingest.md does not route to rnex-behavioral.md"; exit 1; }
+grep -q "\.rnex/ai-instructions\.md" "$DIR/toolkit/prompts/rnex-wiki-ingest.md" || { fail "rnex-wiki-ingest.md does not route to ai-instructions.md"; exit 1; }
 
 # 3. Ensure no inline heuristics or code patterns exist inside task descriptors
-! grep -q "mentioned_in: \[\]" "$DIR/toolkit/prompts/rnex-lint.md" || { fail "rnex-lint.md contains inline frontmatter schema heuristics"; exit 1; }
-! grep -q "contradicts: \[\]" "$DIR/toolkit/prompts/rnex-lint.md" || { fail "rnex-lint.md contains inline frontmatter schema heuristics"; exit 1; }
-! grep -q '```' "$DIR/toolkit/prompts/rnex-lint.md" || { fail "rnex-lint.md contains inlined code patterns"; exit 1; }
+! grep -q "mentioned_in: \[\]" "$DIR/toolkit/prompts/rnex-wiki-lint.md" || { fail "rnex-wiki-lint.md contains inline frontmatter schema heuristics"; exit 1; }
+! grep -q "contradicts: \[\]" "$DIR/toolkit/prompts/rnex-wiki-lint.md" || { fail "rnex-wiki-lint.md contains inline frontmatter schema heuristics"; exit 1; }
+! grep -q '```' "$DIR/toolkit/prompts/rnex-wiki-lint.md" || { fail "rnex-wiki-lint.md contains inlined code patterns"; exit 1; }
 
-! grep -q "mentioned_in: \[\]" "$DIR/toolkit/prompts/rnex-ingest.md" || { fail "rnex-ingest.md contains inline frontmatter schema heuristics"; exit 1; }
-! grep -q "contradicts: \[\]" "$DIR/toolkit/prompts/rnex-ingest.md" || { fail "rnex-ingest.md contains inline frontmatter schema heuristics"; exit 1; }
-! grep -q '```' "$DIR/toolkit/prompts/rnex-ingest.md" || { fail "rnex-ingest.md contains inlined code patterns"; exit 1; }
+! grep -q "mentioned_in: \[\]" "$DIR/toolkit/prompts/rnex-wiki-ingest.md" || { fail "rnex-wiki-ingest.md contains inline frontmatter schema heuristics"; exit 1; }
+! grep -q "contradicts: \[\]" "$DIR/toolkit/prompts/rnex-wiki-ingest.md" || { fail "rnex-wiki-ingest.md contains inline frontmatter schema heuristics"; exit 1; }
+! grep -q '```' "$DIR/toolkit/prompts/rnex-wiki-ingest.md" || { fail "rnex-wiki-ingest.md contains inlined code patterns"; exit 1; }
 
 pass
 

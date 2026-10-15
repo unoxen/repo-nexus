@@ -1,34 +1,16 @@
-# Repo Nexus Workspace Audit Workflow
+# Operational Task: Workspace Configuration & Health Audit
 
-Use this prompt to audit workspace configuration integrity, member repository git statuses, and active plugin states.
+You are tasked with executing a comprehensive audit of the Repo Nexus workspace configuration, member repository git statuses, and active plugin states.
 
----
+## Context & Inputs
+- Target Scope: Root workspace configuration, `.rnex/`, and active member repositories in `repos/<name>/`
+- Workspace Manifest: `rnex.yaml` and `.local.rnex.yaml`
+- AI Instructions: `.rnex/ai-instructions.md`
 
-## 1. Configuration & Health Audit
-1. Run `rnex status` to inspect:
-   - Configuration files (`rnex.yaml` and `.local.rnex.yaml`).
-   - Main AI instructions file existence and routing markers.
-   - VS Code / Cursor `.code-workspace` synchronization.
-   - Git ignore status for `repos/`, `.rnex/`, and local overrides.
-   - Active plugins and member repository registry.
+## Skill & Workflow Router
+1. Read the operational skill requirements in `.rnex/skills/rnex-workspace-audit/SKILL.md`.
+2. Follow the multi-step audit and remediation protocol in `.rnex/workflows/rnex-workspace-audit.md`.
+3. Adhere to mandatory session startup, routing protocols, and member repo boundary rules in `.rnex/ai-instructions.md`.
+4. Do NOT execute uncompiled heuristics or alter workspace configuration outside the referenced workflow.
 
-## 2. Multi-Repository Git Status Audit
-1. Check working tree cleanliness across all active member repositories:
-   ```sh
-   rnex exec git status -s
-   ```
-2. Check branch tracking and unpushed/unpulled commits:
-   ```sh
-   rnex exec git status -uno
-   ```
-3. Report any detached HEADs, uncommitted modifications, or untracked changes.
-
-## 3. Reconciliation & Remediation
-1. If any configuration issues, missing directories, or unlinked plugin assets are detected, run:
-   ```sh
-   rnex status --fix
-   ```
-2. If member repositories declared in `rnex.yaml` are missing on disk, run:
-   ```sh
-   rnex clone
-   ```
+Execute the audit according to the referenced workflow and report configuration integrity, working tree cleanliness, and active plugin health.
