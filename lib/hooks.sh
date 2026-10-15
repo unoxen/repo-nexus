@@ -58,6 +58,7 @@ run_hook() {
         RNEX_QUIET="$_hook_quiet"
         RNEX_PROVIDER_SKILL_DIRS="$_skill_dirs"
         export RNEX_ROOT RNEX_CONFIG_MERGED RNEX_PLUGIN_DIR RNEX_CMD RNEX_ARGS RNEX_QUIET RNEX_PROVIDER_SKILL_DIRS
+        # shellcheck disable=SC2329
         rnex_register_user_skill() {
           skill_name="$1"
           target_path="$2"
@@ -72,6 +73,7 @@ EOF
           done
         }
 
+        # shellcheck disable=SC2329
         rnex_unregister_user_skill() {
           skill_name="$1"
           for provider_dir in $RNEX_PROVIDER_SKILL_DIRS; do
@@ -79,6 +81,7 @@ EOF
           done
         }
         set -- "$@"
+        # shellcheck source=/dev/null
         . "$_hook_script"
       ) || true
     fi
@@ -134,6 +137,7 @@ run_plugin_hook() {
       RNEX_QUIET="$_hook_quiet"
       RNEX_PROVIDER_SKILL_DIRS="$_skill_dirs"
       export RNEX_ROOT RNEX_CONFIG_MERGED RNEX_PLUGIN_DIR RNEX_CMD RNEX_ARGS RNEX_QUIET RNEX_PROVIDER_SKILL_DIRS
+      # shellcheck disable=SC2329
       rnex_register_user_skill() {
         skill_name="$1"
         target_path="$2"
@@ -148,6 +152,7 @@ EOF
         done
       }
 
+      # shellcheck disable=SC2329
       rnex_unregister_user_skill() {
         skill_name="$1"
         for provider_dir in $RNEX_PROVIDER_SKILL_DIRS; do
@@ -155,6 +160,7 @@ EOF
         done
       }
       set -- "$@"
+      # shellcheck source=/dev/null
       . "$_hook_script"
     ) || true
   fi

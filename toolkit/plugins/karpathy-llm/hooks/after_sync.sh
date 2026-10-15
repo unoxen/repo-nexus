@@ -241,7 +241,7 @@ LOG_EOF
     _tmp_idx="$(mktemp)"
     _idx_line="* [Member Repo: ${_m_repo}](./repo-${_m_repo}.md): ${_m_summary}"
     if grep -q "^## Member Repositories" "$_wiki_path/index.md"; then
-      LINE="$_idx_line" awk '
+      if LINE="$_idx_line" awk '
         /^## Member Repositories/ {
           print
           print ENVIRON["LINE"]
@@ -249,9 +249,13 @@ LOG_EOF
         }
         /\* \*\([Aa]ctive member repositories/ { next }
         { print }
-      ' "$_wiki_path/index.md" > "$_tmp_idx" && mv "$_tmp_idx" "$_wiki_path/index.md" || rm -f "$_tmp_idx"
+      ' "$_wiki_path/index.md" > "$_tmp_idx"; then
+        mv "$_tmp_idx" "$_wiki_path/index.md"
+      else
+        rm -f "$_tmp_idx"
+      fi
     elif grep -q "^## Architecture & Concepts" "$_wiki_path/index.md"; then
-      LINE="$_idx_line" awk '
+      if LINE="$_idx_line" awk '
         /^## Architecture & Concepts/ {
           print "## Member Repositories"
           print ENVIRON["LINE"]
@@ -260,8 +264,13 @@ LOG_EOF
           next
         }
         { print }
-      ' "$_wiki_path/index.md" > "$_tmp_idx" && mv "$_tmp_idx" "$_wiki_path/index.md" || rm -f "$_tmp_idx"
+      ' "$_wiki_path/index.md" > "$_tmp_idx"; then
+        mv "$_tmp_idx" "$_wiki_path/index.md"
+      else
+        rm -f "$_tmp_idx"
+      fi
     else
+      rm -f "$_tmp_idx"
       printf '\n## Member Repositories\n* [Member Repo: %s](./repo-%s.md): %s\n' "$_m_repo" "$_m_repo" "$_m_summary" >> "$_wiki_path/index.md"
     fi
   fi
@@ -270,7 +279,7 @@ LOG_EOF
   if [ -f "$_wiki_path/hot.md" ] && ! grep -q "${_rel_loc}" "$_wiki_path/hot.md"; then
     _tmp_hot="$(mktemp)"
     _hot_line="* **${_m_repo} (\`${_rel_loc}\`):** ${_m_summary}"
-    LINE="$_hot_line" awk '
+    if LINE="$_hot_line" awk '
       /^## 1\. Architecture & Member Repo Map/ {
         print
         print ENVIRON["LINE"]
@@ -278,7 +287,11 @@ LOG_EOF
       }
       /\* \*\*Member Repositories:\*\* Map each member repo/ { next }
       { print }
-    ' "$_wiki_path/hot.md" > "$_tmp_hot" && mv "$_tmp_hot" "$_wiki_path/hot.md" || rm -f "$_tmp_hot"
+    ' "$_wiki_path/hot.md" > "$_tmp_hot"; then
+      mv "$_tmp_hot" "$_wiki_path/hot.md"
+    else
+      rm -f "$_tmp_hot"
+    fi
   fi
 }
 

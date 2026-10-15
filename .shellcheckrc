@@ -3,6 +3,8 @@
 
 shell=sh
 
+# SC1090: Dynamic hook and plugin script sourcing (. "$_hook_script")
 # SC1091: Dynamic library module imports (. "$RNEX_LIB_DIR/...")
 # SC2034: Global configuration and state variables shared across sourced modules
-disable=SC1091,SC2034
+# SC2329: Hook helper functions exported or invoked by sourced scripts
+disable=SC1090,SC1091,SC2034,SC2329
