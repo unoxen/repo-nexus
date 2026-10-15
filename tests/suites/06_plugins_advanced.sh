@@ -132,9 +132,9 @@ plugins:
 EOF_CFG2
 
 (cd "$TEST_KWIKI_WS" && ./rnex sync -y >/dev/null)
-[ -f "$TEST_KWIKI_WS/.claude/skills/rnex-wiki-ingest.md" ] || { fail "Plugin User Skill rnex-wiki-ingest was not generated in claude"; exit 1; }
-[ -f "$TEST_KWIKI_WS/.claude/skills/rnex-wiki-lint.md" ] || { fail "Plugin User Skill rnex-wiki-lint was not generated in claude"; exit 1; }
-[ -f "$TEST_KWIKI_WS/.claude/skills/rnex-clone-sync.md" ] || { fail "Core User Skill rnex-clone-sync missing in claude"; exit 1; }
+[ -f "$TEST_KWIKI_WS/.claude/skills/rnex-wiki-ingest/SKILL.md" ] || { fail "Plugin User Skill rnex-wiki-ingest was not generated in claude"; exit 1; }
+[ -f "$TEST_KWIKI_WS/.claude/skills/rnex-wiki-lint/SKILL.md" ] || { fail "Plugin User Skill rnex-wiki-lint was not generated in claude"; exit 1; }
+[ -f "$TEST_KWIKI_WS/.claude/skills/rnex-clone-sync/SKILL.md" ] || { fail "Core User Skill rnex-clone-sync missing in claude"; exit 1; }
 [ -d "$TEST_KWIKI_WS/.rnex/plugins/karpathy-llm" ] || { fail ".rnex/plugins/karpathy-llm missing while enabled"; exit 1; }
 _kw_active_ai="$(cat "$TEST_KWIKI_WS/.rnex/ai-instructions.md")"
 echo "$_kw_active_ai" | grep -q "Karpathy LLM Wiki Knowledge Architecture" || { fail "Active ai-instructions.md missing Karpathy instructions"; exit 1; }
@@ -163,9 +163,9 @@ _kw_disabled_agents="$(cat "$TEST_KWIKI_WS/AGENTS.md")"
 echo "$_kw_disabled_agents" | grep -q "CRITICAL: You MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\`" || { fail "AGENTS.md missing strict directive"; exit 1; }
 
 # 5. Verify provider User Skills from disabled plugin were removed, but core skills kept
-[ ! -f "$TEST_KWIKI_WS/.claude/skills/rnex-wiki-ingest.md" ] || { fail "rnex-wiki-ingest.md still present after disabling plugin"; exit 1; }
-[ ! -f "$TEST_KWIKI_WS/.claude/skills/rnex-wiki-lint.md" ] || { fail "rnex-wiki-lint.md still present after disabling plugin"; exit 1; }
-[ -f "$TEST_KWIKI_WS/.claude/skills/rnex-clone-sync.md" ] || { fail "Core User Skill rnex-clone-sync was incorrectly removed"; exit 1; }
+[ ! -d "$TEST_KWIKI_WS/.claude/skills/rnex-wiki-ingest" ] || { fail "rnex-wiki-ingest still present after disabling plugin"; exit 1; }
+[ ! -d "$TEST_KWIKI_WS/.claude/skills/rnex-wiki-lint" ] || { fail "rnex-wiki-lint still present after disabling plugin"; exit 1; }
+[ -f "$TEST_KWIKI_WS/.claude/skills/rnex-clone-sync/SKILL.md" ] || { fail "Core User Skill rnex-clone-sync was incorrectly removed"; exit 1; }
 
 # 6. Verify .rnex/plugins/karpathy-llm scope was removed
 [ ! -d "$TEST_KWIKI_WS/.rnex/plugins/karpathy-llm" ] || { fail ".rnex/plugins/karpathy-llm still exists after sync"; exit 1; }
@@ -368,29 +368,30 @@ EOF
 
 # Verify User Skills generated in .claude/skills/
 for _s in clone-sync batch-exec workspace-status wiki-ingest wiki-lint; do
-  _usk="$TEST_SEPARATION_WS/.claude/skills/rnex-${_s}.md"
-  [ -f "$_usk" ] || { fail "User skill rnex-${_s}.md missing in .claude/skills/"; exit 1; }
+  _usk="$TEST_SEPARATION_WS/.claude/skills/rnex-${_s}/SKILL.md"
+  [ -f "$_usk" ] || { fail "User skill rnex-${_s}/SKILL.md missing in .claude/skills/"; exit 1; }
+  grep -q "name: rnex-${_s}" "$_usk" || { fail "User skill rnex-${_s} missing YAML frontmatter"; exit 1; }
   grep -q "CRITICAL: Do not execute inline heuristics" "$_usk" || { fail "User skill rnex-${_s} missing strict directive"; exit 1; }
   ! grep -q '```' "$_usk" || { fail "User skill rnex-${_s} contains inlined code patterns"; exit 1; }
 done
 
 # Verify target paths in User Skills
-grep -q "\.rnex/skills/clone-sync\.md" "$TEST_SEPARATION_WS/.claude/skills/rnex-clone-sync.md" || { fail "rnex-clone-sync target path wrong"; exit 1; }
-grep -q "\.rnex/plugins/karpathy-llm/skills/wiki-ingest\.md" "$TEST_SEPARATION_WS/.claude/skills/rnex-wiki-ingest.md" || { fail "rnex-wiki-ingest target path wrong"; exit 1; }
-grep -q "\.rnex/plugins/karpathy-llm/skills/wiki-lint\.md" "$TEST_SEPARATION_WS/.claude/skills/rnex-wiki-lint.md" || { fail "rnex-wiki-lint target path wrong"; exit 1; }
+grep -q "\.rnex/skills/clone-sync\.md" "$TEST_SEPARATION_WS/.claude/skills/rnex-clone-sync/SKILL.md" || { fail "rnex-clone-sync target path wrong"; exit 1; }
+grep -q "\.rnex/plugins/karpathy-llm/skills/wiki-ingest\.md" "$TEST_SEPARATION_WS/.claude/skills/rnex-wiki-ingest/SKILL.md" || { fail "rnex-wiki-ingest target path wrong"; exit 1; }
+grep -q "\.rnex/plugins/karpathy-llm/skills/wiki-lint\.md" "$TEST_SEPARATION_WS/.claude/skills/rnex-wiki-lint/SKILL.md" || { fail "rnex-wiki-lint target path wrong"; exit 1; }
 
 # 5. Disable karpathy-llm via CLI command and verify unregistration
 (cd "$TEST_SEPARATION_WS" && ./rnex plugin disable karpathy-llm >/dev/null)
 (cd "$TEST_SEPARATION_WS" && ./rnex sync -y >/dev/null)
 
 # Plugin user skills unregistered
-[ ! -f "$TEST_SEPARATION_WS/.claude/skills/rnex-wiki-ingest.md" ] || { fail "rnex-wiki-ingest.md not unregistered after plugin disable"; exit 1; }
-[ ! -f "$TEST_SEPARATION_WS/.claude/skills/rnex-wiki-lint.md" ] || { fail "rnex-wiki-lint.md not unregistered after plugin disable"; exit 1; }
+[ ! -d "$TEST_SEPARATION_WS/.claude/skills/rnex-wiki-ingest" ] || { fail "rnex-wiki-ingest not unregistered after plugin disable"; exit 1; }
+[ ! -d "$TEST_SEPARATION_WS/.claude/skills/rnex-wiki-lint" ] || { fail "rnex-wiki-lint not unregistered after plugin disable"; exit 1; }
 
 # Core user skills preserved
-[ -f "$TEST_SEPARATION_WS/.claude/skills/rnex-clone-sync.md" ] || { fail "rnex-clone-sync.md deleted after disabling unrelated plugin"; exit 1; }
-[ -f "$TEST_SEPARATION_WS/.claude/skills/rnex-batch-exec.md" ] || { fail "rnex-batch-exec.md deleted after disabling unrelated plugin"; exit 1; }
-[ -f "$TEST_SEPARATION_WS/.claude/skills/rnex-workspace-status.md" ] || { fail "rnex-workspace-status.md deleted after disabling unrelated plugin"; exit 1; }
+[ -f "$TEST_SEPARATION_WS/.claude/skills/rnex-clone-sync/SKILL.md" ] || { fail "rnex-clone-sync/SKILL.md deleted after disabling unrelated plugin"; exit 1; }
+[ -f "$TEST_SEPARATION_WS/.claude/skills/rnex-batch-exec/SKILL.md" ] || { fail "rnex-batch-exec/SKILL.md deleted after disabling unrelated plugin"; exit 1; }
+[ -f "$TEST_SEPARATION_WS/.claude/skills/rnex-workspace-status/SKILL.md" ] || { fail "rnex-workspace-status/SKILL.md deleted after disabling unrelated plugin"; exit 1; }
 
 pass
 

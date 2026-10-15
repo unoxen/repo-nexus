@@ -27,13 +27,14 @@ git -C "$TEST_SKILLS_WS" init -q
 
 # Verify .claude/skills/ has User Skills generated with rnex- prefix
 [ -d "$TEST_SKILLS_WS/.claude/skills" ] || { fail ".claude/skills directory missing"; exit 1; }
-[ -f "$TEST_SKILLS_WS/.claude/skills/rnex-clone-sync.md" ] || { fail "rnex-clone-sync.md missing in .claude/skills/"; exit 1; }
-[ -f "$TEST_SKILLS_WS/.claude/skills/rnex-batch-exec.md" ] || { fail "rnex-batch-exec.md missing in .claude/skills/"; exit 1; }
-[ -f "$TEST_SKILLS_WS/.claude/skills/rnex-workspace-status.md" ] || { fail "rnex-workspace-status.md missing in .claude/skills/"; exit 1; }
+[ -f "$TEST_SKILLS_WS/.claude/skills/rnex-clone-sync/SKILL.md" ] || { fail "rnex-clone-sync/SKILL.md missing in .claude/skills/"; exit 1; }
+[ -f "$TEST_SKILLS_WS/.claude/skills/rnex-batch-exec/SKILL.md" ] || { fail "rnex-batch-exec/SKILL.md missing in .claude/skills/"; exit 1; }
+[ -f "$TEST_SKILLS_WS/.claude/skills/rnex-workspace-status/SKILL.md" ] || { fail "rnex-workspace-status/SKILL.md missing in .claude/skills/"; exit 1; }
 
-# Verify User Skill contains zero operational logic and only points to .rnex/skills/
-grep -q "CRITICAL: Do not execute inline heuristics" "$TEST_SKILLS_WS/.claude/skills/rnex-clone-sync.md" || { fail "User skill missing strict no-heuristic directive"; exit 1; }
-grep -q "\.rnex/skills/clone-sync\.md" "$TEST_SKILLS_WS/.claude/skills/rnex-clone-sync.md" || { fail "User skill missing target skill path"; exit 1; }
+# Verify User Skill contains YAML frontmatter and points to .rnex/skills/
+grep -q "name: rnex-clone-sync" "$TEST_SKILLS_WS/.claude/skills/rnex-clone-sync/SKILL.md" || { fail "User skill missing YAML frontmatter"; exit 1; }
+grep -q "CRITICAL: Do not execute inline heuristics" "$TEST_SKILLS_WS/.claude/skills/rnex-clone-sync/SKILL.md" || { fail "User skill missing strict no-heuristic directive"; exit 1; }
+grep -q "\.rnex/skills/clone-sync\.md" "$TEST_SKILLS_WS/.claude/skills/rnex-clone-sync/SKILL.md" || { fail "User skill missing target skill path"; exit 1; }
 
 # Verify status highlights user skills
 _skills_status="$(cd "$TEST_SKILLS_WS" && ./rnex status 2>&1)"
@@ -58,7 +59,7 @@ echo "# Custom skill" > "$TEST_SKILLS_WS/.claude/skills/custom-user-skill.md"
 (cd "$TEST_SKILLS_WS" && ./rnex sync -y --quiet >/dev/null)
 
 # Verify rnex-* User Skills were cleaned up, but custom skill remains
-[ ! -f "$TEST_SKILLS_WS/.claude/skills/rnex-clone-sync.md" ] || { fail "rnex User Skills not cleaned when skills: false"; exit 1; }
+[ ! -d "$TEST_SKILLS_WS/.claude/skills/rnex-clone-sync" ] || { fail "rnex User Skills not cleaned when skills: false"; exit 1; }
 [ -f "$TEST_SKILLS_WS/.claude/skills/custom-user-skill.md" ] || { fail "User custom skill deleted when skills: false"; exit 1; }
 pass
 
@@ -76,7 +77,7 @@ git -C "$TEST_PROVIDERS_WS" init -q
 "$TEST_PROVIDERS_WS/rnex" init -y --claude "$TEST_PROVIDERS_WS" >/dev/null
 [ -f "$TEST_PROVIDERS_WS/AGENTS.md" ] || { fail "AGENTS.md missing after init --claude"; exit 1; }
 [ -f "$TEST_PROVIDERS_WS/CLAUDE.md" ] || { fail "CLAUDE.md missing after init --claude"; exit 1; }
-[ -f "$TEST_PROVIDERS_WS/.claude/skills/rnex-clone-sync.md" ] || { fail "Claude user skill rnex-clone-sync.md missing"; exit 1; }
+[ -f "$TEST_PROVIDERS_WS/.claude/skills/rnex-clone-sync/SKILL.md" ] || { fail "Claude user skill rnex-clone-sync/SKILL.md missing"; exit 1; }
 
 # Enable gemini plugin
 (cd "$TEST_PROVIDERS_WS" && ./rnex plugin enable gemini >/dev/null)
@@ -84,7 +85,7 @@ git -C "$TEST_PROVIDERS_WS" init -q
 [ -f "$TEST_PROVIDERS_WS/GEMINI.md" ] || { fail "GEMINI.md missing after enabling gemini"; exit 1; }
 [ -f "$TEST_PROVIDERS_WS/.geminiignore" ] || { fail ".geminiignore missing after enabling gemini"; exit 1; }
 grep -q '!repos/\*' "$TEST_PROVIDERS_WS/.geminiignore" || { fail "!repos/* missing from .geminiignore"; exit 1; }
-[ -f "$TEST_PROVIDERS_WS/.gemini/skills/rnex-clone-sync.md" ] || { fail "Gemini user skill rnex-clone-sync.md missing"; exit 1; }
+[ -f "$TEST_PROVIDERS_WS/.gemini/skills/rnex-clone-sync/SKILL.md" ] || { fail "Gemini user skill rnex-clone-sync/SKILL.md missing"; exit 1; }
 
 # Enable cursor and windsurf plugins
 (cd "$TEST_PROVIDERS_WS" && ./rnex plugin enable cursor >/dev/null)
@@ -142,8 +143,8 @@ echo "custom" > "$TEST_PROVIDERS_WS/.windsurf/rules/my-user-rule.md"
 [ -f "$TEST_PROVIDERS_WS/AGENTS.md" ] || { fail "AGENTS.md not preserved when all AI provider plugins disabled"; exit 1; }
 
 # Verify Repo Nexus generated User Skills were cleaned up
-[ ! -f "$TEST_PROVIDERS_WS/.claude/skills/rnex-clone-sync.md" ] || { fail "rnex User Skill not cleaned from claude"; exit 1; }
-[ ! -f "$TEST_PROVIDERS_WS/.gemini/skills/rnex-clone-sync.md" ] || { fail "rnex User Skill not cleaned from gemini"; exit 1; }
+[ ! -d "$TEST_PROVIDERS_WS/.claude/skills/rnex-clone-sync" ] || { fail "rnex User Skill not cleaned from claude"; exit 1; }
+[ ! -d "$TEST_PROVIDERS_WS/.gemini/skills/rnex-clone-sync" ] || { fail "rnex User Skill not cleaned from gemini"; exit 1; }
 [ ! -f "$TEST_PROVIDERS_WS/.cursor/rules/rnex-clone-sync.md" ] || { fail "rnex User Skill not cleaned from cursor"; exit 1; }
 [ ! -f "$TEST_PROVIDERS_WS/.windsurf/rules/rnex-clone-sync.md" ] || { fail "rnex User Skill not cleaned from windsurf"; exit 1; }
 
@@ -205,14 +206,14 @@ grep -q "My Custom Copilot Developer Rules" "$TEST_PROVIDERS_WS/.github/copilot-
 (cd "$TEST_PROVIDERS_WS" && ./rnex sync -y --quiet >/dev/null)
 grep -q "REPO-NEXUS:START" "$TEST_PROVIDERS_WS/.github/copilot-instructions.md" || { fail "REPO-NEXUS block not merged when copilot enabled"; exit 1; }
 grep -q "My Custom Copilot Developer Rules" "$TEST_PROVIDERS_WS/.github/copilot-instructions.md" || { fail "Custom rules lost when copilot merged"; exit 1; }
-[ -f "$TEST_PROVIDERS_WS/.github/skills/rnex-batch-exec.md" ] || { fail "User skills not generated in .github/skills/ when copilot enabled"; exit 1; }
+[ -f "$TEST_PROVIDERS_WS/.github/skills/rnex-batch-exec/SKILL.md" ] || { fail "User skills not generated in .github/skills/ when copilot enabled"; exit 1; }
 
 # Verify disabling copilot cleans routing block and user skills while preserving custom instructions
 (cd "$TEST_PROVIDERS_WS" && ./rnex plugin disable copilot >/dev/null)
 (cd "$TEST_PROVIDERS_WS" && ./rnex sync -y --quiet >/dev/null)
 ! grep -q "REPO-NEXUS:START" "$TEST_PROVIDERS_WS/.github/copilot-instructions.md" || { fail "REPO-NEXUS block not stripped after copilot disabled"; exit 1; }
 grep -q "My Custom Copilot Developer Rules" "$TEST_PROVIDERS_WS/.github/copilot-instructions.md" || { fail "Custom Copilot rules lost after copilot disabled"; exit 1; }
-[ ! -f "$TEST_PROVIDERS_WS/.github/skills/rnex-batch-exec.md" ] || { fail "User skills not cleaned from .github/skills/ after copilot disabled"; exit 1; }
+[ ! -d "$TEST_PROVIDERS_WS/.github/skills/rnex-batch-exec" ] || { fail "User skills not cleaned from .github/skills/ after copilot disabled"; exit 1; }
 pass
 
 if [ "${_STANDALONE_RUN:-0}" -eq 1 ]; then

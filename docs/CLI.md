@@ -87,8 +87,8 @@ Every lifecycle hook receives the following environment variables:
 | `RNEX_QUIET` | Set to `1` when `--quiet` was passed, `0` otherwise. |
 
 Hooks have access to POSIX helper functions for managing User Skill pointers:
-- `rnex_register_user_skill <skill_name> <target_path_in_rnex>`: Generates a zero-logic user skill pointer (`rnex-<skill_name>.md`) in active provider directories linking to the target skill protocol.
-- `rnex_unregister_user_skill <skill_name>`: Removes the `rnex-<skill_name>.md` user skill pointer from all active provider directories.
+- `rnex_register_user_skill <skill_name> <target_path_in_rnex>`: Generates a zero-logic user skill pointer (either a native `rnex-<name>/SKILL.md` bundle with YAML frontmatter for skill-based providers, or a flat `rnex-<name>.md` file for rule-based providers) linking to the target skill protocol.
+- `rnex_unregister_user_skill <skill_name>`: Removes the `rnex-<skill_name>` user skill pointer (bundle or flat file) from all active provider directories.
 
 ### Karpathy LLM Wiki Plugin
 The `karpathy-llm` plugin uses lifecycle hooks to manage its domain directories:

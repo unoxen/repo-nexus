@@ -370,21 +370,63 @@ fi
 rnex_register_user_skill() {
   skill_name="$1"
   target_path="$2"
-  for provider_dir in $RNEX_PROVIDER_SKILL_DIRS; do
-    mkdir -p "$RNEX_ROOT/$provider_dir"
-    cat << EOF > "$RNEX_ROOT/$provider_dir/rnex-${skill_name}.md"
+  _dirs="${RNEX_PROVIDER_SKILL_DIRS:-}"
+  _r="${RNEX_ROOT:-.}"
+
+  _target_file=""
+  if [ -f "$_r/$target_path" ]; then
+    _target_file="$_r/$target_path"
+  elif [ -f "$target_path" ]; then
+    _target_file="$target_path"
+  fi
+
+  _skill_desc=""
+  if [ -n "$_target_file" ]; then
+    _skill_desc="$(awk 'NF && !/^#/ { print; exit }' "$_target_file" 2>/dev/null)"
+  fi
+  if [ -z "$_skill_desc" ]; then
+    _skill_desc="Repo Nexus agentic skill protocol for ${skill_name}."
+  fi
+  _skill_desc="$(printf '%s' "$_skill_desc" | tr '\n\r' '  ' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//;s/"/\\"/g')"
+
+  for provider_dir in $_dirs; do
+    case "$provider_dir" in
+      *rules*)
+        mkdir -p "$_r/$provider_dir"
+        rm -rf "$_r/$provider_dir/rnex-${skill_name}" 2>/dev/null || true
+        cat << EOF > "$_r/$provider_dir/rnex-${skill_name}.md"
 # User Skill: rnex-${skill_name}
 
 CRITICAL: Do not execute inline heuristics. Read and strictly follow the agentic skill protocol at:
 \`${target_path}\`
 EOF
+        ;;
+      *)
+        mkdir -p "$_r/$provider_dir/rnex-${skill_name}"
+        rm -f "$_r/$provider_dir/rnex-${skill_name}.md" 2>/dev/null || true
+        cat << EOF > "$_r/$provider_dir/rnex-${skill_name}/SKILL.md"
+---
+name: rnex-${skill_name}
+description: "${_skill_desc}"
+---
+
+# User Skill: rnex-${skill_name}
+
+CRITICAL: Do not execute inline heuristics. Read and strictly follow the agentic skill protocol at:
+\`${target_path}\`
+EOF
+        ;;
+    esac
   done
 }
 
 rnex_unregister_user_skill() {
   skill_name="$1"
-  for provider_dir in $RNEX_PROVIDER_SKILL_DIRS; do
-    rm -f "$RNEX_ROOT/$provider_dir/rnex-${skill_name}.md"
+  _dirs="${RNEX_PROVIDER_SKILL_DIRS:-}"
+  _r="${RNEX_ROOT:-.}"
+  for provider_dir in $_dirs; do
+    rm -f "$_r/$provider_dir/rnex-${skill_name}.md"
+    rm -rf "$_r/$provider_dir/rnex-${skill_name}"
   done
 }
 ENV_EOF
@@ -417,14 +459,51 @@ rnex_register_user_skill() {
   target_path="$2"
   _dirs="${RNEX_PROVIDER_SKILL_DIRS:-$(get_active_provider_skill_dirs)}"
   _r="${NEXUS_DIR:-${RNEX_ROOT:-.}}"
+
+  _target_file=""
+  if [ -f "$_r/$target_path" ]; then
+    _target_file="$_r/$target_path"
+  elif [ -f "$target_path" ]; then
+    _target_file="$target_path"
+  fi
+
+  _skill_desc=""
+  if [ -n "$_target_file" ]; then
+    _skill_desc="$(awk 'NF && !/^#/ { print; exit }' "$_target_file" 2>/dev/null)"
+  fi
+  if [ -z "$_skill_desc" ]; then
+    _skill_desc="Repo Nexus agentic skill protocol for ${skill_name}."
+  fi
+  _skill_desc="$(printf '%s' "$_skill_desc" | tr '\n\r' '  ' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//;s/"/\\"/g')"
+
   for provider_dir in $_dirs; do
-    mkdir -p "$_r/$provider_dir"
-    cat << EOF > "$_r/$provider_dir/rnex-${skill_name}.md"
+    case "$provider_dir" in
+      *rules*)
+        mkdir -p "$_r/$provider_dir"
+        rm -rf "$_r/$provider_dir/rnex-${skill_name}" 2>/dev/null || true
+        cat << EOF > "$_r/$provider_dir/rnex-${skill_name}.md"
 # User Skill: rnex-${skill_name}
 
 CRITICAL: Do not execute inline heuristics. Read and strictly follow the agentic skill protocol at:
 \`${target_path}\`
 EOF
+        ;;
+      *)
+        mkdir -p "$_r/$provider_dir/rnex-${skill_name}"
+        rm -f "$_r/$provider_dir/rnex-${skill_name}.md" 2>/dev/null || true
+        cat << EOF > "$_r/$provider_dir/rnex-${skill_name}/SKILL.md"
+---
+name: rnex-${skill_name}
+description: "${_skill_desc}"
+---
+
+# User Skill: rnex-${skill_name}
+
+CRITICAL: Do not execute inline heuristics. Read and strictly follow the agentic skill protocol at:
+\`${target_path}\`
+EOF
+        ;;
+    esac
   done
 }
 
@@ -435,6 +514,7 @@ rnex_unregister_user_skill() {
   _r="${NEXUS_DIR:-${RNEX_ROOT:-.}}"
   for provider_dir in $_dirs; do
     rm -f "$_r/$provider_dir/rnex-${skill_name}.md"
+    rm -rf "$_r/$provider_dir/rnex-${skill_name}"
   done
 }
 
@@ -444,8 +524,7 @@ clean_provider_user_skills() {
   rm -f "$_sk_dir"/rnex-*.md 2>/dev/null || true
   for _d in "$_sk_dir"/rnex-*; do
     [ -d "$_d" ] || continue
-    rm -f "$_d/SKILL.md" 2>/dev/null || true
-    rmdir "$_d" 2>/dev/null || true
+    rm -rf "$_d" 2>/dev/null || true
   done
   rmdir "$_sk_dir" 2>/dev/null || true
 }

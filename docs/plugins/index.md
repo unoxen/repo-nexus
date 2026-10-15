@@ -23,7 +23,7 @@ Active plugins are mirrored into each active member repository under `repos/<nam
 Repo Nexus decouples functional plugins from AI provider plugins:
 - **Core Skills (`toolkit/skills/` $\rightarrow$ `.rnex/skills/`)**: Workspace-level capabilities owned by Repo Nexus core.
 - **Plugin Skills (`toolkit/plugins/<plugin>/skills/` $\rightarrow$ `.rnex/plugins/<plugin>/skills/`)**: Scoped domain skills owned exclusively by individual plugins.
-- **User Skills (`rnex-<name>.md`)**: Provider plugins (`claude`, `gemini`, `cursor`, and `windsurf`) generate zero-logic user skill pointers in active provider directories (`.cursor/rules/`, `.claude/skills/`, `.gemini/skills/`, `.windsurf/rules/`) that redirect AI assistants directly to the underlying agentic skills in `.rnex/`.
+- **User Skills**: Provider plugins (`copilot`, `claude`, `gemini`, `cursor`, and `windsurf`) project zero-logic user skill pointers into active provider directories using native `SKILL.md` bundles with YAML frontmatter in skill directories (`.github/skills/`, `.claude/skills/`, `.gemini/skills/`) and flat files in rule directories (`.cursor/rules/`, `.windsurf/rules/`), redirecting AI assistants directly to the underlying agentic skills in `.rnex/`.
 
 ### 4. Non-Destructive Delimited Merging
 When plugins update root instruction files (`AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `.cursorrules`, `.windsurfrules`), Repo Nexus isolates auto-managed routing between explicit delimiters:

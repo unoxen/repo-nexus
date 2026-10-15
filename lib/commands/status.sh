@@ -165,14 +165,17 @@ cmd_status() {
   if [ -d "$NEXUS_DIR/.cursor/rules" ] && ls "$NEXUS_DIR/.cursor/rules"/rnex-*.md >/dev/null 2>&1; then
     printf '  %b✓%b %s %b(Cursor user skills)%b\n' "$_G" "$_NC" ".cursor/rules/" "$_DIM" "$_NC"
   fi
-  if [ -d "$NEXUS_DIR/.claude/skills" ] && ls "$NEXUS_DIR/.claude/skills"/rnex-*.md >/dev/null 2>&1; then
+  if [ -d "$NEXUS_DIR/.claude/skills" ] && { ls "$NEXUS_DIR/.claude/skills"/rnex-*.md >/dev/null 2>&1 || ls -d "$NEXUS_DIR/.claude/skills"/rnex-* >/dev/null 2>&1; }; then
     printf '  %b✓%b %s %b(Claude user skills)%b\n' "$_G" "$_NC" ".claude/skills/" "$_DIM" "$_NC"
   fi
   if [ -d "$NEXUS_DIR/.windsurf/rules" ] && ls "$NEXUS_DIR/.windsurf/rules"/rnex-*.md >/dev/null 2>&1; then
     printf '  %b✓%b %s %b(Windsurf user skills)%b\n' "$_G" "$_NC" ".windsurf/rules/" "$_DIM" "$_NC"
   fi
-  if [ -d "$NEXUS_DIR/.gemini/skills" ] && ls "$NEXUS_DIR/.gemini/skills"/rnex-*.md >/dev/null 2>&1; then
+  if [ -d "$NEXUS_DIR/.gemini/skills" ] && { ls "$NEXUS_DIR/.gemini/skills"/rnex-*.md >/dev/null 2>&1 || ls -d "$NEXUS_DIR/.gemini/skills"/rnex-* >/dev/null 2>&1; }; then
     printf '  %b✓%b %s %b(Gemini user skills)%b\n' "$_G" "$_NC" ".gemini/skills/" "$_DIM" "$_NC"
+  fi
+  if [ -d "$NEXUS_DIR/.github/skills" ] && { ls "$NEXUS_DIR/.github/skills"/rnex-*.md >/dev/null 2>&1 || ls -d "$NEXUS_DIR/.github/skills"/rnex-* >/dev/null 2>&1; }; then
+    printf '  %b✓%b %s %b(Copilot user skills)%b\n' "$_G" "$_NC" ".github/skills/" "$_DIM" "$_NC"
   fi
   printf '\n'
 

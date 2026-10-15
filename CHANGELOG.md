@@ -5,6 +5,19 @@ All notable changes to Repo Nexus (`rnex`) will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.7] - 2026-10-15
+
+### Added
+- **Native `SKILL.md` Bundle Support for User Skills**:
+  - Upgraded User Skill generator (`rnex_register_user_skill`) to emit dual formats tailored to each AI provider's discovery engine:
+    - **Skill-Based Providers (`.github/skills/`, `.claude/skills/`, `.gemini/skills/`)**: Generates native `rnex-<name>/SKILL.md` directory bundles containing YAML frontmatter (`name: rnex-<name>`, `description: "..."`) for automatic discoverability in VS Code, Copilot Chat, Antigravity, and Claude Code skill-pickers.
+    - **Rule-Based Providers (`.cursor/rules/`, `.windsurf/rules/`)**: Generates flat `rnex-<name>.md` pointer files aligning with Cursor and Windsurf rule conventions.
+  - Automatically extracts skill descriptions from target markdown headers to populate YAML frontmatter cleanly.
+- **GitHub Copilot Integration Plugin (`copilot`)**:
+  - Restored `copilot` as a first-class AI provider plugin in `toolkit/plugins/copilot/`.
+  - Supports `instructions: true` (managing `.github/copilot-instructions.md` within non-destructive delimiters) and `skills: true` (generating native User Skill bundles in `.github/skills/`).
+  - Added CLI flags `--copilot` and `--no-copilot` to `rnex init`.
+
 ## [0.7.5] - 2026-10-15
 
 ### Added

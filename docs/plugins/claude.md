@@ -15,8 +15,8 @@ Operational skills, rules, and subagents remain cleanly encapsulated within `.rn
 
 ## Capabilities
 
-1. **Zero-Logic User Skills (`.claude/skills/rnex-*.md`)**:
-   - Generates lightweight user skill pointers prefixed with `rnex-` in `.claude/skills/`.
+1. **Zero-Logic User Skills (`.claude/skills/rnex-*/SKILL.md`)**:
+   - Generates native `SKILL.md` bundles prefixed with `rnex-` in `.claude/skills/` with YAML frontmatter for Claude Code skill discovery.
    - Contains zero inline heuristics—redirects Claude directly to the underlying agentic skill protocols inside `.rnex/`.
 
 2. **Native Instruction Support via `CLAUDE.md` & `AGENTS.md`**:

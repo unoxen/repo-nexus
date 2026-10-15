@@ -15,8 +15,8 @@ Operational skills, rules, and subagents remain cleanly encapsulated within `.rn
 
 ## Capabilities
 
-1. **Zero-Logic User Skills (`.gemini/skills/rnex-*.md`)**:
-   - Generates lightweight user skill pointers prefixed with `rnex-` in `.gemini/skills/`.
+1. **Zero-Logic User Skills (`.gemini/skills/rnex-*/SKILL.md`)**:
+   - Generates native `SKILL.md` bundles prefixed with `rnex-` in `.gemini/skills/` with YAML frontmatter for Gemini and Antigravity skill discovery.
    - Contains zero inline heuristics—redirects Gemini/Antigravity directly to the underlying agentic skill protocols inside `.rnex/`.
 
 2. **Native Instructions Support via `GEMINI.md`**:

@@ -12,7 +12,7 @@ The `copilot` plugin integrates GitHub Copilot with Repo Nexus by projecting wor
 GitHub Copilot operates natively within VS Code, Visual Studio, JetBrains, and GitHub.com:
 - **Universal Routing (`AGENTS.md`)**: GitHub Copilot natively reads `AGENTS.md` at the workspace root.
 - **Custom Instructions (`.github/copilot-instructions.md`)**: When `instructions: true`, Repo Nexus injects its non-destructive routing block inside `<!-- REPO-NEXUS:START -->` and `<!-- REPO-NEXUS:END -->`. Custom developer rules outside these markers are strictly preserved.
-- **User Skills (`.github/skills/`)**: When `skills: true`, zero-logic User Skill pointers (`rnex-<name>.md`) redirect Copilot Chat to the underlying agentic skills under `.rnex/skills/` and active plugins.
+- **User Skills (`.github/skills/`)**: When `skills: true`, Repo Nexus generates native `SKILL.md` directory bundles (`.github/skills/rnex-<name>/SKILL.md`) with YAML frontmatter, making them automatically discoverable in VS Code and Copilot Chat skill-pickers while redirecting to the underlying agentic skills under `.rnex/skills/` and active plugins.
 
 ## Configuration
 
