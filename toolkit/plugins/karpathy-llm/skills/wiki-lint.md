@@ -12,7 +12,11 @@ Use this skill to perform health checks and maintenance on the curated wiki know
 
 1. **Resolve Configuration & Verify Paths:**
    - Read `rnex.yaml` (and `.local.rnex.yaml` if present) to resolve `wiki_dir` (default: `.rnex/wiki`) and `raw_dir` (default: `./docs`) under `plugins.karpathy-llm`.
-   - For every page under `<wiki_dir>/`, verify that all paths in frontmatter relation fields (`related`, `extends`, `contradicts`, `sources`) resolve to existing files under `<wiki_dir>/` or `<raw_dir>/`.
+   - Direct input scope explicitly reads:
+     1. All files in `raw_dir` (`./docs`) (read-only).
+     2. `./repos/<name>/README.md` for every enabled member repository in `rnex.yaml` / `.local.rnex.yaml` (read-only).
+   - `raw_dir` (`./docs`) and `./repos/` are strictly read-only inputs during wiki operations. Never create, copy, or modify files inside `./docs`; write generated output exclusively inside `wiki_dir` (`.rnex/wiki/`).
+   - For every page under `<wiki_dir>/`, verify that all paths in frontmatter relation fields (`related`, `extends`, `contradicts`, `sources`) resolve to existing files under `<wiki_dir>/`, `<raw_dir>/`, or `./repos/<name>/README.md`.
    - Fix or flag broken paths.
 
 2. **Recompute `mentioned_in` Relations:**

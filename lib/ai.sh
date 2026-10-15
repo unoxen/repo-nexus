@@ -124,6 +124,9 @@ When workspace configuration, routing blocks, plugin assets, or member repositor
 
 ## Git Operations
 Commit and push changes directly within the respective member repository root (`repos/<name>/`).
+
+## Wiki Operations
+`raw_dir` (`./docs`) and `./repos/` are strictly read-only inputs during wiki operations. Never create, copy, or modify files inside `./docs`; write generated output exclusively inside `wiki_dir` (`.rnex/wiki/`).
 BASE_AI_EOF
   fi
 
@@ -367,9 +370,16 @@ if [ -z "$RNEX_PROVIDER_SKILL_DIRS" ]; then
   export RNEX_PROVIDER_SKILL_DIRS="$_dirs"
 fi
 
-rnex_register_user_skill() {
+rnex_generate_user_skill() {
   skill_name="$1"
   target_path="$2"
+  plugin_name="${3:-}"
+
+  if [ -n "$plugin_name" ]; then
+    full_name="rnex-${plugin_name}-${skill_name}"
+  else
+    full_name="rnex-${skill_name}"
+  fi
   _dirs="${RNEX_PROVIDER_SKILL_DIRS:-}"
   _r="${RNEX_ROOT:-.}"
 
@@ -385,7 +395,7 @@ rnex_register_user_skill() {
     _skill_desc="$(awk 'NF && !/^#/ { print; exit }' "$_target_file" 2>/dev/null)"
   fi
   if [ -z "$_skill_desc" ]; then
-    _skill_desc="Repo Nexus agentic skill protocol for ${skill_name}."
+    _skill_desc="Repo Nexus agentic skill protocol for ${full_name}."
   fi
   _skill_desc="$(printf '%s' "$_skill_desc" | tr '\n\r' '  ' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//;s/"/\\"/g')"
 
@@ -393,24 +403,24 @@ rnex_register_user_skill() {
     case "$provider_dir" in
       *rules*)
         mkdir -p "$_r/$provider_dir"
-        rm -rf "$_r/$provider_dir/rnex-${skill_name}" 2>/dev/null || true
-        cat << EOF > "$_r/$provider_dir/rnex-${skill_name}.md"
-# User Skill: rnex-${skill_name}
+        rm -rf "$_r/$provider_dir/${full_name}" 2>/dev/null || true
+        cat << EOF > "$_r/$provider_dir/${full_name}.md"
+# User Skill: ${full_name}
 
 CRITICAL: Do not execute inline heuristics. Read and strictly follow the agentic skill protocol at:
 \`${target_path}\`
 EOF
         ;;
       *)
-        mkdir -p "$_r/$provider_dir/rnex-${skill_name}"
-        rm -f "$_r/$provider_dir/rnex-${skill_name}.md" 2>/dev/null || true
-        cat << EOF > "$_r/$provider_dir/rnex-${skill_name}/SKILL.md"
+        mkdir -p "$_r/$provider_dir/${full_name}"
+        rm -f "$_r/$provider_dir/${full_name}.md" 2>/dev/null || true
+        cat << EOF > "$_r/$provider_dir/${full_name}/SKILL.md"
 ---
-name: rnex-${skill_name}
+name: ${full_name}
 description: "${_skill_desc}"
 ---
 
-# User Skill: rnex-${skill_name}
+# User Skill: ${full_name}
 
 CRITICAL: Do not execute inline heuristics. Read and strictly follow the agentic skill protocol at:
 \`${target_path}\`
@@ -420,13 +430,30 @@ EOF
   done
 }
 
+rnex_register_user_skill() {
+  rnex_generate_user_skill "$@"
+}
+
 rnex_unregister_user_skill() {
   skill_name="$1"
+  plugin_name="${2:-}"
+  if [ -n "$plugin_name" ]; then
+    full_name="rnex-${plugin_name}-${skill_name}"
+  else
+    case "$skill_name" in
+      rnex-*) full_name="$skill_name" ;;
+      *)      full_name="rnex-${skill_name}" ;;
+    esac
+  fi
   _dirs="${RNEX_PROVIDER_SKILL_DIRS:-}"
   _r="${RNEX_ROOT:-.}"
   for provider_dir in $_dirs; do
-    rm -f "$_r/$provider_dir/rnex-${skill_name}.md"
-    rm -rf "$_r/$provider_dir/rnex-${skill_name}"
+    rm -f "$_r/$provider_dir/${full_name}.md"
+    rm -rf "$_r/$provider_dir/${full_name}"
+    if [ -n "$plugin_name" ]; then
+      rm -f "$_r/$provider_dir/rnex-${skill_name}.md"
+      rm -rf "$_r/$provider_dir/rnex-${skill_name}"
+    fi
   done
 }
 ENV_EOF
@@ -453,10 +480,18 @@ get_active_provider_skill_dirs() {
   printf '%s' "$_dirs"
 }
 
-# Usage: rnex_register_user_skill <skill_name> <target_path_in_rnex>
-rnex_register_user_skill() {
+# Usage: rnex_generate_user_skill <skill_name> <target_path_in_rnex> [plugin_name]
+rnex_generate_user_skill() {
   skill_name="$1"
   target_path="$2"
+  plugin_name="${3:-}"
+
+  if [ -n "$plugin_name" ]; then
+    full_name="rnex-${plugin_name}-${skill_name}"
+  else
+    full_name="rnex-${skill_name}"
+  fi
+
   _dirs="${RNEX_PROVIDER_SKILL_DIRS:-$(get_active_provider_skill_dirs)}"
   _r="${NEXUS_DIR:-${RNEX_ROOT:-.}}"
 
@@ -472,7 +507,7 @@ rnex_register_user_skill() {
     _skill_desc="$(awk 'NF && !/^#/ { print; exit }' "$_target_file" 2>/dev/null)"
   fi
   if [ -z "$_skill_desc" ]; then
-    _skill_desc="Repo Nexus agentic skill protocol for ${skill_name}."
+    _skill_desc="Repo Nexus agentic skill protocol for ${full_name}."
   fi
   _skill_desc="$(printf '%s' "$_skill_desc" | tr '\n\r' '  ' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//;s/"/\\"/g')"
 
@@ -480,24 +515,24 @@ rnex_register_user_skill() {
     case "$provider_dir" in
       *rules*)
         mkdir -p "$_r/$provider_dir"
-        rm -rf "$_r/$provider_dir/rnex-${skill_name}" 2>/dev/null || true
-        cat << EOF > "$_r/$provider_dir/rnex-${skill_name}.md"
-# User Skill: rnex-${skill_name}
+        rm -rf "$_r/$provider_dir/${full_name}" 2>/dev/null || true
+        cat << EOF > "$_r/$provider_dir/${full_name}.md"
+# User Skill: ${full_name}
 
 CRITICAL: Do not execute inline heuristics. Read and strictly follow the agentic skill protocol at:
 \`${target_path}\`
 EOF
         ;;
       *)
-        mkdir -p "$_r/$provider_dir/rnex-${skill_name}"
-        rm -f "$_r/$provider_dir/rnex-${skill_name}.md" 2>/dev/null || true
-        cat << EOF > "$_r/$provider_dir/rnex-${skill_name}/SKILL.md"
+        mkdir -p "$_r/$provider_dir/${full_name}"
+        rm -f "$_r/$provider_dir/${full_name}.md" 2>/dev/null || true
+        cat << EOF > "$_r/$provider_dir/${full_name}/SKILL.md"
 ---
-name: rnex-${skill_name}
+name: ${full_name}
 description: "${_skill_desc}"
 ---
 
-# User Skill: rnex-${skill_name}
+# User Skill: ${full_name}
 
 CRITICAL: Do not execute inline heuristics. Read and strictly follow the agentic skill protocol at:
 \`${target_path}\`
@@ -507,14 +542,33 @@ EOF
   done
 }
 
-# Usage: rnex_unregister_user_skill <skill_name>
+# Usage: rnex_register_user_skill <skill_name> <target_path_in_rnex> [plugin_name]
+rnex_register_user_skill() {
+  rnex_generate_user_skill "$@"
+}
+
+# Usage: rnex_unregister_user_skill <skill_name> [plugin_name]
 rnex_unregister_user_skill() {
   skill_name="$1"
+  plugin_name="${2:-}"
+  if [ -n "$plugin_name" ]; then
+    full_name="rnex-${plugin_name}-${skill_name}"
+  else
+    case "$skill_name" in
+      rnex-*) full_name="$skill_name" ;;
+      *)      full_name="rnex-${skill_name}" ;;
+    esac
+  fi
+
   _dirs="${RNEX_PROVIDER_SKILL_DIRS:-$(get_active_provider_skill_dirs)}"
   _r="${NEXUS_DIR:-${RNEX_ROOT:-.}}"
   for provider_dir in $_dirs; do
-    rm -f "$_r/$provider_dir/rnex-${skill_name}.md"
-    rm -rf "$_r/$provider_dir/rnex-${skill_name}"
+    rm -f "$_r/$provider_dir/${full_name}.md"
+    rm -rf "$_r/$provider_dir/${full_name}"
+    if [ -n "$plugin_name" ]; then
+      rm -f "$_r/$provider_dir/rnex-${skill_name}.md"
+      rm -rf "$_r/$provider_dir/rnex-${skill_name}"
+    fi
   done
 }
 
@@ -536,10 +590,12 @@ clean_provider_skills() {
 clean_plugin_user_skills() {
   _pdir="$1"
   [ -d "$_pdir" ] || return 0
+  _pname="$(basename "$_pdir")"
   if [ -d "$_pdir/skills" ]; then
     for _sk_file in "$_pdir/skills"/*.md; do
       [ -f "$_sk_file" ] || continue
       _sk_name="$(basename "$_sk_file" .md)"
+      rnex_unregister_user_skill "$_sk_name" "$_pname"
       rnex_unregister_user_skill "$_sk_name"
     done
   fi
@@ -633,6 +689,12 @@ sync_rnex_base_assets() {
   # Purge any plugin-specific skills from .rnex/skills/
   rm -f "$NEXUS_DIR/.rnex/skills/wiki-ingest.md" "$NEXUS_DIR/.rnex/skills/wiki-lint.md" \
         "$NEXUS_DIR/.rnex/skills/rnex-wiki-ingest.md" "$NEXUS_DIR/.rnex/skills/rnex-wiki-lint.md" 2>/dev/null || true
+
+  # Purge stale unprefixed wiki user skills across provider directories
+  for _p_dir in $(get_active_provider_skill_dirs 2>/dev/null || true); do
+    rm -f "$NEXUS_DIR/$_p_dir/rnex-wiki-ingest.md" "$NEXUS_DIR/$_p_dir/rnex-wiki-lint.md" 2>/dev/null || true
+    rm -rf "$NEXUS_DIR/$_p_dir/rnex-wiki-ingest" "$NEXUS_DIR/$_p_dir/rnex-wiki-lint" 2>/dev/null || true
+  done
 
   # Register core User Skills across active provider directories
   for _sk_file in "$NEXUS_DIR/.rnex/skills"/*.md; do

@@ -83,11 +83,13 @@ cmd_plugin_info() {
   if [ "$_name" = "karpathy-llm" ]; then
     _cur_lt="$(yaml_plugin_get "karpathy-llm" "lint_trigger" 2>/dev/null || true)"
     _cur_nc="$(yaml_plugin_get "karpathy-llm" "notify_on_changes" 2>/dev/null || true)"
+    _cur_imr="$(yaml_plugin_get "karpathy-llm" "ingest_member_readmes" 2>/dev/null || true)"
     printf '\n%bConfigurable Options (in rnex.yaml or .local.rnex.yaml):%b\n' "$_BOLD" "$_NC"
     printf '  - wiki_dir: <dir>  (directory for curated markdown pages; current: %s)\n' "$(karpathy_wiki_dir)"
     printf '  - raw_dir: <dir>   (directory for unmodified intake documents; current: %s)\n' "$(karpathy_raw_dir)"
     printf '  - lint_trigger: git-post-merge|git-post-commit|git-pre-commit|git-pre-push|manual  (current: %s)\n' "${_cur_lt:-manual}"
     printf '  - notify_on_changes: true|false  (show notification when raw/wiki changes are committed; current: %s)\n' "${_cur_nc:-true}"
+    printf '  - ingest_member_readmes: true|false  (automatically track member repository READMEs in wiki; current: %s)\n' "${_cur_imr:-true}"
   fi
 
   printf '\n%bScoped Directory:%b .rnex/plugins/%s\n' "$_BOLD" "$_NC" "$_name"

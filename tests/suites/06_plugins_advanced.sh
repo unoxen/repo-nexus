@@ -132,8 +132,10 @@ plugins:
 EOF_CFG2
 
 (cd "$TEST_KWIKI_WS" && ./rnex sync -y >/dev/null)
-[ -f "$TEST_KWIKI_WS/.claude/skills/rnex-wiki-ingest/SKILL.md" ] || { fail "Plugin User Skill rnex-wiki-ingest was not generated in claude"; exit 1; }
-[ -f "$TEST_KWIKI_WS/.claude/skills/rnex-wiki-lint/SKILL.md" ] || { fail "Plugin User Skill rnex-wiki-lint was not generated in claude"; exit 1; }
+[ -f "$TEST_KWIKI_WS/.claude/skills/rnex-karpathy-llm-wiki-ingest/SKILL.md" ] || { fail "Plugin User Skill rnex-karpathy-llm-wiki-ingest was not generated in claude"; exit 1; }
+[ -f "$TEST_KWIKI_WS/.claude/skills/rnex-karpathy-llm-wiki-lint/SKILL.md" ] || { fail "Plugin User Skill rnex-karpathy-llm-wiki-lint was not generated in claude"; exit 1; }
+[ ! -d "$TEST_KWIKI_WS/.claude/skills/rnex-wiki-ingest" ] || { fail "Stale unprefixed rnex-wiki-ingest was generated in claude"; exit 1; }
+[ ! -d "$TEST_KWIKI_WS/.claude/skills/rnex-wiki-lint" ] || { fail "Stale unprefixed rnex-wiki-lint was generated in claude"; exit 1; }
 [ -f "$TEST_KWIKI_WS/.claude/skills/rnex-clone-sync/SKILL.md" ] || { fail "Core User Skill rnex-clone-sync missing in claude"; exit 1; }
 [ -d "$TEST_KWIKI_WS/.rnex/plugins/karpathy-llm" ] || { fail ".rnex/plugins/karpathy-llm missing while enabled"; exit 1; }
 _kw_active_ai="$(cat "$TEST_KWIKI_WS/.rnex/ai-instructions.md")"
@@ -163,6 +165,8 @@ _kw_disabled_agents="$(cat "$TEST_KWIKI_WS/AGENTS.md")"
 echo "$_kw_disabled_agents" | grep -q "CRITICAL: You MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\`" || { fail "AGENTS.md missing strict directive"; exit 1; }
 
 # 5. Verify provider User Skills from disabled plugin were removed, but core skills kept
+[ ! -d "$TEST_KWIKI_WS/.claude/skills/rnex-karpathy-llm-wiki-ingest" ] || { fail "rnex-karpathy-llm-wiki-ingest still present after disabling plugin"; exit 1; }
+[ ! -d "$TEST_KWIKI_WS/.claude/skills/rnex-karpathy-llm-wiki-lint" ] || { fail "rnex-karpathy-llm-wiki-lint still present after disabling plugin"; exit 1; }
 [ ! -d "$TEST_KWIKI_WS/.claude/skills/rnex-wiki-ingest" ] || { fail "rnex-wiki-ingest still present after disabling plugin"; exit 1; }
 [ ! -d "$TEST_KWIKI_WS/.claude/skills/rnex-wiki-lint" ] || { fail "rnex-wiki-lint still present after disabling plugin"; exit 1; }
 [ -f "$TEST_KWIKI_WS/.claude/skills/rnex-clone-sync/SKILL.md" ] || { fail "Core User Skill rnex-clone-sync was incorrectly removed"; exit 1; }
@@ -210,13 +214,10 @@ printf '# Intake Note\nImportant context notes.\n' > "$TEST_HOOK_WS/docs/intake-
 # 3. Invoke rnex sync to trigger after_sync hook
 (cd "$TEST_HOOK_WS" && ./rnex sync -y >/dev/null)
 
-# 4. Confirm target file is duplicated and named correctly inside .rnex/wiki/raw/
-[ -f "$TEST_HOOK_WS/.rnex/wiki/raw/README_mock-member-repo.md" ] || { fail ".rnex/wiki/raw/README_mock-member-repo.md missing after rnex sync"; exit 1; }
-grep -q "Mock Member Repo" "$TEST_HOOK_WS/.rnex/wiki/raw/README_mock-member-repo.md" || { fail "Content mismatch in synced member README"; exit 1; }
-
-# 5. Confirm local raw_dir files synced to raw intake
-[ -f "$TEST_HOOK_WS/.rnex/wiki/raw/intake-note.md" ] || { fail ".rnex/wiki/raw/intake-note.md missing after rnex sync"; exit 1; }
-grep -q "Intake Note" "$TEST_HOOK_WS/.rnex/wiki/raw/intake-note.md" || { fail "Content mismatch in synced intake note"; exit 1; }
+# 4. Confirm .rnex/wiki/raw staging directory is NOT created and docs/intake-note.md remains in-place
+[ ! -d "$TEST_HOOK_WS/.rnex/wiki/raw" ] || { fail ".rnex/wiki/raw staging directory was created; should not exist"; exit 1; }
+[ -f "$TEST_HOOK_WS/docs/intake-note.md" ] || { fail "docs/intake-note.md missing"; exit 1; }
+grep -q "Intake Note" "$TEST_HOOK_WS/docs/intake-note.md" || { fail "Content mismatch in docs/intake-note.md"; exit 1; }
 
 # 5b. Confirm member repository README ingested into atomic wiki page
 [ -f "$TEST_HOOK_WS/.rnex/wiki/repo-mock-member-repo.md" ] || { fail "repo-mock-member-repo.md missing after wiki ingest"; exit 1; }
@@ -250,7 +251,8 @@ repos:
     enabled: false
 EOF_DIS
 (cd "$TEST_HOOK_WS" && ./rnex sync -y >/dev/null)
-[ ! -f "$TEST_HOOK_WS/.rnex/wiki/raw/README_disabled-member-repo.md" ] || { fail "Disabled repository README should not be synced"; exit 1; }
+[ ! -d "$TEST_HOOK_WS/.rnex/wiki/raw" ] || { fail ".rnex/wiki/raw staging directory exists"; exit 1; }
+[ ! -f "$TEST_HOOK_WS/.rnex/wiki/repo-disabled-member-repo.md" ] || { fail "Disabled repository should not be ingested into wiki"; exit 1; }
 
 # 7. Verify an adjacent enabled repository is NOT affected by the disabled repository entry
 mkdir -p "$TEST_HOOK_WS/repos/adjacent-enabled-repo"
@@ -260,8 +262,9 @@ cat <<'EOF_ADJ' >> "$TEST_HOOK_WS/rnex.yaml"
     url: ./repos/adjacent-enabled-repo
 EOF_ADJ
 (cd "$TEST_HOOK_WS" && ./rnex sync -y >/dev/null)
-[ -f "$TEST_HOOK_WS/.rnex/wiki/raw/README_adjacent-enabled-repo.md" ] || { fail "Adjacent enabled repository README was not copied due to nearby disabled repo bleed"; exit 1; }
-grep -q "Adjacent Enabled Repo" "$TEST_HOOK_WS/.rnex/wiki/raw/README_adjacent-enabled-repo.md" || { fail "Content mismatch in adjacent enabled repo README"; exit 1; }
+[ -f "$TEST_HOOK_WS/.rnex/wiki/repo-adjacent-enabled-repo.md" ] || { fail "Adjacent enabled repository was not ingested into wiki"; exit 1; }
+grep -q "Adjacent Enabled Repo" "$TEST_HOOK_WS/.rnex/wiki/repo-adjacent-enabled-repo.md" || { fail "Content mismatch in adjacent enabled repo wiki page"; exit 1; }
+[ ! -d "$TEST_HOOK_WS/.rnex/wiki/raw" ] || { fail ".rnex/wiki/raw staging directory was created during sync"; exit 1; }
 
 # 8. Verify before_sync plugin lifecycle hook execution
 mkdir -p "$TEST_HOOK_WS/.rnex/plugins/karpathy-llm/hooks"
@@ -367,7 +370,7 @@ EOF
 [ -f "$TEST_SEPARATION_WS/.rnex/plugins/karpathy-llm/skills/wiki-lint.md" ] || { fail "wiki-lint.md missing in plugin skills/"; exit 1; }
 
 # Verify User Skills generated in .claude/skills/
-for _s in clone-sync batch-exec workspace-status wiki-ingest wiki-lint; do
+for _s in clone-sync batch-exec workspace-status; do
   _usk="$TEST_SEPARATION_WS/.claude/skills/rnex-${_s}/SKILL.md"
   [ -f "$_usk" ] || { fail "User skill rnex-${_s}/SKILL.md missing in .claude/skills/"; exit 1; }
   grep -q "name: rnex-${_s}" "$_usk" || { fail "User skill rnex-${_s} missing YAML frontmatter"; exit 1; }
@@ -375,16 +378,26 @@ for _s in clone-sync batch-exec workspace-status wiki-ingest wiki-lint; do
   ! grep -q '```' "$_usk" || { fail "User skill rnex-${_s} contains inlined code patterns"; exit 1; }
 done
 
+for _s in wiki-ingest wiki-lint; do
+  _usk="$TEST_SEPARATION_WS/.claude/skills/rnex-karpathy-llm-${_s}/SKILL.md"
+  [ -f "$_usk" ] || { fail "Plugin user skill rnex-karpathy-llm-${_s}/SKILL.md missing in .claude/skills/"; exit 1; }
+  grep -q "name: rnex-karpathy-llm-${_s}" "$_usk" || { fail "User skill rnex-karpathy-llm-${_s} missing YAML frontmatter"; exit 1; }
+  grep -q "CRITICAL: Do not execute inline heuristics" "$_usk" || { fail "User skill rnex-karpathy-llm-${_s} missing strict directive"; exit 1; }
+  ! grep -q '```' "$_usk" || { fail "User skill rnex-karpathy-llm-${_s} contains inlined code patterns"; exit 1; }
+done
+
 # Verify target paths in User Skills
 grep -q "\.rnex/skills/clone-sync\.md" "$TEST_SEPARATION_WS/.claude/skills/rnex-clone-sync/SKILL.md" || { fail "rnex-clone-sync target path wrong"; exit 1; }
-grep -q "\.rnex/plugins/karpathy-llm/skills/wiki-ingest\.md" "$TEST_SEPARATION_WS/.claude/skills/rnex-wiki-ingest/SKILL.md" || { fail "rnex-wiki-ingest target path wrong"; exit 1; }
-grep -q "\.rnex/plugins/karpathy-llm/skills/wiki-lint\.md" "$TEST_SEPARATION_WS/.claude/skills/rnex-wiki-lint/SKILL.md" || { fail "rnex-wiki-lint target path wrong"; exit 1; }
+grep -q "\.rnex/plugins/karpathy-llm/skills/wiki-ingest\.md" "$TEST_SEPARATION_WS/.claude/skills/rnex-karpathy-llm-wiki-ingest/SKILL.md" || { fail "rnex-karpathy-llm-wiki-ingest target path wrong"; exit 1; }
+grep -q "\.rnex/plugins/karpathy-llm/skills/wiki-lint\.md" "$TEST_SEPARATION_WS/.claude/skills/rnex-karpathy-llm-wiki-lint/SKILL.md" || { fail "rnex-karpathy-llm-wiki-lint target path wrong"; exit 1; }
 
 # 5. Disable karpathy-llm via CLI command and verify unregistration
 (cd "$TEST_SEPARATION_WS" && ./rnex plugin disable karpathy-llm >/dev/null)
 (cd "$TEST_SEPARATION_WS" && ./rnex sync -y >/dev/null)
 
 # Plugin user skills unregistered
+[ ! -d "$TEST_SEPARATION_WS/.claude/skills/rnex-karpathy-llm-wiki-ingest" ] || { fail "rnex-karpathy-llm-wiki-ingest not unregistered after plugin disable"; exit 1; }
+[ ! -d "$TEST_SEPARATION_WS/.claude/skills/rnex-karpathy-llm-wiki-lint" ] || { fail "rnex-karpathy-llm-wiki-lint not unregistered after plugin disable"; exit 1; }
 [ ! -d "$TEST_SEPARATION_WS/.claude/skills/rnex-wiki-ingest" ] || { fail "rnex-wiki-ingest not unregistered after plugin disable"; exit 1; }
 [ ! -d "$TEST_SEPARATION_WS/.claude/skills/rnex-wiki-lint" ] || { fail "rnex-wiki-lint not unregistered after plugin disable"; exit 1; }
 
@@ -392,6 +405,18 @@ grep -q "\.rnex/plugins/karpathy-llm/skills/wiki-lint\.md" "$TEST_SEPARATION_WS/
 [ -f "$TEST_SEPARATION_WS/.claude/skills/rnex-clone-sync/SKILL.md" ] || { fail "rnex-clone-sync/SKILL.md deleted after disabling unrelated plugin"; exit 1; }
 [ -f "$TEST_SEPARATION_WS/.claude/skills/rnex-batch-exec/SKILL.md" ] || { fail "rnex-batch-exec/SKILL.md deleted after disabling unrelated plugin"; exit 1; }
 [ -f "$TEST_SEPARATION_WS/.claude/skills/rnex-workspace-status/SKILL.md" ] || { fail "rnex-workspace-status/SKILL.md deleted after disabling unrelated plugin"; exit 1; }
+
+# 6. Verify rnex sync purges stale unprefixed user skills (rnex-wiki-*) and regenerates prefixed ones
+mkdir -p "$TEST_SEPARATION_WS/.claude/skills/rnex-wiki-ingest"
+touch "$TEST_SEPARATION_WS/.claude/skills/rnex-wiki-ingest/SKILL.md"
+mkdir -p "$TEST_SEPARATION_WS/.claude/skills/rnex-wiki-lint"
+touch "$TEST_SEPARATION_WS/.claude/skills/rnex-wiki-lint/SKILL.md"
+(cd "$TEST_SEPARATION_WS" && ./rnex plugin enable karpathy-llm >/dev/null)
+(cd "$TEST_SEPARATION_WS" && ./rnex sync -y >/dev/null)
+[ ! -d "$TEST_SEPARATION_WS/.claude/skills/rnex-wiki-ingest" ] || { fail "Stale unprefixed rnex-wiki-ingest was not purged by rnex sync"; exit 1; }
+[ ! -d "$TEST_SEPARATION_WS/.claude/skills/rnex-wiki-lint" ] || { fail "Stale unprefixed rnex-wiki-lint was not purged by rnex sync"; exit 1; }
+[ -f "$TEST_SEPARATION_WS/.claude/skills/rnex-karpathy-llm-wiki-ingest/SKILL.md" ] || { fail "rnex-karpathy-llm-wiki-ingest was not regenerated by rnex sync"; exit 1; }
+[ -f "$TEST_SEPARATION_WS/.claude/skills/rnex-karpathy-llm-wiki-lint/SKILL.md" ] || { fail "rnex-karpathy-llm-wiki-lint was not regenerated by rnex sync"; exit 1; }
 
 pass
 

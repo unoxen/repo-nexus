@@ -45,3 +45,7 @@ In a Repo Nexus workspace, independent repositories are organized into `./repos/
 3. **Context Economy:**
    - Do not redundantly read entire files or directory trees when targeted symbol lookups or line ranges suffice.
    - Rely on active workspace context, indexing, and compiled documentation rather than re-scanning raw files repeatedly.
+
+4. **Read-Only Intake & Source Directories:**
+   - `raw_dir` (`./docs`) and `./repos/` are strictly read-only inputs during wiki operations. Never create, copy, or modify files inside `./docs`; write generated output exclusively inside `wiki_dir` (`.rnex/wiki/`).
+

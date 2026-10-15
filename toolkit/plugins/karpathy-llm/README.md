@@ -26,9 +26,9 @@ Reference specification: [setup-karpathy-wiki.md](https://github.com/unoxen/ai-t
 * **Rolling Context Cache (`<wiki_dir>/hot.md`, default: `.rnex/wiki/hot.md`):** High-density ~500-word orientation summary for rapid agent onboarding without full wiki scans (especially for codebase knowledge and second-brain wikis).
 * **Audit Trail (`<wiki_dir>/_log.md`, default: `.rnex/wiki/_log.md`):** Append-only log recording every ingest and lint operation with timestamped details.
 
-### 4. Standardized Agent Workflows (`workflows/`)
-* **`rnex-wiki-ingest.md` (8 Steps):** Decomposes raw source documents into 5–25 atomic wiki pages with frontmatter relations.
-* **`rnex-wiki-lint.md` (10 Steps):** Integrity audit protocol to validate paths, recompute `mentioned_in`, eliminate orphans, merge duplicates, audit inconsistencies, identify gaps, suggest source candidates, and rebuild indexes.
+### 4. Standardized Agent Skills (`skills/`)
+* **`wiki-ingest.md` (User Skill: `rnex-karpathy-llm-wiki-ingest`):** Decomposes raw source documents into 5–25 atomic wiki pages with frontmatter relations.
+* **`wiki-lint.md` (User Skill: `rnex-karpathy-llm-wiki-lint`):** Integrity audit protocol to validate paths, recompute `mentioned_in`, eliminate orphans, merge duplicates, audit inconsistencies, identify gaps, suggest source candidates, and rebuild indexes.
 
 ---
 
@@ -45,9 +45,9 @@ Enabling the plugin (`rnex plugin enable karpathy-llm`) performs an exact, zero-
 
 ### Phase 2: Evolutionary Growth & Domain Specialization (Usage Phase)
 Once initialized, the workspace structure organically evolves according to actual domain needs and source materials:
-* **Source Ingestion (`rnex-wiki-ingest`)**: As raw source documents are deposited into `./docs` and ingested, atomic pages are generated. Users or agents can organize pages into categorical subfolders (e.g. `architecture/`, `decisions/`, `concepts/`, `projects/`) or keep them flat.
+* **Source Ingestion (`rnex-karpathy-llm-wiki-ingest`)**: As raw source documents are deposited into `./docs` and ingested, atomic pages are generated. Users or agents can organize pages into categorical subfolders (e.g. `architecture/`, `decisions/`, `concepts/`, `projects/`) or keep them flat.
 * **Customizable Guidelines**: Teams can tailor `rules/rnex-behavioral.md` and `instructions/rnex-wiki-architecture.md` for their specific team conventions.
-* **Graph Maintenance (`rnex-wiki-lint`)**: The periodic lint workflow validates relation paths, updates `mentioned_in`, and rebuilds `index.md` and `hot.md` to match the evolved knowledge graph.
+* **Graph Maintenance (`rnex-karpathy-llm-wiki-lint`)**: The periodic lint workflow validates relation paths, updates `mentioned_in`, and rebuilds `index.md` and `hot.md` to match the evolved knowledge graph.
 
 ---
 
@@ -71,9 +71,9 @@ my-workspace/
 │           │   └── rnex-wiki-architecture.md# LLM Wiki architecture & relation schema
 │           ├── rules/
 │           │   └── rnex-behavioral.md    # Cardinal principles & context engineering
-│           ├── workflows/
-│           │   ├── rnex-wiki-ingest.md   # 8-step decomposition & ingestion workflow
-│           │   └── rnex-wiki-lint.md     # 10-step graph validation & maintenance workflow
+│           ├── skills/
+│           │   ├── wiki-ingest.md        # 8-step decomposition & ingestion workflow
+│           │   └── wiki-lint.md          # 10-step graph validation & maintenance workflow
 │           └── templates/
 │               ├── rnex-wiki-page.template.md# Atomic page template with typed relations
 │               └── rnex-llm-wiki.sample.md# Sample wiki walkthrough

@@ -9,12 +9,14 @@ config_defaults:
   wiki_dir: ".rnex/wiki"
   lint_trigger: "manual" # Default changed to manual to avoid unsolicited background trigger tasks
   notify_on_changes: true
+  ingest_member_readmes: true
 
 config:
   raw_dir: "./docs"
   wiki_dir: ".rnex/wiki"
   lint_trigger: "manual"
   notify_on_changes: true
+  ingest_member_readmes: true
 
 rules:
   - rules/behavioral.md: .rnex/plugins/karpathy-llm/rules/behavioral.md

@@ -10,13 +10,17 @@ Use this skill when ingesting new reference materials, architecture documentatio
 
 ## Ingestion Protocol
 
-1. **Resolve Configuration & Scan Intake:**
+1. **Resolve Configuration & Direct Source Paths:**
    - Read `rnex.yaml` (and `.local.rnex.yaml` if present) to resolve the active `raw_dir` (default: `./docs`) and `wiki_dir` (default: `.rnex/wiki`) under `plugins.karpathy-llm`.
-   - Scan `<raw_dir>/` for source materials not yet recorded in `<wiki_dir>/_log.md`.
-   - All source material must reside in `<raw_dir>/` unmodified. Never write directly to `<wiki_dir>/` without ingesting.
+   - Direct input scope explicitly reads:
+     1. All files in `raw_dir` (`./docs`) (read-only).
+     2. `./repos/<name>/README.md` for every enabled member repository in `rnex.yaml` / `.local.rnex.yaml` (read-only).
+   - `raw_dir` (`./docs`) and `./repos/` are strictly read-only inputs during wiki operations. Never create, copy, or modify files inside `./docs`; write generated output exclusively inside `wiki_dir` (`.rnex/wiki/`).
+   - Scan direct source paths for source materials not yet recorded in `<wiki_dir>/_log.md`.
+   - All source material is read directly in-place without staging copies. Never write directly to `<wiki_dir>/` without ingesting.
 
 2. **Read & Clarify:**
-   - Read each source document thoroughly.
+   - Read each source document thoroughly in-place.
    - If scope, domain boundaries, or terminology are ambiguous, ask one round of clarifying questions before decomposing.
 
 3. **Atomic Decomposition:**
@@ -31,7 +35,7 @@ Use this skill when ingesting new reference materials, architecture documentatio
    title: ""
    tags: []
    last_updated: YYYY-MM-DD
-   sources: []          # <raw_dir>/ files this page was derived from
+   sources: []          # direct source files (<raw_dir>/... or repos/<name>/README.md) this page was derived from
    related: []          # thematically related wiki pages
    extends: []          # pages this one builds upon or specialises
    contradicts: []      # pages with conflicting information
@@ -56,4 +60,4 @@ Use this skill when ingesting new reference materials, architecture documentatio
    - Maintain the strict ~500-word ceiling. Condense or prune older focus items.
 
 8. **Append Operation Log:**
-   - Append a timestamped entry to `<wiki_dir>/_log.md` detailing date, raw source processed, generated atomic pages, and follow-ups.
+   - Append a timestamped entry to `<wiki_dir>/_log.md` detailing date, direct source path processed, generated atomic pages, and follow-ups.

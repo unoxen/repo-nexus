@@ -119,7 +119,7 @@ cmd_init() {
       _init_plugins="${_init_plugins}  windsurf:\n    instructions: true\n    skills: true\n"
     fi
     if [ "$_cli_karpathy" = "true" ]; then
-      _init_plugins="${_init_plugins}  karpathy-llm:\n    raw_dir: \"./docs\"\n    wiki_dir: \".rnex/wiki\"\n    lint_trigger: \"manual\"\n"
+      _init_plugins="${_init_plugins}  karpathy-llm:\n    raw_dir: \"./docs\"\n    wiki_dir: \".rnex/wiki\"\n    lint_trigger: \"manual\"\n    ingest_member_readmes: true\n"
     fi
 
     cat > "$_target_yaml" <<YAML_EOF

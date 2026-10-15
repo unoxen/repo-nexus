@@ -7,9 +7,6 @@ set -e
 # Resolve root workspace
 _root="$RNEX_ROOT"
 
-# Target directory inside .rnex/ (the internal wiki's Raw intake state)
-WIKI_RAW_DIR="$RNEX_ROOT/.rnex/wiki/raw"
-mkdir -p "$WIKI_RAW_DIR"
 
 # Helper to read plugin config
 get_cfg() {
@@ -48,6 +45,7 @@ get_cfg() {
 
 _wiki="$(get_cfg "wiki_dir" ".rnex/wiki")"
 _raw="$(get_cfg "raw_dir" "./docs")"
+_ingest_readmes="$(get_cfg "ingest_member_readmes" "true")"
 
 # Clean relative paths
 _wiki="$(printf '%s' "$_wiki" | sed -e 's#^/##' -e 's#/$##')"
@@ -58,6 +56,9 @@ _raw_path="$_root/$_raw"
 
 mkdir -p "$_wiki_path" "$_raw_path"
 [ -f "$_raw_path/.gitkeep" ] || touch "$_raw_path/.gitkeep"
+
+# Ensure .rnex/wiki/ contains only agent-maintained wiki artifacts (no raw staging directory)
+rm -rf "$_wiki_path/raw" 2>/dev/null || true
 
 _pdir="${RNEX_PLUGIN_DIR:-$_root/.rnex/plugins/karpathy-llm}"
 if [ ! -d "$_pdir/templates" ] && [ -d "$_root/toolkit/plugins/karpathy-llm/templates" ]; then
@@ -97,18 +98,31 @@ if [ -n "$_src_k_skills" ] && [ "$_src_k_skills" != "$RNEX_ROOT/.rnex/plugins/ka
   cp -R "$_src_k_skills"/. "$RNEX_ROOT/.rnex/plugins/karpathy-llm/skills"/ 2>/dev/null || true
 fi
 
-# 2. Register plugin User Skills via contract helper
-if ! command -v rnex_register_user_skill >/dev/null 2>&1; then
+# 2. Register plugin User Skills via contract helper (with plugin name prefix)
+if ! command -v rnex_register_user_skill >/dev/null 2>&1 && ! command -v rnex_generate_user_skill >/dev/null 2>&1; then
   if [ -f "$RNEX_ROOT/.rnex/bin/rnex-env.sh" ]; then
     . "$RNEX_ROOT/.rnex/bin/rnex-env.sh"
   fi
 fi
 
-if command -v rnex_register_user_skill >/dev/null 2>&1; then
+# Clean up stale unprefixed skills
+if command -v rnex_unregister_user_skill >/dev/null 2>&1; then
+  rnex_unregister_user_skill "wiki-ingest"
+  rnex_unregister_user_skill "wiki-lint"
+fi
+
+_reg_fn=""
+if command -v rnex_generate_user_skill >/dev/null 2>&1; then
+  _reg_fn="rnex_generate_user_skill"
+elif command -v rnex_register_user_skill >/dev/null 2>&1; then
+  _reg_fn="rnex_register_user_skill"
+fi
+
+if [ -n "$_reg_fn" ]; then
   for skill_file in "$RNEX_ROOT/.rnex/plugins/karpathy-llm/skills"/*.md; do
     [ -f "$skill_file" ] || continue
     skill_name=$(basename "$skill_file" .md)
-    rnex_register_user_skill "$skill_name" ".rnex/plugins/karpathy-llm/skills/${skill_name}.md"
+    "$_reg_fn" "$skill_name" ".rnex/plugins/karpathy-llm/skills/${skill_name}.md" "karpathy-llm"
   done
 fi
 
@@ -134,20 +148,6 @@ RAW_DIR_VAL=$(grep -h -E '^\s*raw_dir:' "$RNEX_ROOT/rnex.yaml" "$RNEX_ROOT/.loca
 [ -z "$RAW_DIR_VAL" ] && RAW_DIR_VAL="$(get_cfg "raw_dir" "./docs")"
 RAW_DIR="${RAW_DIR_VAL:-./docs}"
 
-# Clear and sync custom local raw folder files to raw intake (skip if RAW_DIR is a documentation site)
-if [ -d "$RNEX_ROOT/$RAW_DIR" ] && [ ! -d "$RNEX_ROOT/$RAW_DIR/.vitepress" ]; then
-  _raw_abs="$(cd "$RNEX_ROOT/$RAW_DIR" 2>/dev/null && pwd -P || true)"
-  _wiki_raw_abs="$(cd "$WIKI_RAW_DIR" 2>/dev/null && pwd -P || true)"
-  if [ -n "$_raw_abs" ] && [ "$_raw_abs" != "$_wiki_raw_abs" ]; then
-    find "$RNEX_ROOT/$RAW_DIR" -type f \( -name "*.md" -o -name "*.txt" -o -name "*.json" \) 2>/dev/null | while read -r filepath; do
-      filename=$(basename "$filepath")
-      # Prevent overwriting standard operational files
-      if [ "$filename" != "index.md" ] && [ "$filename" != "hot.md" ] && [ "$filename" != "_log.md" ]; then
-        cp "$filepath" "$WIKI_RAW_DIR/$filename"
-      fi
-    done
-  fi
-fi
 
 # Ingest member repository README into atomic wiki page, index, and hot cache
 ingest_member_readme() {
@@ -316,18 +316,24 @@ LOG_EOF
   fi
 }
 
-# 2. Automatically sync README.md from all enabled/cloned member repositories
+# 2. Automatically ingest README.md from all enabled/cloned member repositories in-place
 # Get list of enabled repositories using a secure cross-repo read or `rnex list`
+case "$(printf '%s' "$_ingest_readmes" | tr '[:upper:]' '[:lower:]')" in
+  false|no|0|disabled|off) _skip_all_readmes=1 ;;
+  *) _skip_all_readmes=0 ;;
+esac
+
 REPOS_DIR_VAL=$(grep -h -E '^\s*repos_dir:' "$RNEX_ROOT/rnex.yaml" "$RNEX_ROOT/.local.rnex.yaml" 2>/dev/null | tail -n1 | awk -F: '{print $NF}' | awk '{print $1}' | tr -d '"'\''')
 REPOS_DIR="${REPOS_DIR_VAL:-./repos}"
 
-if [ -d "$RNEX_ROOT/$REPOS_DIR" ]; then
+if [ "$_skip_all_readmes" -ne 1 ] && [ -d "$RNEX_ROOT/$REPOS_DIR" ]; then
   for repo_path in "$RNEX_ROOT/$REPOS_DIR"/*; do
     [ ! -d "$repo_path" ] && continue
     repo_name=$(basename "$repo_path")
     
     # Check if this repository is explicitly disabled in .local.rnex.yaml or rnex.yaml (block-scoped)
     _is_disabled=""
+    _repo_ingest=""
     for _cfg_file in "$RNEX_ROOT/.local.rnex.yaml" "$RNEX_ROOT/rnex.yaml"; do
       [ -f "$_cfg_file" ] || continue
       _en="$(awk -v repo="$repo_name" '
@@ -344,21 +350,40 @@ if [ -d "$RNEX_ROOT/$REPOS_DIR" ]; then
           exit
         }
       ' "$_cfg_file")"
-      if [ -n "$_en" ]; then
+      if [ -n "$_en" ] && [ -z "$_is_disabled" ]; then
         case "$(printf '%s' "$_en" | tr '[:upper:]' '[:lower:]')" in
           false|no|0|disabled|off) _is_disabled=1 ;;
           *) _is_disabled=0 ;;
         esac
-        break
+      fi
+
+      _ingest_val="$(awk -v repo="$repo_name" '
+        /^repos:[ ]*$/ || /^repos:[ ]*#/ { r=1; next }
+        r && /^[^ #]/ { r=0 }
+        r && match($0, "^  " repo ":[ ]*(#.*)?$") { in_target=1; next }
+        in_target && /^  [^ #]/ { in_target=0 }
+        in_target && match($0, "^    ingest_member_readmes:[ ]*") {
+          line = $0
+          sub("^    ingest_member_readmes:[ ]*", "", line)
+          sub(/[ ]*#.*$/, "", line)
+          gsub(/^["\x27]|["\x27]$/, "", line)
+          print line
+          exit
+        }
+      ' "$_cfg_file")"
+      if [ -n "$_ingest_val" ] && [ -z "$_repo_ingest" ]; then
+        case "$(printf '%s' "$_ingest_val" | tr '[:upper:]' '[:lower:]')" in
+          false|no|0|disabled|off) _repo_ingest=0 ;;
+          *) _repo_ingest=1 ;;
+        esac
       fi
     done
     [ "$_is_disabled" = "1" ] && continue
+    [ "$_repo_ingest" = "0" ] && continue
 
-    # Read and sync any README file with case-insensitive check
+    # Read and ingest any README file directly in-place (no staging copy)
     for readme_name in README.md readme.md README.markdown README; do
       if [ -f "$repo_path/$readme_name" ]; then
-        # Namespace the copied file with its repo name to prevent conflicts
-        cp "$repo_path/$readme_name" "$WIKI_RAW_DIR/README_${repo_name}.md"
         # Ingest member repository README into atomic wiki page, index, and hot cache
         ingest_member_readme "$repo_name" "$repo_path" "$readme_name"
         break
