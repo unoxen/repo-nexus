@@ -20,11 +20,15 @@ git -C "$TEST_DET_WS" init -q
 
 "$TEST_DET_WS/rnex" init -y "$TEST_DET_WS" >/dev/null
 
-# 1. Verify all 6 plugins are available with consistent v0.5.1
+# 1. Verify all 6 plugins are available
 _list_out="$(cd "$TEST_DET_WS" && ./rnex plugin list 2>&1)"
 for _p in claude copilot cursor gemini karpathy-llm windsurf; do
   echo "$_list_out" | grep -q "$_p" || { fail "Plugin $_p not in plugin list"; exit 1; }
-  echo "$_list_out" | grep "$_p" | grep -q "(v0.5.1)" || { fail "Plugin $_p is not v0.5.1"; exit 1; }
+  if [ "$_p" = "karpathy-llm" ]; then
+    echo "$_list_out" | grep "$_p" | grep -E -q "\(v(0\.5\.1|1\.0\.0)\)" || { fail "Plugin $_p version unexpected"; exit 1; }
+  else
+    echo "$_list_out" | grep "$_p" | grep -q "(v0.5.1)" || { fail "Plugin $_p is not v0.5.1"; exit 1; }
+  fi
 done
 
 # 2. Test 'rnex plugin install <name>' alias for enable
@@ -173,6 +177,82 @@ echo "$_kw_disabled_agents" | grep -q "CRITICAL: You MUST read and strictly foll
 # 8. Verify plugin list and info report disabled
 _list_out="$(cd "$TEST_KWIKI_WS" && ./rnex plugin list 2>&1)"
 echo "$_list_out" | grep "karpathy-llm" | grep -q "disabled" || { fail "plugin list did not report karpathy-llm as disabled: $_list_out"; exit 1; }
+
+pass
+
+# --------------------------------------------------------------------------
+run_test "Karpathy LLM plugin config default lint_trigger: manual and after_sync hook syncing raw_dir and member repository READMEs"
+TEST_HOOK_WS="$TEST_TMP/karpathy-hook-sync-ws"
+mkdir -p "$TEST_HOOK_WS"
+cp "$CLI" "$TEST_HOOK_WS/rnex"
+chmod +x "$TEST_HOOK_WS/rnex"
+cp -r "$DIR/toolkit" "$TEST_HOOK_WS/toolkit"
+cp "$DIR/package.json" "$TEST_HOOK_WS/package.json"
+git -C "$TEST_HOOK_WS" init -q
+
+"$TEST_HOOK_WS/rnex" init -y "$TEST_HOOK_WS" >/dev/null
+
+# 1. Enable karpathy-llm and assert lint_trigger defaults to manual
+(cd "$TEST_HOOK_WS" && ./rnex plugin enable karpathy-llm >/dev/null)
+_pinfo="$(cd "$TEST_HOOK_WS" && ./rnex plugin info karpathy-llm 2>&1)"
+echo "$_pinfo" | grep "lint_trigger:" | grep -q "current: manual" || { fail "Plugin info did not report default lint_trigger as manual: $_pinfo"; exit 1; }
+grep -q 'lint_trigger: "manual"' "$TEST_HOOK_WS/rnex.yaml" || grep -q 'lint_trigger: manual' "$TEST_HOOK_WS/rnex.yaml" || { fail "rnex.yaml does not contain lint_trigger: manual"; exit 1; }
+
+# 2. Mock a member repository initialization (./repos/mock-member-repo/README.md)
+mkdir -p "$TEST_HOOK_WS/repos/mock-member-repo"
+printf '# Mock Member Repo\nThis is a mock repository README.\n' > "$TEST_HOOK_WS/repos/mock-member-repo/README.md"
+
+# Also place a sample document in custom/default raw_dir (./docs)
+mkdir -p "$TEST_HOOK_WS/docs"
+printf '# Intake Note\nImportant context notes.\n' > "$TEST_HOOK_WS/docs/intake-note.md"
+
+# 3. Invoke rnex sync to trigger after_sync hook
+(cd "$TEST_HOOK_WS" && ./rnex sync -y >/dev/null)
+
+# 4. Confirm target file is duplicated and named correctly inside .rnex/wiki/raw/
+[ -f "$TEST_HOOK_WS/.rnex/wiki/raw/README_mock-member-repo.md" ] || { fail ".rnex/wiki/raw/README_mock-member-repo.md missing after rnex sync"; exit 1; }
+grep -q "Mock Member Repo" "$TEST_HOOK_WS/.rnex/wiki/raw/README_mock-member-repo.md" || { fail "Content mismatch in synced member README"; exit 1; }
+
+# 5. Confirm local raw_dir files synced to raw intake
+[ -f "$TEST_HOOK_WS/.rnex/wiki/raw/intake-note.md" ] || { fail ".rnex/wiki/raw/intake-note.md missing after rnex sync"; exit 1; }
+grep -q "Intake Note" "$TEST_HOOK_WS/.rnex/wiki/raw/intake-note.md" || { fail "Content mismatch in synced intake note"; exit 1; }
+
+# 6. Verify disabled member repo READMEs are not synced
+mkdir -p "$TEST_HOOK_WS/repos/disabled-member-repo"
+printf '# Disabled Repo\n' > "$TEST_HOOK_WS/repos/disabled-member-repo/README.md"
+cat <<'EOF_DIS' >> "$TEST_HOOK_WS/rnex.yaml"
+repos:
+  disabled-member-repo:
+    enabled: false
+EOF_DIS
+(cd "$TEST_HOOK_WS" && ./rnex sync -y >/dev/null)
+[ ! -f "$TEST_HOOK_WS/.rnex/wiki/raw/README_disabled-member-repo.md" ] || { fail "Disabled repository README should not be synced"; exit 1; }
+
+pass
+
+# --------------------------------------------------------------------------
+run_test "Strict decoupling of prompt operations and behavioral instructions (rnex-lint and rnex-ingest)"
+# 1. Assert rnex-lint.md and rnex-ingest.md prompts exist
+[ -f "$DIR/toolkit/prompts/rnex-lint.md" ] || { fail "toolkit/prompts/rnex-lint.md missing"; exit 1; }
+[ -f "$DIR/toolkit/prompts/rnex-ingest.md" ] || { fail "toolkit/prompts/rnex-ingest.md missing"; exit 1; }
+
+# 2. Check routing dispatches to workflows, behavioral rules, and ai-instructions
+grep -q "\.rnex/plugins/karpathy-llm/workflows/wiki-lint\.md" "$DIR/toolkit/prompts/rnex-lint.md" || { fail "rnex-lint.md does not route to wiki-lint.md"; exit 1; }
+grep -q "\.rnex/plugins/karpathy-llm/rules/behavioral\.md" "$DIR/toolkit/prompts/rnex-lint.md" || { fail "rnex-lint.md does not route to behavioral.md"; exit 1; }
+grep -q "\.rnex/ai-instructions\.md" "$DIR/toolkit/prompts/rnex-lint.md" || { fail "rnex-lint.md does not route to ai-instructions.md"; exit 1; }
+
+grep -q "\.rnex/plugins/karpathy-llm/workflows/wiki-ingest\.md" "$DIR/toolkit/prompts/rnex-ingest.md" || { fail "rnex-ingest.md does not route to wiki-ingest.md"; exit 1; }
+grep -q "\.rnex/plugins/karpathy-llm/rules/behavioral\.md" "$DIR/toolkit/prompts/rnex-ingest.md" || { fail "rnex-ingest.md does not route to behavioral.md"; exit 1; }
+grep -q "\.rnex/ai-instructions\.md" "$DIR/toolkit/prompts/rnex-ingest.md" || { fail "rnex-ingest.md does not route to ai-instructions.md"; exit 1; }
+
+# 3. Ensure no inline heuristics or code patterns exist inside task descriptors
+! grep -q "mentioned_in: \[\]" "$DIR/toolkit/prompts/rnex-lint.md" || { fail "rnex-lint.md contains inline frontmatter schema heuristics"; exit 1; }
+! grep -q "contradicts: \[\]" "$DIR/toolkit/prompts/rnex-lint.md" || { fail "rnex-lint.md contains inline frontmatter schema heuristics"; exit 1; }
+! grep -q '```' "$DIR/toolkit/prompts/rnex-lint.md" || { fail "rnex-lint.md contains inlined code patterns"; exit 1; }
+
+! grep -q "mentioned_in: \[\]" "$DIR/toolkit/prompts/rnex-ingest.md" || { fail "rnex-ingest.md contains inline frontmatter schema heuristics"; exit 1; }
+! grep -q "contradicts: \[\]" "$DIR/toolkit/prompts/rnex-ingest.md" || { fail "rnex-ingest.md contains inline frontmatter schema heuristics"; exit 1; }
+! grep -q '```' "$DIR/toolkit/prompts/rnex-ingest.md" || { fail "rnex-ingest.md contains inlined code patterns"; exit 1; }
 
 pass
 

@@ -1,17 +1,28 @@
 name: karpathy-llm
-version: 0.5.1
-description: Andrej Karpathy's agent behavioral principles, context engineering guidelines, and autonomous LLM Wiki knowledge architecture
+version: 1.0.0
+description: Andréj Karpathy's verification frameworks & wiki patterns for AI coding agents.
 author: unoxen
 homepage: https://github.com/unoxen/repo-nexus
-config:
-  wiki_dir: .rnex/wiki
-  raw_dir: ./docs
-  lint_trigger: git-post-merge
+
+config_defaults:
+  raw_dir: "./docs"
+  wiki_dir: ".rnex/wiki"
+  lint_trigger: "manual" # Default changed to manual to avoid unsolicited background trigger tasks
   notify_on_changes: true
+
+config:
+  raw_dir: "./docs"
+  wiki_dir: ".rnex/wiki"
+  lint_trigger: "manual"
+  notify_on_changes: true
+
 rules:
   - rules/rnex-behavioral.md: .rnex/plugins/karpathy-llm/rules/rnex-behavioral.md
+  - rules/behavioral.md: .rnex/plugins/karpathy-llm/rules/behavioral.md
   - workflows/rnex-wiki-ingest.md: .rnex/plugins/karpathy-llm/workflows/rnex-wiki-ingest.md
+  - workflows/wiki-ingest.md: .rnex/plugins/karpathy-llm/workflows/wiki-ingest.md
   - workflows/rnex-wiki-lint.md: .rnex/plugins/karpathy-llm/workflows/rnex-wiki-lint.md
+  - workflows/wiki-lint.md: .rnex/plugins/karpathy-llm/workflows/wiki-lint.md
 instructions:
   - instructions/rnex-wiki-architecture.md: .rnex/plugins/karpathy-llm/instructions/rnex-wiki-architecture.md
 templates:

@@ -15,6 +15,7 @@ cmd_init() {
   _cli_gemini=""
   _cli_cursor=""
   _cli_windsurf=""
+  _cli_karpathy=""
 
   while [ $# -gt 0 ]; do
     case "$1" in
@@ -31,6 +32,8 @@ cmd_init() {
       --no-cursor) _cli_cursor="false" ;;
       --windsurf) _cli_windsurf="true" ;;
       --no-windsurf) _cli_windsurf="false" ;;
+      --karpathy|--karpathy-llm) _cli_karpathy="true" ;;
+      --no-karpathy|--no-karpathy-llm) _cli_karpathy="false" ;;
       --ai|--instructions|--ai-instructions)
         shift
         # Legacy flag ignored in favor of plugins
@@ -115,6 +118,9 @@ cmd_init() {
     fi
     if [ "$_cli_windsurf" = "true" ]; then
       _init_plugins="${_init_plugins}  windsurf:\n    instructions: true\n    prompts: true\n    workflows: true\n"
+    fi
+    if [ "$_cli_karpathy" = "true" ]; then
+      _init_plugins="${_init_plugins}  karpathy-llm:\n    raw_dir: \"./docs\"\n    wiki_dir: \".rnex/wiki\"\n    lint_trigger: \"manual\"\n"
     fi
 
     cat > "$_target_yaml" <<YAML_EOF

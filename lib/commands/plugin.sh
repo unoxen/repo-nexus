@@ -87,7 +87,7 @@ cmd_plugin_info() {
     printf '\n%bConfigurable Options (in rnex.yaml or .local.rnex.yaml):%b\n' "$_BOLD" "$_NC"
     printf '  - wiki_dir: <dir>  (directory for curated markdown pages; current: %s)\n' "$(karpathy_wiki_dir)"
     printf '  - raw_dir: <dir>   (directory for unmodified intake documents; current: %s)\n' "$(karpathy_raw_dir)"
-    printf '  - lint_trigger: git-post-merge|git-post-commit|git-pre-commit|git-pre-push|manual  (current: %s)\n' "${_cur_lt:-git-post-merge}"
+    printf '  - lint_trigger: git-post-merge|git-post-commit|git-pre-commit|git-pre-push|manual  (current: %s)\n' "${_cur_lt:-manual}"
     printf '  - notify_on_changes: true|false  (show notification when raw/wiki changes are committed; current: %s)\n' "${_cur_nc:-true}"
   fi
 

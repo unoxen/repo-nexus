@@ -97,7 +97,7 @@ plugins:
 
     # Automated Git hook trigger for wiki verification
     # Options: git-post-merge, git-post-commit, git-pre-commit, git-pre-push, manual
-    lint_trigger: git-post-merge
+    lint_trigger: manual
 
     # Notify developer when changes are committed to ./docs/ or .rnex/wiki/
     notify_on_changes: true
@@ -110,7 +110,7 @@ plugins:
 |:---|:---|:---|:---|
 | `wiki_dir` | string | `.rnex/wiki` | Directory containing curated atomic markdown pages. |
 | `raw_dir` | string | `./docs` | Append-only directory for unmodified source intake documents. |
-| `lint_trigger` | string | `git-post-merge` | Git hook event that triggers wiki change detection (`git-post-merge`, `git-post-commit`, `git-pre-commit`, `git-pre-push`, `manual`). |
+| `lint_trigger` | string | `manual` | Git hook event that triggers wiki change detection (`git-post-merge`, `git-post-commit`, `git-pre-commit`, `git-pre-push`, `manual`). |
 | `notify_on_changes` | boolean | `true` | Show notification banner when changes are committed to `./docs/` or `.rnex/wiki/`. |
 | `enabled` | boolean | `true` | Enable or disable the plugin. Overridable in `.local.rnex.yaml`. |
 

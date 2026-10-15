@@ -109,7 +109,7 @@ plugins:
 
   # Functional / Knowledge Plugins
   karpathy-llm:
-    lint_trigger: git-post-merge
+    lint_trigger: manual
     notify_on_changes: true
 ```
 

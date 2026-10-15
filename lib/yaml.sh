@@ -309,6 +309,22 @@ yaml_enable_plugin() {
           }
         ' "$_target_file" > "$_tmp" && mv "$_tmp" "$_target_file"
         ;;
+      karpathy-llm)
+        awk -v name="$_name" '
+          /^plugins:[ ]*$/ || /^plugins:[ ]*#/ {
+            print
+            printf "  %s:\n    raw_dir: \"./docs\"\n    wiki_dir: \".rnex/wiki\"\n    lint_trigger: \"manual\"\n", name
+            added=1
+            next
+          }
+          { print }
+          END {
+            if (!added) {
+              printf "plugins:\n  %s:\n    raw_dir: \"./docs\"\n    wiki_dir: \".rnex/wiki\"\n    lint_trigger: \"manual\"\n", name
+            }
+          }
+        ' "$_target_file" > "$_tmp" && mv "$_tmp" "$_target_file"
+        ;;
       *)
         awk -v name="$_name" '
           /^plugins:[ ]*$/ || /^plugins:[ ]*#/ {

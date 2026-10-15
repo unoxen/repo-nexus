@@ -40,7 +40,7 @@ _raw="$(get_cfg "raw_dir" "./docs")"
 _wiki="$(printf '%s' "$_wiki" | sed -e 's#^/##' -e 's#/$##')"
 _raw="$(printf '%s' "$_raw" | sed -e 's#^\./##' -e 's#^/##' -e 's#/$##')"
 
-_trigger="$(get_cfg "lint_trigger" "git-post-merge")"
+_trigger="$(get_cfg "lint_trigger" "manual")"
 if [ "$_trigger" = "git-pre-commit" ] || [ "$_trigger" = "pre-commit" ]; then
   if git -C "$_root" diff --cached --name-only 2>/dev/null | grep -qE "(^|/)($_raw|$_wiki)/"; then
     _notify="$(get_cfg "notify_on_changes" "true")"
