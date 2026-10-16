@@ -5,7 +5,7 @@ const base = (process.env.BASE_URL as `/${string}/`) || '/repo-nexus/'
 export default defineConfig({
   title: 'Repo Nexus (rnex)',
   titleTemplate: ':title | rnex',
-  description: 'Zero-Dependency Virtual Meta-Repo Companion for Multi-Repo Workspaces & Scoped AI Context',
+  description: 'Virtual Meta-Repo companion for multi-repo workspaces and shared AI context',
 
   // Dynamic base URL: defaults to '/repo-nexus/' for GitHub Pages, '/' for root/custom domain
   base,
@@ -14,12 +14,31 @@ export default defineConfig({
   lastUpdated: true,
 
   sitemap: {
-    hostname: `https://unoxen.github.io${base}`
+    hostname: 'https://unoxen.github.io/repo-nexus/'
   },
 
   head: [
+    ['meta', { name: 'google-site-verification', content: '<YOUR_VERIFICATION_TOKEN>' }],
+    ['link', { rel: 'canonical', href: 'https://unoxen.github.io/repo-nexus/' }],
+    ['meta', { property: 'og:type', content: 'website' }],
+    ['meta', { property: 'og:title', content: 'Repo Nexus (rnex) - Virtual Meta-Repo Companion' }],
+    ['meta', { property: 'og:description', content: 'Lightweight multi-repo workspace manager with auto-synced AI context via symlinks' }],
+    ['meta', { property: 'og:url', content: 'https://unoxen.github.io/repo-nexus/' }],
+    [
+      'script',
+      { type: 'application/ld+json' },
+      JSON.stringify({
+        '@context': 'https://schema.org',
+        '@type': 'SoftwareApplication',
+        'name': 'Repo Nexus',
+        'alternateName': 'rnex',
+        'applicationCategory': 'DeveloperApplication',
+        'operatingSystem': 'POSIX (macOS, Linux, WSL)',
+        'url': 'https://unoxen.github.io/repo-nexus/',
+        'codeRepository': 'https://github.com/nu-nenoi/repo-nexus'
+      })
+    ],
     ['meta', { name: 'theme-color', content: '#10b981' }],
-    ['meta', { name: 'og:type', content: 'website' }],
     ['meta', { name: 'og:site_name', content: 'Repo Nexus (rnex)' }],
     ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
     ['link', { rel: 'icon', type: 'image/svg+xml', href: `${base}dark_logo.svg`, media: '(prefers-color-scheme: light)' }],

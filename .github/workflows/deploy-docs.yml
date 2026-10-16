@@ -42,6 +42,12 @@ jobs:
         env:
           BASE_URL: /repo-nexus/
 
+      - name: Verify SEO Build Artifacts
+        run: |
+          test -f docs/.vitepress/dist/sitemap.xml || { echo "::error::sitemap.xml missing in build artifacts"; exit 1; }
+          test -f docs/.vitepress/dist/robots.txt || { echo "::error::robots.txt missing in build artifacts"; exit 1; }
+          echo "Verified sitemap.xml and robots.txt in docs/.vitepress/dist"
+
       - name: Upload Pages Artifact
         uses: actions/upload-pages-artifact@v3
         with:

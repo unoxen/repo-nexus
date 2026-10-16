@@ -1,4 +1,4 @@
-# Repo Nexus (`rnex`)
+# Repo Nexus (rnex)
 
 [![CI](https://github.com/unoxen/repo-nexus/actions/workflows/ci.yml/badge.svg)](https://github.com/unoxen/repo-nexus/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/repo-nexus.svg)](https://www.npmjs.com/package/repo-nexus)
@@ -7,7 +7,9 @@
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey)](#)
 [![Documentation Site](https://img.shields.io/badge/docs-site-blue.svg)](https://unoxen.github.io/repo-nexus/)
 
-A **simple, lightweight Virtual Meta-Repo companion** for multi-repo workspaces and shared AI context. It organizes independent repositories into a unified workspace and shares lean routing instructions (`AGENTS.md`) **without Git submodules, monorepo migrations, or symlink fragility**.
+📖 **Documentation:** [https://unoxen.github.io/repo-nexus/](https://unoxen.github.io/repo-nexus/)
+
+A **Virtual Meta-Repo** companion for multi-repo workspaces and shared AI context. It organizes independent repositories into a unified workspace and shares lean routing instructions (`AGENTS.md`) **without Git submodules, monorepo migrations, or symlink fragility**.
 
 - **No Git Submodules or Nested Git Collisions**: Member repositories are physically cloned into `./repos/` and strictly ignored by workspace Git. Each repository maintains its own standalone history, remotes, branches, and commits with zero submodule friction.
 - **Unified Workspace for AI Coding Assistants**: Open one root folder to give Cursor, Claude Code, GitHub Copilot, Codex, or Antigravity complete cross-service visibility.
@@ -32,10 +34,10 @@ A **simple, lightweight Virtual Meta-Repo companion** for multi-repo workspaces 
 
 ## Table of Contents
 
-- [What Repo Nexus Is (and What It Isn't)](#what-repo-nexus-is-and-what-it-isnt)
-- [Key Principles](#key-principles)
-- [Installation](#installation)
-- [Quick Start](#quick-start)
+- [Multi-Repo Workspace Manager Overview](#multi-repo-workspace-manager-what-repo-nexus-is-and-what-it-isnt)
+- [AGENTS.md Context Sync & Key Principles](#agentsmd-context-sync--key-principles)
+- [POSIX CLI Installation](#posix-cli-installation)
+- [Quick Start: POSIX CLI Workflows](#quick-start-posix-cli-workflows)
 - [Project Structure](#project-structure)
 - [Running Tests](#running-tests)
 - [Contributing](#contributing)
@@ -43,7 +45,7 @@ A **simple, lightweight Virtual Meta-Repo companion** for multi-repo workspaces 
 
 ---
 
-## What Repo Nexus Is (and What It Isn't)
+## Multi-Repo Workspace Manager: What Repo Nexus Is (and What It Isn't)
 
 | What It Is | What It Isn't |
 | :--- | :--- |
@@ -54,7 +56,7 @@ A **simple, lightweight Virtual Meta-Repo companion** for multi-repo workspaces 
 
 ---
 
-## Key Principles
+## AGENTS.md Context Sync & Key Principles
 
 1. **Configuration as Single Source of Truth**:
    Every agent workflow and command starts by reading the configuration files. `.local.rnex.yaml` takes **highest priority** over `rnex.yaml`.
@@ -65,7 +67,7 @@ A **simple, lightweight Virtual Meta-Repo companion** for multi-repo workspaces 
 3. **Enabled by Default with Two-Level Merging**:
    Member repositories are enabled by default. Developers can selectively disable specific repositories locally in `.local.rnex.yaml` (`enabled: false`) without mutating the shared `rnex.yaml`. Disabled repositories are skipped by `clone` and `exec`.
 
-4. **Routing-Only Top-Level AI Instructions**:
+4. **Routing-Only Top-Level AI Instructions (AGENTS.md Context Sync)**:
    `AGENTS.md` (and related top-level instruction files) contains no inlined plugin rules or tool boilerplate. It acts solely as a lean navigation router directing AI agents to configuration files, scoped plugins, and member `.rnex/` contexts.
 
 5. **Strict File Encapsulation**:
@@ -73,7 +75,7 @@ A **simple, lightweight Virtual Meta-Repo companion** for multi-repo workspaces 
 
 ---
 
-## Installation
+## POSIX CLI Installation
 
 Install `rnex` via npm, standalone one-liner (`curl` / `wget`), or from source:
 
@@ -104,7 +106,7 @@ cd repo-nexus
 
 ---
 
-## Quick Start
+## Quick Start: POSIX CLI Workflows
 
 ```bash
 # 1. Initialize a new workspace

@@ -1,6 +1,6 @@
 {
   "name": "repo-nexus",
-  "version": "0.7.12",
+  "version": "0.7.13",
   "description": "Lightweight, zero-dependency Virtual Meta-Repo companion for multi-repo workspaces and shared AI context (no git submodules)",
   "bin": {
     "repo-nexus": "rnex",
@@ -26,7 +26,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/unoxen/repo-nexus.git"
+    "url": "git+https://github.com/nu-nenoi/repo-nexus.git"
   },
   "bugs": {
     "url": "https://github.com/unoxen/repo-nexus/issues"
@@ -35,26 +35,15 @@
   "keywords": [
     "rnex",
     "repo-nexus",
-    "nexus-repository",
-    "nexus",
-    "repo",
-    "repository",
-    "meta-repo",
-    "meta-repository",
     "virtual-meta-repo",
+    "meta-repo",
     "multi-repo",
-    "context-repository",
-    "ai-first-repository",
-    "harness",
-    "ai-harness",
-    "wiki-llm",
-    "workspace",
-    "toolkit",
-    "context-engineering",
-    "cursor",
-    "plugins",
-    "karpathy",
-    "cli"
+    "agents-md",
+    "ai-agents",
+    "cursor-rules",
+    "claude-code",
+    "copilot",
+    "developer-tools"
   ],
   "license": "MIT",
   "author": "Anton Shramkov",
