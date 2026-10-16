@@ -43,7 +43,9 @@ mkdir -p "$TEST_GOAL_WS/.rnex/plugins/karpathy-llm/hooks"
 cp "$TEST_GOAL_WS/toolkit/plugins/karpathy-llm/hooks/before_sync.sh" "$TEST_GOAL_WS/.rnex/plugins/karpathy-llm/hooks/before_sync.sh"
 
 # Append counter output to existing after_sync.sh in toolkit
-printf '\nprintf "y\\n" >> "$RNEX_ROOT/after_sync_counts"\n' >> "$TEST_GOAL_WS/toolkit/plugins/karpathy-llm/hooks/after_sync.sh"
+cat <<'EOF_AS' >> "$TEST_GOAL_WS/toolkit/plugins/karpathy-llm/hooks/after_sync.sh"
+printf 'y\n' >> "$RNEX_ROOT/after_sync_counts"
+EOF_AS
 
 rm -f "$TEST_GOAL_WS/before_sync_counts" "$TEST_GOAL_WS/after_sync_counts"
 
