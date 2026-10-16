@@ -123,7 +123,7 @@ _rnex() {
           hook_cmds=('install:Install Git hooks' 'uninstall:Uninstall Git hooks' 'status:Show Git hooks status')
           _describe -t hook_cmds 'hooks command' hook_cmds
           ;;
-        enable|disable|remove|show|hide)
+        enable|disable|remove|show|hide|rnex-dir)
           local -a repos
           repos=($(rnex list 2>/dev/null | awk 'NR>2 {print $1}'))
           _describe -t repos 'repository' repos
@@ -162,6 +162,9 @@ complete -c rnex -n "__fish_use_subcommand" -a remove -d "Remove a repository"
 complete -c rnex -n "__fish_use_subcommand" -a enable -d "Enable a repository"
 complete -c rnex -n "__fish_use_subcommand" -a disable -d "Disable a repository"
 complete -c rnex -n "__fish_use_subcommand" -a list -d "List repositories"
+complete -c rnex -n "__fish_use_subcommand" -a rnex-dir -d "Toggle .rnex directory integration for a repo"
+complete -c rnex -n "__fish_seen_subcommand_from rnex-dir" -a "enable disable"
+complete -c rnex -n "__fish_seen_subcommand_from rnex-dir" -l local -d "Apply locally"
 complete -c rnex -n "__fish_use_subcommand" -a sync -d "Reconcile workspace, plugins, skills, and repos"
 complete -c rnex -n "__fish_seen_subcommand_from sync" -l yes -s y -d "Automatically answer yes to prompts"
 complete -c rnex -n "__fish_seen_subcommand_from sync" -l quiet -s q -d "Suppress non-error output"

@@ -41,7 +41,7 @@ if [ $# -gt 0 ]; then
     SUITES="$SUITES $_s"
   done
 else
-  SUITES="$SUITES_DIR/01_core_cli.sh $SUITES_DIR/02_plugins_basic.sh $SUITES_DIR/03_config_workspace.sh $SUITES_DIR/04_git_hooks.sh $SUITES_DIR/05_ai_providers.sh $SUITES_DIR/06_plugins_advanced.sh"
+  SUITES="$SUITES_DIR/01_core_cli.sh $SUITES_DIR/02_plugins_basic.sh $SUITES_DIR/03_config_workspace.sh $SUITES_DIR/04_git_hooks.sh $SUITES_DIR/05_ai_providers.sh $SUITES_DIR/06_plugins_advanced.sh $SUITES_DIR/07_goal_fixes.sh"
 fi
 
 # Execute test suites sequentially

@@ -78,6 +78,7 @@ cmd_sync() {
   require_workspace
   ensure_repos_dir
 
+  _old_sync_quiet="${_sync_quiet:-0}"
   _sync_auto_yes=0
   _sync_quiet=0
   _sync_upgrade=0
@@ -106,9 +107,6 @@ cmd_sync() {
     _load_git_hooks
     [ "$_sync_quiet" -eq 0 ] && log_ok "Upgraded workspace configuration and routing instructions to v$RNEX_VERSION"
   fi
-
-  # Dispatch before_sync plugin lifecycle hook
-  run_hook "before_sync" "$@"
 
   # 1. Ensure .gitignore ignores repos/, local configs; ensure .ignore has !repos/*
   reconcile_gitignore "$NEXUS_DIR"
@@ -186,11 +184,9 @@ cmd_sync() {
   # 10. Update sync stamp
   update_sync_stamp "$NEXUS_DIR"
 
-  # Dispatch after_sync plugin lifecycle hook
-  run_hook "after_sync" "$@"
-
   if [ "$_sync_quiet" -eq 0 ]; then
     log_ok "Sync complete — workspace, plugins, skills, and member .rnex directories reconciled"
   fi
+  _sync_quiet="$_old_sync_quiet"
   return 0
 }

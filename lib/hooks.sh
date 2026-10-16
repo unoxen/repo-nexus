@@ -12,27 +12,38 @@ run_hook() {
 
   _ws="${NEXUS_DIR:-}"
   if [ -z "$_ws" ]; then
-    if [ -f rnex.yaml ]; then
+    if [ -n "$CUSTOM_CONFIG" ]; then
+      _cfg_path="$(resolve_path "$CUSTOM_CONFIG" 2>/dev/null || true)"
+      if [ -f "$_cfg_path" ]; then
+        _ws="$(cd -P "$(dirname "$_cfg_path")" 2>/dev/null && pwd -P)"
+      fi
+    elif [ -f rnex.yaml ]; then
       _ws="."
     else
       _ws="$(find_workspace_dir 2>/dev/null || true)"
     fi
   fi
   [ -z "$_ws" ] && return 0
-  [ ! -f "$_ws/rnex.yaml" ] && return 0
-
   _hook_root="$(cd "$_ws" 2>/dev/null && pwd -P)"
   _hook_config_merged="$_hook_root/rnex.yaml"
+  if [ -n "$CUSTOM_CONFIG" ]; then
+    _hook_config_merged="$(resolve_path "$CUSTOM_CONFIG" 2>/dev/null || true)"
+  fi
+  [ ! -f "$_hook_config_merged" ] && return 0
+
   _hook_cmd="${_hook_phase_cmd#*_}"
   _hook_file="${_hook_phase_cmd}.sh"
   _hook_args="$*"
   _hook_quiet="${_sync_quiet:-0}"
 
   _old_nexus="$NEXUS_DIR"
+  _old_yaml="$WORKSPACE_YAML"
+  _old_local_yaml="$WORKSPACE_LOCAL_YAML"
   NEXUS_DIR="$_hook_root"
+  WORKSPACE_YAML="$_hook_config_merged"
+  WORKSPACE_LOCAL_YAML="$_hook_root/$RNEX_LOCAL_CONFIG_FILE"
   _plugins="$(yaml_list_plugins 2>/dev/null || true)"
   _skill_dirs="$(get_active_provider_skill_dirs 2>/dev/null || true)"
-  NEXUS_DIR="$_old_nexus"
 
   for _pname in $_plugins; do
     [ -n "$_pname" ] || continue
@@ -147,6 +158,8 @@ EOF
       ) || true
     fi
   done
+  WORKSPACE_LOCAL_YAML="$_old_local_yaml"
+  WORKSPACE_YAML="$_old_yaml"
   NEXUS_DIR="$_old_nexus"
 }
 
@@ -157,26 +170,37 @@ run_plugin_hook() {
 
   _ws="${NEXUS_DIR:-}"
   if [ -z "$_ws" ]; then
-    if [ -f rnex.yaml ]; then
+    if [ -n "$CUSTOM_CONFIG" ]; then
+      _cfg_path="$(resolve_path "$CUSTOM_CONFIG" 2>/dev/null || true)"
+      if [ -f "$_cfg_path" ]; then
+        _ws="$(cd -P "$(dirname "$_cfg_path")" 2>/dev/null && pwd -P)"
+      fi
+    elif [ -f rnex.yaml ]; then
       _ws="."
     else
       _ws="$(find_workspace_dir 2>/dev/null || true)"
     fi
   fi
   [ -z "$_ws" ] && return 0
-  [ ! -f "$_ws/rnex.yaml" ] && return 0
-
   _hook_root="$(cd "$_ws" 2>/dev/null && pwd -P)"
   _hook_config_merged="$_hook_root/rnex.yaml"
+  if [ -n "$CUSTOM_CONFIG" ]; then
+    _hook_config_merged="$(resolve_path "$CUSTOM_CONFIG" 2>/dev/null || true)"
+  fi
+  [ ! -f "$_hook_config_merged" ] && return 0
+
   _hook_file="${_hook_phase_cmd}.sh"
   _hook_cmd="${_hook_phase_cmd#*_}"
   _hook_args="$*"
   _hook_quiet="${_sync_quiet:-0}"
 
   _old_nexus="$NEXUS_DIR"
+  _old_yaml="$WORKSPACE_YAML"
+  _old_local_yaml="$WORKSPACE_LOCAL_YAML"
   NEXUS_DIR="$_hook_root"
+  WORKSPACE_YAML="$_hook_config_merged"
+  WORKSPACE_LOCAL_YAML="$_hook_root/$RNEX_LOCAL_CONFIG_FILE"
   _skill_dirs="$(get_active_provider_skill_dirs 2>/dev/null || true)"
-  NEXUS_DIR="$_old_nexus"
 
   RNEX_PLUGIN_DIR="$_hook_root/.rnex/plugins/$_target_plugin"
   _hook_script="$RNEX_PLUGIN_DIR/hooks/$_hook_file"
@@ -286,6 +310,9 @@ EOF
       . "$_hook_script"
     ) || true
   fi
+  WORKSPACE_LOCAL_YAML="$_old_local_yaml"
+  WORKSPACE_YAML="$_old_yaml"
+  NEXUS_DIR="$_old_nexus"
 }
 
 run_plugin_git_hooks() {

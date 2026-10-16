@@ -67,12 +67,13 @@ cmd_plugin_info() {
   printf '%bLocation:%b     %s\n' "$_BOLD" "$_NC" "$_pdir"
 
   case "$_name" in
-    claude|gemini|cursor|windsurf)
+    copilot|claude|gemini|cursor|windsurf)
       _skill_target=""
       case "$_name" in
-        claude) _skill_target=".claude/skills/" ;;
-        gemini) _skill_target=".gemini/skills/" ;;
-        cursor) _skill_target=".cursor/rules/" ;;
+        copilot)  _skill_target=".github/skills/" ;;
+        claude)   _skill_target=".claude/skills/" ;;
+        gemini)   _skill_target=".gemini/skills/" ;;
+        cursor)   _skill_target=".cursor/rules/" ;;
         windsurf) _skill_target=".windsurf/rules/" ;;
       esac
       printf '\n%bConfigurable Options (in rnex.yaml or .local.rnex.yaml):%b\n' "$_BOLD" "$_NC"
@@ -188,46 +189,79 @@ cmd_plugin_disable() {
 
   sync_plugins
   cmd_sync -q
-  log_ok "Plugin '$_name' disabled from workspace"
 }
 
 cmd_rnex_dir() {
   require_workspace
-  _action="$1"
-  _name="$2"
+  _action=""
+  _name=""
+  _is_local=0
+
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --local) _is_local=1 ;;
+      enable|disable)
+        if [ -z "$_action" ]; then
+          _action="$1"
+        elif [ -z "$_name" ]; then
+          _name="$1"
+        fi
+        ;;
+      *)
+        if [ -z "$_action" ]; then
+          _action="$1"
+        elif [ -z "$_name" ]; then
+          _name="$1"
+        else
+          die "Unexpected argument: $1"
+        fi
+        ;;
+    esac
+    shift
+  done
 
   case "$_action" in
     enable)
-      [ -n "$_name" ] || die "Usage: rnex rnex-dir enable <name>"
+      [ -n "$_name" ] || die "Usage: rnex rnex-dir <enable|disable> <name> [--local]"
       yaml_has_repo "$_name" || die "Repo '$_name' is not registered"
-      yaml_set "$_name" "rnex_dir" "true"
+      if [ "$_is_local" -eq 1 ]; then
+        yaml_set_local "$_name" "rnex_dir" "true"
+        log_ok "Enabled member .rnex directory for '$_name' locally in $(basename "$WORKSPACE_LOCAL_YAML")"
+      else
+        yaml_set "$_name" "rnex_dir" "true"
+        log_ok "Enabled member .rnex directory for '$_name' in $(basename "$WORKSPACE_YAML")"
+      fi
       sync_repo_rnex "$_name"
-      log_ok "Enabled member .rnex directory for '$_name'"
       ;;
     disable)
-      [ -n "$_name" ] || die "Usage: rnex rnex-dir disable <name>"
+      [ -n "$_name" ] || die "Usage: rnex rnex-dir <enable|disable> <name> [--local]"
       yaml_has_repo "$_name" || die "Repo '$_name' is not registered"
-      yaml_set "$_name" "rnex_dir" "false"
+      if [ "$_is_local" -eq 1 ]; then
+        yaml_set_local "$_name" "rnex_dir" "false"
+        log_ok "Disabled member .rnex directory for '$_name' locally in $(basename "$WORKSPACE_LOCAL_YAML")"
+      else
+        yaml_set "$_name" "rnex_dir" "false"
+        log_ok "Disabled member .rnex directory for '$_name' in $(basename "$WORKSPACE_YAML")"
+      fi
       clean_repo_rnex "$_name"
-      log_ok "Disabled member .rnex directory for '$_name'"
       ;;
     *)
-      die "Usage: rnex rnex-dir <enable|disable> <name>"
+      die "Usage: rnex rnex-dir <enable|disable> <name> [--local]"
       ;;
   esac
 }
 
 cmd_plugin_update() {
   require_workspace
-  _pname="$1"
-  if [ -n "$_pname" ]; then
-    yaml_has_plugin "$_pname" || die "Plugin '$_pname' is not enabled in workspace"
-    _pdir="$(find_plugin_dir "$_pname" 2>/dev/null || true)"
-    [ -n "$_pdir" ] || die "Plugin '$_pname' not found."
-    log_info "Updating plugin '$_pname'..."
+  _target_plugin="$1"
+  if [ -n "$_target_plugin" ]; then
+    yaml_has_plugin "$_target_plugin" || die "Plugin '$_target_plugin' is not enabled in workspace"
+    _pdir="$(find_plugin_dir "$_target_plugin" 2>/dev/null || true)"
+    [ -n "$_pdir" ] || die "Plugin '$_target_plugin' not found."
+    log_info "Updating plugin '$_target_plugin'..."
     sync_plugins
     cmd_sync
-    log_ok "Plugin '$_name' updated"
+    log_ok "Plugin '$_target_plugin' updated"
   else
     log_info "Updating all enabled plugins..."
     sync_plugins

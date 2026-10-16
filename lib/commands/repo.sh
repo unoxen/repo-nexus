@@ -6,7 +6,6 @@
 
 cmd_add() {
   require_workspace
-  _assume=""
   _name=""
   _url=""
   _rnex_dir="true"
@@ -19,8 +18,6 @@ cmd_add() {
       --disabled) _enabled="false" ;;
       --no-rnex-dir|--rnex-dir=false) _rnex_dir="false" ;;
       --rnex-dir|--rnex-dir=true)    _rnex_dir="true" ;;
-      -y|--yes) _assume="y" ;;
-      -n|--no)  _assume="n" ;;
       *)
         if [ -z "$_name" ]; then
           _name="$1"
@@ -38,7 +35,7 @@ cmd_add() {
   [ -n "$_url" ] || die "Usage: rnex add [--local] [--disabled] [--no-rnex-dir] <name> <git-url>"
 
   ensure_repos_dir
-  _target_dir="$REPOS_DIR/$_name"
+  _target_dir="$(resolve_repo_path "$_name")"
 
   # Clone repo into destination if enabled and not already cloned
   if [ "$_enabled" = "true" ] && [ ! -d "$_target_dir" ]; then
@@ -110,7 +107,7 @@ cmd_clone() {
       continue
     fi
 
-    _dest="$REPOS_DIR/$_name"
+    _dest="$(resolve_repo_path "$_name")"
     if [ -d "$_dest/.git" ]; then
       log_ok "Repo '$_name' is already present at $_dest"
     elif [ -e "$_dest" ]; then
@@ -138,7 +135,9 @@ cmd_exec() {
   _all_repos="$(yaml_list_repos)"
   [ -n "$_all_repos" ] || { log_warn "No repositories declared in configuration"; return 0; }
 
-  echo "$_all_repos" | while read -r _name; do
+  _has_failure=0
+  _last_rc=0
+  for _name in $_all_repos; do
     [ -n "$_name" ] || continue
     if ! yaml_repo_enabled "$_name"; then
       continue
@@ -156,10 +155,17 @@ cmd_exec() {
       printf '%b[✓] %s succeeded%b\n' "$_G" "$_name" "$_NC"
     else
       _rc=$?
+      [ "$_rc" -ne 0 ] || _rc=1
+      _has_failure=1
+      _last_rc=$_rc
       printf '%b[✗] %s failed (exit %s)%b\n' "$_R" "$_name" "$_rc" "$_NC"
     fi
   done
   printf '\n'
+  if [ "$_has_failure" -ne 0 ]; then
+    return "$_last_rc"
+  fi
+  return 0
 }
 
 cmd_enable() {
@@ -222,8 +228,23 @@ cmd_hide() {
 
 cmd_remove() {
   require_workspace
-  _name="$1"
-  [ -n "$_name" ] || die "Usage: rnex remove <name>"
+  _name=""
+  _yes=0
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      -y|--yes) _yes=1 ;;
+      *)
+        if [ -z "$_name" ]; then
+          _name="$1"
+        else
+          die "Unexpected argument: $1"
+        fi
+        ;;
+    esac
+    shift
+  done
+
+  [ -n "$_name" ] || die "Usage: rnex remove <name> [-y]"
   yaml_has_repo "$_name" || die "Repo '$_name' is not registered"
 
   _target_dir="$(resolve_repo_path "$_name")"

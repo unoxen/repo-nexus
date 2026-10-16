@@ -29,7 +29,13 @@ find_workspace_dir() {
 
 get_config_sum() {
   _dir="${1:-${NEXUS_DIR:-.}}"
-  ( cd "$_dir" 2>/dev/null && cksum rnex.yaml .local.rnex.yaml 2>/dev/null | cksum | awk '{print $1, $2}' )
+  _yaml="rnex.yaml"
+  if [ -n "$CUSTOM_CONFIG" ]; then
+    _yaml="$(basename "$CUSTOM_CONFIG")"
+  elif [ -n "$WORKSPACE_YAML" ]; then
+    _yaml="$(basename "$WORKSPACE_YAML")"
+  fi
+  ( cd "$_dir" 2>/dev/null && cksum "$_yaml" .local.rnex.yaml 2>/dev/null | cksum | awk '{print $1, $2}' )
 }
 
 update_sync_stamp() {
@@ -46,14 +52,23 @@ update_sync_stamp() {
 check_auto_sync() {
   _ws="${NEXUS_DIR:-}"
   if [ -z "$_ws" ]; then
-    if [ -f rnex.yaml ]; then
+    if [ -n "$CUSTOM_CONFIG" ]; then
+      _cfg_path="$(resolve_path "$CUSTOM_CONFIG" 2>/dev/null || true)"
+      if [ -f "$_cfg_path" ]; then
+        _ws="$(cd -P "$(dirname "$_cfg_path")" 2>/dev/null && pwd -P)"
+      fi
+    elif [ -f rnex.yaml ]; then
       _ws="."
     else
       _ws="$(find_workspace_dir 2>/dev/null || true)"
     fi
   fi
   [ -z "$_ws" ] && return 0
-  [ ! -f "$_ws/rnex.yaml" ] && return 0
+  _cfg_file="$_ws/rnex.yaml"
+  if [ -n "$CUSTOM_CONFIG" ]; then
+    _cfg_file="$(resolve_path "$CUSTOM_CONFIG" 2>/dev/null || true)"
+  fi
+  [ -f "$_cfg_file" ] || return 0
   _stamp="$_ws/.rnex/.sync_stamp"
   if [ ! -f "$_stamp" ] || [ "$(get_config_sum "$_ws")" != "$(cat "$_stamp" 2>/dev/null)" ]; then
     cmd_sync -y --quiet

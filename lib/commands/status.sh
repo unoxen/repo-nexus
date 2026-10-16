@@ -144,6 +144,9 @@ cmd_status() {
   if [ -f "$NEXUS_DIR/.windsurfrules" ]; then
     printf '  %b✓%b %s %b(Windsurf instructions)%b\n' "$_G" "$_NC" ".windsurfrules" "$_DIM" "$_NC"
   fi
+  if [ -f "$NEXUS_DIR/.github/copilot-instructions.md" ]; then
+    printf '  %b✓%b %s %b(Copilot instructions)%b\n' "$_G" "$_NC" ".github/copilot-instructions.md" "$_DIM" "$_NC"
+  fi
   if [ -n "$CODE_WORKSPACE_FILE" ]; then
     if [ -f "$NEXUS_DIR/$CODE_WORKSPACE_FILE" ]; then
       printf '  %b✓%b %s %b(VS Code / Cursor workspace)%b\n' "$_G" "$_NC" "$CODE_WORKSPACE_FILE" "$_DIM" "$_NC"
@@ -196,7 +199,7 @@ cmd_status() {
           printf '  %b●%b %-18s %b(v%s)%b %s\n' "$_G" "$_NC" "$_pname" "$_DIM" "${_ver:-0.1.0}" "$_NC" "${_desc:+- $_desc}"
           printf '    %bScoped directory: .rnex/plugins/%s%b\n' "$_DIM" "$_pname" "$_NC"
           case "$_pname" in
-            claude|gemini|cursor|windsurf)
+            copilot|claude|gemini|cursor|windsurf)
               printf '    %b↳ Options: instructions=%s, skills=%s%b\n' "$_DIM" \
                 "$(provider_option_enabled "$_pname" "instructions" && echo "true" || echo "false")" \
                 "$(provider_option_enabled "$_pname" "skills" && echo "true" || echo "false")" "$_NC"

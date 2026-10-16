@@ -95,6 +95,7 @@ dispatch_action() {
   _action="$1"
   shift
   run_hook "before_$_action" "$@"
+  set +e
   case "$_action" in
     init)        cmd_init "$@" ;;
     install)     cmd_install "$@" ;;
@@ -113,6 +114,7 @@ dispatch_action() {
     *)           die "Unknown action: $_action" ;;
   esac
   _rc=$?
+  set -e
   run_hook "after_$_action" "$@"
   return $_rc
 }
@@ -122,9 +124,10 @@ case "${1:-help}" in
     _cmd="$1"
     shift
     dispatch_action "$_cmd" "$@"
+    exit $?
     ;;
-  show)        shift; dispatch_action "enable" "$@" ;;
-  hide)        shift; dispatch_action "disable" "$@" ;;
+  show)        shift; dispatch_action "enable" "$@"; exit $? ;;
+  hide)        shift; dispatch_action "disable" "$@"; exit $? ;;
   list)        shift; cmd_list "$@" ;;
   status)      shift; cmd_status "$@" ;;
   completion)  shift; cmd_completion "$@" ;;

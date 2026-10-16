@@ -35,7 +35,7 @@ export default defineConfig({
         'applicationCategory': 'DeveloperApplication',
         'operatingSystem': 'POSIX (macOS, Linux, WSL)',
         'url': 'https://unoxen.github.io/repo-nexus/',
-        'codeRepository': 'https://github.com/nu-nenoi/repo-nexus'
+        'codeRepository': 'https://github.com/unoxen/repo-nexus'
       })
     ],
     ['meta', { name: 'theme-color', content: '#10b981' }],

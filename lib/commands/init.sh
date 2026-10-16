@@ -10,6 +10,7 @@ cmd_init() {
   _cli_code_workspace=""
   _cli_hooks=""
   _cli_no_hooks=0
+  _cli_copilot=""
   _cli_claude=""
   _cli_gemini=""
   _cli_cursor=""
@@ -231,17 +232,9 @@ YAML_EOF
   _sync_ai_session_start_hooks "$_init_dir"
   update_sync_stamp "$_init_dir"
 
-  # Dispatch after_init plugin lifecycle hook
-  _orig_nexus="$NEXUS_DIR"
-  _orig_yaml="$WORKSPACE_YAML"
-  _orig_local_yaml="$WORKSPACE_LOCAL_YAML"
   NEXUS_DIR="$_init_dir"
   WORKSPACE_YAML="$_target_yaml"
   WORKSPACE_LOCAL_YAML="$_init_dir/$RNEX_LOCAL_CONFIG_FILE"
-  run_hook "after_init" "$@"
-  WORKSPACE_LOCAL_YAML="$_orig_local_yaml"
-  WORKSPACE_YAML="$_orig_yaml"
-  NEXUS_DIR="$_orig_nexus"
 
   if [ "$_config_created" -eq 1 ]; then
     printf '\n'

@@ -63,7 +63,7 @@ cmd_help() {
     -v, --version           Show version
 
   WORKSPACE & SYSTEM SETUP
-    init [-y] [--code-workspace [file]] [--hooks|--no-hooks] [--claude] [--gemini] [--cursor] [--windsurf] [dir]
+    init [-y] [--code-workspace [file]] [--hooks|--no-hooks] [--copilot] [--claude] [--gemini] [--cursor] [--windsurf] [--karpathy] [dir]
                             Initialize a new Repo Nexus workspace (default: AGENTS.md)
     install [dir]           Install rnex & repo-nexus globally into ~/.local/bin (or custom dir)
     sync [-y] [--quiet]     Reconcile workspace, plugins, skills, member .rnex directories, and compile AI instructions

@@ -311,7 +311,7 @@ yaml_enable_plugin() {
         ;;
     esac
   else
-    if [ -f "$WORKSPACE_LOCAL_YAML" ] && [ "$_target_file" = "$WORKSPACE_LOCAL_YAML" ]; then
+    if [ -f "$_target_file" ]; then
       _yaml_plugin_set_in_file "$_target_file" "$_name" "enabled" "true"
     fi
   fi
@@ -434,7 +434,7 @@ _yaml_remove_repo_from_file() {
   awk -v name="$_name" '
     /^repos:/ { r=1; print; next }
     r && /^[^ #]/ { r=0 }
-    r && match($0, "^  " name ":[ ]*$") { skip=1; next }
+    r && match($0, "^  " name ":[ ]*(#.*)?$") { skip=1; next }
     r && skip && /^  [^ #]/ { skip=0 }
     skip && /^    / { next }
     { print }
