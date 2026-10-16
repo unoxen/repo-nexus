@@ -57,8 +57,40 @@ _raw_path="$_root/$_raw"
 mkdir -p "$_wiki_path" "$_raw_path"
 [ -f "$_raw_path/.gitkeep" ] || touch "$_raw_path/.gitkeep"
 
-# Ensure .rnex/wiki/ contains only agent-maintained wiki artifacts (no raw staging directory)
-rm -rf "$_wiki_path/raw" 2>/dev/null || true
+# Clean up legacy staging directory only if empty or positively verified as managed duplicate copies
+if [ -d "$_wiki_path/raw" ]; then
+  if ! rmdir "$_wiki_path/raw" 2>/dev/null; then
+    _has_user_content=0
+    for _rf in "$_wiki_path/raw"/* "$_wiki_path/raw"/.[!.]* "$_wiki_path/raw"/..?*; do
+      [ -e "$_rf" ] || continue
+      _rname="$(basename "$_rf")"
+      case "$_rname" in
+        README_*.md)
+          _rrepo="${_rname#README_}"
+          _rrepo="${_rrepo%.md}"
+          if [ -f "$_root/repos/$_rrepo/README.md" ] && cmp -s "$_rf" "$_root/repos/$_rrepo/README.md"; then
+            continue
+          fi
+          _has_user_content=1
+          break
+          ;;
+        *)
+          if [ -f "$_raw_path/$_rname" ] && cmp -s "$_rf" "$_raw_path/$_rname"; then
+            continue
+          fi
+          _has_user_content=1
+          break
+          ;;
+      esac
+    done
+
+    if [ "$_has_user_content" -eq 0 ]; then
+      rm -rf "${_wiki_path:?}/raw" 2>/dev/null || true
+    else
+      printf '[WIKI] Warning: %s/raw contains custom or uncommitted files. Preserving directory without deletion.\n' "$_wiki"
+    fi
+  fi
+fi
 
 _pdir="${RNEX_PLUGIN_DIR:-$_root/.rnex/plugins/karpathy-llm}"
 if [ ! -d "$_pdir/templates" ] && [ -d "$_root/toolkit/plugins/karpathy-llm/templates" ]; then

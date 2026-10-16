@@ -219,6 +219,19 @@ printf '# Intake Note\nImportant context notes.\n' > "$TEST_HOOK_WS/docs/intake-
 [ -f "$TEST_HOOK_WS/docs/intake-note.md" ] || { fail "docs/intake-note.md missing"; exit 1; }
 grep -q "Intake Note" "$TEST_HOOK_WS/docs/intake-note.md" || { fail "Content mismatch in docs/intake-note.md"; exit 1; }
 
+# 5a. Verify user-created files in .rnex/wiki/raw are strictly preserved, while duplicate staging is removed
+mkdir -p "$TEST_HOOK_WS/.rnex/wiki/raw"
+printf '# Custom User Draft\nDo not delete this uncommitted content!\n' > "$TEST_HOOK_WS/.rnex/wiki/raw/user-draft.md"
+_sync_preserve_out="$(cd "$TEST_HOOK_WS" && ./rnex sync -y 2>&1)"
+[ -f "$TEST_HOOK_WS/.rnex/wiki/raw/user-draft.md" ] || { fail "Custom user file in .rnex/wiki/raw was deleted by rnex sync"; exit 1; }
+echo "$_sync_preserve_out" | grep -q "Warning: .rnex/wiki/raw contains custom or uncommitted files" || { fail "Missing preservation warning for .rnex/wiki/raw: $_sync_preserve_out"; exit 1; }
+
+# Replace custom file with duplicate staging file matching docs/intake-note.md
+rm -f "$TEST_HOOK_WS/.rnex/wiki/raw/user-draft.md"
+cp "$TEST_HOOK_WS/docs/intake-note.md" "$TEST_HOOK_WS/.rnex/wiki/raw/intake-note.md"
+(cd "$TEST_HOOK_WS" && ./rnex sync -y >/dev/null)
+[ ! -d "$TEST_HOOK_WS/.rnex/wiki/raw" ] || { fail "Managed duplicate staging .rnex/wiki/raw was not cleaned up"; exit 1; }
+
 # 5b. Confirm member repository README ingested into atomic wiki page
 [ -f "$TEST_HOOK_WS/.rnex/wiki/repo-mock-member-repo.md" ] || { fail "repo-mock-member-repo.md missing after wiki ingest"; exit 1; }
 grep -q 'title: "Member Repo: mock-member-repo"' "$TEST_HOOK_WS/.rnex/wiki/repo-mock-member-repo.md" || { fail "Frontmatter title missing in repo-mock-member-repo.md"; exit 1; }
