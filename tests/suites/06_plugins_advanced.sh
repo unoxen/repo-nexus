@@ -317,6 +317,35 @@ done
 (cd "$TEST_HOOK_WS" && ./rnex sync -y >/dev/null)
 _hot_wc="$(wc -w < "$TEST_HOOK_WS/.rnex/wiki/hot.md")"
 [ "$_hot_wc" -le 500 ] || { fail "hot.md word count ($_hot_wc) exceeded 500-word ceiling with 15 repositories"; exit 1; }
+
+# 12. Verify rnex-wiki-page.template.md contains clean placeholders without /.rnex/.rnex
+[ -f "$TEST_HOOK_WS/.rnex/plugins/karpathy-llm/templates/rnex-wiki-page.template.md" ] || { fail "rnex-wiki-page.template.md missing in scoped plugin dir"; exit 1; }
+! grep -q "/\.rnex/\.rnex" "$TEST_HOOK_WS/.rnex/plugins/karpathy-llm/templates/rnex-wiki-page.template.md" || { fail "Corrupted /.rnex/.rnex found in rnex-wiki-page.template.md"; exit 1; }
+grep -q "<wiki_dir>/" "$TEST_HOOK_WS/.rnex/plugins/karpathy-llm/templates/rnex-wiki-page.template.md" || { fail "<wiki_dir>/ placeholder missing in rnex-wiki-page.template.md"; exit 1; }
+
+# 13. Verify Mandatory Wiki-First Gate compiled into .rnex/ai-instructions.md and absent from AGENTS.md
+grep -q "Mandatory Wiki-First Access Gate" "$TEST_HOOK_WS/.rnex/ai-instructions.md" || { fail "Mandatory Wiki-First Access Gate missing from compiled ai-instructions.md"; exit 1; }
+! grep -q "Mandatory Wiki-First Access Gate" "$TEST_HOOK_WS/AGENTS.md" || { fail "AGENTS.md contains wiki instructions; should remain a single pointer"; exit 1; }
+
+# 14. Verify git_pre-push.sh emits explicit reminder and performs deterministic checks
+(
+  cd "$TEST_HOOK_WS"
+  cat <<'EOF_PREPUSH' >> .local.rnex.yaml
+plugins:
+  karpathy-llm:
+    lint_trigger: git-pre-push
+EOF_PREPUSH
+  _pre_push_out="$("$TEST_HOOK_WS/toolkit/plugins/karpathy-llm/hooks/git_pre-push.sh" 2>&1)"
+  echo "$_pre_push_out" | grep -q "Reminder: Wiki files changed. Run the rnex-karpathy-llm-wiki-lint skill to verify." || { fail "git_pre-push.sh missing explicit reminder: $_pre_push_out"; exit 1; }
+)
+
+# 15. Verify copilot integration documentation specifies .github/skills/rnex-*/SKILL.md
+grep -q "\.github/skills/rnex-\*/SKILL\.md" "$DIR/toolkit/plugins/copilot/instructions/rnex-copilot-integration.md" || { fail "copilot integration missing .github/skills/rnex-*/SKILL.md"; exit 1; }
+
+# 16. Verify scaffolding meta prompt specifies rules/behavioral.md
+grep -q "rules/behavioral\.md" "$DIR/toolkit/plugins/karpathy-llm/instructions/rnex-scaffolding-meta-prompt.md" || { fail "rnex-scaffolding-meta-prompt.md missing rules/behavioral.md"; exit 1; }
+! grep -q "rules/rnex-behavioral\.md" "$DIR/toolkit/plugins/karpathy-llm/instructions/rnex-scaffolding-meta-prompt.md" || { fail "rnex-scaffolding-meta-prompt.md still has stale rules/rnex-behavioral.md"; exit 1; }
+
 pass
 
 # --------------------------------------------------------------------------

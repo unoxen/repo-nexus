@@ -27,7 +27,7 @@ Do not create arbitrary or speculative subdirectories during initialization. Sca
 
 ### 2. Agent Rules & Routing
 
-- **Repo Nexus Workspaces**: Directories (`raw_dir`, default: `./docs`; `wiki_dir`, default: `.rnex/wiki`) are configured in `rnex.yaml` under `plugins.karpathy-llm`. Plugin assets are scoped under `.rnex/plugins/karpathy-llm/` (`rules/rnex-behavioral.md` and `instructions/rnex-wiki-architecture.md`). Agents resolve configuration dynamically.
+- **Repo Nexus Workspaces**: Directories (`raw_dir`, default: `./docs`; `wiki_dir`, default: `.rnex/wiki`) are configured in `rnex.yaml` under `plugins.karpathy-llm`. Plugin assets are scoped under `.rnex/plugins/karpathy-llm/` (`rules/behavioral.md` and `instructions/rnex-wiki-architecture.md`). Agents resolve configuration dynamically.
 - **Standalone Repositories**: Append the `## Karpathy Wiki Rules` section (see Section 4) to the primary AI instructions file (`AGENTS.md`, `CLAUDE.md`, `.cursorrules`, etc.), preserving all existing content.
 
 ---

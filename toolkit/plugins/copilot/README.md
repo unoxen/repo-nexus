@@ -5,7 +5,7 @@ A built-in Repo Nexus plugin providing instructions and skill integration for Gi
 ## Capabilities
 
 1. **Instructions Integration**: Generates and maintains `.github/copilot-instructions.md` with Repo Nexus routing instructions while preserving custom instructions outside delimiters.
-2. **User Skills Generation**: Standardized Repo Nexus core skills and active plugins' skills are mirrored as zero-logic User Skill pointers (`rnex-<name>.md`) in `.github/skills/`.
+2. **User Skills Generation**: Standardized Repo Nexus core skills and active plugins' skills are mirrored as zero-logic User Skill pointers (`rnex-<name>/SKILL.md`) in `.github/skills/`.
 
 ## Usage
 

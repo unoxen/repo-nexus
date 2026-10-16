@@ -124,9 +124,6 @@ When workspace configuration, routing blocks, plugin assets, or member repositor
 
 ## Git Operations
 Commit and push changes directly within the respective member repository root (`repos/<name>/`).
-
-## Wiki Operations
-`raw_dir` (`./docs`) and `./repos/` are strictly read-only inputs during wiki operations. Never create, copy, or modify files inside `./docs`; write generated output exclusively inside `wiki_dir` (`.rnex/wiki/`).
 BASE_AI_EOF
   fi
 

@@ -8,6 +8,21 @@ The curated wiki directory (`wiki_dir`, default: `.rnex/wiki`) and raw intake di
 
 ---
 
+## Mandatory Wiki-First Access Gate (Pre-Task Execution)
+
+Before inspecting, searching, or modifying code inside member repositories (`repos/`), AI assistants MUST execute this sequence:
+
+1. **Orientation Gate (`<wiki_dir>/hot.md`)**:
+   - Always read `<wiki_dir>/hot.md` (default: `.rnex/wiki/hot.md`) first to absorb architectural topology, member repo boundaries, and current focus.
+   - Do NOT access `repos/` until this high-level orientation is completed.
+2. **Catalog & Topic Lookup (`<wiki_dir>/index.md`)**:
+   - If the specific domain concept, API contract, or component required for the task is not resolved in `hot.md`, read `<wiki_dir>/index.md` (default: `.rnex/wiki/index.md`).
+   - Identify and read the specific atomic wiki page(s) (e.g. `<wiki_dir>/auth.md`) corresponding to the task.
+3. **Targeted Member Repository Access Only**:
+   - Only after acquiring domain context and contract specifications from the wiki should you inspect targeted files within `repos/<name>/`. Never execute blind repository-wide grep or unbounded directory scans across `repos/`.
+
+---
+
 ## 1. Operating Rules & Token Economy
 
 When working in a workspace with an active Karpathy LLM Wiki:

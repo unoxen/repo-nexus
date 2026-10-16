@@ -10,13 +10,13 @@ Reference specification: [setup-karpathy-wiki.md](https://github.com/unoxen/ai-t
 
 ## What It Provides
 
-### 1. The 4 Cardinal Principles for Coding Agents (`rules/rnex-behavioral.md`)
+### 1. The 4 Cardinal Principles for Coding Agents (`rules/behavioral.md`)
 * **Think Before Coding:** Explicit assumptions, problem formulation, and trade-off evaluation before writing code.
 * **Simplicity First:** Minimal abstractions, readable implementations, and zero boilerplate bloat.
 * **Surgical Changes:** Minimal blast radius, preserved comments/docstrings, and tightly focused diffs.
 * **Goal-Driven Execution:** Upfront verification criteria, automated tests, and rigorous diff review.
 
-### 2. Multi-Repo Context Engineering & Autonomy (`rules/rnex-behavioral.md`)
+### 2. Multi-Repo Context Engineering & Autonomy (`rules/behavioral.md`)
 * Guidelines tailored for Repo Nexus workspaces respecting member repository autonomy and physical repository boundaries.
 
 ### 3. Complete Karpathy LLM Wiki Architecture (`instructions/rnex-wiki-architecture.md`)
@@ -46,7 +46,7 @@ Enabling the plugin (`rnex plugin enable karpathy-llm`) performs an exact, zero-
 ### Phase 2: Evolutionary Growth & Domain Specialization (Usage Phase)
 Once initialized, the workspace structure organically evolves according to actual domain needs and source materials:
 * **Source Ingestion (`rnex-karpathy-llm-wiki-ingest`)**: As raw source documents are deposited into `./docs` and ingested, atomic pages are generated. Users or agents can organize pages into categorical subfolders (e.g. `architecture/`, `decisions/`, `concepts/`, `projects/`) or keep them flat.
-* **Customizable Guidelines**: Teams can tailor `rules/rnex-behavioral.md` and `instructions/rnex-wiki-architecture.md` for their specific team conventions.
+* **Customizable Guidelines**: Teams can tailor `rules/behavioral.md` and `instructions/rnex-wiki-architecture.md` for their specific team conventions.
 * **Graph Maintenance (`rnex-karpathy-llm-wiki-lint`)**: The periodic lint workflow validates relation paths, updates `mentioned_in`, and rebuilds `index.md` and `hot.md` to match the evolved knowledge graph.
 
 ---
@@ -70,7 +70,7 @@ my-workspace/
 │           ├── instructions/
 │           │   └── rnex-wiki-architecture.md# LLM Wiki architecture & relation schema
 │           ├── rules/
-│           │   └── rnex-behavioral.md    # Cardinal principles & context engineering
+│           │   └── behavioral.md         # Cardinal principles & context engineering
 │           ├── skills/
 │           │   ├── wiki-ingest.md        # 8-step decomposition & ingestion workflow
 │           │   └── wiki-lint.md          # 10-step graph validation & maintenance workflow

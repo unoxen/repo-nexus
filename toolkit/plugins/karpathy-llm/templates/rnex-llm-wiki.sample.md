@@ -37,7 +37,7 @@
 ### ADR-001: Independent Git Repositories over Monorepo
 * **Date:** YYYY-MM-DD
 * **Decision:** Keep repositories completely independent without Git submodules. Orchestrate via Repo Nexus Virtual Meta-Repo.
-* **Consequences:** Autonomous CI/CD per repo; AI assistants maintain shared context via `AGENTS.md` and `rnex-behavioral.md`.
+* **Consequences:** Autonomous CI/CD per repo; AI assistants maintain shared context via `AGENTS.md` and `behavioral.md`.
 
 ---
 

@@ -29,4 +29,4 @@ Master navigation index for the Karpathy LLM Wiki. Agents query this index on de
 * *(Key contributors, teams, organizations, and stakeholders)*
 
 ## Sources & Raw References
-* *(Catalog of ingested source materials from `/{raw_dir}/`)*
+* *(Catalog of ingested source materials from `{raw_dir}/`)*

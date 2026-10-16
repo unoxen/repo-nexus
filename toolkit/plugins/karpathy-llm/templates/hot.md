@@ -8,8 +8,8 @@
 
 ## 2. Current Focus & Recent Ingests
 * **Active Tasks:** Wiki initialization complete.
-* **Recent Ingests:** None yet. Deposit source documents into `/{raw_dir}/` and run `rnex-karpathy-llm-wiki-ingest`.
+* **Recent Ingests:** None yet. Deposit source documents into `{raw_dir}/` and run `rnex-karpathy-llm-wiki-ingest`.
 
 ## 3. Key Contracts & Boundaries
 * **Atomic Pages:** Concepts live in discrete files with frontmatter relations (`sources`, `related`, `extends`, `mentioned_in`).
-* **Deep Knowledge:** For detailed RFCs, data contracts, and secondary concepts, consult `/{wiki_dir}/index.md` on demand.
+* **Deep Knowledge:** For detailed RFCs, data contracts, and secondary concepts, consult `{wiki_dir}/index.md` on demand.

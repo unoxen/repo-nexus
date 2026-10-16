@@ -79,7 +79,7 @@ fi
 
 # Ensure template in .rnex/plugins/karpathy-llm/templates
 mkdir -p "$_pdir/templates"
-if [ -f "$_tmpl_dir/rnex-wiki-page.sample.md" ] && [ ! -f "$_pdir/templates/rnex-wiki-page.template.md" ]; then
+if [ -f "$_tmpl_dir/rnex-wiki-page.sample.md" ]; then
   cp "$_tmpl_dir/rnex-wiki-page.sample.md" "$_pdir/templates/rnex-wiki-page.template.md"
 fi
 

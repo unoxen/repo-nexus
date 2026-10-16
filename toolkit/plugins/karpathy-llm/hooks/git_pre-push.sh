@@ -44,6 +44,10 @@ _trigger="$(get_cfg "lint_trigger" "manual")"
 if [ "$_trigger" = "git-pre-push" ] || [ "$_trigger" = "pre-push" ]; then
   _notify="$(get_cfg "notify_on_changes" "true")"
   if [ "$_notify" != "false" ]; then
-    printf '[WIKI] Pre-push trigger: verifying wiki changes in %s/.\n' "$_wiki"
+    _wiki_path="$_root/$_wiki"
+    if [ ! -f "$_wiki_path/index.md" ] || [ ! -f "$_wiki_path/hot.md" ]; then
+      printf '[WIKI] Warning: Required wiki files (index.md or hot.md) missing in %s/.\n' "$_wiki"
+    fi
+    printf '[WIKI] Reminder: Wiki files changed. Run the rnex-karpathy-llm-wiki-lint skill to verify.\n'
   fi
 fi
