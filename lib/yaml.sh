@@ -64,24 +64,6 @@ yaml_plugin_get() {
   _yaml_plugin_get_from_file "$WORKSPACE_YAML" "$_pname" "$_key"
 }
 
-yaml_plugin_list_config() {
-  _pname="$1"
-  _f="$WORKSPACE_YAML"
-  [ -f "$_f" ] || return 0
-  awk -v plugin="$_pname" '
-    /^plugins:[ ]*$/ || /^plugins:[ ]*#/ { in_plugins=1; next }
-    in_plugins && /^[^ #]/ { in_plugins=0 }
-    in_plugins && match($0, "^  " plugin ":[ ]*(#.*)?$") { in_target=1; next }
-    in_target && /^  [^ #]/ { in_target=0 }
-    in_target && /^    [a-zA-Z0-9_.-]+:[ ]*/ {
-      line = $0
-      sub(/^[ ]*/, "", line)
-      sub(/[ ]*#.*$/, "", line)
-      print line
-    }
-  ' "$_f"
-}
-
 yaml_has_plugin() {
   yaml_list_plugins | grep -qx "$1" 2>/dev/null
 }
@@ -120,36 +102,22 @@ provider_option_enabled() {
 copilot_plugin_enabled() { provider_plugin_enabled "copilot"; }
 copilot_instructions_enabled() { provider_option_enabled "copilot" "instructions"; }
 copilot_skills_enabled() { provider_option_enabled "copilot" "skills"; }
-copilot_agents_enabled() { return 1; }
 
 claude_plugin_enabled() { provider_plugin_enabled "claude"; }
 claude_instructions_enabled() { provider_option_enabled "claude" "instructions"; }
 claude_skills_enabled() { provider_option_enabled "claude" "skills"; }
-claude_agents_enabled() { return 1; }
 
 gemini_plugin_enabled() { provider_plugin_enabled "gemini"; }
 gemini_instructions_enabled() { provider_option_enabled "gemini" "instructions"; }
 gemini_skills_enabled() { provider_option_enabled "gemini" "skills"; }
-gemini_agents_enabled() { return 1; }
 
 cursor_plugin_enabled() { provider_plugin_enabled "cursor"; }
 cursor_instructions_enabled() { provider_option_enabled "cursor" "instructions"; }
 cursor_skills_enabled() { provider_option_enabled "cursor" "skills"; }
-cursor_agents_enabled() { return 1; }
 
 windsurf_plugin_enabled() { provider_plugin_enabled "windsurf"; }
 windsurf_instructions_enabled() { provider_option_enabled "windsurf" "instructions"; }
 windsurf_skills_enabled() { provider_option_enabled "windsurf" "skills"; }
-windsurf_agents_enabled() { return 1; }
-
-has_ai_provider_plugin_enabled() {
-  for _ap in copilot claude gemini cursor windsurf; do
-    if provider_plugin_enabled "$_ap"; then
-      return 0
-    fi
-  done
-  return 1
-}
 
 _yaml_plugin_set_in_file() {
   _file="$1"; _plugin="$2"; _field="$3"; _value="$4"

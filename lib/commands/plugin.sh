@@ -146,8 +146,8 @@ cmd_plugin_enable() {
     log_ok "Plugin '$_name' enabled in $(basename "$WORKSPACE_YAML")"
   fi
 
-  sync_plugins
   cmd_sync
+  run_plugin_hook "$_name" "after_sync"
   log_ok "Plugin '$_name' active in workspace (.rnex/plugins/$_name)"
 }
 
@@ -187,7 +187,6 @@ cmd_plugin_disable() {
     log_ok "Plugin '$_name' disabled from workspace"
   fi
 
-  sync_plugins
   cmd_sync -q
 }
 
@@ -259,13 +258,13 @@ cmd_plugin_update() {
     _pdir="$(find_plugin_dir "$_target_plugin" 2>/dev/null || true)"
     [ -n "$_pdir" ] || die "Plugin '$_target_plugin' not found."
     log_info "Updating plugin '$_target_plugin'..."
-    sync_plugins
     cmd_sync
+    run_plugin_hook "$_target_plugin" "after_sync"
     log_ok "Plugin '$_target_plugin' updated"
   else
     log_info "Updating all enabled plugins..."
-    sync_plugins
     cmd_sync
+    run_hook "after_sync"
     log_ok "All plugins updated"
   fi
 }

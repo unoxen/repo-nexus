@@ -86,8 +86,7 @@ build_ai_instructions() {
   for _cand in \
     "$_dir/templates/ai-instructions.sample.md" \
     "$SCRIPT_LOCATION/templates/ai-instructions.sample.md" \
-    "$(dirname "$SCRIPT_LOCATION")/templates/ai-instructions.sample.md" \
-    "$_dir/docs/ai-instructions.sample.md"; do
+    "$(dirname "$SCRIPT_LOCATION")/templates/ai-instructions.sample.md"; do
     if [ -f "$_cand" ]; then
       _tmpl_file="$_cand"
       break
@@ -108,7 +107,7 @@ This workspace operates as a **Repo Nexus Virtual Meta-Repo** uniting independen
 ### Mandatory Session Startup
 Execute in sequence before task execution:
 1. **Read Configuration First (Highest Priority)**: Read `.local.rnex.yaml` (if present) and `rnex.yaml` to identify active member repositories (`repos/`) and enabled plugins.
-2. **Plugin & Skill Routing**: Inspect active plugin instructions under `.rnex/plugins/<plugin-name>/`, and tools under `.rnex/skills/` and `.rnex/workflows/` when relevant.
+2. **Plugin & Skill Routing**: Inspect active plugin instructions under `.rnex/plugins/<plugin-name>/`, and core agentic skills under `.rnex/skills/` when relevant.
 3. **Targeted Member Repository Access Only**: Navigate directly to specific files in `repos/<name>/` relevant to the user request. Avoid blind repository-wide scans or unbounded searches across `repos/`.
 
 ## Subagents
@@ -352,109 +351,22 @@ write_rnex_env_script() {
   _bin_dir="$_dir/.rnex/bin"
   mkdir -p "$_bin_dir"
   _env_script="$_bin_dir/rnex-env.sh"
-  cat > "$_env_script" <<'ENV_EOF'
-#!/bin/sh
-# Repo Nexus Plugin & Skill Contract Environment
-export RNEX_ROOT="${RNEX_ROOT:-$(cd "$(dirname "$0")/../.." 2>/dev/null && pwd -P)}"
-
-if [ -z "$RNEX_PROVIDER_SKILL_DIRS" ]; then
-  _dirs=""
-  [ -d "$RNEX_ROOT/.github/skills" ] && _dirs="${_dirs:+$_dirs }.github/skills"
-  [ -d "$RNEX_ROOT/.cursor" ] && _dirs="${_dirs:+$_dirs }.cursor/rules"
-  [ -d "$RNEX_ROOT/.claude" ] && _dirs="${_dirs:+$_dirs }.claude/skills"
-  [ -d "$RNEX_ROOT/.windsurf" ] && _dirs="${_dirs:+$_dirs }.windsurf/rules"
-  [ -d "$RNEX_ROOT/.gemini" ] && _dirs="${_dirs:+$_dirs }.gemini/skills"
-  export RNEX_PROVIDER_SKILL_DIRS="$_dirs"
-fi
-
-rnex_generate_user_skill() {
-  skill_name="$1"
-  target_path="$2"
-  plugin_name="${3:-}"
-
-  if [ -n "$plugin_name" ]; then
-    full_name="rnex-${plugin_name}-${skill_name}"
-  else
-    full_name="rnex-${skill_name}"
-  fi
-  _dirs="${RNEX_PROVIDER_SKILL_DIRS:-}"
-  _r="${RNEX_ROOT:-.}"
-
-  _target_file=""
-  if [ -f "$_r/$target_path" ]; then
-    _target_file="$_r/$target_path"
-  elif [ -f "$target_path" ]; then
-    _target_file="$target_path"
-  fi
-
-  _skill_desc=""
-  if [ -n "$_target_file" ]; then
-    _skill_desc="$(awk 'NF && !/^#/ { print; exit }' "$_target_file" 2>/dev/null)"
-  fi
-  if [ -z "$_skill_desc" ]; then
-    _skill_desc="Repo Nexus agentic skill protocol for ${full_name}."
-  fi
-  _skill_desc="$(printf '%s' "$_skill_desc" | tr '\n\r' '  ' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//;s/"/\\"/g')"
-
-  for provider_dir in $_dirs; do
-    case "$provider_dir" in
-      *rules*)
-        mkdir -p "$_r/$provider_dir"
-        rm -rf "${_r:?}/${provider_dir:?}/${full_name:?}" 2>/dev/null || true
-        cat << EOF > "$_r/$provider_dir/${full_name}.md"
-# User Skill: ${full_name}
-
-CRITICAL: Do not execute inline heuristics. Read and strictly follow the agentic skill protocol at:
-\`${target_path}\`
-EOF
-        ;;
-      *)
-        mkdir -p "$_r/$provider_dir/${full_name}"
-        rm -f "$_r/$provider_dir/${full_name}.md" 2>/dev/null || true
-        cat << EOF > "$_r/$provider_dir/${full_name}/SKILL.md"
----
-name: ${full_name}
-description: "${_skill_desc}"
----
-
-# User Skill: ${full_name}
-
-CRITICAL: Do not execute inline heuristics. Read and strictly follow the agentic skill protocol at:
-\`${target_path}\`
-EOF
-        ;;
-    esac
-  done
-}
-
-rnex_register_user_skill() {
-  rnex_generate_user_skill "$@"
-}
-
-rnex_unregister_user_skill() {
-  skill_name="$1"
-  plugin_name="${2:-}"
-  if [ -n "$plugin_name" ]; then
-    full_name="rnex-${plugin_name}-${skill_name}"
-  else
-    case "$skill_name" in
-      rnex-*) full_name="$skill_name" ;;
-      *)      full_name="rnex-${skill_name}" ;;
-    esac
-  fi
-  _dirs="${RNEX_PROVIDER_SKILL_DIRS:-}"
-  _r="${RNEX_ROOT:-.}"
-  for provider_dir in $_dirs; do
-    rm -f "$_r/$provider_dir/${full_name}.md"
-    rm -rf "${_r:?}/${provider_dir:?}/${full_name:?}"
-    if [ -n "$plugin_name" ]; then
-      rm -f "$_r/$provider_dir/rnex-${skill_name}.md"
-      rm -rf "${_r:?}/${provider_dir:?}/rnex-${skill_name:?}"
+  _tmpl_env=""
+  for _cand in \
+    "$_dir/templates/rnex-env.sh" \
+    "$SCRIPT_LOCATION/templates/rnex-env.sh" \
+    "$(dirname "$SCRIPT_LOCATION")/templates/rnex-env.sh" \
+    "${RNEX_LIB_DIR:-}/../templates/rnex-env.sh" \
+    "./templates/rnex-env.sh"; do
+    if [ -f "$_cand" ]; then
+      _tmpl_env="$_cand"
+      break
     fi
   done
-}
-ENV_EOF
-  chmod +x "$_env_script"
+  if [ -n "$_tmpl_env" ]; then
+    cp "$_tmpl_env" "$_env_script"
+  fi
+  chmod +x "$_env_script" 2>/dev/null || true
 }
 
 get_active_provider_skill_dirs() {
@@ -477,97 +389,21 @@ get_active_provider_skill_dirs() {
   printf '%s' "$_dirs"
 }
 
-# Usage: rnex_generate_user_skill <skill_name> <target_path_in_rnex> [plugin_name]
-rnex_generate_user_skill() {
-  skill_name="$1"
-  target_path="$2"
-  plugin_name="${3:-}"
-
-  if [ -n "$plugin_name" ]; then
-    full_name="rnex-${plugin_name}-${skill_name}"
-  else
-    full_name="rnex-${skill_name}"
+_tmpl_env=""
+for _cand in \
+  "$SCRIPT_LOCATION/templates/rnex-env.sh" \
+  "$(dirname "$SCRIPT_LOCATION")/templates/rnex-env.sh" \
+  "${RNEX_LIB_DIR:-}/../templates/rnex-env.sh" \
+  "./templates/rnex-env.sh"; do
+  if [ -f "$_cand" ]; then
+    _tmpl_env="$_cand"
+    break
   fi
-
-  _dirs="${RNEX_PROVIDER_SKILL_DIRS:-$(get_active_provider_skill_dirs)}"
-  _r="${NEXUS_DIR:-${RNEX_ROOT:-.}}"
-
-  _target_file=""
-  if [ -f "$_r/$target_path" ]; then
-    _target_file="$_r/$target_path"
-  elif [ -f "$target_path" ]; then
-    _target_file="$target_path"
-  fi
-
-  _skill_desc=""
-  if [ -n "$_target_file" ]; then
-    _skill_desc="$(awk 'NF && !/^#/ { print; exit }' "$_target_file" 2>/dev/null)"
-  fi
-  if [ -z "$_skill_desc" ]; then
-    _skill_desc="Repo Nexus agentic skill protocol for ${full_name}."
-  fi
-  _skill_desc="$(printf '%s' "$_skill_desc" | tr '\n\r' '  ' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//;s/"/\\"/g')"
-
-  for provider_dir in $_dirs; do
-    case "$provider_dir" in
-      *rules*)
-        mkdir -p "$_r/$provider_dir"
-        rm -rf "${_r:?}/${provider_dir:?}/${full_name:?}" 2>/dev/null || true
-        cat << EOF > "$_r/$provider_dir/${full_name}.md"
-# User Skill: ${full_name}
-
-CRITICAL: Do not execute inline heuristics. Read and strictly follow the agentic skill protocol at:
-\`${target_path}\`
-EOF
-        ;;
-      *)
-        mkdir -p "$_r/$provider_dir/${full_name}"
-        rm -f "$_r/$provider_dir/${full_name}.md" 2>/dev/null || true
-        cat << EOF > "$_r/$provider_dir/${full_name}/SKILL.md"
----
-name: ${full_name}
-description: "${_skill_desc}"
----
-
-# User Skill: ${full_name}
-
-CRITICAL: Do not execute inline heuristics. Read and strictly follow the agentic skill protocol at:
-\`${target_path}\`
-EOF
-        ;;
-    esac
-  done
-}
-
-# Usage: rnex_register_user_skill <skill_name> <target_path_in_rnex> [plugin_name]
-rnex_register_user_skill() {
-  rnex_generate_user_skill "$@"
-}
-
-# Usage: rnex_unregister_user_skill <skill_name> [plugin_name]
-rnex_unregister_user_skill() {
-  skill_name="$1"
-  plugin_name="${2:-}"
-  if [ -n "$plugin_name" ]; then
-    full_name="rnex-${plugin_name}-${skill_name}"
-  else
-    case "$skill_name" in
-      rnex-*) full_name="$skill_name" ;;
-      *)      full_name="rnex-${skill_name}" ;;
-    esac
-  fi
-
-  _dirs="${RNEX_PROVIDER_SKILL_DIRS:-$(get_active_provider_skill_dirs)}"
-  _r="${NEXUS_DIR:-${RNEX_ROOT:-.}}"
-  for provider_dir in $_dirs; do
-    rm -f "$_r/$provider_dir/${full_name}.md"
-    rm -rf "${_r:?}/${provider_dir:?}/${full_name:?}"
-    if [ -n "$plugin_name" ]; then
-      rm -f "$_r/$provider_dir/rnex-${skill_name}.md"
-      rm -rf "${_r:?}/${provider_dir:?}/rnex-${skill_name:?}"
-    fi
-  done
-}
+done
+if [ -n "$_tmpl_env" ]; then
+  # shellcheck source=/dev/null
+  . "$_tmpl_env"
+fi
 
 clean_provider_user_skills() {
   _sk_dir="$1"
@@ -578,10 +414,6 @@ clean_provider_user_skills() {
     rm -rf "$_d" 2>/dev/null || true
   done
   rmdir "$_sk_dir" 2>/dev/null || true
-}
-
-clean_provider_skills() {
-  clean_provider_user_skills "$1"
 }
 
 clean_plugin_user_skills() {
@@ -596,28 +428,6 @@ clean_plugin_user_skills() {
       rnex_unregister_user_skill "$_sk_name"
     done
   fi
-}
-
-clean_plugin_prompts_across_providers() {
-  clean_plugin_user_skills "$1"
-}
-
-clean_disabled_plugins_prompts_all_providers() {
-  _seen_plugins=" "
-  for _parent in "$SCRIPT_LOCATION/toolkit/plugins" "$(dirname "$SCRIPT_LOCATION")/toolkit/plugins" "$NEXUS_DIR/toolkit/plugins" "$NEXUS_DIR/.rnex/plugins"; do
-    [ -d "$_parent" ] || continue
-    for _pdir in "$_parent"/*; do
-      [ -d "$_pdir" ] || continue
-      _pname="$(basename "$_pdir")"
-      case "$_seen_plugins" in
-        *" $_pname "*) continue ;;
-      esac
-      _seen_plugins="${_seen_plugins}${_pname} "
-      if ! yaml_plugin_enabled "$_pname"; then
-        clean_plugin_user_skills "$_pdir"
-      fi
-    done
-  done
 }
 
 clean_provider_ignore() {
@@ -845,9 +655,5 @@ sync_skills() {
   write_rnex_env_script "$NEXUS_DIR"
   sync_rnex_base_assets
   sync_ai_providers
-}
-
-sync_prompts() {
-  sync_skills
 }
 

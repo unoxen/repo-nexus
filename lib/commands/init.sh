@@ -170,7 +170,6 @@ YAML_EOF
   NEXUS_DIR="$_init_dir"
   WORKSPACE_YAML="$_target_yaml"
   WORKSPACE_LOCAL_YAML="$_init_dir/$RNEX_LOCAL_CONFIG_FILE"
-  sync_rnex_base_assets
   sync_plugins
   build_ai_instructions "$_init_dir"
   sync_skills

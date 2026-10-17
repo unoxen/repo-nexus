@@ -61,21 +61,6 @@ plugin_get_field() {
   ' "$_pdir/plugin.yaml"
 }
 
-plugin_list_rules() {
-  _pdir="$1"
-  [ -f "$_pdir/plugin.yaml" ] || return 0
-  awk '
-    /^(rules|instructions|ai_files):[ ]*(#.*)?$/ { in_sec = 1; next }
-    in_sec && /^[^ #]/ { in_sec = 0 }
-    in_sec && /^[ ]*-[ ]*/ {
-      line = $0
-      sub(/^[ ]*-[ ]*/, "", line)
-      sub(/[ ]*#.*/, "", line)
-      if (length(line) > 0) print line
-    }
-  ' "$_pdir/plugin.yaml"
-}
-
 plugin_list_templates() {
   _pdir="$1"
   [ -f "$_pdir/plugin.yaml" ] || return 0

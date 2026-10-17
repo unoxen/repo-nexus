@@ -81,7 +81,6 @@ git -C "$TEST_PROVIDERS_WS" init -q
 
 # Enable gemini plugin
 (cd "$TEST_PROVIDERS_WS" && ./rnex plugin enable gemini >/dev/null)
-(cd "$TEST_PROVIDERS_WS" && ./rnex sync -y --quiet >/dev/null)
 [ -f "$TEST_PROVIDERS_WS/GEMINI.md" ] || { fail "GEMINI.md missing after enabling gemini"; exit 1; }
 [ -f "$TEST_PROVIDERS_WS/.geminiignore" ] || { fail ".geminiignore missing after enabling gemini"; exit 1; }
 grep -q '!repos/\*' "$TEST_PROVIDERS_WS/.geminiignore" || { fail "!repos/* missing from .geminiignore"; exit 1; }
@@ -90,7 +89,6 @@ grep -q '!repos/\*' "$TEST_PROVIDERS_WS/.geminiignore" || { fail "!repos/* missi
 # Enable cursor and windsurf plugins
 (cd "$TEST_PROVIDERS_WS" && ./rnex plugin enable cursor >/dev/null)
 (cd "$TEST_PROVIDERS_WS" && ./rnex plugin enable windsurf >/dev/null)
-(cd "$TEST_PROVIDERS_WS" && ./rnex sync -y --quiet >/dev/null)
 [ -f "$TEST_PROVIDERS_WS/.cursorrules" ] || { fail ".cursorrules missing after enabling cursor"; exit 1; }
 [ -f "$TEST_PROVIDERS_WS/.cursorignore" ] || { fail ".cursorignore missing after enabling cursor"; exit 1; }
 grep -q '!repos/\*' "$TEST_PROVIDERS_WS/.cursorignore" || { fail "!repos/* missing from .cursorignore"; exit 1; }

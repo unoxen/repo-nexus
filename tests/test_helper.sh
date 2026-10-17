@@ -80,9 +80,6 @@ setup_test_workspace() {
   if [ -d "$DIR/lib" ] && [ ! -d "$TEST_WORKSPACE/lib" ]; then
     cp -r "$DIR/lib" "$TEST_WORKSPACE/lib"
   fi
-  if [ -d "$DIR/docs" ] && [ ! -d "$TEST_WORKSPACE/docs" ]; then
-    cp -r "$DIR/docs" "$TEST_WORKSPACE/docs"
-  fi
   if [ -d "$DIR/toolkit" ] && [ ! -d "$TEST_WORKSPACE/toolkit" ]; then
     cp -r "$DIR/toolkit" "$TEST_WORKSPACE/toolkit"
   fi

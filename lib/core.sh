@@ -52,19 +52,6 @@ resolve_path() {
   esac
 }
 
-# Resolve location of this script (follows symlinks)
-resolve_script_path() {
-  _source="$1"
-  while [ -L "$_source" ]; do
-    _dir="$(cd "$(dirname "$_source")" 2>/dev/null && pwd -P)"
-    _source="$(readlink "$_source")"
-    case "$_source" in
-      /*) ;;
-      *)  _source="$_dir/$_source" ;;
-    esac
-  done
-  cd "$(dirname "$_source")" 2>/dev/null && pwd -P
-}
 
 # ---- Version Resolution (package.json is single source of truth) ----------
 

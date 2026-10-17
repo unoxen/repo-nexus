@@ -92,45 +92,7 @@ if [ -d "$_wiki_path/raw" ]; then
   fi
 fi
 
-_pdir="${RNEX_PLUGIN_DIR:-$_root/.rnex/plugins/karpathy-llm}"
-if [ ! -d "$_pdir/templates" ] && [ -d "$_root/toolkit/plugins/karpathy-llm/templates" ]; then
-  _tmpl_dir="$_root/toolkit/plugins/karpathy-llm/templates"
-else
-  _tmpl_dir="$_pdir/templates"
-fi
-
-if [ -f "$_tmpl_dir/index.md" ] && [ ! -f "$_wiki_path/index.md" ]; then
-  sed -e "s|{wiki_dir}|$_wiki|g" -e "s|{raw_dir}|$_raw|g" "$_tmpl_dir/index.md" > "$_wiki_path/index.md"
-fi
-if [ -f "$_tmpl_dir/hot.md" ] && [ ! -f "$_wiki_path/hot.md" ]; then
-  sed -e "s|{wiki_dir}|$_wiki|g" -e "s|{raw_dir}|$_raw|g" "$_tmpl_dir/hot.md" > "$_wiki_path/hot.md"
-fi
-if [ -f "$_tmpl_dir/_log.md" ] && [ ! -f "$_wiki_path/_log.md" ]; then
-  sed -e "s|{wiki_dir}|$_wiki|g" -e "s|{raw_dir}|$_raw|g" "$_tmpl_dir/_log.md" > "$_wiki_path/_log.md"
-fi
-
-# Ensure template in .rnex/plugins/karpathy-llm/templates
-mkdir -p "$_pdir/templates"
-if [ -f "$_tmpl_dir/rnex-wiki-page.sample.md" ]; then
-  cp "$_tmpl_dir/rnex-wiki-page.sample.md" "$_pdir/templates/rnex-wiki-page.template.md"
-fi
-
-# 1. Copy plugin rules and skills into scoped runtime directory
-mkdir -p "$RNEX_ROOT/.rnex/plugins/karpathy-llm/rules" "$RNEX_ROOT/.rnex/plugins/karpathy-llm/skills"
-_src_k_rules=""
-_src_k_skills=""
-for _base in "$RNEX_PLUGIN_DIR" "$RNEX_ROOT/toolkit/plugins/karpathy-llm"; do
-  [ -d "$_base/rules" ] && [ -z "$_src_k_rules" ] && _src_k_rules="$_base/rules"
-  [ -d "$_base/skills" ] && [ -z "$_src_k_skills" ] && _src_k_skills="$_base/skills"
-done
-if [ -n "$_src_k_rules" ] && [ "$_src_k_rules" != "$RNEX_ROOT/.rnex/plugins/karpathy-llm/rules" ]; then
-  cp -R "$_src_k_rules"/. "$RNEX_ROOT/.rnex/plugins/karpathy-llm/rules"/ 2>/dev/null || true
-fi
-if [ -n "$_src_k_skills" ] && [ "$_src_k_skills" != "$RNEX_ROOT/.rnex/plugins/karpathy-llm/skills" ]; then
-  cp -R "$_src_k_skills"/. "$RNEX_ROOT/.rnex/plugins/karpathy-llm/skills"/ 2>/dev/null || true
-fi
-
-# 2. Register plugin User Skills via contract helper (with plugin name prefix)
+# 1. Register plugin User Skills via contract helper (with plugin name prefix)
 if ! command -v rnex_register_user_skill >/dev/null 2>&1 && ! command -v rnex_generate_user_skill >/dev/null 2>&1; then
   if [ -f "$RNEX_ROOT/.rnex/bin/rnex-env.sh" ]; then
     . "$RNEX_ROOT/.rnex/bin/rnex-env.sh"
@@ -157,28 +119,6 @@ if [ -n "$_reg_fn" ]; then
     "$_reg_fn" "$skill_name" ".rnex/plugins/karpathy-llm/skills/${skill_name}.md" "karpathy-llm"
   done
 fi
-
-# 3. Append instructions to .rnex/ai-instructions.md
-_instr_src=""
-for _cand in "$RNEX_PLUGIN_DIR/instructions.md" "$RNEX_ROOT/toolkit/plugins/karpathy-llm/instructions.md"; do
-  if [ -f "$_cand" ]; then
-    _instr_src="$_cand"
-    break
-  fi
-done
-
-if [ -n "$_instr_src" ] && [ -f "$RNEX_ROOT/.rnex/ai-instructions.md" ]; then
-  if ! grep -q "Karpathy LLM Wiki Knowledge Architecture" "$RNEX_ROOT/.rnex/ai-instructions.md" 2>/dev/null; then
-    printf '\n\n' >> "$RNEX_ROOT/.rnex/ai-instructions.md"
-    cat "$_instr_src" >> "$RNEX_ROOT/.rnex/ai-instructions.md"
-  fi
-fi
-
-# 4. Parse 'raw_dir' configuration from rnex.yaml/.local.rnex.yaml (Defaults to './docs')
-# We check if parsed in RNEX_CONFIG_MERGED (YAML) using a standard grep/sed lookup
-RAW_DIR_VAL=$(grep -h -E '^\s*raw_dir:' "$RNEX_ROOT/rnex.yaml" "$RNEX_ROOT/.local.rnex.yaml" 2>/dev/null | tail -n1 | awk -F: '{print $NF}' | awk '{print $1}' | tr -d '"'\''')
-[ -z "$RAW_DIR_VAL" ] && RAW_DIR_VAL="$(get_cfg "raw_dir" "./docs")"
-RAW_DIR="${RAW_DIR_VAL:-./docs}"
 
 
 # Ingest member repository README into atomic wiki page, index, and hot cache
