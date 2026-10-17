@@ -10,30 +10,29 @@ cmd_init() {
   _cli_code_workspace=""
   _cli_hooks=""
   _cli_no_hooks=0
-  _cli_copilot=""
-  _cli_claude=""
-  _cli_gemini=""
-  _cli_cursor=""
-  _cli_windsurf=""
-  _cli_karpathy=""
+  _cli_plugins=""
 
   while [ $# -gt 0 ]; do
     case "$1" in
       -y|--yes) _non_interactive=1 ;;
       --hooks) _cli_hooks="true" ;;
       --no-hooks) _cli_no_hooks=1; _cli_hooks="false" ;;
-      --copilot) _cli_copilot="true" ;;
-      --no-copilot) _cli_copilot="false" ;;
-      --claude) _cli_claude="true" ;;
-      --no-claude) _cli_claude="false" ;;
-      --gemini) _cli_gemini="true" ;;
-      --no-gemini) _cli_gemini="false" ;;
-      --cursor) _cli_cursor="true" ;;
-      --no-cursor) _cli_cursor="false" ;;
-      --windsurf) _cli_windsurf="true" ;;
-      --no-windsurf) _cli_windsurf="false" ;;
-      --karpathy|--karpathy-llm) _cli_karpathy="true" ;;
-      --no-karpathy|--no-karpathy-llm) _cli_karpathy="false" ;;
+      --copilot) _cli_plugins="${_cli_plugins:+$_cli_plugins }copilot" ;;
+      --no-copilot) _cli_plugins="$(printf '%s' " $_cli_plugins " | sed -e 's/ copilot / /g' -e 's/^ *//;s/ *$//')" ;;
+      --claude) _cli_plugins="${_cli_plugins:+$_cli_plugins }claude" ;;
+      --no-claude) _cli_plugins="$(printf '%s' " $_cli_plugins " | sed -e 's/ claude / /g' -e 's/^ *//;s/ *$//')" ;;
+      --gemini) _cli_plugins="${_cli_plugins:+$_cli_plugins }gemini" ;;
+      --no-gemini) _cli_plugins="$(printf '%s' " $_cli_plugins " | sed -e 's/ gemini / /g' -e 's/^ *//;s/ *$//')" ;;
+      --cursor) _cli_plugins="${_cli_plugins:+$_cli_plugins }cursor" ;;
+      --no-cursor) _cli_plugins="$(printf '%s' " $_cli_plugins " | sed -e 's/ cursor / /g' -e 's/^ *//;s/ *$//')" ;;
+      --windsurf) _cli_plugins="${_cli_plugins:+$_cli_plugins }windsurf" ;;
+      --no-windsurf) _cli_plugins="$(printf '%s' " $_cli_plugins " | sed -e 's/ windsurf / /g' -e 's/^ *//;s/ *$//')" ;;
+      --karpathy|--karpathy-llm) _cli_plugins="${_cli_plugins:+$_cli_plugins }karpathy-llm" ;;
+      --no-karpathy|--no-karpathy-llm) _cli_plugins="$(printf '%s' " $_cli_plugins " | sed -e 's/ karpathy-llm / /g' -e 's/^ *//;s/ *$//')" ;;
+      --plugin|--enable-plugin)
+        shift
+        [ -n "$1" ] && _cli_plugins="${_cli_plugins:+$_cli_plugins }$1"
+        ;;
       --ai|--instructions|--ai-instructions)
         shift
         # Legacy flag ignored in favor of plugins
@@ -85,7 +84,7 @@ cmd_init() {
     elif [ "$_cli_hooks" = "true" ] || [ "$_non_interactive" -eq 1 ]; then
       _init_git_hooks="true"
     elif [ -t 0 ]; then
-      printf '%bConfigure automated Git hooks (post-merge auto-sync & wiki triggers)? [Y/n]: %b' "$_BOLD" "$_NC"
+      printf '%bConfigure automated Git hooks (post-merge auto-sync & plugin triggers)? [Y/n]: %b' "$_BOLD" "$_NC"
       read -r _h_ans
       case "$_h_ans" in
         n*|N*) _init_git_hooks="false" ;;
@@ -104,24 +103,26 @@ cmd_init() {
     log_dim "  rnex sync"
   else
     _init_plugins=""
-    if [ "$_cli_copilot" = "true" ]; then
-      _init_plugins="${_init_plugins}  copilot:\n    instructions: true\n    skills: true\n"
-    fi
-    if [ "$_cli_claude" = "true" ]; then
-      _init_plugins="${_init_plugins}  claude:\n    instructions: true\n    skills: true\n"
-    fi
-    if [ "$_cli_gemini" = "true" ]; then
-      _init_plugins="${_init_plugins}  gemini:\n    instructions: true\n    skills: true\n"
-    fi
-    if [ "$_cli_cursor" = "true" ]; then
-      _init_plugins="${_init_plugins}  cursor:\n    instructions: true\n    skills: true\n"
-    fi
-    if [ "$_cli_windsurf" = "true" ]; then
-      _init_plugins="${_init_plugins}  windsurf:\n    instructions: true\n    skills: true\n"
-    fi
-    if [ "$_cli_karpathy" = "true" ]; then
-      _init_plugins="${_init_plugins}  karpathy-llm:\n    raw_dir: \"./docs\"\n    wiki_dir: \".rnex/wiki\"\n    lint_trigger: \"manual\"\n    ingest_member_readmes: true\n"
-    fi
+    for _p in $_cli_plugins; do
+      _pdir="$(find_plugin_dir "$_p" 2>/dev/null || true)"
+      _cfg_lines=""
+      if [ -n "$_pdir" ] && [ -f "$_pdir/plugin.yaml" ]; then
+        _cfg_lines="$(awk '
+          /^config_defaults:[ ]*$/ || /^config_defaults:[ ]*#/ { in_c=1; next }
+          in_c && /^[^ #]/ { exit }
+          in_c && /^[ ]*[a-zA-Z0-9_.-]+:[ ]*/ {
+            line = $0
+            sub(/^[ ]*/, "    ", line)
+            print line
+          }
+        ' "$_pdir/plugin.yaml")"
+      fi
+      if [ -n "$_cfg_lines" ]; then
+        _init_plugins="${_init_plugins}  ${_p}:\n${_cfg_lines}\n"
+      else
+        _init_plugins="${_init_plugins}  ${_p}: {}\n"
+      fi
+    done
 
     cat > "$_target_yaml" <<YAML_EOF
 # Repo Nexus workspace configuration

@@ -32,46 +32,8 @@ EOF
 }
 
 _sync_ai_session_start_hooks() {
-  _dir="${1:-$NEXUS_DIR}"
-  if claude_plugin_enabled 2>/dev/null || [ -d "$_dir/.claude" ]; then
-    mkdir -p "$_dir/.claude"
-    _settings="$_dir/.claude/settings.json"
-    if [ ! -f "$_settings" ]; then
-      cat > "$_settings" <<'EOF'
-{
-  "hooks": {
-    "SessionStart": [
-      {
-        "command": ".rnex/bin/auto-sync.sh"
-      }
-    ]
-  }
-}
-EOF
-    elif ! grep -q "auto-sync.sh" "$_settings" 2>/dev/null; then
-      if grep -q '"SessionStart"' "$_settings" 2>/dev/null; then
-        _tmp="$(mktemp)"
-        awk '
-          /"SessionStart"[ ]*:[ ]*\[/ {
-            print
-            print "      { \"command\": \".rnex/bin/auto-sync.sh\" },"
-            next
-          }
-          { print }
-        ' "$_settings" > "$_tmp" && mv "$_tmp" "$_settings"
-      elif grep -q '"hooks"' "$_settings" 2>/dev/null; then
-        _tmp="$(mktemp)"
-        awk '
-          /"hooks"[ ]*:[ ]*\{/ {
-            print
-            print "    \"SessionStart\": [ { \"command\": \".rnex/bin/auto-sync.sh\" } ],"
-            next
-          }
-          { print }
-        ' "$_settings" > "$_tmp" && mv "$_tmp" "$_settings"
-      fi
-    fi
-  fi
+  # Claude and other providers manage their own session start hooks in hooks/after_sync.sh
+  :
 }
 
 cmd_sync() {

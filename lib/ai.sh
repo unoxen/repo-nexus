@@ -130,17 +130,36 @@ BASE_AI_EOF
     [ -n "$_p" ] || continue
     yaml_plugin_enabled "$_p" 2>/dev/null || continue
     _pdir="$(find_plugin_dir "$_p" 2>/dev/null || true)"
-    _p_instr=""
-    if [ -f "$_dir/.rnex/plugins/$_p/instructions.md" ]; then
-      _p_instr="$_dir/.rnex/plugins/$_p/instructions.md"
-    elif [ -n "$_pdir" ] && [ -f "$_pdir/instructions.md" ]; then
-      _p_instr="$_pdir/instructions.md"
+    _p_instr_files=""
+    if [ -n "$_pdir" ] && [ -f "$_pdir/plugin.yaml" ]; then
+      for _item in $(plugin_list_instructions "$_pdir" 2>/dev/null || true); do
+        [ -n "$_item" ] || continue
+        _src="${_item%%:*}"
+        _src="$(printf '%s' "$_src" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+        _found=""
+        if [ -f "$_dir/.rnex/plugins/$_p/$_src" ]; then
+          _found="$_dir/.rnex/plugins/$_p/$_src"
+        elif [ -f "$_pdir/$_src" ]; then
+          _found="$_pdir/$_src"
+        fi
+        if [ -n "$_found" ]; then
+          _p_instr_files="${_p_instr_files:+$_p_instr_files }$_found"
+        fi
+      done
     fi
 
-    if [ -n "$_p_instr" ]; then
-      printf '\n\n' >> "$_out_tmp"
-      cat "$_p_instr" >> "$_out_tmp"
+    if [ -z "$_p_instr_files" ]; then
+      if [ -f "$_dir/.rnex/plugins/$_p/instructions.md" ]; then
+        _p_instr_files="$_dir/.rnex/plugins/$_p/instructions.md"
+      elif [ -n "$_pdir" ] && [ -f "$_pdir/instructions.md" ]; then
+        _p_instr_files="$_pdir/instructions.md"
+      fi
     fi
+
+    for _f in $_p_instr_files; do
+      printf '\n\n' >> "$_out_tmp"
+      cat "$_f" >> "$_out_tmp"
+    done
   done
 
   mv "$_out_tmp" "$_ai_file"
@@ -371,21 +390,32 @@ write_rnex_env_script() {
 
 get_active_provider_skill_dirs() {
   _dirs=""
-  if provider_option_enabled "copilot" "skills" 2>/dev/null; then
-    _dirs="${_dirs:+$_dirs }.github/skills"
-  fi
-  if provider_option_enabled "cursor" "skills" 2>/dev/null; then
-    _dirs="${_dirs:+$_dirs }.cursor/rules"
-  fi
-  if provider_option_enabled "claude" "skills" 2>/dev/null; then
-    _dirs="${_dirs:+$_dirs }.claude/skills"
-  fi
-  if provider_option_enabled "windsurf" "skills" 2>/dev/null; then
-    _dirs="${_dirs:+$_dirs }.windsurf/rules"
-  fi
-  if provider_option_enabled "gemini" "skills" 2>/dev/null; then
-    _dirs="${_dirs:+$_dirs }.gemini/skills"
-  fi
+  for _p in $(yaml_list_plugins 2>/dev/null || true); do
+    [ -n "$_p" ] || continue
+    yaml_plugin_enabled "$_p" 2>/dev/null || continue
+    if provider_option_enabled "$_p" "skills" 2>/dev/null; then
+      _pdir="$(find_plugin_dir "$_p" 2>/dev/null || true)"
+      _sdir=""
+      if [ -n "$_pdir" ]; then
+        _sdir="$(plugin_get_field "$_pdir" "skill_dir" 2>/dev/null || true)"
+      fi
+      if [ -z "$_sdir" ]; then
+        case "$_p" in
+          copilot)  _sdir=".github/skills" ;;
+          cursor)   _sdir=".cursor/rules" ;;
+          claude)   _sdir=".claude/skills" ;;
+          windsurf) _sdir=".windsurf/rules" ;;
+          gemini)   _sdir=".gemini/skills" ;;
+        esac
+      fi
+      if [ -n "$_sdir" ]; then
+        case " $_dirs " in
+          *" $_sdir "*) ;;
+          *) _dirs="${_dirs:+$_dirs }$_sdir" ;;
+        esac
+      fi
+    fi
+  done
   printf '%s' "$_dirs"
 }
 
@@ -450,7 +480,6 @@ clean_provider_agents() {
   _ag_dir="$1"
   _ext="${2:-.md}"
   [ -d "$_ag_dir" ] || return 0
-  rm -f "$_ag_dir/wiki-curator${_ext}" 2>/dev/null || true
 
   for _pdir in "$SCRIPT_LOCATION/toolkit/plugins"/* "$NEXUS_DIR/toolkit/plugins"/* "$NEXUS_DIR/.rnex/plugins"/*; do
     [ -d "$_pdir" ] || continue
@@ -493,14 +522,20 @@ sync_rnex_base_assets() {
     cp -f "$_src_toolkit"/skills/*.md "$NEXUS_DIR/.rnex/skills/" 2>/dev/null || true
   fi
 
-  # Purge any plugin-specific skills from .rnex/skills/
-  rm -f "$NEXUS_DIR/.rnex/skills/wiki-ingest.md" "$NEXUS_DIR/.rnex/skills/wiki-lint.md" \
-        "$NEXUS_DIR/.rnex/skills/rnex-wiki-ingest.md" "$NEXUS_DIR/.rnex/skills/rnex-wiki-lint.md" 2>/dev/null || true
-
-  # Purge stale unprefixed wiki user skills across provider directories
-  for _p_dir in $(get_active_provider_skill_dirs 2>/dev/null || true); do
-    rm -f "$NEXUS_DIR/$_p_dir/rnex-wiki-ingest.md" "$NEXUS_DIR/$_p_dir/rnex-wiki-lint.md" 2>/dev/null || true
-    rm -rf "$NEXUS_DIR/$_p_dir/rnex-wiki-ingest" "$NEXUS_DIR/$_p_dir/rnex-wiki-lint" 2>/dev/null || true
+  # Purge any plugin-declared skills that may have been placed in core .rnex/skills/
+  for _pdir in $(list_all_available_plugin_dirs 2>/dev/null || true); do
+    if [ -d "$_pdir/skills" ]; then
+      for _psk in "$_pdir/skills"/*.md; do
+        [ -f "$_psk" ] || continue
+        _sbase="$(basename "$_psk")"
+        _sname="$(basename "$_psk" .md)"
+        rm -f "$NEXUS_DIR/.rnex/skills/$_sbase" "$NEXUS_DIR/.rnex/skills/rnex-$_sbase" 2>/dev/null || true
+        for _p_dir in $(get_active_provider_skill_dirs 2>/dev/null || true); do
+          rm -f "$NEXUS_DIR/$_p_dir/rnex-$_sbase" 2>/dev/null || true
+          rm -rf "$NEXUS_DIR/$_p_dir/rnex-$_sname" 2>/dev/null || true
+        done
+      done
+    fi
   done
 
   # Register core User Skills across active provider directories
@@ -512,148 +547,51 @@ sync_rnex_base_assets() {
 }
 
 sync_claude() {
-  if claude_plugin_enabled; then
-    if claude_instructions_enabled; then
-      merge_rnex_instructions "$NEXUS_DIR/CLAUDE.md"
-    else
-      clean_rnex_instructions "$NEXUS_DIR/CLAUDE.md"
-    fi
-    if ! claude_skills_enabled; then
-      clean_provider_user_skills "$NEXUS_DIR/.claude/skills"
-    fi
+  if yaml_plugin_enabled "claude" 2>/dev/null; then
+    run_plugin_hook "claude" "after_sync"
   else
-    clean_rnex_instructions "$NEXUS_DIR/CLAUDE.md"
-    clean_provider_user_skills "$NEXUS_DIR/.claude/skills"
+    run_plugin_hook "claude" "before_plugin_disable"
   fi
-  rm -rf "$NEXUS_DIR/.claude/commands" "$NEXUS_DIR/.claude/prompts" 2>/dev/null || true
-  rmdir "$NEXUS_DIR/.claude" 2>/dev/null || true
 }
 
 sync_gemini() {
-  if gemini_plugin_enabled; then
-    _gi="$NEXUS_DIR/.geminiignore"
-    if [ ! -f "$_gi" ]; then
-      cat > "$_gi" <<GI_EOF
-# Gemini CLI file discovery un-ignore for member repos
-!repos/*
-GI_EOF
-      log_ok "Created .geminiignore (enabling Gemini CLI file discovery for member repos)"
-    elif ! grep -q '!repos/\*' "$_gi" 2>/dev/null; then
-      printf '\n# Gemini CLI file discovery un-ignore for member repos\n!repos/*\n' >> "$_gi"
-      log_dim "Added !repos/* to .geminiignore"
-    fi
-
-    if gemini_instructions_enabled; then
-      merge_rnex_instructions "$NEXUS_DIR/GEMINI.md"
-    else
-      clean_rnex_instructions "$NEXUS_DIR/GEMINI.md"
-    fi
-    if ! gemini_skills_enabled; then
-      clean_provider_user_skills "$NEXUS_DIR/.gemini/skills"
-    fi
+  if yaml_plugin_enabled "gemini" 2>/dev/null; then
+    run_plugin_hook "gemini" "after_sync"
   else
-    clean_provider_ignore "$NEXUS_DIR/.geminiignore"
-    clean_rnex_instructions "$NEXUS_DIR/GEMINI.md"
-    clean_provider_user_skills "$NEXUS_DIR/.gemini/skills"
+    run_plugin_hook "gemini" "before_plugin_disable"
   fi
-  rm -rf "$NEXUS_DIR/.gemini/prompts" 2>/dev/null || true
-  rmdir "$NEXUS_DIR/.gemini" 2>/dev/null || true
 }
 
 sync_cursor() {
-  if cursor_plugin_enabled; then
-    _ci="$NEXUS_DIR/.cursorignore"
-    if [ ! -f "$_ci" ]; then
-      cat > "$_ci" <<CI_EOF
-# Cursor codebase indexing un-ignore for member repos
-!repos/*
-CI_EOF
-      log_ok "Created .cursorignore (enabling Cursor indexing for member repos)"
-    elif ! grep -q '!repos/\*' "$_ci" 2>/dev/null; then
-      printf '\n# Cursor codebase indexing un-ignore for member repos\n!repos/*\n' >> "$_ci"
-      log_dim "Added !repos/* to .cursorignore"
-    fi
-
-    if cursor_instructions_enabled; then
-      merge_rnex_instructions "$NEXUS_DIR/.cursorrules"
-      mkdir -p "$NEXUS_DIR/.cursor/rules"
-      _c_body="$(mktemp)"
-      get_rnex_instructions > "$_c_body"
-      {
-        printf -- '---\ndescription: Repo Nexus Virtual Meta-Repo routing protocol\nglobs: *\nalwaysApply: true\n---\n\n%s\n' "$AI_MARKER_START"
-        cat "$_c_body"
-        printf '\n%s\n' "$AI_MARKER_END"
-      } > "$NEXUS_DIR/.cursor/rules/rnex-context.mdc"
-      rm -f "$_c_body"
-      rm -f "$NEXUS_DIR/.cursor/rules/repo-nexus.mdc" 2>/dev/null || true
-    else
-      clean_rnex_instructions "$NEXUS_DIR/.cursorrules"
-      rm -f "$NEXUS_DIR/.cursor/rules/rnex-context.mdc" "$NEXUS_DIR/.cursor/rules/repo-nexus.mdc" 2>/dev/null || true
-    fi
-    if ! cursor_skills_enabled; then
-      clean_provider_user_skills "$NEXUS_DIR/.cursor/rules"
-    fi
+  if yaml_plugin_enabled "cursor" 2>/dev/null; then
+    run_plugin_hook "cursor" "after_sync"
   else
-    clean_provider_ignore "$NEXUS_DIR/.cursorignore"
-    clean_rnex_instructions "$NEXUS_DIR/.cursorrules"
-    rm -f "$NEXUS_DIR/.cursor/rules/rnex-context.mdc" "$NEXUS_DIR/.cursor/rules/repo-nexus.mdc" 2>/dev/null || true
-    clean_provider_user_skills "$NEXUS_DIR/.cursor/rules"
+    run_plugin_hook "cursor" "before_plugin_disable"
   fi
-  rm -rf "$NEXUS_DIR/.cursor/prompts" 2>/dev/null || true
-  rmdir "$NEXUS_DIR/.cursor/rules" 2>/dev/null || true
-  rmdir "$NEXUS_DIR/.cursor" 2>/dev/null || true
 }
 
 sync_windsurf() {
-  if windsurf_plugin_enabled; then
-    if windsurf_instructions_enabled; then
-      merge_rnex_instructions "$NEXUS_DIR/.windsurfrules"
-    else
-      clean_rnex_instructions "$NEXUS_DIR/.windsurfrules"
-    fi
-    if ! windsurf_skills_enabled; then
-      clean_provider_user_skills "$NEXUS_DIR/.windsurf/rules"
-    fi
+  if yaml_plugin_enabled "windsurf" 2>/dev/null; then
+    run_plugin_hook "windsurf" "after_sync"
   else
-    clean_rnex_instructions "$NEXUS_DIR/.windsurfrules"
-    clean_provider_user_skills "$NEXUS_DIR/.windsurf/rules"
+    run_plugin_hook "windsurf" "before_plugin_disable"
   fi
-  rm -rf "$NEXUS_DIR/.windsurf/prompts" 2>/dev/null || true
-  rmdir "$NEXUS_DIR/.windsurf/rules" 2>/dev/null || true
-  rmdir "$NEXUS_DIR/.windsurf" 2>/dev/null || true
 }
 
 sync_copilot() {
-  if copilot_plugin_enabled; then
-    if copilot_instructions_enabled; then
-      mkdir -p "$NEXUS_DIR/.github"
-      merge_rnex_instructions "$NEXUS_DIR/.github/copilot-instructions.md"
-    else
-      clean_rnex_instructions "$NEXUS_DIR/.github/copilot-instructions.md"
-    fi
-    if ! copilot_skills_enabled; then
-      clean_provider_user_skills "$NEXUS_DIR/.github/skills"
-    fi
+  if yaml_plugin_enabled "copilot" 2>/dev/null; then
+    run_plugin_hook "copilot" "after_sync"
   else
-    clean_rnex_instructions "$NEXUS_DIR/.github/copilot-instructions.md"
-    clean_provider_user_skills "$NEXUS_DIR/.github/skills"
+    run_plugin_hook "copilot" "before_plugin_disable"
   fi
-  clean_provider_agents "$NEXUS_DIR/.github/agents" ".agent.md"
-  rm -rf "$NEXUS_DIR/.github/prompts" 2>/dev/null || true
-  rmdir "$NEXUS_DIR/.github" 2>/dev/null || true
 }
 
 sync_ai_providers() {
-  sync_copilot
-  sync_claude
-  sync_gemini
-  sync_cursor
-  sync_windsurf
+  :
 }
 
 sync_skills() {
   write_rnex_env_script "$NEXUS_DIR"
   sync_rnex_base_assets
-  sync_ai_providers
 }
 

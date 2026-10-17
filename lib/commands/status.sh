@@ -90,9 +90,15 @@ cmd_status() {
     true|yes|1)
       if [ "$_gh_active" -eq 1 ]; then
         _active_trigger=""
-        if yaml_plugin_enabled "karpathy-llm"; then
-          _active_trigger="$(yaml_plugin_get "karpathy-llm" "lint_trigger")"
-        fi
+        for _p in $(yaml_list_plugins 2>/dev/null || true); do
+          yaml_plugin_enabled "$_p" 2>/dev/null || continue
+          _trig="$(yaml_plugin_get "$_p" "lint_trigger" 2>/dev/null || true)"
+          [ -z "$_trig" ] && _trig="$(yaml_plugin_get "$_p" "trigger" 2>/dev/null || true)"
+          if [ -n "$_trig" ] && [ "$_trig" != "manual" ]; then
+            _active_trigger="$_trig"
+            break
+          fi
+        done
         if [ -n "$_active_trigger" ]; then
           printf '  %b✓%b Git Hooks:     active (git_hooks: true, .rnex/hooks — %s)\n' "$_G" "$_NC" "$_active_trigger"
         else
@@ -105,9 +111,15 @@ cmd_status() {
     *)
       if [ "$_gh_active" -eq 1 ]; then
         _active_trigger=""
-        if yaml_plugin_enabled "karpathy-llm"; then
-          _active_trigger="$(yaml_plugin_get "karpathy-llm" "lint_trigger")"
-        fi
+        for _p in $(yaml_list_plugins 2>/dev/null || true); do
+          yaml_plugin_enabled "$_p" 2>/dev/null || continue
+          _trig="$(yaml_plugin_get "$_p" "lint_trigger" 2>/dev/null || true)"
+          [ -z "$_trig" ] && _trig="$(yaml_plugin_get "$_p" "trigger" 2>/dev/null || true)"
+          if [ -n "$_trig" ] && [ "$_trig" != "manual" ]; then
+            _active_trigger="$_trig"
+            break
+          fi
+        done
         if [ -n "$_active_trigger" ]; then
           printf '  %b✓%b Git Hooks:     active (.rnex/hooks — post-merge auto-sync, %s)\n' "$_G" "$_NC" "$_active_trigger"
         else
@@ -198,13 +210,11 @@ cmd_status() {
         else
           printf '  %b●%b %-18s %b(v%s)%b %s\n' "$_G" "$_NC" "$_pname" "$_DIM" "${_ver:-0.1.0}" "$_NC" "${_desc:+- $_desc}"
           printf '    %bScoped directory: .rnex/plugins/%s%b\n' "$_DIM" "$_pname" "$_NC"
-          case "$_pname" in
-            copilot|claude|gemini|cursor|windsurf)
-              printf '    %b↳ Options: instructions=%s, skills=%s%b\n' "$_DIM" \
-                "$(provider_option_enabled "$_pname" "instructions" && echo "true" || echo "false")" \
-                "$(provider_option_enabled "$_pname" "skills" && echo "true" || echo "false")" "$_NC"
-              ;;
-          esac
+          if [ -n "$_pdir" ] && { grep -q "instructions:" "$_pdir/plugin.yaml" 2>/dev/null || [ -n "$(yaml_plugin_get "$_pname" "instructions" 2>/dev/null)" ]; }; then
+            printf '    %b↳ Options: instructions=%s, skills=%s%b\n' "$_DIM" \
+              "$(provider_option_enabled "$_pname" "instructions" && echo "true" || echo "false")" \
+              "$(provider_option_enabled "$_pname" "skills" && echo "true" || echo "false")" "$_NC"
+          fi
         fi
       else
         printf '  %b✗%b %-18s %bMISSING%b\n' "$_R" "$_NC" "$_pname" "$_R" "$_NC"

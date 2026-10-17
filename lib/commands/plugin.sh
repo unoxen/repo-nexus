@@ -66,31 +66,60 @@ cmd_plugin_info() {
   [ -n "$_home" ] && printf '%bHomepage:%b     %s\n' "$_BOLD" "$_NC" "$_home"
   printf '%bLocation:%b     %s\n' "$_BOLD" "$_NC" "$_pdir"
 
-  case "$_name" in
-    copilot|claude|gemini|cursor|windsurf)
-      _skill_target=""
-      case "$_name" in
-        copilot)  _skill_target=".github/skills/" ;;
-        claude)   _skill_target=".claude/skills/" ;;
-        gemini)   _skill_target=".gemini/skills/" ;;
-        cursor)   _skill_target=".cursor/rules/" ;;
-        windsurf) _skill_target=".windsurf/rules/" ;;
-      esac
-      printf '\n%bConfigurable Options (in rnex.yaml or .local.rnex.yaml):%b\n' "$_BOLD" "$_NC"
-      printf '  - instructions: true|false  (maintain provider instructions; current: %s)\n' "$(provider_option_enabled "$_name" "instructions" && echo "true" || echo "false")"
-      printf '  - skills: true|false        (generate user skills in %s; current: %s)\n' "$_skill_target" "$(provider_option_enabled "$_name" "skills" && echo "true" || echo "false")"
-      ;;
+  _skill_target="$(plugin_get_field "$_pdir" "skill_dir" 2>/dev/null || true)"
+  [ -z "$_skill_target" ] && case "$_name" in
+    copilot)  _skill_target=".github/skills/" ;;
+    claude)   _skill_target=".claude/skills/" ;;
+    gemini)   _skill_target=".gemini/skills/" ;;
+    cursor)   _skill_target=".cursor/rules/" ;;
+    windsurf) _skill_target=".windsurf/rules/" ;;
   esac
-  if [ "$_name" = "karpathy-llm" ]; then
-    _cur_lt="$(yaml_plugin_get "karpathy-llm" "lint_trigger" 2>/dev/null || true)"
-    _cur_nc="$(yaml_plugin_get "karpathy-llm" "notify_on_changes" 2>/dev/null || true)"
-    _cur_imr="$(yaml_plugin_get "karpathy-llm" "ingest_member_readmes" 2>/dev/null || true)"
-    printf '\n%bConfigurable Options (in rnex.yaml or .local.rnex.yaml):%b\n' "$_BOLD" "$_NC"
-    printf '  - wiki_dir: <dir>  (directory for curated markdown pages; current: %s)\n' "$(karpathy_wiki_dir)"
-    printf '  - raw_dir: <dir>   (directory for unmodified intake documents; current: %s)\n' "$(karpathy_raw_dir)"
-    printf '  - lint_trigger: git-post-merge|git-post-commit|git-pre-commit|git-pre-push|manual  (current: %s)\n' "${_cur_lt:-manual}"
-    printf '  - notify_on_changes: true|false  (show notification when raw/wiki changes are committed; current: %s)\n' "${_cur_nc:-true}"
-    printf '  - ingest_member_readmes: true|false  (automatically track member repository READMEs in wiki; current: %s)\n' "${_cur_imr:-true}"
+  case "$_skill_target" in
+    */|"") ;;
+    *) _skill_target="${_skill_target}/" ;;
+  esac
+
+  if [ -f "$_pdir/plugin.yaml" ]; then
+    _cfg_lines="$(awk '
+      /^config_descriptions:[ ]*$/ || /^config_descriptions:[ ]*#/ { in_d=1; next }
+      in_d && /^[^ #]/ { exit }
+      in_d && /^[ ]*[a-zA-Z0-9_.-]+:[ ]*/ {
+        print $0
+      }
+    ' "$_pdir/plugin.yaml")"
+
+    if [ -n "$_cfg_lines" ]; then
+      printf '\n%bConfigurable Options (in rnex.yaml or .local.rnex.yaml):%b\n' "$_BOLD" "$_NC"
+      echo "$_cfg_lines" | while read -r _cline; do
+        [ -n "$_cline" ] || continue
+        _opt="${_cline%%:*}"
+        _opt="$(printf '%s' "$_opt" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+        _desc="${_cline#*:}"
+        _desc="$(printf '%s' "$_desc" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//')"
+        [ -n "$_skill_target" ] && _desc="$(printf '%s' "$_desc" | sed -e "s|{skill_dir}|$_skill_target|g")"
+
+        _cur="$(yaml_plugin_get "$_name" "$_opt" 2>/dev/null || true)"
+        if [ -z "$_cur" ]; then
+          _cur="$(awk -v k="$_opt" '
+            /^config_defaults:[ ]*$/ || /^config_defaults:[ ]*#/ { in_c=1; next }
+            in_c && /^[^ #]/ { exit }
+            in_c && $0 ~ ("^[ ]*" k ":") {
+              sub("^[ ]*" k ":[ ]*", "")
+              sub(/[ ]*#.*/, "")
+              gsub(/^["\047]|["\047]$/, "")
+              print
+              exit
+            }
+          ' "$_pdir/plugin.yaml")"
+        fi
+        case "$_opt" in
+          *_dir|dir)
+            _cur="$(printf '%s' "$_cur" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's#^\./##' -e 's#^/##' -e 's#/$##')"
+            ;;
+        esac
+        printf '  - %s: %s  (current: %s)\n' "$_opt" "$_desc" "${_cur:-default}"
+      done
+    fi
   fi
 
   printf '\n%bScoped Directory:%b .rnex/plugins/%s\n' "$_BOLD" "$_NC" "$_name"
@@ -104,15 +133,7 @@ cmd_plugin_info() {
       _d="${_item#*:}"
       _s="$(printf '%s' "$_s" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
       _d="$(printf '%s' "$_d" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
-      if [ "$_name" = "karpathy-llm" ]; then
-        _wiki_d="$(karpathy_wiki_dir)"
-        _raw_d="$(karpathy_raw_dir)"
-        _d="$(printf '%s' "$_d" | sed \
-          -e "s|{wiki_dir}|$_wiki_d|g" \
-          -e "s|{raw_dir}|$_raw_d|g" \
-          -e "s|^wiki/|${_wiki_d}/|" \
-          -e "s|^raw/|${_raw_d}/|")"
-      fi
+      _d="$(plugin_resolve_placeholders "$_name" "$_pdir" "$_d")"
       printf '  - %s → %s\n' "$_s" "$_d"
     done
   fi
@@ -252,15 +273,15 @@ cmd_rnex_dir() {
 
 cmd_plugin_update() {
   require_workspace
-  _target_plugin="$1"
-  if [ -n "$_target_plugin" ]; then
-    yaml_has_plugin "$_target_plugin" || die "Plugin '$_target_plugin' is not enabled in workspace"
-    _pdir="$(find_plugin_dir "$_target_plugin" 2>/dev/null || true)"
-    [ -n "$_pdir" ] || die "Plugin '$_target_plugin' not found."
-    log_info "Updating plugin '$_target_plugin'..."
+  _update_pname="$1"
+  if [ -n "$_update_pname" ]; then
+    yaml_has_plugin "$_update_pname" || die "Plugin '$_update_pname' is not enabled in workspace"
+    _pdir="$(find_plugin_dir "$_update_pname" 2>/dev/null || true)"
+    [ -n "$_pdir" ] || die "Plugin '$_update_pname' not found."
+    log_info "Updating plugin '$_update_pname'..."
     cmd_sync
-    run_plugin_hook "$_target_plugin" "after_sync"
-    log_ok "Plugin '$_target_plugin' updated"
+    run_plugin_hook "$_update_pname" "after_sync"
+    log_ok "Plugin '$_update_pname' updated"
   else
     log_info "Updating all enabled plugins..."
     cmd_sync

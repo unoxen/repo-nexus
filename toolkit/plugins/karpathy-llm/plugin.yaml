@@ -11,6 +11,12 @@ config_defaults:
   notify_on_changes: true
   ingest_member_readmes: true
 
+config_descriptions:
+  wiki_dir: "<dir>  (directory for curated markdown pages)"
+  raw_dir: "<dir>   (directory for unmodified intake documents)"
+  lint_trigger: "git-post-merge|git-post-commit|git-pre-commit|git-pre-push|manual"
+  notify_on_changes: "true|false  (show notification when raw/wiki changes are committed)"
+  ingest_member_readmes: "true|false  (automatically track member repository READMEs in wiki)"
 
 rules:
   - rules/behavioral.md: .rnex/plugins/karpathy-llm/rules/behavioral.md

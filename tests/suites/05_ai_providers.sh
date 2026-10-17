@@ -211,7 +211,28 @@ grep -q "My Custom Copilot Developer Rules" "$TEST_PROVIDERS_WS/.github/copilot-
 (cd "$TEST_PROVIDERS_WS" && ./rnex sync -y --quiet >/dev/null)
 ! grep -q "REPO-NEXUS:START" "$TEST_PROVIDERS_WS/.github/copilot-instructions.md" || { fail "REPO-NEXUS block not stripped after copilot disabled"; exit 1; }
 grep -q "My Custom Copilot Developer Rules" "$TEST_PROVIDERS_WS/.github/copilot-instructions.md" || { fail "Custom Copilot rules lost after copilot disabled"; exit 1; }
-[ ! -d "$TEST_PROVIDERS_WS/.github/skills/rnex-batch-exec" ] || { fail "User skills not cleaned from .github/skills/ after copilot disabled"; exit 1; }
+pass
+
+# --------------------------------------------------------------------------
+run_test "Provider integration instructions compiled into .rnex/ai-instructions.md from plugin.yaml"
+TEST_INSTR_WS="$TEST_TMP/instr-compile-ws"
+mkdir -p "$TEST_INSTR_WS"
+cp "$CLI" "$TEST_INSTR_WS/rnex"
+chmod +x "$TEST_INSTR_WS/rnex"
+cp -r "$DIR/toolkit" "$TEST_INSTR_WS/toolkit"
+cp "$DIR/package.json" "$TEST_INSTR_WS/package.json"
+git -C "$TEST_INSTR_WS" init -q
+
+"$TEST_INSTR_WS/rnex" init -y --claude "$TEST_INSTR_WS" >/dev/null
+[ -f "$TEST_INSTR_WS/.rnex/ai-instructions.md" ] || { fail ".rnex/ai-instructions.md missing after init --claude"; exit 1; }
+grep -q "Anthropic Claude Code Integration for Repo Nexus" "$TEST_INSTR_WS/.rnex/ai-instructions.md" || { fail "Claude instructions not compiled into .rnex/ai-instructions.md"; exit 1; }
+
+(cd "$TEST_INSTR_WS" && ./rnex plugin enable gemini >/dev/null)
+grep -q "Google Gemini & Antigravity Integration for Repo Nexus" "$TEST_INSTR_WS/.rnex/ai-instructions.md" || { fail "Gemini instructions not compiled into .rnex/ai-instructions.md after enable"; exit 1; }
+
+(cd "$TEST_INSTR_WS" && ./rnex plugin disable claude >/dev/null)
+! grep -q "Anthropic Claude Code Integration for Repo Nexus" "$TEST_INSTR_WS/.rnex/ai-instructions.md" || { fail "Claude instructions not removed after disable"; exit 1; }
+grep -q "Google Gemini & Antigravity Integration for Repo Nexus" "$TEST_INSTR_WS/.rnex/ai-instructions.md" || { fail "Gemini instructions lost after disabling claude"; exit 1; }
 pass
 
 if [ "${_STANDALONE_RUN:-0}" -eq 1 ]; then

@@ -7,7 +7,7 @@
 # ---- Action Command Hook Dispatcher -----------------------------------------
 
 _run_hook_internal() {
-  _target_plugin="$1"
+  _hook_target_plugin="$1"
   _hook_phase_cmd="$2"
   shift 2 2>/dev/null || true
 
@@ -45,15 +45,15 @@ _run_hook_internal() {
   WORKSPACE_LOCAL_YAML="$_hook_root/$RNEX_LOCAL_CONFIG_FILE"
   _skill_dirs="$(get_active_provider_skill_dirs 2>/dev/null || true)"
 
-  if [ -n "$_target_plugin" ]; then
-    _plugins="$_target_plugin"
+  if [ -n "$_hook_target_plugin" ]; then
+    _plugins="$_hook_target_plugin"
   else
     _plugins="$(yaml_list_plugins 2>/dev/null || true)"
   fi
 
   for _pname in $_plugins; do
     [ -n "$_pname" ] || continue
-    if [ -z "$_target_plugin" ]; then
+    if [ -z "$_hook_target_plugin" ]; then
       yaml_plugin_enabled "$_pname" 2>/dev/null || continue
     fi
 
@@ -95,10 +95,10 @@ run_hook() {
 }
 
 run_plugin_hook() {
-  _target_plugin="$1"
+  _hook_target_plugin="$1"
   _hook_phase_cmd="$2"
   shift 2 2>/dev/null || true
-  _run_hook_internal "$_target_plugin" "$_hook_phase_cmd" "$@"
+  _run_hook_internal "$_hook_target_plugin" "$_hook_phase_cmd" "$@"
 }
 
 run_plugin_git_hooks() {

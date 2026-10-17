@@ -227,57 +227,60 @@ yaml_enable_plugin() {
     printf '\nplugins:\n' >> "$_target_file"
   fi
   if ! _yaml_list_plugins_from_file "$_target_file" | grep -qx "$_name" 2>/dev/null; then
+    _pdir="$(find_plugin_dir "$_name" 2>/dev/null || true)"
+    _cfg_lines=""
+    if [ -n "$_pdir" ] && [ -f "$_pdir/plugin.yaml" ]; then
+      _cfg_lines="$(awk '
+        /^config_defaults:[ ]*$/ || /^config_defaults:[ ]*#/ { in_c=1; next }
+        in_c && /^[^ #]/ { exit }
+        in_c && /^[ ]*[a-zA-Z0-9_.-]+:[ ]*/ {
+          line = $0
+          sub(/^[ ]*/, "    ", line)
+          print line
+        }
+      ' "$_pdir/plugin.yaml")"
+    fi
+
     _tmp="$(mktemp)"
-    case "$_name" in
-      copilot|claude|gemini|cursor|windsurf)
-        awk -v name="$_name" '
-          /^plugins:[ ]*$/ || /^plugins:[ ]*#/ {
-            print
-            printf "  %s:\n    instructions: true\n    skills: true\n", name
-            added=1
-            next
+    if [ -n "$_cfg_lines" ]; then
+      _cfg_tmp="$(mktemp)"
+      printf '%s\n' "$_cfg_lines" > "$_cfg_tmp"
+      awk -v name="$_name" -v cfg_file="$_cfg_tmp" '
+        /^plugins:[ ]*$/ || /^plugins:[ ]*#/ {
+          print
+          printf "  %s:\n", name
+          while ((getline line < cfg_file) > 0) print line
+          close(cfg_file)
+          added=1
+          next
+        }
+        { print }
+        END {
+          if (!added) {
+            printf "plugins:\n  %s:\n", name
+            while ((getline line < cfg_file) > 0) print line
+            close(cfg_file)
           }
-          { print }
-          END {
-            if (!added) {
-              printf "plugins:\n  %s:\n    instructions: true\n    skills: true\n", name
-            }
+        }
+      ' "$_target_file" > "$_tmp"
+      rm -f "$_cfg_tmp"
+      mv "$_tmp" "$_target_file"
+    else
+      awk -v name="$_name" '
+        /^plugins:[ ]*$/ || /^plugins:[ ]*#/ {
+          print
+          printf "  %s: {}\n", name
+          added=1
+          next
+        }
+        { print }
+        END {
+          if (!added) {
+            printf "plugins:\n  %s: {}\n", name
           }
-        ' "$_target_file" > "$_tmp" && mv "$_tmp" "$_target_file"
-        ;;
-      karpathy-llm)
-        awk -v name="$_name" '
-          /^plugins:[ ]*$/ || /^plugins:[ ]*#/ {
-            print
-            printf "  %s:\n    raw_dir: \"./docs\"\n    wiki_dir: \".rnex/wiki\"\n    lint_trigger: \"manual\"\n    ingest_member_readmes: true\n", name
-            added=1
-            next
-          }
-          { print }
-          END {
-            if (!added) {
-              printf "plugins:\n  %s:\n    raw_dir: \"./docs\"\n    wiki_dir: \".rnex/wiki\"\n    lint_trigger: \"manual\"\n    ingest_member_readmes: true\n", name
-            }
-          }
-        ' "$_target_file" > "$_tmp" && mv "$_tmp" "$_target_file"
-        ;;
-      *)
-        awk -v name="$_name" '
-          /^plugins:[ ]*$/ || /^plugins:[ ]*#/ {
-            print
-            printf "  %s: {}\n", name
-            added=1
-            next
-          }
-          { print }
-          END {
-            if (!added) {
-              printf "plugins:\n  %s: {}\n", name
-            }
-          }
-        ' "$_target_file" > "$_tmp" && mv "$_tmp" "$_target_file"
-        ;;
-    esac
+        }
+      ' "$_target_file" > "$_tmp" && mv "$_tmp" "$_target_file"
+    fi
   else
     if [ -f "$_target_file" ]; then
       _yaml_plugin_set_in_file "$_target_file" "$_name" "enabled" "true"

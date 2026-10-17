@@ -3,5 +3,15 @@ version: 0.5.1
 description: GitHub Copilot integration (maintains .github/copilot-instructions.md and user skills in .github/skills/)
 author: unoxen
 homepage: https://github.com/unoxen/repo-nexus
+skill_dir: .github/skills
+
+config_defaults:
+  instructions: true
+  skills: true
+
+config_descriptions:
+  instructions: "true|false  (maintain provider instructions)"
+  skills: "true|false        (generate user skills in {skill_dir})"
+
 instructions:
   - instructions/rnex-copilot-integration.md: .rnex/plugins/copilot/instructions/rnex-copilot-integration.md

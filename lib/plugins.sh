@@ -75,31 +75,98 @@ plugin_list_templates() {
   ' "$_pdir/plugin.yaml"
 }
 
-karpathy_wiki_dir() {
-  _d="$(yaml_plugin_get "karpathy-llm" "wiki_dir" 2>/dev/null || true)"
-  _d="$(printf '%s' "$_d" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's#^/##' -e 's#/$##')"
-  if [ -n "$_d" ]; then
-    printf '%s' "$_d"
-  else
-    printf '.rnex/wiki'
-  fi
+plugin_list_instructions() {
+  _pdir="$1"
+  [ -f "$_pdir/plugin.yaml" ] || return 0
+  awk '
+    /^instructions:/ { t=1; next }
+    t && /^[^ #]/ { exit }
+    t && /^[ ]*-[ ]*/ {
+      sub(/^[ ]*-[ ]*/, "");
+      sub(/[ ]*#.*/, "");
+      if (length($0) > 0) print $0
+    }
+  ' "$_pdir/plugin.yaml"
 }
 
-karpathy_raw_dir() {
-  _d="$(yaml_plugin_get "karpathy-llm" "raw_dir" 2>/dev/null || true)"
-  _d="$(printf '%s' "$_d" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's#^\./##' -e 's#^/##' -e 's#/$##')"
-  if [ -n "$_d" ]; then
-    printf '%s' "$_d"
-  else
-    printf 'docs'
+plugin_resolve_placeholders() {
+  _p="$1"; _pd="$2"; _str="$3"
+  _res="$_str"
+
+  if [ -f "$_pd/plugin.yaml" ]; then
+    _keys="$(awk '
+      /^config_defaults:[ ]*$/ || /^config_defaults:[ ]*#/ { in_c=1; next }
+      in_c && /^[^ #]/ { exit }
+      in_c && /^[ ]*[a-zA-Z0-9_.-]+:[ ]*/ {
+        k = $0
+        sub(/^[ ]*/, "", k)
+        sub(/:.*/, "", k)
+        print k
+      }
+    ' "$_pd/plugin.yaml")"
+
+    for _k in $_keys; do
+      _v="$(yaml_plugin_get "$_p" "$_k" 2>/dev/null || true)"
+      if [ -z "$_v" ]; then
+        _v="$(awk -v k="$_k" '
+          /^config_defaults:[ ]*$/ || /^config_defaults:[ ]*#/ { in_c=1; next }
+          in_c && /^[^ #]/ { exit }
+          in_c && $0 ~ ("^[ ]*" k ":") {
+            sub("^[ ]*" k ":[ ]*", "")
+            sub(/[ ]*#.*/, "")
+            gsub(/^["\047]|["\047]$/, "")
+            print
+            exit
+          }
+        ' "$_pd/plugin.yaml")"
+      fi
+      case "$_k" in
+        *_dir|dir)
+          _v="$(printf '%s' "$_v" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's#^\./##' -e 's#^/##' -e 's#/$##')"
+          ;;
+      esac
+      _res="$(printf '%s' "$_res" | sed -e "s|{$_k}|$_v|g")"
+    done
   fi
+
+  # Backward compatibility for legacy template destination paths
+  _w_val="$(yaml_plugin_get "$_p" "wiki_dir" 2>/dev/null || true)"
+  [ -z "$_w_val" ] && _w_val=".rnex/wiki"
+  _w_val="$(printf '%s' "$_w_val" | sed -e 's#^/##' -e 's#/$##')"
+
+  _r_val="$(yaml_plugin_get "$_p" "raw_dir" 2>/dev/null || true)"
+  [ -z "$_r_val" ] && _r_val="docs"
+  _r_val="$(printf '%s' "$_r_val" | sed -e 's#^\./##' -e 's#^/##' -e 's#/$##')"
+
+  _res="$(printf '%s' "$_res" | sed \
+    -e "s|^wiki/|${_w_val}/|" \
+    -e "s|^raw/|${_r_val}/|")"
+
+  printf '%s' "$_res"
+}
+
+plugin_instantiate_template() {
+  _p="$1"; _pd="$2"; _src="$3"; _dest="$4"
+
+  _w_val="$(yaml_plugin_get "$_p" "wiki_dir" 2>/dev/null || true)"
+  [ -z "$_w_val" ] && _w_val=".rnex/wiki"
+  _w_val="$(printf '%s' "$_w_val" | sed -e 's#^/##' -e 's#/$##')"
+
+  _r_val="$(yaml_plugin_get "$_p" "raw_dir" 2>/dev/null || true)"
+  [ -z "$_r_val" ] && _r_val="docs"
+  _r_val="$(printf '%s' "$_r_val" | sed -e 's#^\./##' -e 's#^/##' -e 's#/$##')"
+
+  sed -e "s|{wiki_dir}|$_w_val|g" \
+      -e "s|{raw_dir}|$_r_val|g" \
+      -e "s|/raw/|/$_r_val/|g" \
+      -e "s|raw/|$_r_val/|g" \
+      -e "s|/wiki/|/$_w_val/|g" \
+      -e "s|wiki/|$_w_val/|g" \
+      "$_src" > "$_dest"
 }
 
 # Sync plugins into scoped directories: .rnex/plugins/<plugin-name>/
 sync_plugins() {
-  _wiki_dir="$(karpathy_wiki_dir)"
-  _raw_dir="$(karpathy_raw_dir)"
-
   # 1. Prune plugins that are disabled or no longer enabled in config
   if [ -d "$NEXUS_DIR/.rnex/plugins" ]; then
     for _existing in "$NEXUS_DIR/.rnex/plugins"/*; do
@@ -114,6 +181,14 @@ sync_plugins() {
     done
     rmdir "$NEXUS_DIR/.rnex/plugins" 2>/dev/null || true
   fi
+
+  # Also run cleanup hook for any available plugin that is disabled
+  for _pdir in $(list_all_available_plugin_dirs 2>/dev/null || true); do
+    _pname="$(basename "$_pdir")"
+    if ! yaml_plugin_enabled "$_pname" 2>/dev/null; then
+      run_plugin_hook "$_pname" "before_plugin_disable"
+    fi
+  done
 
   # 2. Sync enabled plugins
   yaml_list_plugins | while read -r _pname; do
@@ -162,25 +237,14 @@ sync_plugins() {
       _s="$(printf '%s' "$_s" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
       _d="$(printf '%s' "$_d" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
 
-      # Resolve dynamic destination placeholders for wiki and raw directories
-      _d="$(printf '%s' "$_d" | sed \
-        -e "s|{wiki_dir}|$_wiki_dir|g" \
-        -e "s|{raw_dir}|$_raw_dir|g" \
-        -e "s|^wiki/|${_wiki_dir}/|" \
-        -e "s|^raw/|${_raw_dir}/|")"
+      _d="$(plugin_resolve_placeholders "$_pname" "$_pdir" "$_d")"
 
       _src_path="$_pdir/$_s"
       _dest_path="$NEXUS_DIR/$_d"
 
       if [ -f "$_src_path" ] && [ ! -f "$_dest_path" ]; then
         mkdir -p "$(dirname "$_dest_path")"
-        sed -e "s|{wiki_dir}|$_wiki_dir|g" \
-            -e "s|{raw_dir}|$_raw_dir|g" \
-            -e "s|/raw/|/$_raw_dir/|g" \
-            -e "s|raw/|$_raw_dir/|g" \
-            -e "s|/wiki/|/$_wiki_dir/|g" \
-            -e "s|wiki/|$_wiki_dir/|g" \
-            "$_src_path" > "$_dest_path"
+        plugin_instantiate_template "$_pname" "$_pdir" "$_src_path" "$_dest_path"
         [ -x "$_src_path" ] && chmod +x "$_dest_path" 2>/dev/null || true
         log_ok "Initialized template: $_d"
       fi

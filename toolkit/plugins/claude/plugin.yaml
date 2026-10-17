@@ -3,5 +3,15 @@ version: 0.5.1
 description: Anthropic Claude Code integration (maintains CLAUDE.md instructions and generates user skills in .claude/skills/)
 author: unoxen
 homepage: https://github.com/unoxen/repo-nexus
+skill_dir: .claude/skills
+
+config_defaults:
+  instructions: true
+  skills: true
+
+config_descriptions:
+  instructions: "true|false  (maintain provider instructions)"
+  skills: "true|false        (generate user skills in {skill_dir})"
+
 instructions:
   - instructions/rnex-claude-integration.md: .rnex/plugins/claude/instructions/rnex-claude-integration.md
