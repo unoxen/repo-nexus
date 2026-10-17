@@ -14,9 +14,10 @@ get_cfg() {
   _val=""
   if [ -f "$_root/.local.rnex.yaml" ]; then
     _val="$(awk -v k="$_key" '
-      /^plugins:/ { in_p=1; next }
-      in_p && /^[ ]*karpathy-llm:/ { in_k=1; next }
-      in_k && /^[^ ]/ { exit }
+      /^plugins:/ { in_p=1; in_k=0; next }
+      in_p && /^[^ #]/ { in_p=0; in_k=0 }
+      in_p && match($0, "^[ ]*karpathy-llm:[ ]*(#.*)?$") { in_k=1; next }
+      in_k && (/^[ ]{1,2}[^ #]/ || /^[^ #]/) { in_k=0 }
       in_k && $0 ~ ("^[ ]*" k ":") {
         sub("^[ ]*" k ":[ ]*", "")
         sub(/[ ]*#.*/, "")
@@ -28,9 +29,10 @@ get_cfg() {
   fi
   if [ -z "$_val" ] && [ -f "$_root/rnex.yaml" ]; then
     _val="$(awk -v k="$_key" '
-      /^plugins:/ { in_p=1; next }
-      in_p && /^[ ]*karpathy-llm:/ { in_k=1; next }
-      in_k && /^[^ ]/ { exit }
+      /^plugins:/ { in_p=1; in_k=0; next }
+      in_p && /^[^ #]/ { in_p=0; in_k=0 }
+      in_p && match($0, "^[ ]*karpathy-llm:[ ]*(#.*)?$") { in_k=1; next }
+      in_k && (/^[ ]{1,2}[^ #]/ || /^[^ #]/) { in_k=0 }
       in_k && $0 ~ ("^[ ]*" k ":") {
         sub("^[ ]*" k ":[ ]*", "")
         sub(/[ ]*#.*/, "")
@@ -126,6 +128,7 @@ ingest_member_readme() {
   _m_repo="$1"
   _m_path="$2"
   _m_readme="$3"
+  _m_rel_prefix="$4"
   _src_file="$_m_path/$_m_readme"
   _target_page="$_wiki_path/repo-${_m_repo}.md"
   _today="$(date +%Y-%m-%d 2>/dev/null || date +%F 2>/dev/null || echo "2026-10-15")"
@@ -133,9 +136,15 @@ ingest_member_readme() {
   [ -f "$_src_file" ] || return 0
 
   # Clean relative paths for source references
-  _clean_repos="$(printf '%s' "$REPOS_DIR" | sed -e 's#^\./##' -e 's#^/##' -e 's#/$##')"
-  _rel_source="${_clean_repos}/${_m_repo}/${_m_readme}"
-  _rel_loc="${_clean_repos}/${_m_repo}/"
+  _clean_repos="$(printf '%s' "$REPOS_DIR" | sed -e 's#^[[:space:]]*##' -e 's#[[:space:]]*$##' -e 's#^\./##' -e 's#^/##' -e 's#/$##')"
+  if [ -n "$_m_rel_prefix" ]; then
+    _clean_rel="$(printf '%s' "$_m_rel_prefix" | sed -e 's#^[[:space:]]*##' -e 's#[[:space:]]*$##' -e 's#^\./##' -e 's#^/##' -e 's#/$##')"
+    _rel_source="${_clean_rel}/${_m_readme}"
+    _rel_loc="${_clean_rel}/"
+  else
+    _rel_source="${_clean_repos}/${_m_repo}/${_m_readme}"
+    _rel_loc="${_clean_repos}/${_m_repo}/"
+  fi
 
   # 1. Parse repository title from first Markdown header
   _m_title="$(awk '
@@ -161,11 +170,9 @@ ingest_member_readme() {
   ' "$_src_file")"
   [ -z "$_m_summary" ] && _m_summary="Core architecture, contracts, and implementation for member repository ${_m_repo}."
 
-  # 3. Determine if target page needs generation (missing or source newer)
+  # 3. Determine if target page needs generation (missing only — preserve curated pages)
   _needs_gen=0
   if [ ! -f "$_target_page" ]; then
-    _needs_gen=1
-  elif [ "$_src_file" -nt "$_target_page" ]; then
     _needs_gen=1
   fi
 
@@ -260,7 +267,14 @@ LOG_EOF
   fi
 
   # 5. Register in hot cache (hot.md) under Section 1 if not already present
-  if [ -f "$_wiki_path/hot.md" ] && ! grep -q "${_rel_loc}" "$_wiki_path/hot.md"; then
+  _is_in_hot=0
+  if grep -q "${_rel_loc}" "$_wiki_path/hot.md" 2>/dev/null; then
+    _is_in_hot=1
+  elif grep -E -q "^\* \*\*Member Repositories \([0-9]+ repos\):.*[ :]${_m_repo}(,|\.|$)" "$_wiki_path/hot.md" 2>/dev/null; then
+    _is_in_hot=1
+  fi
+
+  if [ -f "$_wiki_path/hot.md" ] && [ "$_is_in_hot" -eq 0 ]; then
     # Ultra-concise summary for bounded hot cache (~500-word ceiling)
     _hot_summary="$(printf '%s' "$_m_summary" | sed -e 's/[.?!][[:space:]].*//' -e 's/[.?!]$//' | awk '{
       out=""
@@ -288,20 +302,58 @@ LOG_EOF
   fi
 }
 
-# 2. Automatically ingest README.md from all enabled/cloned member repositories in-place
-# Get list of enabled repositories using a secure cross-repo read or `rnex list`
+# 2. Automatically ingest README.md from all registered/enabled member repositories
 case "$(printf '%s' "$_ingest_readmes" | tr '[:upper:]' '[:lower:]')" in
   false|no|0|disabled|off) _skip_all_readmes=1 ;;
   *) _skip_all_readmes=0 ;;
 esac
 
-REPOS_DIR_VAL=$(grep -h -E '^\s*repos_dir:' "$RNEX_ROOT/rnex.yaml" "$RNEX_ROOT/.local.rnex.yaml" 2>/dev/null | tail -n1 | awk -F: '{print $NF}' | awk '{print $1}' | tr -d '"'\''')
-REPOS_DIR="${REPOS_DIR_VAL:-./repos}"
+_rd=""
+for _cfg in "$_root/.local.rnex.yaml" "$_root/rnex.yaml"; do
+  [ -f "$_cfg" ] || continue
+  _val="$(awk '
+    /^[[:space:]]*repos_dir:[ ]*/ {
+      sub(/^[[:space:]]*repos_dir:[ ]*/, "")
+      sub(/[ ]*#.*/, "")
+      sub(/^[[:space:]]+/, "")
+      sub(/[[:space:]]+$/, "")
+      gsub(/^["\047]|["\047]$/, "")
+      val=$0
+    }
+    END { if (val) print val }
+  ' "$_cfg")"
+  if [ -n "$_val" ]; then
+    _rd="$_val"
+    break
+  fi
+done
+REPOS_DIR="${_rd:-./repos}"
+_clean_repos="$(printf '%s' "$REPOS_DIR" | sed -e 's#^[[:space:]]*##' -e 's#[[:space:]]*$##' -e 's#^\./##' -e 's#^/##' -e 's#/$##')"
 
-if [ "$_skip_all_readmes" -ne 1 ] && [ -d "$RNEX_ROOT/$REPOS_DIR" ]; then
-  for repo_path in "$RNEX_ROOT/$REPOS_DIR"/*; do
-    [ ! -d "$repo_path" ] && continue
-    repo_name=$(basename "$repo_path")
+list_configured_repos() {
+  for _cfg_file in "$_root/.local.rnex.yaml" "$_root/rnex.yaml"; do
+    [ -f "$_cfg_file" ] || continue
+    awk '
+      /^repos:[ ]*$/ || /^repos:[ ]*#/ { r=1; next }
+      r && /^[^ #]/ { r=0 }
+      r && /^  [a-zA-Z0-9_.-]+:[ ]*(\{\})?[ ]*(#.*)?$/ {
+        line = $0
+        sub(/^[ ]*/, "", line)
+        sub(/:.*/, "", line)
+        gsub(/[[:space:]]/, "", line)
+        if (length(line) > 0) print line
+      }
+    ' "$_cfg_file"
+  done | awk '!seen[$0]++'
+}
+
+_ALL_INGESTED_REPOS=""
+_ALL_INGESTED_COUNT=0
+
+if [ "$_skip_all_readmes" -ne 1 ]; then
+  for repo_name in $(list_configured_repos); do
+    [ -n "$repo_name" ] || continue
+    _custom_path=""
     
     # Check if this repository is explicitly disabled in .local.rnex.yaml or rnex.yaml (block-scoped)
     _is_disabled=""
@@ -311,7 +363,7 @@ if [ "$_skip_all_readmes" -ne 1 ] && [ -d "$RNEX_ROOT/$REPOS_DIR" ]; then
       _en="$(awk -v repo="$repo_name" '
         /^repos:[ ]*$/ || /^repos:[ ]*#/ { r=1; next }
         r && /^[^ #]/ { r=0 }
-        r && match($0, "^  " repo ":[ ]*(#.*)?$") { in_target=1; next }
+        r && match($0, "^  " repo ":[ ]*(\\{\\})?[ ]*(#.*)?$") { in_target=1; next }
         in_target && /^  [^ #]/ { in_target=0 }
         in_target && match($0, "^    enabled:[ ]*") {
           line = $0
@@ -332,7 +384,7 @@ if [ "$_skip_all_readmes" -ne 1 ] && [ -d "$RNEX_ROOT/$REPOS_DIR" ]; then
       _ingest_val="$(awk -v repo="$repo_name" '
         /^repos:[ ]*$/ || /^repos:[ ]*#/ { r=1; next }
         r && /^[^ #]/ { r=0 }
-        r && match($0, "^  " repo ":[ ]*(#.*)?$") { in_target=1; next }
+        r && match($0, "^  " repo ":[ ]*(\\{\\})?[ ]*(#.*)?$") { in_target=1; next }
         in_target && /^  [^ #]/ { in_target=0 }
         in_target && match($0, "^    ingest_member_readmes:[ ]*") {
           line = $0
@@ -349,15 +401,57 @@ if [ "$_skip_all_readmes" -ne 1 ] && [ -d "$RNEX_ROOT/$REPOS_DIR" ]; then
           *) _repo_ingest=1 ;;
         esac
       fi
+
+      if [ -z "$_custom_path" ]; then
+        _cp="$(awk -v repo="$repo_name" '
+          /^repos:[ ]*$/ || /^repos:[ ]*#/ { r=1; next }
+          r && /^[^ #]/ { r=0 }
+          r && match($0, "^  " repo ":[ ]*(\\{\\})?[ ]*(#.*)?$") { in_target=1; next }
+          in_target && (/^[ ]{1,2}[^ #]/ || /^[^ #]/) { in_target=0 }
+          in_target && match($0, "^    path:[ ]*") {
+            line = $0
+            sub("^    path:[ ]*", "", line)
+            sub(/[ ]*#.*$/, "", line)
+            gsub(/^["\x27]|["\x27]$/, "")
+            print line
+            exit
+          }
+        ' "$_cfg_file")"
+        [ -n "$_cp" ] && _custom_path="$_cp"
+      fi
     done
     [ "$_is_disabled" = "1" ] && continue
     [ "$_repo_ingest" = "0" ] && continue
 
+    # Resolve physical repository path and relative location
+    _repo_rel=""
+    if [ -n "$_custom_path" ]; then
+      case "$_custom_path" in
+        /*)
+          repo_path="$_custom_path"
+          case "$_custom_path" in
+            "$_root"/*) _repo_rel="${_custom_path#"$_root"/}" ;;
+            *) _repo_rel="$_custom_path" ;;
+          esac
+          ;;
+        *)
+          repo_path="$_root/$_custom_path"
+          _repo_rel="$_custom_path"
+          ;;
+      esac
+    else
+      repo_path="$_root/$REPOS_DIR/$repo_name"
+      _repo_rel="${_clean_repos}/${repo_name}"
+    fi
+
+    [ -d "$repo_path" ] || continue
+
     # Read and ingest any README file directly in-place (no staging copy)
     for readme_name in README.md readme.md README.markdown README; do
       if [ -f "$repo_path/$readme_name" ]; then
-        # Ingest member repository README into atomic wiki page, index, and hot cache
-        ingest_member_readme "$repo_name" "$repo_path" "$readme_name"
+        ingest_member_readme "$repo_name" "$repo_path" "$readme_name" "$_repo_rel"
+        _ALL_INGESTED_REPOS="${_ALL_INGESTED_REPOS:+$_ALL_INGESTED_REPOS, }$repo_name"
+        _ALL_INGESTED_COUNT=$((_ALL_INGESTED_COUNT + 1))
         break
       fi
     done
@@ -368,16 +462,25 @@ fi
 if [ -f "$_wiki_path/hot.md" ]; then
   _hot_words="$(wc -w < "$_wiki_path/hot.md" 2>/dev/null || echo 0)"
   if [ "$_hot_words" -gt 480 ]; then
-    _num_repos="$(grep -cE '^\* \*\*[a-zA-Z0-9_.-]+ \(`?repos/' "$_wiki_path/hot.md" 2>/dev/null || echo 0)"
-    if [ "$_num_repos" -gt 3 ]; then
-      _repo_names="$(grep -E '^\* \*\*[a-zA-Z0-9_.-]+ \(`?repos/' "$_wiki_path/hot.md" | sed -e 's/^\* \*\*//' -e 's/ .*//' | tr '\n' ', ' | sed -e 's/, $//')"
-      _clean_repos="$(printf '%s' "$REPOS_DIR" | sed -e 's#^\./##' -e 's#^/##' -e 's#/$##')"
+    _num_repos="$(grep -cE '^\* \*\*[a-zA-Z0-9_.-]+ \(`?'"$_clean_repos"'/' "$_wiki_path/hot.md" 2>/dev/null || echo 0)"
+    if [ "$_ALL_INGESTED_COUNT" -gt 3 ]; then
+      _condense_count="$_ALL_INGESTED_COUNT"
+      _repo_names="$_ALL_INGESTED_REPOS"
+    elif [ "$_num_repos" -gt 3 ]; then
+      _condense_count="$_num_repos"
+      _repo_names="$(grep -E '^\* \*\*[a-zA-Z0-9_.-]+ \(`?'"$_clean_repos"'/' "$_wiki_path/hot.md" | sed -e 's/^\* \*\*//' -e 's/ .*//' | tr '\n' ', ' | sed -e 's/, $//')"
+    else
+      _condense_count=0
+      _repo_names=""
+    fi
+
+    if [ "$_condense_count" -gt 3 ]; then
       _tmp_b="$(mktemp)"
-      if awk -v rnames="$_repo_names" -v nrepos="$_num_repos" -v rdir="$_clean_repos" '
+      if awk -v rnames="$_repo_names" -v nrepos="$_condense_count" -v rdir="$_clean_repos" '
         BEGIN { in_s1=0; replaced=0 }
         /^## 1\. Architecture & Member Repo Map/ { in_s1=1; print; next }
         in_s1 && /^## / { in_s1=0 }
-        in_s1 && /^\* \*\*[a-zA-Z0-9_.-]+ \(`?repos\// {
+        in_s1 && (/^\* \*\*[a-zA-Z0-9_.-]+ \(`?[^\/]+\// || /^\* \*\*Member Repositories \([0-9]+ repos\):/) {
           if (!replaced) {
             print "* **Member Repositories (" nrepos " repos):** Autonomous repositories under `" rdir "/`: " rnames ". See [Wiki Index](./index.md#member-repositories) for individual architecture pages."
             replaced=1

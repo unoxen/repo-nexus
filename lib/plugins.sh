@@ -150,18 +150,14 @@ plugin_instantiate_template() {
 
   _w_val="$(yaml_plugin_get "$_p" "wiki_dir" 2>/dev/null || true)"
   [ -z "$_w_val" ] && _w_val=".rnex/wiki"
-  _w_val="$(printf '%s' "$_w_val" | sed -e 's#^/##' -e 's#/$##')"
+  _w_val="$(printf '%s' "$_w_val" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's#^/##' -e 's#/$##')"
 
   _r_val="$(yaml_plugin_get "$_p" "raw_dir" 2>/dev/null || true)"
   [ -z "$_r_val" ] && _r_val="docs"
-  _r_val="$(printf '%s' "$_r_val" | sed -e 's#^\./##' -e 's#^/##' -e 's#/$##')"
+  _r_val="$(printf '%s' "$_r_val" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's#^\./##' -e 's#^/##' -e 's#/$##')"
 
   sed -e "s|{wiki_dir}|$_w_val|g" \
       -e "s|{raw_dir}|$_r_val|g" \
-      -e "s|/raw/|/$_r_val/|g" \
-      -e "s|raw/|$_r_val/|g" \
-      -e "s|/wiki/|/$_w_val/|g" \
-      -e "s|wiki/|$_w_val/|g" \
       "$_src" > "$_dest"
 }
 

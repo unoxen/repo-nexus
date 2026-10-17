@@ -6,9 +6,10 @@ get_cfg() {
   _val=""
   if [ -f "$_root/.local.rnex.yaml" ]; then
     _val="$(awk -v k="$_key" '
-      /^plugins:/ { in_p=1; next }
-      in_p && /^[ ]*karpathy-llm:/ { in_k=1; next }
-      in_k && /^[^ ]/ { exit }
+      /^plugins:/ { in_p=1; in_k=0; next }
+      in_p && /^[^ #]/ { in_p=0; in_k=0 }
+      in_p && match($0, "^[ ]*karpathy-llm:[ ]*(#.*)?$") { in_k=1; next }
+      in_k && (/^[ ]{1,2}[^ #]/ || /^[^ #]/) { in_k=0 }
       in_k && $0 ~ ("^[ ]*" k ":") {
         sub("^[ ]*" k ":[ ]*", "")
         sub(/[ ]*#.*/, "")
@@ -20,9 +21,10 @@ get_cfg() {
   fi
   if [ -z "$_val" ] && [ -f "$_root/rnex.yaml" ]; then
     _val="$(awk -v k="$_key" '
-      /^plugins:/ { in_p=1; next }
-      in_p && /^[ ]*karpathy-llm:/ { in_k=1; next }
-      in_k && /^[^ ]/ { exit }
+      /^plugins:/ { in_p=1; in_k=0; next }
+      in_p && /^[^ #]/ { in_p=0; in_k=0 }
+      in_p && match($0, "^[ ]*karpathy-llm:[ ]*(#.*)?$") { in_k=1; next }
+      in_k && (/^[ ]{1,2}[^ #]/ || /^[^ #]/) { in_k=0 }
       in_k && $0 ~ ("^[ ]*" k ":") {
         sub("^[ ]*" k ":[ ]*", "")
         sub(/[ ]*#.*/, "")

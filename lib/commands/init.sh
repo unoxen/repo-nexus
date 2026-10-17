@@ -124,6 +124,18 @@ cmd_init() {
       fi
     done
 
+    _existing_repos=""
+    if [ -d "$_init_dir/repos" ]; then
+      for _d in "$_init_dir/repos"/*; do
+        [ -d "$_d" ] || continue
+        _r="$(basename "$_d")"
+        case "$_r" in
+          .*) continue ;;
+          *) _existing_repos="${_existing_repos}  ${_r}:\n" ;;
+        esac
+      done
+    fi
+
     cat > "$_target_yaml" <<YAML_EOF
 # Repo Nexus workspace configuration
 # See templates/rnex.example.yaml for a comprehensive example with all options.
@@ -144,6 +156,7 @@ plugins:
 $(printf '%b' "$_init_plugins")
 # Member repositories managed by Repo Nexus
 repos:
+$(printf '%b' "$_existing_repos")
 YAML_EOF
     _config_created=1
     log_ok "Created $RNEX_CONFIG_FILE"

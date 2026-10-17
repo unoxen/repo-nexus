@@ -315,7 +315,7 @@ _yaml_list_repos_from_file() {
   awk '
     /^repos:[ ]*$/ || /^repos:[ ]*#/ { r=1; next }
     r && /^[^ #]/ { r=0 }
-    r && /^  [a-zA-Z0-9_.-]+:[ ]*(#.*)?$/ {
+    r && /^  [a-zA-Z0-9_.-]+:[ ]*(\{\})?[ ]*(#.*)?$/ {
       line = $0
       sub(/^[ ]*/, "", line)
       sub(/:.*/, "", line)
@@ -340,7 +340,7 @@ _yaml_get_from_file() {
   awk -v repo="$_repo" -v field="$_field" '
     /^repos:[ ]*$/ || /^repos:[ ]*#/ { r=1; next }
     r && /^[^ #]/ { r=0 }
-    r && match($0, "^  " repo ":[ ]*(#.*)?$") { in_target=1; next }
+    r && match($0, "^  " repo ":[ ]*(\\{\\})?[ ]*(#.*)?$") { in_target=1; next }
     in_target && /^  [^ #]/ { in_target=0 }
     in_target && match($0, "^    " field ":[ ]*") {
       line = $0

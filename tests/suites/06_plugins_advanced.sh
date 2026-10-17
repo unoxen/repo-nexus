@@ -87,10 +87,12 @@ EOF_CFG
 [ -f "$TEST_KWIKI_WS/docs/wiki/_log.md" ] || { fail "docs/wiki/_log.md missing"; exit 1; }
 [ -f "$TEST_KWIKI_WS/intake/raw/.gitkeep" ] || { fail "intake/raw/.gitkeep missing"; exit 1; }
 
-# Verify template substitutions reflect custom paths
-grep -q "/intake/raw/" "$TEST_KWIKI_WS/docs/wiki/index.md" || { fail "docs/wiki/index.md does not reference custom intake/raw/"; exit 1; }
-grep -q "/intake/raw/" "$TEST_KWIKI_WS/docs/wiki/hot.md" || { fail "docs/wiki/hot.md does not reference custom intake/raw/"; exit 1; }
-grep -q "/docs/wiki/" "$TEST_KWIKI_WS/docs/wiki/hot.md" || { fail "docs/wiki/hot.md does not reference custom docs/wiki/"; exit 1; }
+# Verify template substitutions reflect custom paths without corruption
+grep -q "intake/raw/" "$TEST_KWIKI_WS/docs/wiki/index.md" || { fail "docs/wiki/index.md does not reference custom intake/raw/"; exit 1; }
+grep -q "intake/raw/" "$TEST_KWIKI_WS/docs/wiki/hot.md" || { fail "docs/wiki/hot.md does not reference custom intake/raw/"; exit 1; }
+grep -q "docs/wiki/" "$TEST_KWIKI_WS/docs/wiki/hot.md" || { fail "docs/wiki/hot.md does not reference custom docs/wiki/"; exit 1; }
+! grep -q "docs/docs/wiki" "$TEST_KWIKI_WS/docs/wiki/hot.md" || { fail "Corrupted duplicated path docs/docs/wiki found"; exit 1; }
+! grep -q "intake/intake/raw" "$TEST_KWIKI_WS/docs/wiki/hot.md" || { fail "Corrupted duplicated path intake/intake/raw found"; exit 1; }
 
 # Verify AGENTS.md maintains strict directive and .rnex/ai-instructions.md contains plugin instructions
 _kw_agents="$(cat "$TEST_KWIKI_WS/AGENTS.md")"
@@ -206,6 +208,7 @@ grep -q 'lint_trigger: "manual"' "$TEST_HOOK_WS/rnex.yaml" || grep -q 'lint_trig
 # 2. Mock a member repository initialization (./repos/mock-member-repo/README.md)
 mkdir -p "$TEST_HOOK_WS/repos/mock-member-repo"
 printf '# Mock Member Repo\nThis is a mock repository README.\n' > "$TEST_HOOK_WS/repos/mock-member-repo/README.md"
+printf '  mock-member-repo:\n' >> "$TEST_HOOK_WS/rnex.yaml"
 
 # Also place a sample document in custom/default raw_dir (./docs)
 mkdir -p "$TEST_HOOK_WS/docs"
@@ -326,6 +329,7 @@ grep -q "Member Repo Ingest: added-repo" "$TEST_HOOK_WS/.rnex/wiki/_log.md" || {
 for _i in $(seq 1 14); do
   mkdir -p "$TEST_HOOK_WS/repos/repo-$_i"
   printf '# Repository %s\nAutonomous microservice %s responsible for dedicated business domain tasks.\n' "$_i" "$_i" > "$TEST_HOOK_WS/repos/repo-$_i/README.md"
+  printf '  repo-%s:\n' "$_i" >> "$TEST_HOOK_WS/rnex.yaml"
 done
 (cd "$TEST_HOOK_WS" && ./rnex sync -y >/dev/null)
 _hot_wc="$(wc -w < "$TEST_HOOK_WS/.rnex/wiki/hot.md")"

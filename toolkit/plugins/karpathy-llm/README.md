@@ -117,7 +117,7 @@ rnex sync
 
 The plugin supports two levels of configuration:
 1. **Repo Config (`rnex.yaml`)**: Shared across your team and version-controlled. Configures repository-level structure, file paths, and indexing rules.
-2. **Local Config (`.local.rnex.yaml`)**: Machine-specific and gitignored. Configures git hook triggers, deterministic checks, and your preferred local AI runner command.
+2. **Local Config (`.local.rnex.yaml`)**: Machine-specific and gitignored. Configures git hook triggers and terminal notifications.
 
 ### 1. Shared Repo Configuration (`rnex.yaml`)
 
@@ -128,14 +128,14 @@ plugins:
     wiki_dir: .rnex/wiki        # Directory for curated atomic markdown pages
     raw_dir: ./docs             # Append-only directory for unmodified intake documents
 
-    # Master catalog auto-indexing (default: true)
-    # Automatically rebuilds categorized links in .rnex/wiki/index.md when pages change
-    auto_index: true
+    # Member repository README auto-ingestion (default: true)
+    # Automatically registers member repos into wiki pages and hot.md during rnex sync
+    ingest_member_readmes: true
 ```
 
 ### 2. Local Machine Configuration (`.local.rnex.yaml`)
 
-Use this file to customize how your local workstation executes wiki maintenance (e.g., via git hooks, deterministic scripts, or provider-agnostic AI CLI runners):
+Use this file to customize how your local workstation executes wiki maintenance (e.g., via git hooks and notifications):
 
 ```yaml
 plugins:
@@ -147,23 +147,6 @@ plugins:
     # Omit or leave unset for purely manual maintenance (default).
     lint_trigger: git-post-commit
 
-    # Stage 1: Deterministic graph maintenance (default: true)
-    # Executes zero-token AST/regex checks to validate broken links, recompute mentioned_in,
-    # and find orphaned pages without calling an LLM (<50ms, free, offline).
-    run_deterministic_checks: true
-
-    # Stage 2: Provider-agnostic AI command runner (default: "")
-    # Executed ONLY when semantic synthesis is required (e.g. decomposing /raw/ docs via wiki-ingest).
-    # The trigger pipes the workflow markdown instructions to this command via standard input (stdin).
-    ai_cmd: "llm -m openrouter/auto"
-
-    # Examples for popular CLI tools:
-    # ai_cmd: "gemini run"                         # Google Gemini / Antigravity CLI
-    # ai_cmd: "claude -p"                          # Claude Code CLI
-    # ai_cmd: "ollama run llama3"                  # Local offline model
-    # ai_cmd: "aider --message"                    # Aider CLI
-    # ai_cmd: ""                                   # Empty: Prompt-only mode (prints terminal notification)
-
     # Terminal notifications on commit (default: true)
     # Displays non-blocking alerts in your terminal right after git commit completes.
     notify_on_changes: true
@@ -171,10 +154,10 @@ plugins:
 
 ### Detailed Option Descriptions
 
-#### `auto_index` (Repo Config)
-* **What it does:** Automatically keeps `.rnex/wiki/index.md` (the master catalog) synchronized with all atomic pages in `.rnex/wiki/`.
-* **How it works:** During `wiki-ingest` and `wiki-lint`, the tool inspects each page's frontmatter (`title`, `tags`, directory category) and updates the categorized link sections in `index.md`.
-* **Why you need it:** AI coding assistants read `.rnex/wiki/index.md` first as a high-level "navigation map" to locate relevant concepts without scanning hundreds of individual markdown files (saving massive amounts of context tokens). If disabled (`false`), you must manually maintain links in `index.md`.
+#### `ingest_member_readmes` (Repo Config)
+* **What it does:** Automatically ingests member repository READMEs into atomic wiki pages (`repo-<name>.md`) and registers them in `hot.md`.
+* **How it works:** During `rnex sync`, the plugin discovers configured repositories in `rnex.yaml`, extracts top-level README summaries, creates initial `repo-<name>.md` pages non-destructively, logs ingestion in `_log.md`, and updates the catalog in `hot.md`.
+* **Why you need it:** Provides newly onboarded AI assistants immediate context and navigation for all member repositories in the multi-repo workspace. If set to `false`, member repositories are not automatically scanned or ingested during sync.
 
 #### `lint_trigger` (Local Config)
 * **What it does:** Optional git hook trigger to automate wiki graph audits and maintenance workflows (`wiki-lint` and `wiki-ingest`).
@@ -192,26 +175,14 @@ plugins:
   * If broken links or orphans were detected: prints a summary notice highlighting the pages that need attention.
 * **Why you need it:** Provides immediate visibility into pending wiki operations without blocking or slowing down your Git workflow. Set to `false` for silent background execution.
 
-#### `run_deterministic_checks` (Local Config)
-* **What it does:** Enables fast, offline graph analysis before invoking any LLM.
-* **How it works:** Runs a local script that parses Markdown link targets and frontmatter relations (`sources`, `related`, `extends`, `contradicts`). It validates that target files exist, recomputes reciprocal `mentioned_in: []` backlinks, and identifies orphan pages.
-* **Why you need it:** Resolves 90% of routine wiki maintenance in <50ms without spending API tokens, hitting rate limits, or risking LLM path hallucinations.
-
-#### `ai_cmd` (Local Config)
-* **What it does:** A provider-agnostic shell command template used to execute semantic LLM tasks (such as decomposing an intake document via `wiki-ingest` or resolving factual contradictions).
-* **How it works:** When semantic work is needed, the trigger pipes the task prompt and workflow file into this shell command via standard input (`stdin`).
-* **Why you need it:** Decouples your wiki workflow from any single vendor. Works with Simon Willison's `llm`, Google Gemini / Antigravity CLI, Anthropic Claude Code, Ollama, Aider, or custom shell scripts. If left blank (`""`), the system operates in prompt-only mode, reminding you to run the workflow in your interactive chat assistant.
-
 ### Summary Reference Table
 
 | Field | Scope / File | Type | Default | Values / Behavior |
 |:---|:---|:---|:---|:---|
-| `auto_index` | Repo (`rnex.yaml`) | `boolean` | `true` | Auto-rebuilds categorized links in `.rnex/wiki/index.md`. Set to `false` for manual curation. |
+| `ingest_member_readmes` | Repo (`rnex.yaml`) | `boolean` | `true` | Automatically ingests member repo READMEs into `repo-<name>.md` and `hot.md` during `rnex sync`. |
 | `wiki_dir` | Repo (`rnex.yaml`) | `string` | `.rnex/wiki` | Directory containing atomic domain pages. |
 | `raw_dir` | Repo (`rnex.yaml`) | `string` | `./docs` | Append-only directory for unmodified source materials. |
 | `lint_trigger` | Local (`.local.rnex.yaml`) | `string` | *(unset)* | Optional opt-in Git hook: `git-post-commit`, `git-pre-push`, `git-post-merge`. Unset = purely manual. |
-| `run_deterministic_checks` | Local (`.local.rnex.yaml`) | `boolean` | `true` | Offline zero-token validation of broken links, `mentioned_in`, and orphans. |
-| `ai_cmd` | Local (`.local.rnex.yaml`) | `string` | `""` | Command template for semantic tasks. If unset, operates in prompt-only mode. |
 | `notify_on_changes` | Local (`.local.rnex.yaml`) | `boolean` | `true` | Terminal alerts printed right after git commit/push when `./docs/` or `.rnex/wiki/` needs attention. |
 
 ---
