@@ -91,7 +91,7 @@ plugin_list_instructions() {
 
 plugin_resolve_placeholders() {
   _p="$1"; _pd="$2"; _str="$3"
-  _res="$_str"
+  _res="$(printf '%s' "$_str" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^["\047]//' -e 's/["\047]$//')"
 
   if [ -f "$_pd/plugin.yaml" ]; then
     _keys="$(awk '
@@ -141,6 +141,8 @@ plugin_resolve_placeholders() {
   _res="$(printf '%s' "$_res" | sed \
     -e "s|^wiki/|${_w_val}/|" \
     -e "s|^raw/|${_r_val}/|")"
+
+  _res="$(printf '%s' "$_res" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^["\047]//' -e 's/["\047]$//')"
 
   printf '%s' "$_res"
 }
@@ -230,8 +232,8 @@ sync_plugins() {
       [ -n "$_item" ] || continue
       _s="${_item%%:*}"
       _d="${_item#*:}"
-      _s="$(printf '%s' "$_s" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
-      _d="$(printf '%s' "$_d" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+      _s="$(printf '%s' "$_s" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^["\047]//' -e 's/["\047]$//')"
+      _d="$(printf '%s' "$_d" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^["\047]//' -e 's/["\047]$//')"
 
       _d="$(plugin_resolve_placeholders "$_pname" "$_pdir" "$_d")"
 

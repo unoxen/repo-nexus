@@ -115,6 +115,11 @@ run_plugin_git_hooks() {
   RNEX_ARGS="$*"
   RNEX_QUIET="${_sync_quiet:-0}"
 
+  _stdin_data=""
+  if [ ! -t 0 ]; then
+    _stdin_data="$(cat)"
+  fi
+
   _plugins="$(yaml_list_plugins 2>/dev/null || true)"
   for _pname in $_plugins; do
     [ -n "$_pname" ] || continue
@@ -143,7 +148,11 @@ run_plugin_git_hooks() {
       chmod +x "$_h_cand" 2>/dev/null || true
       (
         export RNEX_ROOT RNEX_CONFIG_MERGED RNEX_PLUGIN_DIR RNEX_CMD RNEX_ARGS RNEX_QUIET
-        "$_h_cand" "$@"
+        if [ -n "$_stdin_data" ]; then
+          printf '%s\n' "$_stdin_data" | "$_h_cand" "$@"
+        else
+          "$_h_cand" "$@"
+        fi
       ) || true
     fi
   done
@@ -377,11 +386,27 @@ cmd_hooks() {
           return 0
           ;;
         pre-push)
-          run_plugin_git_hooks "pre-push" "$@"
+          _stdin_data=""
+          if [ ! -t 0 ]; then
+            _stdin_data="$(cat)"
+          fi
+          if [ -n "$_stdin_data" ]; then
+            printf '%s\n' "$_stdin_data" | run_plugin_git_hooks "pre-push" "$@"
+          else
+            run_plugin_git_hooks "pre-push" "$@"
+          fi
           if [ -x "$NEXUS_DIR/scripts/githooks/pre-push" ]; then
-            "$NEXUS_DIR/scripts/githooks/pre-push" "$@" || return $?
+            if [ -n "$_stdin_data" ]; then
+              printf '%s\n' "$_stdin_data" | "$NEXUS_DIR/scripts/githooks/pre-push" "$@" || return $?
+            else
+              "$NEXUS_DIR/scripts/githooks/pre-push" "$@" || return $?
+            fi
           elif [ -x "$NEXUS_DIR/.githooks/pre-push" ]; then
-            "$NEXUS_DIR/.githooks/pre-push" "$@" || return $?
+            if [ -n "$_stdin_data" ]; then
+              printf '%s\n' "$_stdin_data" | "$NEXUS_DIR/.githooks/pre-push" "$@" || return $?
+            else
+              "$NEXUS_DIR/.githooks/pre-push" "$@" || return $?
+            fi
           fi
           return 0
           ;;

@@ -131,8 +131,8 @@ cmd_plugin_info() {
       [ -n "$_item" ] || continue
       _s="${_item%%:*}"
       _d="${_item#*:}"
-      _s="$(printf '%s' "$_s" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
-      _d="$(printf '%s' "$_d" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+      _s="$(printf '%s' "$_s" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^["\047]//' -e 's/["\047]$//')"
+      _d="$(printf '%s' "$_d" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^["\047]//' -e 's/["\047]$//')"
       _d="$(plugin_resolve_placeholders "$_name" "$_pdir" "$_d")"
       printf '  - %s → %s\n' "$_s" "$_d"
     done

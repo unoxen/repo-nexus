@@ -103,3 +103,137 @@ rnex_unregister_user_skill() {
     fi
   done
 }
+
+# Provider configuration check helper
+if ! command -v provider_option_enabled >/dev/null 2>&1; then
+  provider_option_enabled() {
+    _p="$1"; _opt="$2"
+    _r="${NEXUS_DIR:-${RNEX_ROOT:-.}}"
+    _val=""
+    if [ -f "$_r/.local.rnex.yaml" ]; then
+      _val="$(awk -v p="$_p" -v o="$_opt" '
+        /^plugins:/ { in_p=1; next }
+        in_p && /^[^ #]/ { in_p=0; in_target=0 }
+        in_p && match($0, "^[ ]*" p ":[ ]*(#.*)?$") { in_target=1; next }
+        in_target && (/^[ ]{1,2}[^ #]/ || /^[^ #]/) { in_target=0 }
+        in_target && $0 ~ ("^[ ]*" o ":") {
+          sub("^[ ]*" o ":[ ]*", "")
+          sub(/[ ]*#.*/, "")
+          gsub(/["\047]/, "")
+          print
+          exit
+        }
+      ' "$_r/.local.rnex.yaml")"
+    fi
+    if [ -z "$_val" ] && [ -f "$_r/rnex.yaml" ]; then
+      _val="$(awk -v p="$_p" -v o="$_opt" '
+        /^plugins:/ { in_p=1; next }
+        in_p && /^[^ #]/ { in_p=0; in_target=0 }
+        in_p && match($0, "^[ ]*" p ":[ ]*(#.*)?$") { in_target=1; next }
+        in_target && (/^[ ]{1,2}[^ #]/ || /^[^ #]/) { in_target=0 }
+        in_target && $0 ~ ("^[ ]*" o ":") {
+          sub("^[ ]*" o ":[ ]*", "")
+          sub(/[ ]*#.*/, "")
+          gsub(/["\047]/, "")
+          print
+          exit
+        }
+      ' "$_r/rnex.yaml")"
+    fi
+    _val="$(printf '%s' "$_val" | tr '[:upper:]' '[:lower:]')"
+    case "$_val" in
+      false|no|0|disabled|off) return 1 ;;
+      *) return 0 ;;
+    esac
+  }
+fi
+
+# Instructions routing helpers
+if ! command -v merge_rnex_instructions >/dev/null 2>&1; then
+  merge_rnex_instructions() {
+    _dst="$1"
+    _m_start="<!-- REPO-NEXUS:START -->"
+    _m_end="<!-- REPO-NEXUS:END -->"
+    _instr="CRITICAL: You MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\` before executing any task or answering any query in this workspace."
+    if [ ! -f "$_dst" ]; then
+      mkdir -p "$(dirname "$_dst")"
+      printf '%s\n%s\n%s\n' "$_m_start" "$_instr" "$_m_end" > "$_dst"
+      return 0
+    fi
+    if grep -qF "$_m_start" "$_dst" 2>/dev/null; then
+      _tmp="$(mktemp)"
+      awk -v s="$_m_start" -v e="$_m_end" -v msg="$_instr" '
+        $0 == s { in_b = 1; print s; print msg; next }
+        $0 == e { in_b = 0; print e; next }
+        !in_b { print }
+      ' "$_dst" > "$_tmp" && mv "$_tmp" "$_dst"
+      return 0
+    fi
+    _tmp="$(mktemp)"
+    cp "$_dst" "$_tmp"
+    if [ -s "$_tmp" ] && [ -n "$(tail -c 1 "$_tmp" 2>/dev/null)" ]; then
+      printf '\n' >> "$_tmp"
+    fi
+    printf '\n%s\n%s\n%s\n' "$_m_start" "$_instr" "$_m_end" >> "$_tmp"
+    mv "$_tmp" "$_dst"
+  }
+fi
+
+if ! command -v clean_rnex_instructions >/dev/null 2>&1; then
+  clean_rnex_instructions() {
+    _dst="$1"
+    [ -f "$_dst" ] || return 0
+    _m_start="<!-- REPO-NEXUS:START -->"
+    _m_end="<!-- REPO-NEXUS:END -->"
+    if grep -qF "$_m_start" "$_dst" 2>/dev/null; then
+      _non_rnex="$(awk -v s="$_m_start" -v e="$_m_end" '
+        $0 == s { skip=1; next }
+        $0 == e { skip=0; next }
+        !skip { print }
+      ' "$_dst" | tr -d " \t\r\n")"
+      if [ -z "$_non_rnex" ]; then
+        rm -f "$_dst"
+      else
+        _tmp="$(mktemp)"
+        awk -v s="$_m_start" -v e="$_m_end" '
+          $0 == s { skip=1; next }
+          $0 == e { skip=0; next }
+          !skip { print }
+        ' "$_dst" > "$_tmp" && mv "$_tmp" "$_dst"
+      fi
+    fi
+  }
+fi
+
+if ! command -v clean_provider_user_skills >/dev/null 2>&1; then
+  clean_provider_user_skills() {
+    _sk_dir="$1"
+    [ -d "$_sk_dir" ] || return 0
+    rm -f "$_sk_dir"/rnex-*.md 2>/dev/null || true
+    for _d in "$_sk_dir"/rnex-*; do
+      [ -d "$_d" ] || continue
+      rm -rf "$_d" 2>/dev/null || true
+    done
+    rmdir "$_sk_dir" 2>/dev/null || true
+  }
+fi
+
+if ! command -v clean_provider_agents >/dev/null 2>&1; then
+  clean_provider_agents() {
+    _ag_dir="$1"
+    _ext="${2:-.md}"
+    _r="${NEXUS_DIR:-${RNEX_ROOT:-.}}"
+    [ -d "$_ag_dir" ] || return 0
+    for _pdir in "$_r/toolkit/plugins"/* "$_r/.rnex/plugins"/*; do
+      [ -d "$_pdir" ] || continue
+      [ -d "$_pdir/agents" ] || continue
+      for _afile in "$_pdir/agents"/*.md; do
+        [ -f "$_afile" ] || continue
+        _aname="$(basename "$_afile" .agent.md)"
+        _aname="$(basename "$_aname" .md)"
+        rm -f "$_ag_dir/${_aname}${_ext}" 2>/dev/null || true
+      done
+    done
+    rmdir "$_ag_dir" 2>/dev/null || true
+  }
+fi

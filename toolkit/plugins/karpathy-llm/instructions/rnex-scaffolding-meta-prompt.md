@@ -34,7 +34,7 @@ Do not create arbitrary or speculative subdirectories during initialization. Sca
 
 ### 2. Index File Format
 
-`/wiki/index.md` uses its own frontmatter schema (it is the wiki navigation file, not an atomic content page):
+`.rnex/wiki/index.md` uses its own frontmatter schema (it is the wiki navigation file, not an atomic content page):
 
 ```yaml
 ---
@@ -58,8 +58,8 @@ Every wiki page is a single atomic markdown file covering one concept, entity, s
 title: ""
 tags: []
 last_updated: YYYY-MM-DD
-# Typed relation fields — paths relative to /wiki/
-sources: []          # /raw/ files this page was derived from
+# Typed relation fields — paths relative to .rnex/wiki/
+sources: []          # ./docs/ files this page was derived from
 related: []          # thematically related wiki pages
 extends: []          # pages this one builds upon or specialises
 contradicts: []      # pages with conflicting information

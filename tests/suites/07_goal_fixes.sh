@@ -536,6 +536,164 @@ EOF_TOG
 [ ! -f "$TEST_TOGGLE_WS/.rnex/wiki/repo-skipped-repo.md" ] || { fail "repo-skipped-repo.md was generated despite ingest_member_readmes: false"; exit 1; }
 pass
 
+# --------------------------------------------------------------------------
+run_test "Fix 16: Copilot before_plugin_disable hook preserves unrelated prompts and non-empty directories"
+TEST_COP_DIS_WS="$TEST_TMP/cop-disable-preserve-ws"
+mkdir -p "$TEST_COP_DIS_WS"
+cp "$CLI" "$TEST_COP_DIS_WS/rnex"
+chmod +x "$TEST_COP_DIS_WS/rnex"
+cp "$DIR/package.json" "$TEST_COP_DIS_WS/package.json"
+cp -r "$DIR/lib" "$TEST_COP_DIS_WS/lib"
+cp -r "$DIR/toolkit" "$TEST_COP_DIS_WS/toolkit"
+cp -r "$DIR/templates" "$TEST_COP_DIS_WS/templates"
+git -C "$TEST_COP_DIS_WS" init -q
+
+"$TEST_COP_DIS_WS/rnex" init -y --copilot "$TEST_COP_DIS_WS" >/dev/null
+
+# Add user-authored prompts in .github/prompts/ and a plugin-owned prompt
+mkdir -p "$TEST_COP_DIS_WS/.github/prompts"
+printf '# User custom prompt\n' > "$TEST_COP_DIS_WS/.github/prompts/user-authored.prompt.md"
+printf '# Third-party prompt\n' > "$TEST_COP_DIS_WS/.github/prompts/vendor.prompt.md"
+printf '# Plugin-owned prompt\n' > "$TEST_COP_DIS_WS/.github/prompts/rnex-sample.prompt.md"
+
+# Disable copilot plugin
+(cd "$TEST_COP_DIS_WS" && ./rnex plugin disable copilot >/dev/null)
+
+# Verify plugin-owned prompt is removed but user/third-party prompts remain
+[ ! -f "$TEST_COP_DIS_WS/.github/prompts/rnex-sample.prompt.md" ] || { fail "Plugin-owned prompt was not removed"; exit 1; }
+[ -f "$TEST_COP_DIS_WS/.github/prompts/user-authored.prompt.md" ] || { fail "User-authored prompt was deleted as collateral"; exit 1; }
+[ -f "$TEST_COP_DIS_WS/.github/prompts/vendor.prompt.md" ] || { fail "Vendor prompt was deleted as collateral"; exit 1; }
+[ -d "$TEST_COP_DIS_WS/.github/prompts" ] || { fail ".github/prompts directory was removed despite containing user files"; exit 1; }
+
+# Remove remaining user prompts and run disable hook again; verify empty directory is cleaned
+rm -f "$TEST_COP_DIS_WS/.github/prompts"/*
+(RNEX_ROOT="$TEST_COP_DIS_WS" "$TEST_COP_DIS_WS/toolkit/plugins/copilot/hooks/before_plugin_disable.sh" >/dev/null 2>&1 || true)
+[ ! -d "$TEST_COP_DIS_WS/.github/prompts" ] || { fail "Empty .github/prompts directory was not removed"; exit 1; }
+pass
+
+# --------------------------------------------------------------------------
+run_test "Fix 17: Karpathy-llm plugin.yaml quoted template placeholders parse cleanly as valid YAML and resolve without quotes"
+_yaml_file="$DIR/toolkit/plugins/karpathy-llm/plugin.yaml"
+[ -f "$_yaml_file" ] || { fail "karpathy-llm plugin.yaml missing"; exit 1; }
+
+# Assert placeholders are quoted in plugin.yaml
+grep -q 'templates/index\.md:[ ]*"{wiki_dir}/index\.md"' "$_yaml_file" || { fail "index.md placeholder not quoted in plugin.yaml"; exit 1; }
+grep -q 'templates/raw\.gitkeep:[ ]*"{raw_dir}/\.gitkeep"' "$_yaml_file" || { fail "raw.gitkeep placeholder not quoted in plugin.yaml"; exit 1; }
+
+# Verify valid YAML parsing if ruby is available
+if command -v ruby >/dev/null 2>&1; then
+  ruby -ryaml -e 'YAML.load_file(ARGV[0])' "$_yaml_file" || { fail "karpathy-llm plugin.yaml is not valid YAML"; exit 1; }
+fi
+
+# Verify placeholder resolution strips quotes cleanly
+TEST_QUOTE_WS="$TEST_TMP/quote-resolve-ws"
+mkdir -p "$TEST_QUOTE_WS"
+cp "$CLI" "$TEST_QUOTE_WS/rnex"
+chmod +x "$TEST_QUOTE_WS/rnex"
+cp "$DIR/package.json" "$TEST_QUOTE_WS/package.json"
+cp -r "$DIR/lib" "$TEST_QUOTE_WS/lib"
+cp -r "$DIR/toolkit" "$TEST_QUOTE_WS/toolkit"
+cp -r "$DIR/templates" "$TEST_QUOTE_WS/templates"
+git -C "$TEST_QUOTE_WS" init -q
+
+"$TEST_QUOTE_WS/rnex" init -y --karpathy "$TEST_QUOTE_WS" >/dev/null
+[ -f "$TEST_QUOTE_WS/.rnex/wiki/index.md" ] || { fail "index.md not created at resolved path"; exit 1; }
+[ ! -d "$TEST_QUOTE_WS/\"" ] || { fail "Literal quotes leaked into directory names"; exit 1; }
+pass
+
+# --------------------------------------------------------------------------
+run_test "Fix 18: Copilot after_sync hook functions reliably in standalone/unpreloaded hook runners"
+TEST_STANDALONE_SYNC_WS="$TEST_TMP/cop-sync-standalone-ws"
+mkdir -p "$TEST_STANDALONE_SYNC_WS"
+cp "$CLI" "$TEST_STANDALONE_SYNC_WS/rnex"
+chmod +x "$TEST_STANDALONE_SYNC_WS/rnex"
+cp "$DIR/package.json" "$TEST_STANDALONE_SYNC_WS/package.json"
+cp -r "$DIR/lib" "$TEST_STANDALONE_SYNC_WS/lib"
+cp -r "$DIR/toolkit" "$TEST_STANDALONE_SYNC_WS/toolkit"
+cp -r "$DIR/templates" "$TEST_STANDALONE_SYNC_WS/templates"
+git -C "$TEST_STANDALONE_SYNC_WS" init -q
+"$TEST_STANDALONE_SYNC_WS/rnex" init -y --copilot "$TEST_STANDALONE_SYNC_WS" >/dev/null
+rm -f "$TEST_STANDALONE_SYNC_WS/.github/copilot-instructions.md"
+
+# Run copilot after_sync.sh in a clean subshell with NO preloaded core functions
+_sync_out="$(env -i PATH="$PATH" HOME="$HOME" RNEX_ROOT="$TEST_STANDALONE_SYNC_WS" sh "$TEST_STANDALONE_SYNC_WS/toolkit/plugins/copilot/hooks/after_sync.sh" 2>&1)" || { fail "after_sync.sh failed in unpreloaded subshell: $_sync_out"; exit 1; }
+[ -f "$TEST_STANDALONE_SYNC_WS/.github/copilot-instructions.md" ] || { fail "copilot-instructions.md not created by standalone after_sync hook"; exit 1; }
+grep -q "CRITICAL: You MUST read and strictly follow all instructions" "$TEST_STANDALONE_SYNC_WS/.github/copilot-instructions.md" || { fail "Instructions content missing in standalone after_sync run"; exit 1; }
+pass
+
+# --------------------------------------------------------------------------
+run_test "Fix 19: Copilot before_plugin_disable hook functions reliably in standalone/unpreloaded hook runners"
+TEST_STANDALONE_DIS_WS="$TEST_TMP/cop-dis-standalone-ws"
+mkdir -p "$TEST_STANDALONE_DIS_WS"
+cp "$CLI" "$TEST_STANDALONE_DIS_WS/rnex"
+chmod +x "$TEST_STANDALONE_DIS_WS/rnex"
+cp "$DIR/package.json" "$TEST_STANDALONE_DIS_WS/package.json"
+cp -r "$DIR/lib" "$TEST_STANDALONE_DIS_WS/lib"
+cp -r "$DIR/toolkit" "$TEST_STANDALONE_DIS_WS/toolkit"
+cp -r "$DIR/templates" "$TEST_STANDALONE_DIS_WS/templates"
+git -C "$TEST_STANDALONE_DIS_WS" init -q
+"$TEST_STANDALONE_DIS_WS/rnex" init -y --copilot "$TEST_STANDALONE_DIS_WS" >/dev/null
+[ -f "$TEST_STANDALONE_DIS_WS/.github/copilot-instructions.md" ] || { fail "copilot-instructions.md missing before disable"; exit 1; }
+
+# Run copilot before_plugin_disable.sh in a clean subshell with NO preloaded core functions
+_dis_out="$(env -i PATH="$PATH" HOME="$HOME" RNEX_ROOT="$TEST_STANDALONE_DIS_WS" sh "$TEST_STANDALONE_DIS_WS/toolkit/plugins/copilot/hooks/before_plugin_disable.sh" 2>&1)" || { fail "before_plugin_disable.sh failed in unpreloaded subshell: $_dis_out"; exit 1; }
+[ ! -f "$TEST_STANDALONE_DIS_WS/.github/copilot-instructions.md" ] || { fail "copilot-instructions.md not cleaned by standalone before_plugin_disable hook"; exit 1; }
+pass
+
+# --------------------------------------------------------------------------
+run_test "Fix 20: Karpathy-llm git_pre-push hook inspects pushed revisions and suppresses false reminders for unrelated pushes"
+TEST_PUSH_WS="$TEST_TMP/git-prepush-ws"
+mkdir -p "$TEST_PUSH_WS/src" "$TEST_PUSH_WS/docs" "$TEST_PUSH_WS/.rnex/wiki"
+git -C "$TEST_PUSH_WS" init -q
+git -C "$TEST_PUSH_WS" config user.email "test@example.com"
+git -C "$TEST_PUSH_WS" config user.name "Test Runner"
+
+printf 'initial\n' > "$TEST_PUSH_WS/README.md"
+printf '# Index\n' > "$TEST_PUSH_WS/.rnex/wiki/index.md"
+printf '# Hot\n' > "$TEST_PUSH_WS/.rnex/wiki/hot.md"
+git -C "$TEST_PUSH_WS" add README.md .rnex/wiki/index.md .rnex/wiki/hot.md
+git -C "$TEST_PUSH_WS" commit -qm "Initial commit"
+_base_sha="$(git -C "$TEST_PUSH_WS" rev-parse HEAD)"
+
+cat <<'EOF_CFG' > "$TEST_PUSH_WS/.local.rnex.yaml"
+plugins:
+  karpathy-llm:
+    lint_trigger: git-pre-push
+    notify_on_changes: true
+EOF_CFG
+
+# Scenario A: Push commit with unrelated changes (src/main.py)
+printf 'print("hello")\n' > "$TEST_PUSH_WS/src/main.py"
+git -C "$TEST_PUSH_WS" add src/main.py
+git -C "$TEST_PUSH_WS" commit -qm "Unrelated feature commit"
+_unrelated_sha="$(git -C "$TEST_PUSH_WS" rev-parse HEAD)"
+
+# Feed pushed range to git_pre-push.sh via stdin
+_push_unrelated_out="$(printf 'refs/heads/main %s refs/heads/main %s\n' "$_unrelated_sha" "$_base_sha" | RNEX_ROOT="$TEST_PUSH_WS" "$DIR/toolkit/plugins/karpathy-llm/hooks/git_pre-push.sh" 2>&1)"
+! echo "$_push_unrelated_out" | grep -q "Reminder: Wiki files changed" || { fail "git_pre-push emitted false reminder on unrelated push: $_push_unrelated_out"; exit 1; }
+
+# Scenario B: Push commit modifying wiki/raw files (docs/intake.md)
+printf '# Intake\nNew data\n' > "$TEST_PUSH_WS/docs/intake.md"
+git -C "$TEST_PUSH_WS" add docs/intake.md
+git -C "$TEST_PUSH_WS" commit -qm "Wiki intake document commit"
+_wiki_sha="$(git -C "$TEST_PUSH_WS" rev-parse HEAD)"
+
+_push_wiki_out="$(printf 'refs/heads/main %s refs/heads/main %s\n' "$_wiki_sha" "$_unrelated_sha" | RNEX_ROOT="$TEST_PUSH_WS" "$DIR/toolkit/plugins/karpathy-llm/hooks/git_pre-push.sh" 2>&1)"
+echo "$_push_wiki_out" | grep -q "Reminder: Wiki files changed\. Run the rnex-karpathy-llm-wiki-lint skill to verify\." || { fail "git_pre-push failed to emit reminder on wiki push: $_push_wiki_out"; exit 1; }
+pass
+
+# --------------------------------------------------------------------------
+run_test "Fix 21: Karpathy-llm rnex-scaffolding-meta-prompt.md relation and source examples match configured .rnex/wiki/ and ./docs/ paths"
+_prompt_file="$DIR/toolkit/plugins/karpathy-llm/instructions/rnex-scaffolding-meta-prompt.md"
+[ -f "$_prompt_file" ] || { fail "rnex-scaffolding-meta-prompt.md missing"; exit 1; }
+
+grep -q "sources: \[\][ ]*#[ ]*\./docs/ files this page was derived from" "$_prompt_file" || { fail "sources example does not reference ./docs/: $(grep -n 'sources:' "$_prompt_file")"; exit 1; }
+grep -q "# Typed relation fields — paths relative to \.rnex/wiki/" "$_prompt_file" || { fail "relations example does not reference .rnex/wiki/: $(grep -n 'Typed relation fields' "$_prompt_file")"; exit 1; }
+grep -q "\`\.rnex/wiki/index\.md\` uses its own frontmatter schema" "$_prompt_file" || { fail "index file example does not reference .rnex/wiki/index.md"; exit 1; }
+! grep -q "# /raw/ files this page was derived from" "$_prompt_file" || { fail "Still references legacy /raw/ in sources comment"; exit 1; }
+! grep -q "# Typed relation fields — paths relative to /wiki/" "$_prompt_file" || { fail "Still references legacy /wiki/ in relations comment"; exit 1; }
+pass
+
 if [ "${_STANDALONE_RUN:-0}" -eq 1 ]; then
   report_results
 fi
