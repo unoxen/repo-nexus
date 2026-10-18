@@ -23,18 +23,18 @@ _yaml_list_plugins_from_file() {
     }
 
     in_plugins && (indent == plugin_indent) {
-      if (trimmed ~ /^[\"\x27]?[a-zA-Z0-9_.-]+[\"\x27]?:/) {
+      if (trimmed ~ /^["\047]?[a-zA-Z0-9_.-]+["\047]?:/) {
         line = trimmed
         sub(/:.*/, "", line)
-        gsub(/^["\x27]|["\x27]$/, "", line)
+        gsub(/^["\047]|["\047]$/, "", line)
         gsub(/[[:space:]]/, "", line)
         if (length(line) > 0) print line
-      } else if (trimmed ~ /^-[ \t]+[\"\x27]?[a-zA-Z0-9_.-]+/) {
+      } else if (trimmed ~ /^-[ \t]+["\047]?[a-zA-Z0-9_.-]+/) {
         line = trimmed
         sub(/^-[ \t]+/, "", line)
         sub(/[ \t]*#.*/, "", line)
         sub(/:.*/, "", line)
-        gsub(/^["\x27]|["\x27]$/, "", line)
+        gsub(/^["\047]|["\047]$/, "", line)
         gsub(/[[:space:]]/, "", line)
         if (length(line) > 0) print line
       }
@@ -72,7 +72,11 @@ _yaml_plugin_get_from_file() {
     }
 
     !in_target {
-      if (trimmed ~ ("^[\"\x27]?" plugin "[\"\x27]?:")) {
+      k = trimmed
+      sub(/:.*/, "", k)
+      gsub(/^["\047]|["\047]$/, "", k)
+      gsub(/[[:space:]]/, "", k)
+      if (k == plugin && trimmed ~ /:[ \t]*(#.*)?$/) {
         in_target=1
         plugin_indent=indent
         next
@@ -80,18 +84,22 @@ _yaml_plugin_get_from_file() {
     }
 
     in_target && (indent > plugin_indent) {
-      if (trimmed ~ ("^[\"\x27]?" key "[\"\x27]?:[ \t]*")) {
-        sub("^[\"\x27]?" key "[\"\x27]?:[ \t]*", "", trimmed)
-        if (trimmed ~ /^"[^"]*"/) {
-          match(trimmed, /^"[^"]*"/)
-          val = substr(trimmed, 2, RLENGTH - 2)
-        } else if (trimmed ~ /^\x27[^\x27]*\x27/) {
-          match(trimmed, /^\x27[^\x27]*\x27/)
-          val = substr(trimmed, 2, RLENGTH - 2)
+      k = trimmed
+      sub(/:.*/, "", k)
+      gsub(/^["\047]|["\047]$/, "", k)
+      gsub(/[[:space:]]/, "", k)
+      if (k == key && trimmed ~ /:[ \t]*/) {
+        val = trimmed
+        sub(/^[^:]*:[ \t]*/, "", val)
+        if (val ~ /^"[^"]*"/) {
+          match(val, /^"[^"]*"/)
+          val = substr(val, 2, RLENGTH - 2)
+        } else if (val ~ /^\047[^\047]*\047/) {
+          match(val, /^\047[^\047]*\047/)
+          val = substr(val, 2, RLENGTH - 2)
         } else {
-          sub(/[ \t]*#.*$/, "", trimmed)
-          sub(/[ \t]+$/, "", trimmed)
-          val = trimmed
+          sub(/[ \t]*#.*$/, "", val)
+          sub(/[ \t]+$/, "", val)
         }
         print val
         exit
@@ -396,7 +404,7 @@ _yaml_get_from_file() {
       line = $0
       sub("^    " field ":[ ]*", "", line)
       sub(/[ ]*#.*$/, "", line)
-      gsub(/^["\x27]|["\x27]$/, "", line)
+      gsub(/^["\047]|["\047]$/, "", line)
       print line
       exit
     }

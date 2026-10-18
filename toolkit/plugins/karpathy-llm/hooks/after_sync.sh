@@ -30,7 +30,11 @@ get_cfg() {
       }
 
       !in_target {
-        if (trimmed ~ ("^[\"\x27]?" plugin "[\"\x27]?:")) {
+        k = trimmed
+        sub(/:.*/, "", k)
+        gsub(/^["\047]|["\047]$/, "", k)
+        gsub(/[[:space:]]/, "", k)
+        if (k == plugin && trimmed ~ /:[ \t]*(#.*)?$/) {
           in_target=1
           plugin_indent=indent
           next
@@ -38,18 +42,22 @@ get_cfg() {
       }
 
       in_target && (indent > plugin_indent) {
-        if (trimmed ~ ("^[\"\x27]?" key "[\"\x27]?:[ \t]*")) {
-          sub("^[\"\x27]?" key "[\"\x27]?:[ \t]*", "", trimmed)
-          if (trimmed ~ /^"[^"]*"/) {
-            match(trimmed, /^"[^"]*"/)
-            val = substr(trimmed, 2, RLENGTH - 2)
-          } else if (trimmed ~ /^\x27[^\x27]*\x27/) {
-            match(trimmed, /^\x27[^\x27]*\x27/)
-            val = substr(trimmed, 2, RLENGTH - 2)
+        k = trimmed
+        sub(/:.*/, "", k)
+        gsub(/^["\047]|["\047]$/, "", k)
+        gsub(/[[:space:]]/, "", k)
+        if (k == key && trimmed ~ /:[ \t]*/) {
+          val = trimmed
+          sub(/^[^:]*:[ \t]*/, "", val)
+          if (val ~ /^"[^"]*"/) {
+            match(val, /^"[^"]*"/)
+            val = substr(val, 2, RLENGTH - 2)
+          } else if (val ~ /^\047[^\047]*\047/) {
+            match(val, /^\047[^\047]*\047/)
+            val = substr(val, 2, RLENGTH - 2)
           } else {
-            sub(/[ \t]*#.*$/, "", trimmed)
-            sub(/[ \t]+$/, "", trimmed)
-            val = trimmed
+            sub(/[ \t]*#.*$/, "", val)
+            sub(/[ \t]+$/, "", val)
           }
           print val
           exit
@@ -432,7 +440,7 @@ if [ "$_skip_all_readmes" -ne 1 ]; then
           line = $0
           sub("^    enabled:[ ]*", "", line)
           sub(/[ ]*#.*$/, "", line)
-          gsub(/^["\x27]|["\x27]$/, "", line)
+          gsub(/^["\047]|["\047]$/, "", line)
           print line
           exit
         }
@@ -453,7 +461,7 @@ if [ "$_skip_all_readmes" -ne 1 ]; then
           line = $0
           sub("^    ingest_member_readmes:[ ]*", "", line)
           sub(/[ ]*#.*$/, "", line)
-          gsub(/^["\x27]|["\x27]$/, "", line)
+          gsub(/^["\047]|["\047]$/, "", line)
           print line
           exit
         }
@@ -475,7 +483,7 @@ if [ "$_skip_all_readmes" -ne 1 ]; then
             line = $0
             sub("^    path:[ ]*", "", line)
             sub(/[ ]*#.*$/, "", line)
-            gsub(/^["\x27]|["\x27]$/, "")
+            gsub(/^["\047]|["\047]$/, "", line)
             print line
             exit
           }

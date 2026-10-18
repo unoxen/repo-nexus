@@ -767,21 +767,26 @@ touch "$TEST_SYNC_GOAL_WS/wiki/index.md"
 [ -d "$TEST_SYNC_GOAL_WS/raw" ] || { fail "Failed to set up test directory raw"; exit 1; }
 [ -d "$TEST_SYNC_GOAL_WS/wiki" ] || { fail "Failed to set up test directory wiki"; exit 1; }
 
-# Add hook to verify that during Step 3, Step 2 artifacts (.rnex/sync_stamp & .rnex/ai-instructions.md) already exist
+# Remove Step 2 artifacts to verify that rnex sync generates them before Step 3 completes
+rm -f "$TEST_SYNC_GOAL_WS/.rnex/sync_stamp" "$TEST_SYNC_GOAL_WS/.rnex/.sync_stamp" "$TEST_SYNC_GOAL_WS/.rnex/ai-instructions.md"
+[ ! -f "$TEST_SYNC_GOAL_WS/.rnex/sync_stamp" ] || { fail "sync_stamp was not removed"; exit 1; }
+[ ! -f "$TEST_SYNC_GOAL_WS/.rnex/ai-instructions.md" ] || { fail "ai-instructions.md was not removed"; exit 1; }
+
+# Add after_sync hook to verify that during Step 3, Step 2 artifacts (.rnex/sync_stamp & .rnex/ai-instructions.md) already exist
 mkdir -p "$TEST_SYNC_GOAL_WS/toolkit/plugins/karpathy-llm/hooks"
-cat <<'HOOK_CHECK' > "$TEST_SYNC_GOAL_WS/toolkit/plugins/karpathy-llm/hooks/before_sync.sh"
+cat <<'HOOK_CHECK' > "$TEST_SYNC_GOAL_WS/toolkit/plugins/karpathy-llm/hooks/after_sync.sh"
 #!/bin/sh
 if [ ! -f "$RNEX_ROOT/.rnex/sync_stamp" ]; then
-  echo "STEP_ORDER_ERROR: sync_stamp does not exist before Step 3 plugin sync" >&2
+  echo "STEP_ORDER_ERROR: sync_stamp does not exist before Step 3 completes" >&2
   exit 1
 fi
 if [ ! -f "$RNEX_ROOT/.rnex/ai-instructions.md" ]; then
-  echo "STEP_ORDER_ERROR: ai-instructions.md does not exist before Step 3 plugin sync" >&2
+  echo "STEP_ORDER_ERROR: ai-instructions.md does not exist before Step 3 completes" >&2
   exit 1
 fi
 echo "STEP_ORDER_VERIFIED: Step 2 ran before Step 3"
 HOOK_CHECK
-chmod +x "$TEST_SYNC_GOAL_WS/toolkit/plugins/karpathy-llm/hooks/before_sync.sh"
+chmod +x "$TEST_SYNC_GOAL_WS/toolkit/plugins/karpathy-llm/hooks/after_sync.sh"
 
 # Run rnex sync and capture output
 _sync_goal_out="$(cd "$TEST_SYNC_GOAL_WS" && ./rnex sync 2>&1)" || { fail "rnex sync failed: $_sync_goal_out"; exit 1; }
