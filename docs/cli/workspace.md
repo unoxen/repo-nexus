@@ -71,7 +71,7 @@ rnex sync [options]
 7. Reconciles automated Git hooks in `.rnex/hooks/` against `git_hooks` config.
 8. Re-creates member `.rnex/` scaffolding in active repositories (`rnex_dir: true`).
 9. Updates multi-root `.code-workspace` folder mappings if configured.
-10. Generates `.rnex/bin/auto-sync.sh` and updates the checksum stamp in `.rnex/.sync_stamp`.
+10. Generates `.rnex/bin/auto-sync.sh` and updates the checksum stamp in `.rnex/sync_stamp`.
 
 ---
 
@@ -86,7 +86,7 @@ rnex status
 
 ### Execution
 * **Strictly Read-Only**: Inspects workspace health, active repos, loaded config files (`rnex.yaml` and `.local.rnex.yaml`), git hooks, and plugins.
-* **Sync Diagnostics**: Compares current config checksums against `.rnex/.sync_stamp` and suggests running `rnex sync` if configuration drift is detected.
+* **Sync Diagnostics**: Compares current config checksums against `.rnex/sync_stamp` and suggests running `rnex sync` if configuration drift is detected.
 
 ---
 

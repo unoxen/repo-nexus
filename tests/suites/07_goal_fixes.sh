@@ -228,7 +228,8 @@ cp -r "$DIR/templates" "$TEST_CFG_EXT_WS/templates"
 (cd "$TEST_CFG_EXT_WS" && ./rnex init -y >/dev/null)
 
 # Verify sync stamp exists
-[ -f "$TEST_CFG_EXT_WS/.rnex/.sync_stamp" ] || { fail "sync stamp missing after init"; exit 1; }
+[ -f "$TEST_CFG_EXT_WS/.rnex/sync_stamp" ] || { fail "sync stamp missing after init"; exit 1; }
+[ ! -f "$TEST_CFG_EXT_WS/.rnex/.sync_stamp" ] || { fail "legacy .sync_stamp still exists after init"; exit 1; }
 
 # Modify rnex.yaml in TEST_CFG_EXT_WS
 printf "\n# modified config\n" >> "$TEST_CFG_EXT_WS/rnex.yaml"
@@ -241,7 +242,7 @@ cd "$DIR"
 
 # Verify the stamp in TEST_CFG_EXT_WS was updated to match the new config sum
 _new_sum="$(cd "$TEST_CFG_EXT_WS" && cksum rnex.yaml .local.rnex.yaml 2>/dev/null | cksum | awk '{print $1, $2}')"
-_stamp_val="$(cat "$TEST_CFG_EXT_WS/.rnex/.sync_stamp" 2>/dev/null)"
+_stamp_val="$(cat "$TEST_CFG_EXT_WS/.rnex/sync_stamp" 2>/dev/null)"
 [ "$_new_sum" = "$_stamp_val" ] || { fail "Auto-sync was not triggered for custom config from external directory (sum: $_new_sum, stamp: $_stamp_val)"; exit 1; }
 pass
 
@@ -796,7 +797,7 @@ echo "$_sync_goal_out" | grep -q "STEP_ORDER_VERIFIED: Step 2 ran before Step 3"
 
 # Verify .rnex/sync_stamp and .rnex/ai-instructions.md exist
 [ -f "$TEST_SYNC_GOAL_WS/.rnex/sync_stamp" ] || { fail ".rnex/sync_stamp missing after sync"; exit 1; }
-[ -f "$TEST_SYNC_GOAL_WS/.rnex/.sync_stamp" ] || { fail ".rnex/.sync_stamp missing after sync"; exit 1; }
+[ ! -f "$TEST_SYNC_GOAL_WS/.rnex/.sync_stamp" ] || { fail "legacy .rnex/.sync_stamp still exists after sync"; exit 1; }
 [ -f "$TEST_SYNC_GOAL_WS/.rnex/ai-instructions.md" ] || { fail ".rnex/ai-instructions.md missing after sync"; exit 1; }
 
 # Verify root raw/ and wiki/ were purged / do not exist

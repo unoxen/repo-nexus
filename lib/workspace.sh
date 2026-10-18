@@ -52,8 +52,8 @@ update_sync_stamp() {
     fi
   fi
   _csum="$(get_config_sum "$_dir")"
-  printf '%s\n' "$_csum" > "$_dir/.rnex/.sync_stamp"
   printf '%s\n' "$_csum" > "$_dir/.rnex/sync_stamp"
+  rm -f "$_dir/.rnex/.sync_stamp"
 }
 
 check_auto_sync() {
@@ -76,8 +76,8 @@ check_auto_sync() {
     _cfg_file="$(resolve_path "$CUSTOM_CONFIG" 2>/dev/null || true)"
   fi
   [ -f "$_cfg_file" ] || return 0
-  _stamp="$_ws/.rnex/.sync_stamp"
-  [ -f "$_stamp" ] || _stamp="$_ws/.rnex/sync_stamp"
+  _stamp="$_ws/.rnex/sync_stamp"
+  [ -f "$_stamp" ] || _stamp="$_ws/.rnex/.sync_stamp"
   if [ ! -f "$_stamp" ] || [ "$(get_config_sum "$_ws")" != "$(cat "$_stamp" 2>/dev/null)" ]; then
     cmd_sync -y --quiet
   fi

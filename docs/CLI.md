@@ -41,7 +41,7 @@ rnex sync [-y|--yes] [-q|--quiet]
 6. **Harness Sync**: Reconciles root `.rnex/` and member repository harnesses (`repos/<name>/.rnex/`) for all enabled member repositories where `rnex_dir: true`.
 7. **Git Hooks**: Installs or reconciles workspace Git hooks in `.rnex/hooks` when `git_hooks: true`.
 8. **Multi-Root Workspace**: Synchronizes `.code-workspace` folder mappings when `code_workspace: true`.
-9. **Event-Driven Auto-Sync Scripts & Stamp**: Generates `.rnex/bin/auto-sync.sh` and updates `.rnex/.sync_stamp`.
+9. **Event-Driven Auto-Sync Scripts & Stamp**: Generates `.rnex/bin/auto-sync.sh` and updates `.rnex/sync_stamp`.
 
 ---
 

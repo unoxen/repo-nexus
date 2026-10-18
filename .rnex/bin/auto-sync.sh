@@ -3,7 +3,8 @@ set -e
 _ws="$(cd "$(dirname "$0")/../.." 2>/dev/null && pwd -P)"
 [ -f "$_ws/rnex.yaml" ] || exit 0
 
-_stamp="$_ws/.rnex/.sync_stamp"
+_stamp="$_ws/.rnex/sync_stamp"
+[ -f "$_stamp" ] || _stamp="$_ws/.rnex/.sync_stamp"
 _cur_sum="$(cd "$_ws" 2>/dev/null && cksum rnex.yaml .local.rnex.yaml 2>/dev/null | cksum | awk '{print $1, $2}')"
 _saved_sum=""
 [ -f "$_stamp" ] && _saved_sum="$(cat "$_stamp" 2>/dev/null)"

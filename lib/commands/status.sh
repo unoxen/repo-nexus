@@ -50,8 +50,8 @@ cmd_status() {
     printf '  %b●%b Workspace:   %s\n' "$_DIM" "$_NC" "$CODE_WORKSPACE_FILE"
   fi
 
-  _stamp_file="$NEXUS_DIR/.rnex/.sync_stamp"
-  [ -f "$_stamp_file" ] || _stamp_file="$NEXUS_DIR/.rnex/sync_stamp"
+  _stamp_file="$NEXUS_DIR/.rnex/sync_stamp"
+  [ -f "$_stamp_file" ] || _stamp_file="$NEXUS_DIR/.rnex/.sync_stamp"
   _cur_sum="$(get_config_sum "$NEXUS_DIR")"
   if [ ! -f "$_stamp_file" ] || [ "$_cur_sum" != "$(cat "$_stamp_file" 2>/dev/null)" ]; then
     printf '  %b!%b Sync Stamp:    workspace out of sync with configuration (run "rnex sync")\n' "$_Y" "$_NC"

@@ -82,7 +82,7 @@ _status_fix_err="$("$TEST_WORKSPACE/rnex" status --fix 2>&1 || true)"
 echo "$_status_fix_err" | grep -q "Use 'rnex sync'" || { fail "rnex status --fix did not fail with migration message"; exit 1; }
 
 # Read-only status reports out of sync when sync stamp is missing
-rm -f "$TEST_WORKSPACE/.rnex/.sync_stamp" "$TEST_WORKSPACE/.rnex/sync_stamp"
+rm -f "$TEST_WORKSPACE/.rnex/sync_stamp" "$TEST_WORKSPACE/.rnex/.sync_stamp"
 _status_out="$("$TEST_WORKSPACE/rnex" status 2>&1)"
 echo "$_status_out" | grep -q "out of sync" || { fail "rnex status did not report missing sync stamp"; exit 1; }
 
@@ -90,8 +90,8 @@ echo "$_status_out" | grep -q "out of sync" || { fail "rnex status did not repor
 rm -f "$TEST_WORKSPACE/.ignore"
 "$TEST_WORKSPACE/rnex" sync >/dev/null
 [ -f "$TEST_WORKSPACE/.ignore" ] || { fail "rnex sync did not recreate .ignore"; exit 1; }
-[ -f "$TEST_WORKSPACE/.rnex/.sync_stamp" ] || { fail "rnex sync did not create .sync_stamp"; exit 1; }
 [ -f "$TEST_WORKSPACE/.rnex/sync_stamp" ] || { fail "rnex sync did not create sync_stamp"; exit 1; }
+[ ! -f "$TEST_WORKSPACE/.rnex/.sync_stamp" ] || { fail "legacy .sync_stamp still exists after rnex sync"; exit 1; }
 _status_synced="$("$TEST_WORKSPACE/rnex" status 2>&1)"
 echo "$_status_synced" | grep -q "synchronized" || { fail "rnex status did not report synchronized status"; exit 1; }
 pass
@@ -104,14 +104,14 @@ echo "# modified config" >> "$TEST_WORKSPACE/rnex.yaml"
 # Next workspace command (e.g. rnex list) should auto-reconcile and recreate .ignore and update stamp
 "$TEST_WORKSPACE/rnex" list >/dev/null
 [ -f "$TEST_WORKSPACE/.ignore" ] || { fail "rnex list did not auto-sync when rnex.yaml changed"; exit 1; }
-_stamp_after_edit="$(cat "$TEST_WORKSPACE/.rnex/.sync_stamp" 2>/dev/null)"
+_stamp_after_edit="$(cat "$TEST_WORKSPACE/.rnex/sync_stamp" 2>/dev/null)"
 
 # 2. Create .local.rnex.yaml: invalidate stamp
 rm -f "$TEST_WORKSPACE/.ignore"
 echo "git_hooks: false" > "$TEST_WORKSPACE/.local.rnex.yaml"
 "$TEST_WORKSPACE/rnex" list >/dev/null
 [ -f "$TEST_WORKSPACE/.ignore" ] || { fail "rnex list did not auto-sync when .local.rnex.yaml created"; exit 1; }
-_stamp_after_local="$(cat "$TEST_WORKSPACE/.rnex/.sync_stamp" 2>/dev/null)"
+_stamp_after_local="$(cat "$TEST_WORKSPACE/.rnex/sync_stamp" 2>/dev/null)"
 [ "$_stamp_after_local" != "$_stamp_after_edit" ] || { fail "sync stamp was not updated after .local.rnex.yaml created"; exit 1; }
 
 # 3. Delete .local.rnex.yaml: invalidate stamp
@@ -119,7 +119,7 @@ rm -f "$TEST_WORKSPACE/.ignore"
 rm -f "$TEST_WORKSPACE/.local.rnex.yaml"
 "$TEST_WORKSPACE/rnex" list >/dev/null
 [ -f "$TEST_WORKSPACE/.ignore" ] || { fail "rnex list did not auto-sync when .local.rnex.yaml deleted"; exit 1; }
-_stamp_after_del="$(cat "$TEST_WORKSPACE/.rnex/.sync_stamp" 2>/dev/null)"
+_stamp_after_del="$(cat "$TEST_WORKSPACE/.rnex/sync_stamp" 2>/dev/null)"
 [ "$_stamp_after_del" != "$_stamp_after_local" ] || { fail "sync stamp was not updated after .local.rnex.yaml deleted"; exit 1; }
 
 # 4. Shell prompt hook _rnex_auto_sync triggers reconciliation
@@ -130,8 +130,8 @@ echo "# prompt hook change" >> "$TEST_WORKSPACE/rnex.yaml"
   cd "$TEST_WORKSPACE"
   _rnex_auto_sync() {
     [ -f rnex.yaml ] || return 0
-    if [ ! -f .rnex/.sync_stamp ] || [ rnex.yaml -nt .rnex/.sync_stamp ] || \
-       { [ -f .local.rnex.yaml ] && [ .local.rnex.yaml -nt .rnex/.sync_stamp ]; }; then
+    if [ ! -f .rnex/sync_stamp ] || [ rnex.yaml -nt .rnex/sync_stamp ] || \
+       { [ -f .local.rnex.yaml ] && [ .local.rnex.yaml -nt .rnex/sync_stamp ]; }; then
       ./rnex sync -y --quiet
     fi
   }

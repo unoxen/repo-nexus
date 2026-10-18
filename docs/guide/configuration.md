@@ -126,5 +126,5 @@ rnex sync
 ```
 
 ::: tip Status & Auto-Sync
-Running `rnex status` inspects workspace health and checks if configuration is in sync with `.rnex/.sync_stamp`. Running `rnex sync` applies full reconciliation and updates the sync stamp. Workspace commands (like `rnex list`) also automatically trigger auto-sync whenever configuration changes.
+Running `rnex status` inspects workspace health and checks if configuration is in sync with `.rnex/sync_stamp`. Running `rnex sync` applies full reconciliation and updates the sync stamp. Workspace commands (like `rnex list`) also automatically trigger auto-sync whenever configuration changes.
 :::
