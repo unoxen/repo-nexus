@@ -169,7 +169,7 @@ The `karpathy-llm` plugin encapsulates its agentic skills in `.rnex/plugins/karp
 - `wiki-ingest.md`
 - `wiki-lint.md`
 
-During `rnex sync`, its `after_sync.sh` lifecycle hook automatically registers zero-logic User Skill pointers (`rnex-karpathy-llm-wiki-ingest` and `rnex-karpathy-llm-wiki-lint`) across all enabled AI provider directories (`.cursor/rules/`, `.claude/skills/`, `.gemini/skills/`, `.windsurf/rules/`).
+During `rnex sync`, its `after_sync.sh` lifecycle hook automatically registers zero-logic User Skill pointers (`rnex-karpathy-llm-wiki-ingest` and `rnex-karpathy-llm-wiki-lint`) across all enabled AI provider directories (`.cursor/rules/`, `.claude/skills/`, `.agents/skills/`, `.windsurf/rules/`).
 
 When running `rnex plugin disable karpathy-llm`, its `before_plugin_disable.sh` lifecycle hook automatically unregisters the User Skills from all provider directories, while keeping core workspace skills intact.
 

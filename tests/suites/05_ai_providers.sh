@@ -75,7 +75,7 @@ git -C "$TEST_PROVIDERS_WS" init -q
 
 # Init workspace with claude flag
 "$TEST_PROVIDERS_WS/rnex" init -y --claude "$TEST_PROVIDERS_WS" >/dev/null
-[ -f "$TEST_PROVIDERS_WS/AGENTS.md" ] || { fail "AGENTS.md missing after init --claude"; exit 1; }
+[ ! -f "$TEST_PROVIDERS_WS/AGENTS.md" ] || { fail "Redundant AGENTS.md created after init --claude"; exit 1; }
 [ -f "$TEST_PROVIDERS_WS/CLAUDE.md" ] || { fail "CLAUDE.md missing after init --claude"; exit 1; }
 [ -f "$TEST_PROVIDERS_WS/.claude/skills/rnex-clone-sync/SKILL.md" ] || { fail "Claude user skill rnex-clone-sync/SKILL.md missing"; exit 1; }
 
@@ -84,7 +84,9 @@ git -C "$TEST_PROVIDERS_WS" init -q
 [ -f "$TEST_PROVIDERS_WS/GEMINI.md" ] || { fail "GEMINI.md missing after enabling gemini"; exit 1; }
 [ -f "$TEST_PROVIDERS_WS/.geminiignore" ] || { fail ".geminiignore missing after enabling gemini"; exit 1; }
 grep -q '!repos/\*' "$TEST_PROVIDERS_WS/.geminiignore" || { fail "!repos/* missing from .geminiignore"; exit 1; }
-[ -f "$TEST_PROVIDERS_WS/.gemini/skills/rnex-clone-sync/SKILL.md" ] || { fail "Gemini user skill rnex-clone-sync/SKILL.md missing"; exit 1; }
+[ -d "$TEST_PROVIDERS_WS/.agents/skills" ] || { fail ".agents/skills missing after enabling gemini"; exit 1; }
+[ ! -d "$TEST_PROVIDERS_WS/.gemini/skills" ] || { fail "incorrect .gemini/skills created"; exit 1; }
+[ -f "$TEST_PROVIDERS_WS/.agents/skills/rnex-clone-sync/SKILL.md" ] || { fail "Gemini user skill rnex-clone-sync/SKILL.md missing in .agents/skills"; exit 1; }
 
 # Enable cursor and windsurf plugins
 (cd "$TEST_PROVIDERS_WS" && ./rnex plugin enable cursor >/dev/null)
@@ -98,13 +100,12 @@ grep -q '!repos/\*' "$TEST_PROVIDERS_WS/.cursorignore" || { fail "!repos/* missi
 
 # Status command reports all enabled AI providers
 _prov_status="$(cd "$TEST_PROVIDERS_WS" && ./rnex status 2>&1)"
-echo "$_prov_status" | grep -q "AGENTS.md" || { fail "Status did not report AGENTS.md"; exit 1; }
 echo "$_prov_status" | grep -q "CLAUDE.md" || { fail "Status did not report CLAUDE.md"; exit 1; }
 echo "$_prov_status" | grep -q "GEMINI.md" || { fail "Status did not report GEMINI.md"; exit 1; }
 echo "$_prov_status" | grep -q "\.cursorrules" || { fail "Status did not report .cursorrules"; exit 1; }
 echo "$_prov_status" | grep -q "\.windsurfrules" || { fail "Status did not report .windsurfrules"; exit 1; }
 echo "$_prov_status" | grep -q "\.claude/skills/" || { fail "Status did not report .claude/skills/"; exit 1; }
-echo "$_prov_status" | grep -q "\.gemini/skills/" || { fail "Status did not report .gemini/skills/"; exit 1; }
+echo "$_prov_status" | grep -q "\.agents/skills/" || { fail "Status did not report .agents/skills/"; exit 1; }
 echo "$_prov_status" | grep -q "\.cursor/rules/" || { fail "Status did not report .cursor/rules/"; exit 1; }
 echo "$_prov_status" | grep -q "\.windsurf/rules/" || { fail "Status did not report .windsurf/rules/"; exit 1; }
 
@@ -127,28 +128,28 @@ grep -q "REPO-NEXUS:START" "$TEST_PROVIDERS_WS/.windsurfrules" || { fail "REPO-N
 
 # Add custom user skills and extra files across all providers
 echo "custom" > "$TEST_PROVIDERS_WS/.claude/skills/my-claude-skill.md"
-echo "custom" > "$TEST_PROVIDERS_WS/.gemini/skills/my-gemini-skill.md"
+echo "custom" > "$TEST_PROVIDERS_WS/.agents/skills/my-gemini-skill.md"
 echo "custom" > "$TEST_PROVIDERS_WS/.cursor/rules/my-user-rule.mdc"
 echo "custom" > "$TEST_PROVIDERS_WS/.windsurf/rules/my-user-rule.md"
 
-# Disable all provider plugins and verify AGENTS.md remains intact
+# Disable all provider plugins and verify AGENTS.md is restored
 (cd "$TEST_PROVIDERS_WS" && ./rnex plugin disable claude >/dev/null)
 (cd "$TEST_PROVIDERS_WS" && ./rnex plugin disable gemini >/dev/null)
 (cd "$TEST_PROVIDERS_WS" && ./rnex plugin disable cursor >/dev/null)
 (cd "$TEST_PROVIDERS_WS" && ./rnex plugin disable windsurf >/dev/null)
 (cd "$TEST_PROVIDERS_WS" && ./rnex sync -y --quiet >/dev/null)
 
-[ -f "$TEST_PROVIDERS_WS/AGENTS.md" ] || { fail "AGENTS.md not preserved when all AI provider plugins disabled"; exit 1; }
+[ -f "$TEST_PROVIDERS_WS/AGENTS.md" ] || { fail "AGENTS.md not restored when all AI provider plugins disabled"; exit 1; }
 
 # Verify Repo Nexus generated User Skills were cleaned up
 [ ! -d "$TEST_PROVIDERS_WS/.claude/skills/rnex-clone-sync" ] || { fail "rnex User Skill not cleaned from claude"; exit 1; }
-[ ! -d "$TEST_PROVIDERS_WS/.gemini/skills/rnex-clone-sync" ] || { fail "rnex User Skill not cleaned from gemini"; exit 1; }
+[ ! -d "$TEST_PROVIDERS_WS/.agents/skills/rnex-clone-sync" ] || { fail "rnex User Skill not cleaned from .agents"; exit 1; }
 [ ! -f "$TEST_PROVIDERS_WS/.cursor/rules/rnex-clone-sync.md" ] || { fail "rnex User Skill not cleaned from cursor"; exit 1; }
 [ ! -f "$TEST_PROVIDERS_WS/.windsurf/rules/rnex-clone-sync.md" ] || { fail "rnex User Skill not cleaned from windsurf"; exit 1; }
 
 # Verify ALL user custom files were preserved
 [ -f "$TEST_PROVIDERS_WS/.claude/skills/my-claude-skill.md" ] || { fail "User skill deleted from .claude"; exit 1; }
-[ -f "$TEST_PROVIDERS_WS/.gemini/skills/my-gemini-skill.md" ] || { fail "User skill deleted from .gemini"; exit 1; }
+[ -f "$TEST_PROVIDERS_WS/.agents/skills/my-gemini-skill.md" ] || { fail "User skill deleted from .agents"; exit 1; }
 [ -f "$TEST_PROVIDERS_WS/.cursor/rules/my-user-rule.mdc" ] || { fail "User rule deleted from .cursor"; exit 1; }
 [ -f "$TEST_PROVIDERS_WS/.windsurf/rules/my-user-rule.md" ] || { fail "User rule deleted from .windsurf"; exit 1; }
 

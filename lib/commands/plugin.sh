@@ -70,7 +70,7 @@ cmd_plugin_info() {
   [ -z "$_skill_target" ] && case "$_name" in
     copilot)  _skill_target=".github/skills/" ;;
     claude)   _skill_target=".claude/skills/" ;;
-    gemini)   _skill_target=".gemini/skills/" ;;
+    gemini)   _skill_target=".agents/skills/" ;;
     cursor)   _skill_target=".cursor/rules/" ;;
     windsurf) _skill_target=".windsurf/rules/" ;;
   esac

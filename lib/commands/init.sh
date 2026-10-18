@@ -162,8 +162,18 @@ YAML_EOF
     log_ok "Created $RNEX_CONFIG_FILE"
   fi
 
+  # Set active workspace context for initialization
+  _orig_nexus="$NEXUS_DIR"
+  _orig_yaml="$WORKSPACE_YAML"
+  _orig_local_yaml="$WORKSPACE_LOCAL_YAML"
+  NEXUS_DIR="$_init_dir"
+  WORKSPACE_YAML="$_target_yaml"
+  WORKSPACE_LOCAL_YAML="$_init_dir/$RNEX_LOCAL_CONFIG_FILE"
+
   # ---- 2. Merge routing instructions into AI instructions files ------------
-  merge_rnex_instructions "$_init_dir/AGENTS.md"
+  if ! has_active_provider_instructions "$_init_dir"; then
+    merge_rnex_instructions "$_init_dir/AGENTS.md"
+  fi
   [ -f "$_init_dir/CLAUDE.md" ] && merge_rnex_instructions "$_init_dir/CLAUDE.md"
   [ -f "$_init_dir/GEMINI.md" ] && merge_rnex_instructions "$_init_dir/GEMINI.md"
   [ -f "$_init_dir/.cursorrules" ] && merge_rnex_instructions "$_init_dir/.cursorrules"
@@ -178,12 +188,6 @@ YAML_EOF
   # ---- 4. Create internal .rnex directory and sync base assets -------------
   mkdir -p "$_init_dir/.rnex"
   mkdir -p "$_init_dir/.rnex/plugins"
-  _orig_nexus="$NEXUS_DIR"
-  _orig_yaml="$WORKSPACE_YAML"
-  _orig_local_yaml="$WORKSPACE_LOCAL_YAML"
-  NEXUS_DIR="$_init_dir"
-  WORKSPACE_YAML="$_target_yaml"
-  WORKSPACE_LOCAL_YAML="$_init_dir/$RNEX_LOCAL_CONFIG_FILE"
   sync_plugins
   build_ai_instructions "$_init_dir"
   sync_skills

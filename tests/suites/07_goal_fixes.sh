@@ -814,6 +814,97 @@ echo "$_sync_goal_out" | grep -q "STEP_ORDER_VERIFIED: Step 2 ran before Step 3"
 
 pass
 
+# --------------------------------------------------------------------------
+run_test "Fix 24: rnex sync (with gemini plugin enabled) builds .agents/skills/ instead of .gemini/skills/"
+TEST_GEMINI_WS="$TEST_TMP/gemini-fix-ws"
+mkdir -p "$TEST_GEMINI_WS"
+cp "$CLI" "$TEST_GEMINI_WS/rnex"
+chmod +x "$TEST_GEMINI_WS/rnex"
+cp "$DIR/package.json" "$TEST_GEMINI_WS/package.json"
+cp -r "$DIR/lib" "$TEST_GEMINI_WS/lib"
+cp -r "$DIR/toolkit" "$TEST_GEMINI_WS/toolkit"
+cp -r "$DIR/templates" "$TEST_GEMINI_WS/templates"
+
+# Create a legacy .gemini/skills directory to verify migration/cleanup
+mkdir -p "$TEST_GEMINI_WS/.gemini/skills/rnex-legacy-skill"
+echo "legacy" > "$TEST_GEMINI_WS/.gemini/skills/rnex-legacy.md"
+
+(cd "$TEST_GEMINI_WS" && ./rnex init -y --gemini >/dev/null)
+
+# Verify .agents/skills/ is created and .gemini/skills/ is cleaned up
+[ -d "$TEST_GEMINI_WS/.agents/skills" ] || { fail ".agents/skills missing after init --gemini"; exit 1; }
+[ -f "$TEST_GEMINI_WS/.agents/skills/rnex-clone-sync/SKILL.md" ] || { fail ".agents/skills/rnex-clone-sync/SKILL.md missing"; exit 1; }
+[ ! -d "$TEST_GEMINI_WS/.gemini/skills" ] || { fail "legacy .gemini/skills was not purged on sync"; exit 1; }
+
+# Verify GEMINI.md exists with instructions directive
+[ -f "$TEST_GEMINI_WS/GEMINI.md" ] || { fail "GEMINI.md missing after init --gemini"; exit 1; }
+grep -q "CRITICAL: You MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\`" "$TEST_GEMINI_WS/GEMINI.md" || { fail "GEMINI.md missing directive"; exit 1; }
+
+# Verify AGENTS.md is not created (no redundancy)
+[ ! -f "$TEST_GEMINI_WS/AGENTS.md" ] || { fail "Redundant AGENTS.md created when gemini enabled"; exit 1; }
+
+# Status reports .agents/skills/ and GEMINI.md
+_gem_status="$(cd "$TEST_GEMINI_WS" && ./rnex status 2>&1)"
+echo "$_gem_status" | grep -q "GEMINI.md" || { fail "status did not report GEMINI.md: $_gem_status"; exit 1; }
+echo "$_gem_status" | grep -q "\.agents/skills/" || { fail "status did not report .agents/skills/: $_gem_status"; exit 1; }
+! echo "$_gem_status" | grep -q "\.gemini/skills/" || { fail "status reported obsolete .gemini/skills/: $_gem_status"; exit 1; }
+
+pass
+
+# --------------------------------------------------------------------------
+run_test "Fix 25: rnex sync (with copilot enabled) builds .github/copilot-instructions.md without redundant AGENTS.md, and restores AGENTS.md when disabled"
+TEST_COPILOT_WS="$TEST_TMP/copilot-redundancy-ws"
+mkdir -p "$TEST_COPILOT_WS"
+cp "$CLI" "$TEST_COPILOT_WS/rnex"
+chmod +x "$TEST_COPILOT_WS/rnex"
+cp "$DIR/package.json" "$TEST_COPILOT_WS/package.json"
+cp -r "$DIR/lib" "$TEST_COPILOT_WS/lib"
+cp -r "$DIR/toolkit" "$TEST_COPILOT_WS/toolkit"
+cp -r "$DIR/templates" "$TEST_COPILOT_WS/templates"
+
+# 1. Initialize workspace with copilot plugin enabled
+(cd "$TEST_COPILOT_WS" && ./rnex init -y --copilot >/dev/null)
+
+# Verify .github/copilot-instructions.md was created with routing instructions
+[ -f "$TEST_COPILOT_WS/.github/copilot-instructions.md" ] || { fail ".github/copilot-instructions.md missing after init --copilot"; exit 1; }
+grep -q "CRITICAL: You MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\`" "$TEST_COPILOT_WS/.github/copilot-instructions.md" || { fail ".github/copilot-instructions.md missing directive"; exit 1; }
+
+# Verify AGENTS.md was NOT created (no redundant file)
+[ ! -f "$TEST_COPILOT_WS/AGENTS.md" ] || { fail "Redundant AGENTS.md was created alongside copilot-instructions.md"; exit 1; }
+
+# Status reports copilot instructions and does NOT complain about missing AGENTS.md
+_copilot_status="$(cd "$TEST_COPILOT_WS" && ./rnex status 2>&1)"
+echo "$_copilot_status" | grep -q "\.github/copilot-instructions.md" || { fail "status did not report .github/copilot-instructions.md: $_copilot_status"; exit 1; }
+! echo "$_copilot_status" | grep -q "AGENTS.md.*MISSING" || { fail "status reported AGENTS.md MISSING when copilot active: $_copilot_status"; exit 1; }
+
+# 2. Test existing AGENTS.md cleanup on sync when copilot is enabled
+# If AGENTS.md is created with only the default rnex routing block, rnex sync should clean it up
+(cd "$TEST_COPILOT_WS" && ./rnex sync -y >/dev/null)
+[ ! -f "$TEST_COPILOT_WS/AGENTS.md" ] || { fail "Redundant AGENTS.md created after rnex sync with copilot enabled"; exit 1; }
+
+# 3. Test existing custom AGENTS.md preserves user content but strips rnex block
+cat <<'EOF_CUSTOM_AGENTS' > "$TEST_COPILOT_WS/AGENTS.md"
+# Custom Workspace Guidelines
+These are custom developer instructions.
+<!-- REPO-NEXUS:START -->
+CRITICAL: You MUST read and strictly follow all instructions in `.rnex/ai-instructions.md` before executing any task or answering any query in this workspace.
+<!-- REPO-NEXUS:END -->
+EOF_CUSTOM_AGENTS
+
+(cd "$TEST_COPILOT_WS" && ./rnex sync -y >/dev/null)
+[ -f "$TEST_COPILOT_WS/AGENTS.md" ] || { fail "Custom AGENTS.md was incorrectly deleted"; exit 1; }
+grep -q "These are custom developer instructions" "$TEST_COPILOT_WS/AGENTS.md" || { fail "Custom developer instructions were deleted from AGENTS.md"; exit 1; }
+! grep -q "REPO-NEXUS:START" "$TEST_COPILOT_WS/AGENTS.md" || { fail "Redundant REPO-NEXUS block was not stripped from custom AGENTS.md when copilot enabled"; exit 1; }
+
+# 4. Disable copilot plugin and verify AGENTS.md restores REPO-NEXUS routing block
+(cd "$TEST_COPILOT_WS" && ./rnex plugin disable copilot >/dev/null)
+[ ! -f "$TEST_COPILOT_WS/.github/copilot-instructions.md" ] || { fail ".github/copilot-instructions.md was not removed after disabling copilot"; exit 1; }
+[ -f "$TEST_COPILOT_WS/AGENTS.md" ] || { fail "AGENTS.md missing after disabling copilot"; exit 1; }
+grep -q "REPO-NEXUS:START" "$TEST_COPILOT_WS/AGENTS.md" || { fail "REPO-NEXUS instructions not restored in AGENTS.md after disabling copilot"; exit 1; }
+grep -q "These are custom developer instructions" "$TEST_COPILOT_WS/AGENTS.md" || { fail "Custom developer instructions lost when restoring REPO-NEXUS in AGENTS.md"; exit 1; }
+
+pass
+
 if [ "${_STANDALONE_RUN:-0}" -eq 1 ]; then
   report_results
 fi

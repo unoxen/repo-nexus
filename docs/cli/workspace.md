@@ -28,7 +28,7 @@ rnex init [options] [directory]
 | `--no-hooks` | | boolean | `false` | Skip Git hooks configuration during initialization. |
 | `--claude` | | boolean | `false` | Enable Claude Code plugin (maintains `CLAUDE.md`, generates skills in `.claude/skills/`). |
 | `--cursor` | | boolean | `false` | Enable Cursor plugin (maintains `.cursorrules`, generates skills in `.cursor/rules/`). |
-| `--gemini` | | boolean | `false` | Enable Google Gemini plugin (maintains `GEMINI.md`, generates skills in `.gemini/skills/`). |
+| `--gemini` | | boolean | `false` | Enable Google Gemini plugin (maintains `GEMINI.md`, generates skills in `.agents/skills/`). |
 | `--windsurf` | | boolean | `false` | Enable Windsurf plugin (maintains `.windsurfrules`, generates skills in `.windsurf/rules/`). |
 
 ### Examples

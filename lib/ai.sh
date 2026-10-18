@@ -405,7 +405,7 @@ get_active_provider_skill_dirs() {
           cursor)   _sdir=".cursor/rules" ;;
           claude)   _sdir=".claude/skills" ;;
           windsurf) _sdir=".windsurf/rules" ;;
-          gemini)   _sdir=".gemini/skills" ;;
+          gemini)   _sdir=".agents/skills" ;;
         esac
       fi
       if [ -n "$_sdir" ]; then

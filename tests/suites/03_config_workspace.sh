@@ -87,38 +87,39 @@ echo "$_status_out" | grep -q "Workspace AI Context" || { fail "Status did not s
 pass
 
 # --------------------------------------------------------------------------
-run_test "Enabling provider plugin creates instruction file, preserves AGENTS.md, and creates User Skills"
+run_test "Enabling provider plugin creates instruction file, avoids redundant AGENTS.md, and creates User Skills"
 # Enable gemini plugin in workspace
 "$TEST_WORKSPACE/rnex" plugin enable gemini >/dev/null
-[ -f "$TEST_WORKSPACE/AGENTS.md" ] || { fail "AGENTS.md missing when gemini enabled"; exit 1; }
+[ ! -f "$TEST_WORKSPACE/AGENTS.md" ] || { fail "Redundant AGENTS.md exists when gemini enabled"; exit 1; }
 [ -f "$TEST_WORKSPACE/GEMINI.md" ] || { fail "GEMINI.md missing when gemini enabled"; exit 1; }
-[ -d "$TEST_WORKSPACE/.gemini/skills" ] || { fail ".gemini/skills not created"; exit 1; }
-[ -f "$TEST_WORKSPACE/.gemini/skills/rnex-clone-sync/SKILL.md" ] || { fail "rnex-clone-sync missing in .gemini/skills"; exit 1; }
+[ -d "$TEST_WORKSPACE/.agents/skills" ] || { fail ".agents/skills not created"; exit 1; }
+[ ! -d "$TEST_WORKSPACE/.gemini/skills" ] || { fail "incorrect .gemini/skills was created"; exit 1; }
+[ -f "$TEST_WORKSPACE/.agents/skills/rnex-clone-sync/SKILL.md" ] || { fail "rnex-clone-sync missing in .agents/skills"; exit 1; }
 _status_fixed="$("$TEST_WORKSPACE/rnex" status 2>&1)"
-echo "$_status_fixed" | grep -q "AGENTS.md" || { fail "Status did not show AGENTS.md"; exit 1; }
+! echo "$_status_fixed" | grep -q "AGENTS.md" || { fail "Status showed redundant AGENTS.md when gemini enabled"; exit 1; }
 echo "$_status_fixed" | grep -q "GEMINI.md" || { fail "Status did not show GEMINI.md"; exit 1; }
-echo "$_status_fixed" | grep -q ".gemini/skills/" || { fail "Status did not show .gemini/skills/"; exit 1; }
-# Disable gemini plugin; AGENTS.md should remain intact, GEMINI.md cleaned, and User Skills cleaned up
+echo "$_status_fixed" | grep -q ".agents/skills/" || { fail "Status did not show .agents/skills/"; exit 1; }
+# Disable gemini plugin; GEMINI.md cleaned, AGENTS.md restored, and User Skills cleaned up
 "$TEST_WORKSPACE/rnex" plugin disable gemini >/dev/null
 [ ! -f "$TEST_WORKSPACE/GEMINI.md" ] || { fail "GEMINI.md was not cleaned up"; exit 1; }
-[ -f "$TEST_WORKSPACE/AGENTS.md" ] || { fail "AGENTS.md was removed after disabling provider plugin"; exit 1; }
-[ ! -d "$TEST_WORKSPACE/.gemini/skills/rnex-clone-sync" ] || { fail "User skills not cleaned up after disabling gemini"; exit 1; }
+[ -f "$TEST_WORKSPACE/AGENTS.md" ] || { fail "AGENTS.md was not restored after disabling provider plugin"; exit 1; }
+grep -q "REPO-NEXUS:START" "$TEST_WORKSPACE/AGENTS.md" || { fail "AGENTS.md did not restore REPO-NEXUS instructions after disabling gemini"; exit 1; }
+[ ! -d "$TEST_WORKSPACE/.agents/skills/rnex-clone-sync" ] || { fail "User skills not cleaned up after disabling gemini"; exit 1; }
 pass
 
 # --------------------------------------------------------------------------
-run_test "Init with --claude flag sets up Claude plugin, universal AGENTS.md, CLAUDE.md, and User Skills"
+run_test "Init with --claude flag sets up Claude plugin, CLAUDE.md, and User Skills without redundant AGENTS.md"
 TEST_AI_WS="$TEST_TMP/ai-workspace"
 mkdir -p "$TEST_AI_WS"
 cp "$CLI" "$TEST_AI_WS/rnex"
 chmod +x "$TEST_AI_WS/rnex"
 cp -r "$DIR/toolkit" "$TEST_AI_WS/toolkit"
 "$TEST_AI_WS/rnex" init -y --claude "$TEST_AI_WS" >/dev/null
-[ -f "$TEST_AI_WS/AGENTS.md" ] || { fail "AGENTS.md missing after init --claude"; exit 1; }
+[ ! -f "$TEST_AI_WS/AGENTS.md" ] || { fail "Redundant AGENTS.md created after init --claude"; exit 1; }
 [ -f "$TEST_AI_WS/CLAUDE.md" ] || { fail "CLAUDE.md missing after init --claude"; exit 1; }
 [ -d "$TEST_AI_WS/.claude/skills" ] || { fail ".claude/skills missing after init --claude"; exit 1; }
 [ -f "$TEST_AI_WS/.claude/skills/rnex-clone-sync/SKILL.md" ] || { fail "rnex-clone-sync/SKILL.md missing in .claude/skills"; exit 1; }
 grep -q "claude:" "$TEST_AI_WS/rnex.yaml" || { fail "claude plugin not enabled in rnex.yaml"; exit 1; }
-grep -q "CRITICAL: You MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\`" "$TEST_AI_WS/AGENTS.md" || { fail "AGENTS.md missing critical directive"; exit 1; }
 grep -q "CRITICAL: You MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\`" "$TEST_AI_WS/CLAUDE.md" || { fail "CLAUDE.md missing critical directive"; exit 1; }
 grep -q "Multi-Repo AI Workspace Context" "$TEST_AI_WS/.rnex/ai-instructions.md" || { fail ".rnex/ai-instructions.md missing Multi-Repo AI Workspace Context"; exit 1; }
 pass

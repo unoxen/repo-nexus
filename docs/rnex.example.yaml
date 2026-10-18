@@ -74,7 +74,7 @@ git_hooks: true
 #
 # Built-in plugins:
 #   claude         — Anthropic Claude Code integration: manages CLAUDE.md; generates user skills in .claude/skills/
-#   gemini         — Google Gemini / Antigravity integration: manages GEMINI.md; generates user skills in .gemini/skills/
+#   gemini         — Google Gemini / Antigravity integration: manages GEMINI.md; generates user skills in .agents/skills/
 #   cursor         — Cursor IDE integration: manages .cursorrules & .cursor/rules/; generates user skills in .cursor/rules/
 #   windsurf       — Windsurf IDE integration: manages .windsurfrules; generates user skills in .windsurf/rules/
 #   karpathy-llm   — Andrej Karpathy's agent behavioral principles,
@@ -95,7 +95,7 @@ plugins:
   #   skills: true         # generate user skills in .claude/skills/ (default: true)
   # gemini:
   #   instructions: true   # sync routing instructions to GEMINI.md (default: true)
-  #   skills: true         # generate user skills in .gemini/skills/ (default: true)
+  #   skills: true         # generate user skills in .agents/skills/ (default: true)
   # cursor:
   #   instructions: true   # sync routing instructions to .cursorrules (default: true)
   #   skills: true         # generate user skills in .cursor/rules/ (default: true)

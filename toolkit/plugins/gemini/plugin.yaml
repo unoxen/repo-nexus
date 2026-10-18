@@ -1,9 +1,9 @@
 name: gemini
 version: 0.5.1
-description: Google Gemini and Antigravity integration (maintains GEMINI.md instructions and generates user skills in .gemini/skills/)
+description: Google Gemini and Antigravity integration (maintains GEMINI.md instructions and generates user skills in .agents/skills/)
 author: unoxen
 homepage: https://github.com/unoxen/repo-nexus
-skill_dir: .gemini/skills
+skill_dir: .agents/skills
 
 config_defaults:
   instructions: true

@@ -29,5 +29,12 @@ fi
 
 _sk="$(provider_option_enabled "gemini" "skills" 2>/dev/null && echo "true" || echo "false")"
 if [ "$_sk" != "true" ]; then
+  clean_provider_user_skills "$_root/.agents/skills"
+fi
+
+# Clean legacy .gemini/skills if it exists
+if [ -d "$_root/.gemini/skills" ]; then
   clean_provider_user_skills "$_root/.gemini/skills"
+  rmdir "$_root/.gemini/skills" 2>/dev/null || true
+  rmdir "$_root/.gemini" 2>/dev/null || true
 fi

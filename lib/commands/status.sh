@@ -142,7 +142,7 @@ cmd_status() {
   fi
   if [ -f "$NEXUS_DIR/AGENTS.md" ]; then
     printf '  %b✓%b %s %b(standard instructions directive)%b\n' "$_G" "$_NC" "AGENTS.md" "$_DIM" "$_NC"
-  else
+  elif ! has_active_provider_instructions "$NEXUS_DIR"; then
     printf '  %b✗%b %s %b(standard instructions directive — MISSING; run "rnex sync" to create)%b\n' "$_R" "$_NC" "AGENTS.md" "$_R" "$_NC"
   fi
   if [ -f "$NEXUS_DIR/CLAUDE.md" ]; then
@@ -187,7 +187,9 @@ cmd_status() {
   if [ -d "$NEXUS_DIR/.windsurf/rules" ] && ls "$NEXUS_DIR/.windsurf/rules"/rnex-*.md >/dev/null 2>&1; then
     printf '  %b✓%b %s %b(Windsurf user skills)%b\n' "$_G" "$_NC" ".windsurf/rules/" "$_DIM" "$_NC"
   fi
-  if [ -d "$NEXUS_DIR/.gemini/skills" ] && { ls "$NEXUS_DIR/.gemini/skills"/rnex-*.md >/dev/null 2>&1 || ls -d "$NEXUS_DIR/.gemini/skills"/rnex-* >/dev/null 2>&1; }; then
+  if [ -d "$NEXUS_DIR/.agents/skills" ] && { ls "$NEXUS_DIR/.agents/skills"/rnex-*.md >/dev/null 2>&1 || ls -d "$NEXUS_DIR/.agents/skills"/rnex-* >/dev/null 2>&1; }; then
+    printf '  %b✓%b %s %b(Gemini user skills)%b\n' "$_G" "$_NC" ".agents/skills/" "$_DIM" "$_NC"
+  elif [ -d "$NEXUS_DIR/.gemini/skills" ] && { ls "$NEXUS_DIR/.gemini/skills"/rnex-*.md >/dev/null 2>&1 || ls -d "$NEXUS_DIR/.gemini/skills"/rnex-* >/dev/null 2>&1; }; then
     printf '  %b✓%b %s %b(Gemini user skills)%b\n' "$_G" "$_NC" ".gemini/skills/" "$_DIM" "$_NC"
   fi
   if [ -d "$NEXUS_DIR/.github/skills" ] && { ls "$NEXUS_DIR/.github/skills"/rnex-*.md >/dev/null 2>&1 || ls -d "$NEXUS_DIR/.github/skills"/rnex-* >/dev/null 2>&1; }; then

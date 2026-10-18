@@ -23,7 +23,7 @@ When a workspace is initialized, Repo Nexus maintains core agentic skills in `.r
 | `wiki-ingest` | Plugin (`karpathy-llm`) | Ingest raw intake documents into atomic Karpathy LLM Wiki pages. | `.rnex/plugins/karpathy-llm/skills/wiki-ingest.md` |
 | `wiki-lint` | Plugin (`karpathy-llm`) | Validate markdown links, compute backlinks, and update the master index. | `.rnex/plugins/karpathy-llm/skills/wiki-lint.md` |
 
-When provider plugins (such as `claude`, `gemini`, `cursor`, or `windsurf`) are enabled with `skills: true`, zero-logic User Skill pointers (`rnex-<skill-name>.md`) are generated directly into the respective native provider directories (`.cursor/rules/`, `.claude/skills/`, `.gemini/skills/`, `.windsurf/rules/`).
+When provider plugins (such as `claude`, `gemini`, `cursor`, or `windsurf`) are enabled with `skills: true`, zero-logic User Skill pointers (`rnex-<skill-name>.md`) are generated directly into the respective native provider directories (`.cursor/rules/`, `.claude/skills/`, `.agents/skills/`, `.windsurf/rules/`).
 
 ---
 

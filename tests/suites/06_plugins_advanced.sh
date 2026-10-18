@@ -158,13 +158,14 @@ EOF_CFG3
 # 3. Run rnex sync
 (cd "$TEST_KWIKI_WS" && ./rnex sync -y >/dev/null)
 
-# 4. Verify .rnex/ai-instructions.md no longer contains wiki instructions and AGENTS.md retains single directive
+# 4. Verify .rnex/ai-instructions.md no longer contains wiki instructions and CLAUDE.md retains single directive
 _kw_disabled_ai="$(cat "$TEST_KWIKI_WS/.rnex/ai-instructions.md")"
 ! echo "$_kw_disabled_ai" | grep -q "Karpathy LLM Wiki Knowledge Architecture" || { fail "ai-instructions.md still contains wiki instructions after disabling plugin"; exit 1; }
 echo "$_kw_disabled_ai" | grep -q "Read Configuration First" || { fail "ai-instructions.md missing Read Configuration First"; exit 1; }
 
-_kw_disabled_agents="$(cat "$TEST_KWIKI_WS/AGENTS.md")"
-echo "$_kw_disabled_agents" | grep -q "CRITICAL: You MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\`" || { fail "AGENTS.md missing strict directive"; exit 1; }
+[ ! -f "$TEST_KWIKI_WS/AGENTS.md" ] || { fail "Redundant AGENTS.md still exists when claude plugin is enabled"; exit 1; }
+_kw_disabled_claude="$(cat "$TEST_KWIKI_WS/CLAUDE.md")"
+echo "$_kw_disabled_claude" | grep -q "CRITICAL: You MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\`" || { fail "CLAUDE.md missing strict directive"; exit 1; }
 
 # 5. Verify provider User Skills from disabled plugin were removed, but core skills kept
 [ ! -d "$TEST_KWIKI_WS/.claude/skills/rnex-karpathy-llm-wiki-ingest" ] || { fail "rnex-karpathy-llm-wiki-ingest still present after disabling plugin"; exit 1; }

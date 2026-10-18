@@ -8,7 +8,8 @@ if [ -z "$RNEX_PROVIDER_SKILL_DIRS" ]; then
   [ -d "$RNEX_ROOT/.cursor" ] && _dirs="${_dirs:+$_dirs }.cursor/rules"
   [ -d "$RNEX_ROOT/.claude" ] && _dirs="${_dirs:+$_dirs }.claude/skills"
   [ -d "$RNEX_ROOT/.windsurf" ] && _dirs="${_dirs:+$_dirs }.windsurf/rules"
-  [ -d "$RNEX_ROOT/.gemini" ] && _dirs="${_dirs:+$_dirs }.gemini/skills"
+  [ -d "$RNEX_ROOT/.agents" ] && _dirs="${_dirs:+$_dirs }.agents/skills"
+  [ -d "$RNEX_ROOT/.gemini" ] && _dirs="${_dirs:+$_dirs }.agents/skills"
   export RNEX_PROVIDER_SKILL_DIRS="$_dirs"
 fi
 
@@ -145,6 +146,17 @@ if ! command -v provider_option_enabled >/dev/null 2>&1; then
       false|no|0|disabled|off) return 1 ;;
       *) return 0 ;;
     esac
+  }
+fi
+
+if ! command -v has_active_provider_instructions >/dev/null 2>&1; then
+  has_active_provider_instructions() {
+    provider_option_enabled "copilot" "instructions" 2>/dev/null && return 0
+    provider_option_enabled "claude" "instructions" 2>/dev/null && return 0
+    provider_option_enabled "gemini" "instructions" 2>/dev/null && return 0
+    provider_option_enabled "cursor" "instructions" 2>/dev/null && return 0
+    provider_option_enabled "windsurf" "instructions" 2>/dev/null && return 0
+    return 1
   }
 fi
 

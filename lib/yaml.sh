@@ -177,6 +177,29 @@ windsurf_plugin_enabled() { provider_plugin_enabled "windsurf"; }
 windsurf_instructions_enabled() { provider_option_enabled "windsurf" "instructions"; }
 windsurf_skills_enabled() { provider_option_enabled "windsurf" "skills"; }
 
+has_active_provider_instructions() {
+  _dir="${1:-${NEXUS_DIR:-$PWD}}"
+  _saved_ws_yaml="${WORKSPACE_YAML:-}"
+  _saved_local_yaml="${WORKSPACE_LOCAL_YAML:-}"
+  if [ -n "$1" ] && [ -d "$1" ]; then
+    WORKSPACE_YAML="$1/rnex.yaml"
+    WORKSPACE_LOCAL_YAML="$1/.local.rnex.yaml"
+  fi
+  _res=1
+  if copilot_instructions_enabled || \
+     claude_instructions_enabled || \
+     gemini_instructions_enabled || \
+     cursor_instructions_enabled || \
+     windsurf_instructions_enabled; then
+    _res=0
+  fi
+  if [ -n "$1" ] && [ -d "$1" ]; then
+    WORKSPACE_YAML="$_saved_ws_yaml"
+    WORKSPACE_LOCAL_YAML="$_saved_local_yaml"
+  fi
+  return $_res
+}
+
 _yaml_plugin_set_in_file() {
   _file="$1"; _plugin="$2"; _field="$3"; _value="$4"
   if [ ! -f "$_file" ]; then

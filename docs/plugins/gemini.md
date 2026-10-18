@@ -1,13 +1,13 @@
 ---
 title: Google Gemini & Antigravity Plugin
-description: Integrate Google Gemini and Antigravity IDE with Repo Nexus, generating zero-logic user skill pointers in .gemini/skills/.
+description: Integrate Google Gemini and Antigravity IDE with Repo Nexus, generating zero-logic user skill pointers in .agents/skills/.
 ---
 
 # Google Gemini & Antigravity Plugin
 
 The **`gemini`** plugin integrates Google Gemini CLI and Google Antigravity IDE into a Repo Nexus Virtual Meta-Repo.
 
-All AI assistants in Repo Nexus share [`AGENTS.md`](file:///Users/admin/Projects/ai/repo-nexus/AGENTS.md) at the workspace root as the single universal source of truth for routing. When enabled, the `gemini` plugin generates zero-logic User Skill pointers into `.gemini/skills/` (e.g. `rnex-clone-sync.md`, `rnex-batch-exec.md`, `rnex-karpathy-llm-wiki-ingest`).
+All AI assistants in Repo Nexus share [`AGENTS.md`](file:///Users/admin/Projects/ai/repo-nexus/AGENTS.md) at the workspace root as the single universal source of truth for routing. When enabled, the `gemini` plugin generates zero-logic User Skill pointers into `.agents/skills/` (e.g. `rnex-clone-sync/SKILL.md`, `rnex-batch-exec/SKILL.md`, `rnex-karpathy-llm-wiki-ingest/SKILL.md`).
 
 Operational skills, rules, and subagents remain cleanly encapsulated within `.rnex/skills/` and active plugin directories (`.rnex/plugins/<plugin-name>/`).
 
@@ -15,8 +15,8 @@ Operational skills, rules, and subagents remain cleanly encapsulated within `.rn
 
 ## Capabilities
 
-1. **Zero-Logic User Skills (`.gemini/skills/rnex-*/SKILL.md`)**:
-   - Generates native `SKILL.md` bundles prefixed with `rnex-` in `.gemini/skills/` with YAML frontmatter for Gemini and Antigravity skill discovery.
+1. **Zero-Logic User Skills (`.agents/skills/rnex-*/SKILL.md`)**:
+   - Generates native `SKILL.md` bundles prefixed with `rnex-` in `.agents/skills/` with YAML frontmatter for Gemini and Antigravity skill discovery.
    - Contains zero inline heuristics—redirects Gemini/Antigravity directly to the underlying agentic skill protocols inside `.rnex/`.
 
 2. **Native Instructions Support via `GEMINI.md`**:
@@ -58,14 +58,14 @@ Configure options under `plugins.gemini` in `rnex.yaml` or `.local.rnex.yaml`:
 plugins:
   gemini:
     instructions: true   # Sync routing instructions to GEMINI.md (default: true)
-    skills: true         # Generate user skills in .gemini/skills/ (default: true)
+    skills: true         # Generate user skills in .agents/skills/ (default: true)
     enabled: true        # Set to false to disable
 ```
 
 | Option | Type | Default | Description |
 |:---|:---|:---|:---|
 | `instructions` | boolean | `true` | Merge routing instructions into `GEMINI.md`. |
-| `skills` | boolean | `true` | Generate user skill pointers in `.gemini/skills/rnex-*.md`. |
+| `skills` | boolean | `true` | Generate user skill pointers in `.agents/skills/rnex-*/SKILL.md`. |
 | `enabled` | boolean | `true` | Enable or disable the plugin. Overridable in `.local.rnex.yaml`. |
 
 ---
@@ -76,15 +76,19 @@ When `gemini` is enabled with functional plugins like `karpathy-llm`, it generat
 
 ```text
 my-workspace/
-├── AGENTS.md                          # Universal workspace instructions & routing
 ├── GEMINI.md                          # Gemini-specific instructions (if instructions: true)
-├── .gemini/
+├── .agents/
 │   └── skills/                        # Zero-logic User Skill pointers
-│       ├── rnex-clone-sync.md
-│       ├── rnex-batch-exec.md
-│       ├── rnex-workspace-status.md
+│       ├── rnex-clone-sync/
+│       │   └── SKILL.md
+│       ├── rnex-batch-exec/
+│       │   └── SKILL.md
+│       ├── rnex-workspace-status/
+│       │   └── SKILL.md
 │       ├── rnex-karpathy-llm-wiki-ingest/
+│       │   └── SKILL.md
 │       └── rnex-karpathy-llm-wiki-lint/
+│           └── SKILL.md
 ├── .rnex/
 │   ├── skills/                        # Core workspace agentic skills
 │   └── plugins/
@@ -103,6 +107,6 @@ rnex plugin disable gemini
 ```
 
 Repo Nexus automatically performs surgical cleanup:
-- Removes auto-generated user skills under `.gemini/skills/rnex-*.md`.
+- Removes auto-generated user skills under `.agents/skills/rnex-*`.
 - Cleans up managed routing instructions in `GEMINI.md`.
-- Developer-created files under `.gemini/` that do not originate from Repo Nexus are preserved.
+- Developer-created files under `.agents/` or `.gemini/` that do not originate from Repo Nexus are preserved.

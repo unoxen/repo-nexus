@@ -5,7 +5,7 @@ A built-in Repo Nexus plugin providing bidirectional alignment and operational p
 ## Capabilities
 
 1. **Instructions Integration**: Generates and maintains `GEMINI.md` with Repo Nexus routing instructions while preserving custom instructions outside delimiters.
-2. **User Skills Generation**: Standardized Repo Nexus core skills and active plugins' skills are mirrored as zero-logic User Skill pointers (`rnex-<name>.md`) in `.gemini/skills/`.
+2. **User Skills Generation**: Standardized Repo Nexus core skills and active plugins' skills are mirrored as zero-logic User Skill pointers (`rnex-<name>.md`) in `.agents/skills/`.
 3. **File Discovery Un-Ignore**: Maintains `.geminiignore` (`!repos/*`) so Gemini CLI and Google Antigravity can discover and access member repository files.
 
 ## Usage
@@ -28,5 +28,5 @@ plugins:
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `instructions` | boolean | `true` | Maintain routing in `GEMINI.md` |
-| `skills` | boolean | `true` | Generate user skills in `.gemini/skills/` |
+| `skills` | boolean | `true` | Generate user skills in `.agents/skills/` |
 | `enabled` | boolean | `true` | Set to `false` in `.local.rnex.yaml` to override team config |

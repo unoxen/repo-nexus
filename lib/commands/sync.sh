@@ -78,7 +78,11 @@ cmd_sync() {
   reconcile_gitignore "$NEXUS_DIR"
 
   # 1.2. Reconcile universal workspace instructions in AGENTS.md
-  merge_rnex_instructions "$NEXUS_DIR/AGENTS.md"
+  if has_active_provider_instructions; then
+    clean_rnex_instructions "$NEXUS_DIR/AGENTS.md"
+  else
+    merge_rnex_instructions "$NEXUS_DIR/AGENTS.md"
+  fi
 
   # 1.3. Generate auto-sync script and AI session-start hooks (hardcoded harness)
   _write_auto_sync_script "$NEXUS_DIR"
