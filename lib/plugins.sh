@@ -70,6 +70,7 @@ plugin_list_templates() {
     t && /^[ ]*-[ ]*/ {
       sub(/^[ ]*-[ ]*/, "");
       sub(/[ ]*#.*/, "");
+      gsub(/["\047]/, "");
       if (length($0) > 0) print $0
     }
   ' "$_pdir/plugin.yaml"
@@ -91,7 +92,7 @@ plugin_list_instructions() {
 
 plugin_resolve_placeholders() {
   _p="$1"; _pd="$2"; _str="$3"
-  _res="$(printf '%s' "$_str" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^["\047]//' -e 's/["\047]$//')"
+  _res="$(printf '%s' "$_str" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d "'\"")"
 
   if [ -f "$_pd/plugin.yaml" ]; then
     _keys="$(awk '
@@ -114,7 +115,7 @@ plugin_resolve_placeholders() {
           in_c && $0 ~ ("^[ ]*" k ":") {
             sub("^[ ]*" k ":[ ]*", "")
             sub(/[ ]*#.*/, "")
-            gsub(/^["\047]|["\047]$/, "")
+            gsub(/["\047]/, "")
             print
             exit
           }
@@ -122,27 +123,29 @@ plugin_resolve_placeholders() {
       fi
       case "$_k" in
         *_dir|dir)
-          _v="$(printf '%s' "$_v" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's#^\./##' -e 's#^/##' -e 's#/$##')"
+          _v="$(printf '%s' "$_v" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d "'\"" | sed -e 's#^\./##' -e 's#^/##' -e 's#/$##')"
           ;;
       esac
       _res="$(printf '%s' "$_res" | sed -e "s|{$_k}|$_v|g")"
     done
   fi
 
-  # Backward compatibility for legacy template destination paths
+  # Fallback resolution for core wiki/raw placeholders and legacy prefixes
   _w_val="$(yaml_plugin_get "$_p" "wiki_dir" 2>/dev/null || true)"
   [ -z "$_w_val" ] && _w_val=".rnex/wiki"
-  _w_val="$(printf '%s' "$_w_val" | sed -e 's#^/##' -e 's#/$##')"
+  _w_val="$(printf '%s' "$_w_val" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d "'\"" | sed -e 's#^/##' -e 's#/$##')"
 
   _r_val="$(yaml_plugin_get "$_p" "raw_dir" 2>/dev/null || true)"
   [ -z "$_r_val" ] && _r_val="docs"
-  _r_val="$(printf '%s' "$_r_val" | sed -e 's#^\./##' -e 's#^/##' -e 's#/$##')"
+  _r_val="$(printf '%s' "$_r_val" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d "'\"" | sed -e 's#^\./##' -e 's#^/##' -e 's#/$##')"
 
   _res="$(printf '%s' "$_res" | sed \
+    -e "s|{wiki_dir}|${_w_val}|g" \
+    -e "s|{raw_dir}|${_r_val}|g" \
     -e "s|^wiki/|${_w_val}/|" \
     -e "s|^raw/|${_r_val}/|")"
 
-  _res="$(printf '%s' "$_res" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^["\047]//' -e 's/["\047]$//')"
+  _res="$(printf '%s' "$_res" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d "'\"")"
 
   printf '%s' "$_res"
 }
@@ -152,11 +155,11 @@ plugin_instantiate_template() {
 
   _w_val="$(yaml_plugin_get "$_p" "wiki_dir" 2>/dev/null || true)"
   [ -z "$_w_val" ] && _w_val=".rnex/wiki"
-  _w_val="$(printf '%s' "$_w_val" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's#^/##' -e 's#/$##')"
+  _w_val="$(printf '%s' "$_w_val" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d "'\"" | sed -e 's#^/##' -e 's#/$##')"
 
   _r_val="$(yaml_plugin_get "$_p" "raw_dir" 2>/dev/null || true)"
   [ -z "$_r_val" ] && _r_val="docs"
-  _r_val="$(printf '%s' "$_r_val" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's#^\./##' -e 's#^/##' -e 's#/$##')"
+  _r_val="$(printf '%s' "$_r_val" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d "'\"" | sed -e 's#^\./##' -e 's#^/##' -e 's#/$##')"
 
   sed -e "s|{wiki_dir}|$_w_val|g" \
       -e "s|{raw_dir}|$_r_val|g" \
@@ -165,6 +168,18 @@ plugin_instantiate_template() {
 
 # Sync plugins into scoped directories: .rnex/plugins/<plugin-name>/
 sync_plugins() {
+  # Clean up any bogus placeholder directories accidentally created in workspace root
+  for _bogus in \
+    "$NEXUS_DIR/\"{wiki_dir}" \
+    "$NEXUS_DIR/\"{raw_dir}" \
+    "$NEXUS_DIR/{wiki_dir}" \
+    "$NEXUS_DIR/{raw_dir}"; do
+    if [ -d "$_bogus" ]; then
+      rm -rf "$_bogus"
+      log_dim "Cleaned up leaked placeholder directory: $(basename "$_bogus")"
+    fi
+  done
+
   # 1. Prune plugins that are disabled or no longer enabled in config
   if [ -d "$NEXUS_DIR/.rnex/plugins" ]; then
     for _existing in "$NEXUS_DIR/.rnex/plugins"/*; do
@@ -232,10 +247,18 @@ sync_plugins() {
       [ -n "$_item" ] || continue
       _s="${_item%%:*}"
       _d="${_item#*:}"
-      _s="$(printf '%s' "$_s" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^["\047]//' -e 's/["\047]$//')"
-      _d="$(printf '%s' "$_d" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^["\047]//' -e 's/["\047]$//')"
+      _s="$(printf '%s' "$_s" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d "'\"")"
+      _d="$(printf '%s' "$_d" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d "'\"")"
 
       _d="$(plugin_resolve_placeholders "$_pname" "$_pdir" "$_d")"
+
+      # Defensive guard: never create directories or files if placeholder expansion failed or quotes leaked
+      case "$_d" in
+        *"{"*"}"*|*\"*|*\'*)
+          log_warn "Skipping invalid template destination with unresolved placeholders: $_d"
+          continue
+          ;;
+      esac
 
       _src_path="$_pdir/$_s"
       _dest_path="$NEXUS_DIR/$_d"

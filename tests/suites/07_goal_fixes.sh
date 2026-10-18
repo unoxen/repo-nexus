@@ -694,6 +694,48 @@ grep -q "\`\.rnex/wiki/index\.md\` uses its own frontmatter schema" "$_prompt_fi
 ! grep -q "# Typed relation fields — paths relative to /wiki/" "$_prompt_file" || { fail "Still references legacy /wiki/ in relations comment"; exit 1; }
 pass
 
+# --------------------------------------------------------------------------
+run_test "Fix 22: rnex sync resolves template placeholders without creating literal \"{wiki_dir} or \"{raw_dir} directories and purges leaked dirs"
+TEST_SYNC_PLACEHOLDER_WS="$TEST_TMP/sync-placeholder-ws"
+mkdir -p "$TEST_SYNC_PLACEHOLDER_WS"
+cp "$CLI" "$TEST_SYNC_PLACEHOLDER_WS/rnex"
+chmod +x "$TEST_SYNC_PLACEHOLDER_WS/rnex"
+cp "$DIR/package.json" "$TEST_SYNC_PLACEHOLDER_WS/package.json"
+cp -r "$DIR/lib" "$TEST_SYNC_PLACEHOLDER_WS/lib"
+cp -r "$DIR/toolkit" "$TEST_SYNC_PLACEHOLDER_WS/toolkit"
+cp -r "$DIR/templates" "$TEST_SYNC_PLACEHOLDER_WS/templates"
+git -C "$TEST_SYNC_PLACEHOLDER_WS" init -q
+
+# Initialize workspace without plugins first
+"$TEST_SYNC_PLACEHOLDER_WS/rnex" init -y "$TEST_SYNC_PLACEHOLDER_WS" >/dev/null
+
+# Simulate pre-existing leaked bogus directories in workspace root
+mkdir -p "$TEST_SYNC_PLACEHOLDER_WS/\"{wiki_dir}" "$TEST_SYNC_PLACEHOLDER_WS/\"{raw_dir}" "$TEST_SYNC_PLACEHOLDER_WS/{wiki_dir}" "$TEST_SYNC_PLACEHOLDER_WS/{raw_dir}"
+[ -d "$TEST_SYNC_PLACEHOLDER_WS/\"{wiki_dir}" ] || { fail "Failed to set up test directory \"{wiki_dir}"; exit 1; }
+[ -d "$TEST_SYNC_PLACEHOLDER_WS/\"{raw_dir}" ] || { fail "Failed to set up test directory \"{raw_dir}"; exit 1; }
+
+# Enable karpathy-llm plugin
+cat <<'EOF_CFG' >> "$TEST_SYNC_PLACEHOLDER_WS/rnex.yaml"
+plugins:
+  karpathy-llm: true
+EOF_CFG
+
+# Run rnex sync
+_sync_out="$(cd "$TEST_SYNC_PLACEHOLDER_WS" && ./rnex sync 2>&1)" || { fail "rnex sync failed: $_sync_out"; exit 1; }
+
+# Verify bogus directories were purged
+[ ! -d "$TEST_SYNC_PLACEHOLDER_WS/\"{wiki_dir}" ] || { fail "Bogus directory \"{wiki_dir} still exists after sync"; exit 1; }
+[ ! -d "$TEST_SYNC_PLACEHOLDER_WS/\"{raw_dir}" ] || { fail "Bogus directory \"{raw_dir} still exists after sync"; exit 1; }
+[ ! -d "$TEST_SYNC_PLACEHOLDER_WS/{wiki_dir}" ] || { fail "Bogus directory {wiki_dir} still exists after sync"; exit 1; }
+[ ! -d "$TEST_SYNC_PLACEHOLDER_WS/{raw_dir}" ] || { fail "Bogus directory {raw_dir} still exists after sync"; exit 1; }
+[ ! -d "$TEST_SYNC_PLACEHOLDER_WS/\"" ] || { fail "Literal quote directory leaked into workspace root"; exit 1; }
+
+# Verify templates were correctly initialized in resolved paths
+[ -f "$TEST_SYNC_PLACEHOLDER_WS/.rnex/wiki/index.md" ] || { fail ".rnex/wiki/index.md missing after sync"; exit 1; }
+[ -f "$TEST_SYNC_PLACEHOLDER_WS/docs/.gitkeep" ] || { fail "docs/.gitkeep missing after sync"; exit 1; }
+
+pass
+
 if [ "${_STANDALONE_RUN:-0}" -eq 1 ]; then
   report_results
 fi
