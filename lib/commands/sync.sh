@@ -16,6 +16,7 @@ _ws="$(cd "$(dirname "$0")/../.." 2>/dev/null && pwd -P)"
 [ -f "$_ws/rnex.yaml" ] || exit 0
 
 _stamp="$_ws/.rnex/.sync_stamp"
+[ -f "$_stamp" ] || _stamp="$_ws/.rnex/sync_stamp"
 _cur_sum="$(cd "$_ws" 2>/dev/null && cksum rnex.yaml .local.rnex.yaml 2>/dev/null | cksum | awk '{print $1, $2}')"
 _saved_sum=""
 [ -f "$_stamp" ] && _saved_sum="$(cat "$_stamp" 2>/dev/null)"
@@ -70,22 +71,38 @@ cmd_sync() {
     [ "$_sync_quiet" -eq 0 ] && log_ok "Upgraded workspace configuration and routing instructions to v$RNEX_VERSION"
   fi
 
-  # 1. Ensure .gitignore ignores repos/, local configs; ensure .ignore has !repos/*
+  # --------------------------------------------------------------------------
+  # Step 1: Sync hardcoded files & invoke commands that do not depend on config
+  # --------------------------------------------------------------------------
+  # 1.1. Ensure .gitignore ignores repos/, local configs; ensure .ignore has !repos/*
   reconcile_gitignore "$NEXUS_DIR"
 
-  # 2. Reconcile plugins (scopes, deterministic sync, lifecycle hooks copy)
-  sync_plugins
-
-  # 3. Compile .rnex/ai-instructions.md
-  build_ai_instructions "$NEXUS_DIR"
-
-  # 4. Reconcile universal workspace instructions in AGENTS.md
+  # 1.2. Reconcile universal workspace instructions in AGENTS.md
   merge_rnex_instructions "$NEXUS_DIR/AGENTS.md"
 
-  # 5. Sync core agentic skills and active provider user skills
+  # 1.3. Generate auto-sync script and AI session-start hooks (hardcoded harness)
+  _write_auto_sync_script "$NEXUS_DIR"
+  _sync_ai_session_start_hooks "$NEXUS_DIR"
+
+  # 1.4. Sync core agentic skills into .rnex/skills/ and write rnex-env.sh
   sync_skills
 
-  # 6. Reconcile Git hooks according to configuration
+  # --------------------------------------------------------------------------
+  # Step 2: Generate .rnex/ai-instructions.md and .rnex/sync_stamp
+  # --------------------------------------------------------------------------
+  # 2.1. Compile .rnex/ai-instructions.md
+  build_ai_instructions "$NEXUS_DIR"
+
+  # 2.2. Update sync stamp (.rnex/.sync_stamp and .rnex/sync_stamp)
+  update_sync_stamp "$NEXUS_DIR"
+
+  # --------------------------------------------------------------------------
+  # Step 3: The rest of synchronization
+  # --------------------------------------------------------------------------
+  # 3.1. Reconcile plugins (scopes, deterministic sync, lifecycle hooks copy, templates, leaked dir cleanup)
+  sync_plugins
+
+  # 3.2. Reconcile Git hooks according to configuration
   case "$GIT_HOOKS_CONFIG" in
     false|no|0)
       _cur_hp="$(git -C "$NEXUS_DIR" config --get core.hooksPath 2>/dev/null || true)"
@@ -123,7 +140,7 @@ cmd_sync() {
       ;;
   esac
 
-  # 7. Reconcile member repos (.rnex/ harness sync)
+  # 3.3. Reconcile member repos (.rnex/ harness sync)
   yaml_list_repos | while read -r _name; do
     [ -n "$_name" ] || continue
     if yaml_repo_enabled "$_name"; then
@@ -136,15 +153,8 @@ cmd_sync() {
     fi
   done
 
-  # 8. Reconcile VS Code / Cursor multi-root workspace if configured
+  # 3.4. Reconcile VS Code / Cursor multi-root workspace if configured
   sync_code_workspace
-
-  # 9. Generate auto-sync script and AI session-start hooks
-  _write_auto_sync_script "$NEXUS_DIR"
-  _sync_ai_session_start_hooks "$NEXUS_DIR"
-
-  # 10. Update sync stamp
-  update_sync_stamp "$NEXUS_DIR"
 
   if [ "$_sync_quiet" -eq 0 ]; then
     log_ok "Sync complete — workspace, plugins, skills, and member .rnex directories reconciled"

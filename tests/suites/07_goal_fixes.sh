@@ -736,6 +736,78 @@ _sync_out="$(cd "$TEST_SYNC_PLACEHOLDER_WS" && ./rnex sync 2>&1)" || { fail "rne
 
 pass
 
+# --------------------------------------------------------------------------
+run_test "Fix 23: rnex sync reordered steps and karpathy-llm wiki_dir / raw_dir configuration without leaking ./raw or ./wiki"
+TEST_SYNC_GOAL_WS="$TEST_TMP/sync-goal-ws"
+mkdir -p "$TEST_SYNC_GOAL_WS"
+cp "$CLI" "$TEST_SYNC_GOAL_WS/rnex"
+chmod +x "$TEST_SYNC_GOAL_WS/rnex"
+cp "$DIR/package.json" "$TEST_SYNC_GOAL_WS/package.json"
+cp -r "$DIR/lib" "$TEST_SYNC_GOAL_WS/lib"
+cp -r "$DIR/toolkit" "$TEST_SYNC_GOAL_WS/toolkit"
+cp -r "$DIR/templates" "$TEST_SYNC_GOAL_WS/templates"
+git -C "$TEST_SYNC_GOAL_WS" init -q
+
+# Initialize workspace
+"$TEST_SYNC_GOAL_WS/rnex" init -y "$TEST_SYNC_GOAL_WS" >/dev/null
+
+# Configure exact user rnex.yaml
+cat <<'EOF_CFG' > "$TEST_SYNC_GOAL_WS/rnex.yaml"
+name: user-test-project
+plugins:
+  karpathy-llm:
+    wiki_dir: .rnex/wiki
+    raw_dir: docs
+EOF_CFG
+
+# Simulate pre-existing leaked root raw/ and wiki/ directories (e.g. from previous runs)
+mkdir -p "$TEST_SYNC_GOAL_WS/raw" "$TEST_SYNC_GOAL_WS/wiki"
+touch "$TEST_SYNC_GOAL_WS/raw/.gitkeep"
+touch "$TEST_SYNC_GOAL_WS/wiki/index.md"
+[ -d "$TEST_SYNC_GOAL_WS/raw" ] || { fail "Failed to set up test directory raw"; exit 1; }
+[ -d "$TEST_SYNC_GOAL_WS/wiki" ] || { fail "Failed to set up test directory wiki"; exit 1; }
+
+# Add hook to verify that during Step 3, Step 2 artifacts (.rnex/sync_stamp & .rnex/ai-instructions.md) already exist
+mkdir -p "$TEST_SYNC_GOAL_WS/toolkit/plugins/karpathy-llm/hooks"
+cat <<'HOOK_CHECK' > "$TEST_SYNC_GOAL_WS/toolkit/plugins/karpathy-llm/hooks/before_sync.sh"
+#!/bin/sh
+if [ ! -f "$RNEX_ROOT/.rnex/sync_stamp" ]; then
+  echo "STEP_ORDER_ERROR: sync_stamp does not exist before Step 3 plugin sync" >&2
+  exit 1
+fi
+if [ ! -f "$RNEX_ROOT/.rnex/ai-instructions.md" ]; then
+  echo "STEP_ORDER_ERROR: ai-instructions.md does not exist before Step 3 plugin sync" >&2
+  exit 1
+fi
+echo "STEP_ORDER_VERIFIED: Step 2 ran before Step 3"
+HOOK_CHECK
+chmod +x "$TEST_SYNC_GOAL_WS/toolkit/plugins/karpathy-llm/hooks/before_sync.sh"
+
+# Run rnex sync and capture output
+_sync_goal_out="$(cd "$TEST_SYNC_GOAL_WS" && ./rnex sync 2>&1)" || { fail "rnex sync failed: $_sync_goal_out"; exit 1; }
+
+# Verify step order assertion passed
+echo "$_sync_goal_out" | grep -q "STEP_ORDER_VERIFIED: Step 2 ran before Step 3" || { fail "Step order verification failed: $_sync_goal_out"; exit 1; }
+
+# Verify .rnex/sync_stamp and .rnex/ai-instructions.md exist
+[ -f "$TEST_SYNC_GOAL_WS/.rnex/sync_stamp" ] || { fail ".rnex/sync_stamp missing after sync"; exit 1; }
+[ -f "$TEST_SYNC_GOAL_WS/.rnex/.sync_stamp" ] || { fail ".rnex/.sync_stamp missing after sync"; exit 1; }
+[ -f "$TEST_SYNC_GOAL_WS/.rnex/ai-instructions.md" ] || { fail ".rnex/ai-instructions.md missing after sync"; exit 1; }
+
+# Verify root raw/ and wiki/ were purged / do not exist
+[ ! -d "$TEST_SYNC_GOAL_WS/raw" ] || { fail "Root ./raw directory still exists after sync"; exit 1; }
+[ ! -d "$TEST_SYNC_GOAL_WS/wiki" ] || { fail "Root ./wiki directory still exists after sync"; exit 1; }
+
+# Verify configured directories exist and have templates
+[ -d "$TEST_SYNC_GOAL_WS/docs" ] || { fail "Configured raw_dir 'docs' missing after sync"; exit 1; }
+[ -f "$TEST_SYNC_GOAL_WS/docs/.gitkeep" ] || { fail "docs/.gitkeep missing after sync"; exit 1; }
+[ -d "$TEST_SYNC_GOAL_WS/.rnex/wiki" ] || { fail "Configured wiki_dir '.rnex/wiki' missing after sync"; exit 1; }
+[ -f "$TEST_SYNC_GOAL_WS/.rnex/wiki/index.md" ] || { fail ".rnex/wiki/index.md missing after sync"; exit 1; }
+[ -f "$TEST_SYNC_GOAL_WS/.rnex/wiki/hot.md" ] || { fail ".rnex/wiki/hot.md missing after sync"; exit 1; }
+[ -f "$TEST_SYNC_GOAL_WS/.rnex/wiki/_log.md" ] || { fail ".rnex/wiki/_log.md missing after sync"; exit 1; }
+
+pass
+
 if [ "${_STANDALONE_RUN:-0}" -eq 1 ]; then
   report_results
 fi

@@ -82,7 +82,7 @@ _status_fix_err="$("$TEST_WORKSPACE/rnex" status --fix 2>&1 || true)"
 echo "$_status_fix_err" | grep -q "Use 'rnex sync'" || { fail "rnex status --fix did not fail with migration message"; exit 1; }
 
 # Read-only status reports out of sync when sync stamp is missing
-rm -f "$TEST_WORKSPACE/.rnex/.sync_stamp"
+rm -f "$TEST_WORKSPACE/.rnex/.sync_stamp" "$TEST_WORKSPACE/.rnex/sync_stamp"
 _status_out="$("$TEST_WORKSPACE/rnex" status 2>&1)"
 echo "$_status_out" | grep -q "out of sync" || { fail "rnex status did not report missing sync stamp"; exit 1; }
 
@@ -91,6 +91,7 @@ rm -f "$TEST_WORKSPACE/.ignore"
 "$TEST_WORKSPACE/rnex" sync >/dev/null
 [ -f "$TEST_WORKSPACE/.ignore" ] || { fail "rnex sync did not recreate .ignore"; exit 1; }
 [ -f "$TEST_WORKSPACE/.rnex/.sync_stamp" ] || { fail "rnex sync did not create .sync_stamp"; exit 1; }
+[ -f "$TEST_WORKSPACE/.rnex/sync_stamp" ] || { fail "rnex sync did not create sync_stamp"; exit 1; }
 _status_synced="$("$TEST_WORKSPACE/rnex" status 2>&1)"
 echo "$_status_synced" | grep -q "synchronized" || { fail "rnex status did not report synchronized status"; exit 1; }
 pass

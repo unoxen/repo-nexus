@@ -8,12 +8,16 @@ find_plugin_dir() {
   _query="$1"
   _sdir="$(dirname "$SCRIPT_LOCATION")"
   for _cand in \
+    "${RNEX_ROOT:-}/toolkit/plugins/$_query" \
+    "${RNEX_TOOLKIT_DIR:-}/plugins/$_query" \
+    "${RNEX_PLUGINS_DIR:-}/$_query" \
     "$NEXUS_DIR/toolkit/plugins/$_query" \
     "$SCRIPT_LOCATION/toolkit/plugins/$_query" \
     "$_sdir/toolkit/plugins/$_query" \
     "$NEXUS_DIR/plugins/$_query" \
     "$NEXUS_DIR/.rnex/plugins/$_query" \
     "$NEXUS_DIR/.nexus/plugins/$_query"; do
+    [ -n "$_cand" ] || continue
     if [ -f "$_cand/plugin.yaml" ]; then
       printf '%s' "$_cand"
       return 0
@@ -26,12 +30,16 @@ list_all_available_plugin_dirs() {
   _sdir="$(dirname "$SCRIPT_LOCATION")"
   _dirs=""
   for _parent in \
+    "${RNEX_ROOT:-}/toolkit/plugins" \
+    "${RNEX_TOOLKIT_DIR:-}/plugins" \
+    "${RNEX_PLUGINS_DIR:-}" \
     "$NEXUS_DIR/toolkit/plugins" \
     "$SCRIPT_LOCATION/toolkit/plugins" \
     "$_sdir/toolkit/plugins" \
     "$NEXUS_DIR/plugins" \
     "$NEXUS_DIR/.rnex/plugins" \
     "$NEXUS_DIR/.nexus/plugins"; do
+    [ -n "$_parent" ] || continue
     if [ -d "$_parent" ]; then
       for _sub in "$_parent"/*; do
         if [ -d "$_sub" ] && [ -f "$_sub/plugin.yaml" ]; then
@@ -133,7 +141,7 @@ plugin_resolve_placeholders() {
   # Fallback resolution for core wiki/raw placeholders and legacy prefixes
   _w_val="$(yaml_plugin_get "$_p" "wiki_dir" 2>/dev/null || true)"
   [ -z "$_w_val" ] && _w_val=".rnex/wiki"
-  _w_val="$(printf '%s' "$_w_val" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d "'\"" | sed -e 's#^/##' -e 's#/$##')"
+  _w_val="$(printf '%s' "$_w_val" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d "'\"" | sed -e 's#^\./##' -e 's#^/##' -e 's#/$##')"
 
   _r_val="$(yaml_plugin_get "$_p" "raw_dir" 2>/dev/null || true)"
   [ -z "$_r_val" ] && _r_val="docs"
@@ -142,10 +150,10 @@ plugin_resolve_placeholders() {
   _res="$(printf '%s' "$_res" | sed \
     -e "s|{wiki_dir}|${_w_val}|g" \
     -e "s|{raw_dir}|${_r_val}|g" \
-    -e "s|^wiki/|${_w_val}/|" \
-    -e "s|^raw/|${_r_val}/|")"
+    -e "s|^\.\{0,1\}\/\{0,1\}wiki/|${_w_val}/|" \
+    -e "s|^\.\{0,1\}\/\{0,1\}raw/|${_r_val}/|")"
 
-  _res="$(printf '%s' "$_res" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d "'\"")"
+  _res="$(printf '%s' "$_res" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d "'\"" | sed -e 's#^\./##')"
 
   printf '%s' "$_res"
 }
@@ -179,6 +187,67 @@ sync_plugins() {
       log_dim "Cleaned up leaked placeholder directory: $(basename "$_bogus")"
     fi
   done
+
+  # Clean up obsolete leaked root ./raw and ./wiki directories if non-default paths are configured
+  _raw_cfg="$(yaml_plugin_get "karpathy-llm" "raw_dir" 2>/dev/null || true)"
+  [ -z "$_raw_cfg" ] && _raw_cfg="docs"
+  _raw_cfg="$(printf '%s' "$_raw_cfg" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d "'\"" | sed -e 's#^\./##' -e 's#^/##' -e 's#/$##')"
+
+  _wiki_cfg="$(yaml_plugin_get "karpathy-llm" "wiki_dir" 2>/dev/null || true)"
+  [ -z "$_wiki_cfg" ] && _wiki_cfg=".rnex/wiki"
+  _wiki_cfg="$(printf '%s' "$_wiki_cfg" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d "'\"" | sed -e 's#^\./##' -e 's#^/##' -e 's#/$##')"
+
+  if [ "$_raw_cfg" != "raw" ] && [ -d "$NEXUS_DIR/raw" ]; then
+    if ! rmdir "$NEXUS_DIR/raw" 2>/dev/null; then
+      _can_clean=1
+      for _f in "$NEXUS_DIR/raw"/* "$NEXUS_DIR/raw"/.[!.]* "$NEXUS_DIR/raw"/..?*; do
+        [ -e "$_f" ] || continue
+        _b="$(basename "$_f")"
+        if [ "$_b" = ".gitkeep" ]; then
+          continue
+        fi
+        if [ -f "$NEXUS_DIR/$_raw_cfg/$_b" ] && cmp -s "$_f" "$NEXUS_DIR/$_raw_cfg/$_b"; then
+          continue
+        fi
+        _can_clean=0
+        break
+      done
+      if [ "$_can_clean" -eq 1 ]; then
+        rm -rf "$NEXUS_DIR/raw"
+        log_dim "Cleaned up obsolete root raw/ directory"
+      fi
+    else
+      log_dim "Removed empty obsolete root raw/ directory"
+    fi
+  fi
+
+  if [ "$_wiki_cfg" != "wiki" ] && [ -d "$NEXUS_DIR/wiki" ]; then
+    if ! rmdir "$NEXUS_DIR/wiki" 2>/dev/null; then
+      _can_clean=1
+      for _f in "$NEXUS_DIR/wiki"/* "$NEXUS_DIR/wiki"/.[!.]* "$NEXUS_DIR/wiki"/..?*; do
+        [ -e "$_f" ] || continue
+        _b="$(basename "$_f")"
+        case "$_b" in
+          index.md|_log.md|hot.md|.gitkeep)
+            continue
+            ;;
+          *)
+            if [ -f "$NEXUS_DIR/$_wiki_cfg/$_b" ] && cmp -s "$_f" "$NEXUS_DIR/$_wiki_cfg/$_b"; then
+              continue
+            fi
+            _can_clean=0
+            break
+            ;;
+        esac
+      done
+      if [ "$_can_clean" -eq 1 ]; then
+        rm -rf "$NEXUS_DIR/wiki"
+        log_dim "Cleaned up obsolete root wiki/ directory"
+      fi
+    else
+      log_dim "Removed empty obsolete root wiki/ directory"
+    fi
+  fi
 
   # 1. Prune plugins that are disabled or no longer enabled in config
   if [ -d "$NEXUS_DIR/.rnex/plugins" ]; then

@@ -8,30 +8,48 @@ _yaml_list_plugins_from_file() {
   _f="$1"
   [ -f "$_f" ] || return 0
   awk '
-    /^plugins:[ ]*$/ || /^plugins:[ ]*#/ { p=1; next }
-    p && /^[^ #]/ { p=0 }
-    p && /^  [a-zA-Z0-9_.-]+:/ {
-      line = $0
-      sub(/^[ ]*/, "", line)
-      sub(/:.*/, "", line)
-      gsub(/[[:space:]]/, "", line)
-      if (length(line) > 0) print line
+    /^[ \t]*plugins:[ \t]*(#.*)?$/ { in_plugins=1; plugin_indent=-1; next }
+    in_plugins && /^[^ \t#]/ { in_plugins=0 }
+    !in_plugins { next }
+    {
+      match($0, /^[ \t]*/)
+      indent = RLENGTH
+      trimmed = substr($0, indent + 1)
     }
-    p && /^  -[ ]+[a-zA-Z0-9_.-]+/ {
-      line = $0
-      sub(/^[ ]*-[ ]*/, "", line)
-      sub(/[ ]*#.*/, "", line)
-      sub(/:.*/, "", line)
-      gsub(/[[:space:]]/, "", line)
-      if (length(line) > 0) print line
+    trimmed ~ /^([#]|$)/ { next }
+
+    in_plugins && (plugin_indent == -1) && (indent > 0) {
+      plugin_indent = indent
+    }
+
+    in_plugins && (indent == plugin_indent) {
+      if (trimmed ~ /^[\"\x27]?[a-zA-Z0-9_.-]+[\"\x27]?:/) {
+        line = trimmed
+        sub(/:.*/, "", line)
+        gsub(/^["\x27]|["\x27]$/, "", line)
+        gsub(/[[:space:]]/, "", line)
+        if (length(line) > 0) print line
+      } else if (trimmed ~ /^-[ \t]+[\"\x27]?[a-zA-Z0-9_.-]+/) {
+        line = trimmed
+        sub(/^-[ \t]+/, "", line)
+        sub(/[ \t]*#.*/, "", line)
+        sub(/:.*/, "", line)
+        gsub(/^["\x27]|["\x27]$/, "", line)
+        gsub(/[[:space:]]/, "", line)
+        if (length(line) > 0) print line
+      }
     }
   ' "$_f"
 }
 
 yaml_list_plugins() {
+  _wy="${WORKSPACE_YAML:-}"
+  [ -z "$_wy" ] && _wy="${NEXUS_DIR:-.}/$RNEX_CONFIG_FILE"
+  _wly="${WORKSPACE_LOCAL_YAML:-}"
+  [ -z "$_wly" ] && _wly="${NEXUS_DIR:-.}/$RNEX_LOCAL_CONFIG_FILE"
   {
-    _yaml_list_plugins_from_file "$WORKSPACE_YAML"
-    _yaml_list_plugins_from_file "$WORKSPACE_LOCAL_YAML"
+    _yaml_list_plugins_from_file "$_wy"
+    _yaml_list_plugins_from_file "$_wly"
   } | awk '!seen[$0]++'
 }
 
@@ -39,29 +57,61 @@ _yaml_plugin_get_from_file() {
   _f="$1"; _pname="$2"; _key="$3"
   [ -f "$_f" ] || return 0
   awk -v plugin="$_pname" -v key="$_key" '
-    /^plugins:[ ]*$/ || /^plugins:[ ]*#/ { in_plugins=1; next }
-    in_plugins && /^[^ #]/ { in_plugins=0 }
-    in_plugins && match($0, "^  " plugin ":[ ]*(#.*)?$") { in_target=1; next }
-    in_target && /^  [^ #]/ { in_target=0 }
-    in_target && match($0, "^    " key ":[ ]*") {
-      line = $0
-      sub("^    " key ":[ ]*", "", line)
-      sub(/[ ]*#.*$/, "", line)
-      gsub(/^["\x27]|["\x27]$/, "", line)
-      print line
-      exit
+    /^[ \t]*plugins:[ \t]*(#.*)?$/ { in_plugins=1; in_target=0; plugin_indent=-1; next }
+    in_plugins && /^[^ \t#]/ { in_plugins=0; in_target=0 }
+    !in_plugins { next }
+    {
+      match($0, /^[ \t]*/)
+      indent = RLENGTH
+      trimmed = substr($0, indent + 1)
+    }
+    trimmed ~ /^([#]|$)/ { next }
+
+    in_target && (indent <= plugin_indent) {
+      in_target=0
+    }
+
+    !in_target {
+      if (trimmed ~ ("^[\"\x27]?" plugin "[\"\x27]?:")) {
+        in_target=1
+        plugin_indent=indent
+        next
+      }
+    }
+
+    in_target && (indent > plugin_indent) {
+      if (trimmed ~ ("^[\"\x27]?" key "[\"\x27]?:[ \t]*")) {
+        sub("^[\"\x27]?" key "[\"\x27]?:[ \t]*", "", trimmed)
+        if (trimmed ~ /^"[^"]*"/) {
+          match(trimmed, /^"[^"]*"/)
+          val = substr(trimmed, 2, RLENGTH - 2)
+        } else if (trimmed ~ /^\x27[^\x27]*\x27/) {
+          match(trimmed, /^\x27[^\x27]*\x27/)
+          val = substr(trimmed, 2, RLENGTH - 2)
+        } else {
+          sub(/[ \t]*#.*$/, "", trimmed)
+          sub(/[ \t]+$/, "", trimmed)
+          val = trimmed
+        }
+        print val
+        exit
+      }
     }
   ' "$_f"
 }
 
 yaml_plugin_get() {
   _pname="$1"; _key="$2"
-  _val="$(_yaml_plugin_get_from_file "$WORKSPACE_LOCAL_YAML" "$_pname" "$_key")"
+  _wy="${WORKSPACE_YAML:-}"
+  [ -z "$_wy" ] && _wy="${NEXUS_DIR:-.}/$RNEX_CONFIG_FILE"
+  _wly="${WORKSPACE_LOCAL_YAML:-}"
+  [ -z "$_wly" ] && _wly="${NEXUS_DIR:-.}/$RNEX_LOCAL_CONFIG_FILE"
+  _val="$(_yaml_plugin_get_from_file "$_wly" "$_pname" "$_key")"
   if [ -n "$_val" ]; then
     printf '%s' "$_val"
     return 0
   fi
-  _yaml_plugin_get_from_file "$WORKSPACE_YAML" "$_pname" "$_key"
+  _yaml_plugin_get_from_file "$_wy" "$_pname" "$_key"
 }
 
 yaml_has_plugin() {

@@ -324,7 +324,13 @@ cmd_hooks() {
       case "$_hook_name" in
         post-merge)
           _cfg_changed=0
-          if [ ! -f "$NEXUS_DIR/.rnex/.sync_stamp" ] || [ "$(get_config_sum "$NEXUS_DIR")" != "$(cat "$NEXUS_DIR/.rnex/.sync_stamp" 2>/dev/null)" ]; then
+          _stamp_file=""
+          if [ -f "$NEXUS_DIR/.rnex/sync_stamp" ]; then
+            _stamp_file="$NEXUS_DIR/.rnex/sync_stamp"
+          elif [ -f "$NEXUS_DIR/.rnex/.sync_stamp" ]; then
+            _stamp_file="$NEXUS_DIR/.rnex/.sync_stamp"
+          fi
+          if [ -z "$_stamp_file" ] || [ "$(get_config_sum "$NEXUS_DIR")" != "$(cat "$_stamp_file" 2>/dev/null)" ]; then
             _cfg_changed=1
           elif git -C "$NEXUS_DIR" diff-tree -r --name-only ORIG_HEAD HEAD 2>/dev/null | grep -qE "(^rnex\.yaml$|^\.local\.rnex\.yaml$)"; then
             _cfg_changed=1
@@ -342,7 +348,13 @@ cmd_hooks() {
           ;;
         post-checkout)
           _cfg_changed=0
-          if [ ! -f "$NEXUS_DIR/.rnex/.sync_stamp" ] || [ "$(get_config_sum "$NEXUS_DIR")" != "$(cat "$NEXUS_DIR/.rnex/.sync_stamp" 2>/dev/null)" ]; then
+          _stamp_file=""
+          if [ -f "$NEXUS_DIR/.rnex/sync_stamp" ]; then
+            _stamp_file="$NEXUS_DIR/.rnex/sync_stamp"
+          elif [ -f "$NEXUS_DIR/.rnex/.sync_stamp" ]; then
+            _stamp_file="$NEXUS_DIR/.rnex/.sync_stamp"
+          fi
+          if [ -z "$_stamp_file" ] || [ "$(get_config_sum "$NEXUS_DIR")" != "$(cat "$_stamp_file" 2>/dev/null)" ]; then
             _cfg_changed=1
           elif [ -n "$1" ] && [ -n "$2" ] && git -C "$NEXUS_DIR" diff-tree -r --name-only "$1" "$2" 2>/dev/null | grep -qE "(^rnex\.yaml$|^\.local\.rnex\.yaml$)"; then
             _cfg_changed=1
@@ -369,7 +381,13 @@ cmd_hooks() {
           ;;
         pre-commit)
           _cfg_changed=0
-          if [ ! -f "$NEXUS_DIR/.rnex/.sync_stamp" ] || [ "$(get_config_sum "$NEXUS_DIR")" != "$(cat "$NEXUS_DIR/.rnex/.sync_stamp" 2>/dev/null)" ]; then
+          _stamp_file=""
+          if [ -f "$NEXUS_DIR/.rnex/sync_stamp" ]; then
+            _stamp_file="$NEXUS_DIR/.rnex/sync_stamp"
+          elif [ -f "$NEXUS_DIR/.rnex/.sync_stamp" ]; then
+            _stamp_file="$NEXUS_DIR/.rnex/.sync_stamp"
+          fi
+          if [ -z "$_stamp_file" ] || [ "$(get_config_sum "$NEXUS_DIR")" != "$(cat "$_stamp_file" 2>/dev/null)" ]; then
             _cfg_changed=1
           elif git -C "$NEXUS_DIR" diff --cached --name-only 2>/dev/null | grep -qE "(^rnex\.yaml$|^\.local\.rnex\.yaml$)"; then
             _cfg_changed=1

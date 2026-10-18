@@ -12,36 +12,52 @@ _root="$RNEX_ROOT"
 get_cfg() {
   _key="$1"; _def="$2"
   _val=""
-  if [ -f "$_root/.local.rnex.yaml" ]; then
-    _val="$(awk -v k="$_key" '
-      /^plugins:/ { in_p=1; in_k=0; next }
-      in_p && /^[^ #]/ { in_p=0; in_k=0 }
-      in_p && match($0, "^[ ]*karpathy-llm:[ ]*(#.*)?$") { in_k=1; next }
-      in_k && (/^[ ]{1,2}[^ #]/ || /^[^ #]/) { in_k=0 }
-      in_k && $0 ~ ("^[ ]*" k ":") {
-        sub("^[ ]*" k ":[ ]*", "")
-        sub(/[ ]*#.*/, "")
-        gsub(/["\047]/, "")
-        print
-        exit
+  for _cfg in "$_root/.local.rnex.yaml" "$_root/rnex.yaml"; do
+    [ -f "$_cfg" ] || continue
+    _val="$(awk -v plugin="karpathy-llm" -v key="$_key" '
+      /^[ \t]*plugins:[ \t]*(#.*)?$/ { in_plugins=1; in_target=0; plugin_indent=-1; next }
+      in_plugins && /^[^ \t#]/ { in_plugins=0; in_target=0 }
+      !in_plugins { next }
+      {
+        match($0, /^[ \t]*/)
+        indent = RLENGTH
+        trimmed = substr($0, indent + 1)
       }
-    ' "$_root/.local.rnex.yaml")"
-  fi
-  if [ -z "$_val" ] && [ -f "$_root/rnex.yaml" ]; then
-    _val="$(awk -v k="$_key" '
-      /^plugins:/ { in_p=1; in_k=0; next }
-      in_p && /^[^ #]/ { in_p=0; in_k=0 }
-      in_p && match($0, "^[ ]*karpathy-llm:[ ]*(#.*)?$") { in_k=1; next }
-      in_k && (/^[ ]{1,2}[^ #]/ || /^[^ #]/) { in_k=0 }
-      in_k && $0 ~ ("^[ ]*" k ":") {
-        sub("^[ ]*" k ":[ ]*", "")
-        sub(/[ ]*#.*/, "")
-        gsub(/["\047]/, "")
-        print
-        exit
+      trimmed ~ /^([#]|$)/ { next }
+
+      in_target && (indent <= plugin_indent) {
+        in_target=0
       }
-    ' "$_root/rnex.yaml")"
-  fi
+
+      !in_target {
+        if (trimmed ~ ("^[\"\x27]?" plugin "[\"\x27]?:")) {
+          in_target=1
+          plugin_indent=indent
+          next
+        }
+      }
+
+      in_target && (indent > plugin_indent) {
+        if (trimmed ~ ("^[\"\x27]?" key "[\"\x27]?:[ \t]*")) {
+          sub("^[\"\x27]?" key "[\"\x27]?:[ \t]*", "", trimmed)
+          if (trimmed ~ /^"[^"]*"/) {
+            match(trimmed, /^"[^"]*"/)
+            val = substr(trimmed, 2, RLENGTH - 2)
+          } else if (trimmed ~ /^\x27[^\x27]*\x27/) {
+            match(trimmed, /^\x27[^\x27]*\x27/)
+            val = substr(trimmed, 2, RLENGTH - 2)
+          } else {
+            sub(/[ \t]*#.*$/, "", trimmed)
+            sub(/[ \t]+$/, "", trimmed)
+            val = trimmed
+          }
+          print val
+          exit
+        }
+      }
+    ' "$_cfg")"
+    [ -n "$_val" ] && break
+  done
   [ -n "$_val" ] && printf '%s' "$_val" || printf '%s' "$_def"
 }
 
@@ -58,6 +74,53 @@ _raw_path="$_root/$_raw"
 
 mkdir -p "$_wiki_path" "$_raw_path"
 [ -f "$_raw_path/.gitkeep" ] || touch "$_raw_path/.gitkeep"
+
+# Clean up obsolete leaked root ./raw and ./wiki directories if non-default paths are configured
+if [ "$_raw" != "raw" ] && [ -d "$_root/raw" ]; then
+  if ! rmdir "$_root/raw" 2>/dev/null; then
+    _clean_raw_leak=1
+    for _rf in "$_root/raw"/* "$_root/raw"/.[!.]* "$_root/raw"/..?*; do
+      [ -e "$_rf" ] || continue
+      _rf_base="$(basename "$_rf")"
+      if [ "$_rf_base" = ".gitkeep" ]; then
+        continue
+      fi
+      if [ -f "$_raw_path/$_rf_base" ] && cmp -s "$_rf" "$_raw_path/$_rf_base"; then
+        continue
+      fi
+      _clean_raw_leak=0
+      break
+    done
+    if [ "$_clean_raw_leak" -eq 1 ]; then
+      rm -rf "$_root/raw" 2>/dev/null || true
+    fi
+  fi
+fi
+
+if [ "$_wiki" != "wiki" ] && [ -d "$_root/wiki" ]; then
+  if ! rmdir "$_root/wiki" 2>/dev/null; then
+    _clean_wiki_leak=1
+    for _wf in "$_root/wiki"/* "$_root/wiki"/.[!.]* "$_root/wiki"/..?*; do
+      [ -e "$_wf" ] || continue
+      _wf_base="$(basename "$_wf")"
+      case "$_wf_base" in
+        index.md|_log.md|hot.md|.gitkeep)
+          continue
+          ;;
+        *)
+          if [ -f "$_wiki_path/$_wf_base" ] && cmp -s "$_wf" "$_wiki_path/$_wf_base"; then
+            continue
+          fi
+          _clean_wiki_leak=0
+          break
+          ;;
+      esac
+    done
+    if [ "$_clean_wiki_leak" -eq 1 ]; then
+      rm -rf "$_root/wiki" 2>/dev/null || true
+    fi
+  fi
+fi
 
 # Clean up legacy staging directory only if empty or positively verified as managed duplicate copies
 if [ -d "$_wiki_path/raw" ]; then

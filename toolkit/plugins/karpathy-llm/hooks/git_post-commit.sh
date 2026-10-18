@@ -4,36 +4,52 @@ _root="${RNEX_ROOT:-$PWD}"
 get_cfg() {
   _key="$1"; _def="$2"
   _val=""
-  if [ -f "$_root/.local.rnex.yaml" ]; then
-    _val="$(awk -v k="$_key" '
-      /^plugins:/ { in_p=1; in_k=0; next }
-      in_p && /^[^ #]/ { in_p=0; in_k=0 }
-      in_p && match($0, "^[ ]*karpathy-llm:[ ]*(#.*)?$") { in_k=1; next }
-      in_k && (/^[ ]{1,2}[^ #]/ || /^[^ #]/) { in_k=0 }
-      in_k && $0 ~ ("^[ ]*" k ":") {
-        sub("^[ ]*" k ":[ ]*", "")
-        sub(/[ ]*#.*/, "")
-        gsub(/["\047]/, "")
-        print
-        exit
+  for _cfg in "$_root/.local.rnex.yaml" "$_root/rnex.yaml"; do
+    [ -f "$_cfg" ] || continue
+    _val="$(awk -v plugin="karpathy-llm" -v key="$_key" '
+      /^[ \t]*plugins:[ \t]*(#.*)?$/ { in_plugins=1; in_target=0; plugin_indent=-1; next }
+      in_plugins && /^[^ \t#]/ { in_plugins=0; in_target=0 }
+      !in_plugins { next }
+      {
+        match($0, /^[ \t]*/)
+        indent = RLENGTH
+        trimmed = substr($0, indent + 1)
       }
-    ' "$_root/.local.rnex.yaml")"
-  fi
-  if [ -z "$_val" ] && [ -f "$_root/rnex.yaml" ]; then
-    _val="$(awk -v k="$_key" '
-      /^plugins:/ { in_p=1; in_k=0; next }
-      in_p && /^[^ #]/ { in_p=0; in_k=0 }
-      in_p && match($0, "^[ ]*karpathy-llm:[ ]*(#.*)?$") { in_k=1; next }
-      in_k && (/^[ ]{1,2}[^ #]/ || /^[^ #]/) { in_k=0 }
-      in_k && $0 ~ ("^[ ]*" k ":") {
-        sub("^[ ]*" k ":[ ]*", "")
-        sub(/[ ]*#.*/, "")
-        gsub(/["\047]/, "")
-        print
-        exit
+      trimmed ~ /^([#]|$)/ { next }
+
+      in_target && (indent <= plugin_indent) {
+        in_target=0
       }
-    ' "$_root/rnex.yaml")"
-  fi
+
+      !in_target {
+        if (trimmed ~ ("^[\"\x27]?" plugin "[\"\x27]?:")) {
+          in_target=1
+          plugin_indent=indent
+          next
+        }
+      }
+
+      in_target && (indent > plugin_indent) {
+        if (trimmed ~ ("^[\"\x27]?" key "[\"\x27]?:[ \t]*")) {
+          sub("^[\"\x27]?" key "[\"\x27]?:[ \t]*", "", trimmed)
+          if (trimmed ~ /^"[^"]*"/) {
+            match(trimmed, /^"[^"]*"/)
+            val = substr(trimmed, 2, RLENGTH - 2)
+          } else if (trimmed ~ /^\x27[^\x27]*\x27/) {
+            match(trimmed, /^\x27[^\x27]*\x27/)
+            val = substr(trimmed, 2, RLENGTH - 2)
+          } else {
+            sub(/[ \t]*#.*$/, "", trimmed)
+            sub(/[ \t]+$/, "", trimmed)
+            val = trimmed
+          }
+          print val
+          exit
+        }
+      }
+    ' "$_cfg")"
+    [ -n "$_val" ] && break
+  done
   [ -n "$_val" ] && printf '%s' "$_val" || printf '%s' "$_def"
 }
 
