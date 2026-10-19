@@ -97,12 +97,12 @@ repos_dir: ./repos
 plugins:
   # AI Provider Plugins
   claude:
-    instructions: true
     skills: true
+    auto_sync_on: SessionStart
 
   gemini:
-    instructions: true
     skills: true
+    auto_sync_on: SessionStart
 
   # Functional / Knowledge Plugins
   karpathy-llm:

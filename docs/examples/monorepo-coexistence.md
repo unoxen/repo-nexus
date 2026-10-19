@@ -52,7 +52,6 @@ repos:
 
 plugins:
   claude:
-    instructions: true
     skills: true
 ```
 

@@ -14,7 +14,6 @@ Configure plugin options in `rnex.yaml` or override them per developer in `.loca
 ```yaml
 plugins:
   cursor:
-    instructions: true   # Maintain routing in .cursorrules & .cursor/rules/ (default: true)
     skills: true         # Generate user skills in .cursor/rules/ (default: true)
 ```
 

@@ -13,7 +13,6 @@ Configure plugin options in `rnex.yaml` or override them per developer in `.loca
 ```yaml
 plugins:
   windsurf:
-    instructions: true   # Maintain routing in .windsurfrules (default: true)
     skills: true         # Generate user skills in .windsurf/rules/ (default: true)
 ```
 

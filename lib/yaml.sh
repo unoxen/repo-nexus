@@ -157,24 +157,39 @@ provider_option_enabled() {
   esac
 }
 
+provider_auto_sync_enabled() {
+  _p="$1"
+  provider_plugin_enabled "$_p" || return 1
+  _val="$(yaml_plugin_get "$_p" "auto_sync_on")"
+  [ -z "$_val" ] && _val="$(yaml_plugin_get "$_p" "autoSyncOn")"
+  [ -z "$_val" ] && _val="SessionStart"
+  _val="$(printf '%s' "$_val" | tr '[:upper:]' '[:lower:]')"
+  case "$_val" in
+    false|no|0|disabled|off|none) return 1 ;;
+    *) return 0 ;;
+  esac
+}
+
 copilot_plugin_enabled() { provider_plugin_enabled "copilot"; }
-copilot_instructions_enabled() { provider_option_enabled "copilot" "instructions"; }
+copilot_instructions_enabled() { provider_plugin_enabled "copilot"; }
 copilot_skills_enabled() { provider_option_enabled "copilot" "skills"; }
 
 claude_plugin_enabled() { provider_plugin_enabled "claude"; }
-claude_instructions_enabled() { provider_option_enabled "claude" "instructions"; }
+claude_instructions_enabled() { provider_plugin_enabled "claude"; }
 claude_skills_enabled() { provider_option_enabled "claude" "skills"; }
+claude_auto_sync_enabled() { provider_auto_sync_enabled "claude"; }
 
 gemini_plugin_enabled() { provider_plugin_enabled "gemini"; }
-gemini_instructions_enabled() { provider_option_enabled "gemini" "instructions"; }
+gemini_instructions_enabled() { provider_plugin_enabled "gemini"; }
 gemini_skills_enabled() { provider_option_enabled "gemini" "skills"; }
+gemini_auto_sync_enabled() { provider_auto_sync_enabled "gemini"; }
 
 cursor_plugin_enabled() { provider_plugin_enabled "cursor"; }
-cursor_instructions_enabled() { provider_option_enabled "cursor" "instructions"; }
+cursor_instructions_enabled() { provider_plugin_enabled "cursor"; }
 cursor_skills_enabled() { provider_option_enabled "cursor" "skills"; }
 
 windsurf_plugin_enabled() { provider_plugin_enabled "windsurf"; }
-windsurf_instructions_enabled() { provider_option_enabled "windsurf" "instructions"; }
+windsurf_instructions_enabled() { provider_plugin_enabled "windsurf"; }
 windsurf_skills_enabled() { provider_option_enabled "windsurf" "skills"; }
 
 has_active_provider_instructions() {

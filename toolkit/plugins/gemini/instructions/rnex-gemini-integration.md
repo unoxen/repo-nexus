@@ -14,8 +14,8 @@ Configure plugin options in `rnex.yaml` or override them per developer in `.loca
 ```yaml
 plugins:
   gemini:
-    instructions: true   # Maintain routing in GEMINI.md (default: true)
     skills: true         # Generate user skills in .agents/skills/ (default: true)
+    auto_sync_on: SessionStart # Trigger auto-sync on lifecycle event (default: SessionStart, or false)
 ```
 
 To disable locally without altering team configuration, add to `.local.rnex.yaml`:

@@ -6,12 +6,12 @@ homepage: https://github.com/unoxen/repo-nexus
 skill_dir: .claude/skills
 
 config_defaults:
-  instructions: true
   skills: true
+  auto_sync_on: SessionStart
 
 config_descriptions:
-  instructions: "true|false  (maintain provider instructions)"
   skills: "true|false        (generate user skills in {skill_dir})"
+  auto_sync_on: "SessionStart|false  (trigger auto-sync on lifecycle event, e.g. SessionStart)"
 
 instructions:
   - instructions/rnex-claude-integration.md: .rnex/plugins/claude/instructions/rnex-claude-integration.md

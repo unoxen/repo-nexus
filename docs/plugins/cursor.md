@@ -20,7 +20,7 @@ Operational skills, rules, and subagents remain cleanly encapsulated within `.rn
    - Contains zero inline heuristics—redirects Cursor directly to the underlying agentic skill protocols inside `.rnex/`.
 
 2. **Native Instructions & Rules Support**:
-   - Synchronizes Repo Nexus routing instructions to `.cursorrules` when `instructions: true` (default).
+   - Automatically synchronizes Repo Nexus routing instructions to `.cursorrules` and `.cursor/rules/rnex-context.mdc`.
    - Preserves user custom rules and custom sections in `.cursorrules`.
 
 3. **Subagent & Skill Execution**:
@@ -57,14 +57,12 @@ Configure options under `plugins.cursor` in `rnex.yaml` or `.local.rnex.yaml`:
 ```yaml
 plugins:
   cursor:
-    instructions: true   # Sync routing instructions to .cursorrules (default: true)
     skills: true         # Generate user skills in .cursor/rules/ (default: true)
     enabled: true        # Set to false to disable
 ```
 
 | Option | Type | Default | Description |
 |:---|:---|:---|:---|
-| `instructions` | boolean | `true` | Merge routing instructions into `.cursorrules`. |
 | `skills` | boolean | `true` | Generate user skill pointers in `.cursor/rules/rnex-*.md`. |
 | `enabled` | boolean | `true` | Enable or disable the plugin. Overridable in `.local.rnex.yaml`. |
 
@@ -77,7 +75,7 @@ When `cursor` is enabled with functional plugins like `karpathy-llm`, it generat
 ```text
 my-workspace/
 ├── AGENTS.md                          # Universal workspace instructions & routing
-├── .cursorrules                       # Cursor root instructions (if instructions: true)
+├── .cursorrules                       # Cursor root instructions
 ├── .cursor/
 │   └── rules/                         # Zero-logic User Skill pointers
 │       ├── rnex-clone-sync.md

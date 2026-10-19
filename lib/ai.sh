@@ -495,6 +495,96 @@ clean_provider_agents() {
   rmdir "$_ag_dir" 2>/dev/null || true
 }
 
+clean_claude_auto_sync_hook() {
+  _settings="$1"
+  [ -f "$_settings" ] || return 0
+  if grep -q "auto-sync.sh" "$_settings" 2>/dev/null; then
+    _tmp="$(mktemp)"
+    awk '
+      /\{[ \t]*"command"[ \t]*:[ \t]*"\.rnex\/bin\/auto-sync\.sh"[ \t]*\}/ { next }
+      /"command"[ \t]*:[ \t]*"\.rnex\/bin\/auto-sync\.sh"/ { next }
+      { print }
+    ' "$_settings" > "$_tmp"
+    _clean="$(tr -d " \t\r\n[]{}:,\"hooksSessionStart" < "$_tmp")"
+    if [ -z "$_clean" ]; then
+      rm -f "$_tmp" "$_settings"
+    else
+      awk '
+        { lines[NR] = $0 }
+        END {
+          for (i = 1; i <= NR; i++) {
+            if (i < NR && lines[i] ~ /,[ \t]*$/) {
+              next_is_bracket = 0
+              for (j = i + 1; j <= NR; j++) {
+                if (lines[j] ~ /^[ \t]*$/) continue
+                if (lines[j] ~ /^[ \t]*[\]\}]/) next_is_bracket = 1
+                break
+              }
+              if (next_is_bracket) {
+                sub(/,[ \t]*$/, "", lines[i])
+              }
+            }
+            print lines[i]
+          }
+        }
+      ' "$_tmp" > "$_settings"
+      rm -f "$_tmp"
+    fi
+  fi
+}
+
+clean_agents_auto_sync_hook() {
+  _hooks="$1"
+  [ -f "$_hooks" ] || return 0
+  if grep -q '"rnex-auto-sync"' "$_hooks" 2>/dev/null; then
+    _tmp="$(mktemp)"
+    awk '
+      BEGIN { skip=0; depth=0 }
+      /"rnex-auto-sync"[ \t]*:[ \t]*\{/ { skip=1; depth=1; next }
+      skip {
+        for (i=1; i<=length($0); i++) {
+          c = substr($0, i, 1)
+          if (c == "{") depth++
+          if (c == "}") {
+            depth--
+            if (depth == 0) {
+              skip = 0
+              next
+            }
+          }
+        }
+        next
+      }
+      { print }
+    ' "$_hooks" > "$_tmp"
+    _clean="$(tr -d " \t\r\n{}" < "$_tmp")"
+    if [ -z "$_clean" ]; then
+      rm -f "$_tmp" "$_hooks"
+    else
+      awk '
+        { lines[NR] = $0 }
+        END {
+          for (i = 1; i <= NR; i++) {
+            if (i < NR && lines[i] ~ /,[ \t]*$/) {
+              next_is_brace = 0
+              for (j = i + 1; j <= NR; j++) {
+                if (lines[j] ~ /^[ \t]*$/) continue
+                if (lines[j] ~ /^[ \t]*\}/) next_is_brace = 1
+                break
+              }
+              if (next_is_brace) {
+                sub(/,[ \t]*$/, "", lines[i])
+              }
+            }
+            print lines[i]
+          }
+        }
+      ' "$_tmp" > "$_hooks"
+      rm -f "$_tmp"
+    fi
+  fi
+}
+
 sync_rnex_base_assets() {
   _src_toolkit=""
   if [ -d "$SCRIPT_LOCATION/toolkit" ]; then

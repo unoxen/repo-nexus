@@ -10,5 +10,6 @@ fi
 
 clean_rnex_instructions "$_root/CLAUDE.md"
 clean_provider_user_skills "$_root/.claude/skills"
+clean_claude_auto_sync_hook "$_root/.claude/settings.json"
 rm -rf "$_root/.claude/commands" "$_root/.claude/prompts" 2>/dev/null || true
 rmdir "$_root/.claude" 2>/dev/null || true

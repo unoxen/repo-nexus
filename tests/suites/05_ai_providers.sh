@@ -48,7 +48,6 @@ code_workspace: false
 git_hooks: false
 plugins:
   claude:
-    instructions: true
     skills: false
 repos:
 EOF

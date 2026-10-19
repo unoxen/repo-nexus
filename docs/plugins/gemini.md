@@ -20,7 +20,7 @@ Operational skills, rules, and subagents remain cleanly encapsulated within `.rn
    - Contains zero inline heuristics—redirects Gemini/Antigravity directly to the underlying agentic skill protocols inside `.rnex/`.
 
 2. **Native Instructions Support via `GEMINI.md`**:
-   - Synchronizes Repo Nexus routing instructions to `GEMINI.md` (when `instructions: true`, default) for native support by the Google Gemini CLI.
+   - Automatically synchronizes Repo Nexus routing instructions to `GEMINI.md` for native support by the Google Gemini CLI and Antigravity.
    - Preserves user-defined custom sections in `GEMINI.md` across updates.
 
 3. **Subagent & Skill Execution**:
@@ -57,15 +57,15 @@ Configure options under `plugins.gemini` in `rnex.yaml` or `.local.rnex.yaml`:
 ```yaml
 plugins:
   gemini:
-    instructions: true   # Sync routing instructions to GEMINI.md (default: true)
     skills: true         # Generate user skills in .agents/skills/ (default: true)
+    auto_sync_on: SessionStart # Trigger auto-sync on lifecycle event (default: SessionStart, or false)
     enabled: true        # Set to false to disable
 ```
 
 | Option | Type | Default | Description |
 |:---|:---|:---|:---|
-| `instructions` | boolean | `true` | Merge routing instructions into `GEMINI.md`. |
 | `skills` | boolean | `true` | Generate user skill pointers in `.agents/skills/rnex-*/SKILL.md`. |
+| `auto_sync_on` | string/boolean | `SessionStart` | Lifecycle event triggering auto-sync in `.agents/hooks.json` (or `false` to disable). |
 | `enabled` | boolean | `true` | Enable or disable the plugin. Overridable in `.local.rnex.yaml`. |
 
 ---
@@ -76,7 +76,7 @@ When `gemini` is enabled with functional plugins like `karpathy-llm`, it generat
 
 ```text
 my-workspace/
-├── GEMINI.md                          # Gemini-specific instructions (if instructions: true)
+├── GEMINI.md                          # Gemini-specific instructions
 ├── .agents/
 │   └── skills/                        # Zero-logic User Skill pointers
 │       ├── rnex-clone-sync/

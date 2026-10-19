@@ -64,11 +64,10 @@ repos:
 plugins:
   # AI Provider Plugins
   claude:
-    instructions: true
     skills: true
+    auto_sync_on: SessionStart
 
   cursor:
-    instructions: true
     skills: true
 
   # Knowledge & Agent Protocol Plugins
@@ -116,7 +115,7 @@ repos:
 
 plugins:
   gemini:
-    instructions: true
+    skills: true
 ```
 
 After modifying configuration files directly, reconcile the workspace state:

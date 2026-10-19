@@ -19,14 +19,14 @@ Or configure options in `rnex.yaml` or `.local.rnex.yaml`:
 ```yaml
 plugins:
   gemini:
-    instructions: true
     skills: true
+    auto_sync_on: SessionStart
 ```
 
 ## Options
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `instructions` | boolean | `true` | Maintain routing in `GEMINI.md` |
 | `skills` | boolean | `true` | Generate user skills in `.agents/skills/` |
+| `auto_sync_on` | string/boolean | `SessionStart` | Lifecycle event triggering auto-sync in `.agents/hooks.json` (or `false` to disable) |
 | `enabled` | boolean | `true` | Set to `false` in `.local.rnex.yaml` to override team config |

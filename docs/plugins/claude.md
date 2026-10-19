@@ -21,8 +21,8 @@ Operational skills, rules, and subagents remain cleanly encapsulated within `.rn
 
 2. **Native Instruction Support via `CLAUDE.md` & `AGENTS.md`**:
    - Claude Code natively reads `CLAUDE.md` as its primary instructions file; it only falls back to `AGENTS.md` when no `CLAUDE.md` exists in the project.
-   - When enabled (`instructions: true`), the Claude plugin synchronizes Repo Nexus routing instructions to `CLAUDE.md` (or merges them cleanly if you already have custom instructions).
-   - If `CLAUDE.md` is absent and `instructions: false`, Claude Code falls back to reading `AGENTS.md` directly.
+   - When enabled, the Claude plugin automatically synchronizes Repo Nexus routing instructions to `CLAUDE.md` (or merges them cleanly if you already have custom instructions).
+   - If the plugin is disabled, the routing block is removed, allowing Claude Code to read `AGENTS.md` directly.
 
 3. **Subagent & Skill Execution**:
    - Core skills reside under `.rnex/skills/`.
@@ -58,15 +58,15 @@ Configure options under `plugins.claude` in `rnex.yaml` or `.local.rnex.yaml`:
 ```yaml
 plugins:
   claude:
-    instructions: true   # Sync routing instructions to CLAUDE.md (default: true)
     skills: true         # Generate user skills in .claude/skills/ (default: true)
+    auto_sync_on: SessionStart # Trigger auto-sync on lifecycle event (default: SessionStart, or false)
     enabled: true        # Set to false to disable
 ```
 
 | Option | Type | Default | Description |
 |:---|:---|:---|:---|
-| `instructions` | boolean | `true` | Merge routing instructions into `CLAUDE.md`. |
 | `skills` | boolean | `true` | Generate user skill pointers in `.claude/skills/rnex-*.md`. |
+| `auto_sync_on` | string/boolean | `SessionStart` | Lifecycle event triggering auto-sync in `.claude/settings.json` (or `false` to disable). |
 | `enabled` | boolean | `true` | Enable or disable the plugin. Overridable in `.local.rnex.yaml`. |
 
 ---
@@ -78,7 +78,7 @@ When `claude` is enabled with functional plugins like `karpathy-llm`, it generat
 ```text
 my-workspace/
 ├── AGENTS.md                          # Universal workspace instructions & routing
-├── CLAUDE.md                          # Claude-specific instructions (if instructions: true)
+├── CLAUDE.md                          # Claude-specific instructions
 ├── .claude/
 │   └── skills/                        # Zero-logic User Skill pointers
 │       ├── rnex-clone-sync.md

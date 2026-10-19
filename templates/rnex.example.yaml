@@ -84,24 +84,22 @@ git_hooks: true
 #   AGENTS.md at workspace root is the universal cross-tool standard. Assistants that read AGENTS.md
 #   all the time need no separate top-level instructions file. Assistants with native
 #   formats (Claude with CLAUDE.md, Gemini with GEMINI.md, Cursor with .cursorrules, Windsurf with .windsurfrules)
-#   have their instruction files maintained when their plugin is enabled (instructions: true).
+#   have their instruction files maintained automatically when their plugin is enabled.
 #   Agentic skills live self-contained inside .rnex/skills/ (core) and .rnex/plugins/<plugin>/skills/ (plugins).
 #   Provider plugins generate zero-logic User Skills (prefixed with rnex-) into IDE-specific skill directories
 #   linking directly to the agentic skill protocols inside .rnex/.
 
 plugins:
   # claude:
-  #   instructions: true   # sync routing instructions to CLAUDE.md (default: true)
-  #   skills: true         # generate user skills in .claude/skills/ (default: true)
+  #   skills: true              # generate user skills in .claude/skills/ (default: true)
+  #   auto_sync_on: SessionStart # trigger auto-sync on lifecycle event (default: SessionStart, or false)
   # gemini:
-  #   instructions: true   # sync routing instructions to GEMINI.md (default: true)
-  #   skills: true         # generate user skills in .agents/skills/ (default: true)
+  #   skills: true              # generate user skills in .agents/skills/ (default: true)
+  #   auto_sync_on: SessionStart # trigger auto-sync on lifecycle event (default: SessionStart, or false)
   # cursor:
-  #   instructions: true   # sync routing instructions to .cursorrules (default: true)
-  #   skills: true         # generate user skills in .cursor/rules/ (default: true)
+  #   skills: true              # generate user skills in .cursor/rules/ (default: true)
   # windsurf:
-  #   instructions: true   # sync routing instructions to .windsurfrules (default: true)
-  #   skills: true         # generate user skills in .windsurf/rules/ (default: true)
+  #   skills: true              # generate user skills in .windsurf/rules/ (default: true)
   # karpathy-llm:
   #   raw_dir: "./docs"           # Append-only directory for unmodified intake documents (default: ./docs)
   #   wiki_dir: ".rnex/wiki"      # Directory for curated atomic markdown pages (default: .rnex/wiki)

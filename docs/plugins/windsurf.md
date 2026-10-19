@@ -20,7 +20,7 @@ Operational skills, rules, and subagents remain cleanly encapsulated within `.rn
    - Contains zero inline heuristics—redirects Cascade directly to the underlying agentic skill protocols inside `.rnex/`.
 
 2. **Native Instructions Support via `.windsurfrules`**:
-   - Synchronizes Repo Nexus routing instructions to `.windsurfrules` when `instructions: true` (default).
+   - Automatically synchronizes Repo Nexus routing instructions to `.windsurfrules`.
    - Preserves user custom rules and custom sections in `.windsurfrules`.
 
 3. **Subagent & Skill Execution**:
@@ -57,14 +57,12 @@ Configure options under `plugins.windsurf` in `rnex.yaml` or `.local.rnex.yaml`:
 ```yaml
 plugins:
   windsurf:
-    instructions: true   # Sync routing instructions to .windsurfrules (default: true)
     skills: true         # Generate user skills in .windsurf/rules/ (default: true)
     enabled: true        # Set to false to disable
 ```
 
 | Option | Type | Default | Description |
 |:---|:---|:---|:---|
-| `instructions` | boolean | `true` | Merge routing instructions into `.windsurfrules`. |
 | `skills` | boolean | `true` | Generate user skill pointers in `.windsurf/rules/rnex-*.md`. |
 | `enabled` | boolean | `true` | Enable or disable the plugin. Overridable in `.local.rnex.yaml`. |
 
@@ -77,7 +75,7 @@ When `windsurf` is enabled with functional plugins like `karpathy-llm`, it gener
 ```text
 my-workspace/
 ├── AGENTS.md                          # Universal workspace instructions & routing
-├── .windsurfrules                     # Windsurf instructions (if instructions: true)
+├── .windsurfrules                     # Windsurf instructions
 ├── .windsurf/
 │   └── rules/                         # Zero-logic User Skill pointers
 │       ├── rnex-clone-sync.md

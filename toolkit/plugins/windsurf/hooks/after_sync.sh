@@ -8,12 +8,8 @@ if ! command -v merge_rnex_instructions >/dev/null 2>&1; then
   fi
 fi
 
-_inst="$(provider_option_enabled "windsurf" "instructions" 2>/dev/null && echo "true" || echo "false")"
-if [ "$_inst" = "true" ]; then
-  merge_rnex_instructions "$_root/.windsurfrules"
-else
-  clean_rnex_instructions "$_root/.windsurfrules"
-fi
+# Instructions management (always maintained when windsurf plugin is enabled)
+merge_rnex_instructions "$_root/.windsurfrules"
 
 _sk="$(provider_option_enabled "windsurf" "skills" 2>/dev/null && echo "true" || echo "false")"
 if [ "$_sk" != "true" ]; then

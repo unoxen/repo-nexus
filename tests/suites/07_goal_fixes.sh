@@ -125,7 +125,7 @@ pass
 # --------------------------------------------------------------------------
 run_test "Fix 5: Re-enabling a disabled plugin in rnex.yaml updates enabled: true"
 # Manually disable copilot in rnex.yaml
-sed -e '/copilot:/,/skills:/ s/instructions: true/enabled: false/' "$TEST_GOAL_WS/rnex.yaml" > "$TEST_GOAL_WS/rnex.yaml.tmp"
+sed -e '/copilot:/,/skills:/ s/skills: true/enabled: false/' "$TEST_GOAL_WS/rnex.yaml" > "$TEST_GOAL_WS/rnex.yaml.tmp"
 mv "$TEST_GOAL_WS/rnex.yaml.tmp" "$TEST_GOAL_WS/rnex.yaml"
 # Ensure enabled: false is in rnex.yaml
 if ! grep -q "enabled: false" "$TEST_GOAL_WS/rnex.yaml"; then
@@ -202,7 +202,7 @@ run_test "Fix 9: Incomplete copilot plugin CLI integration"
 # 9a: status displays copilot instructions and options
 _status_out="$(cd "$TEST_GOAL_WS" && ./rnex status 2>&1)"
 echo "$_status_out" | grep -q ".github/copilot-instructions.md" || { fail "status did not check .github/copilot-instructions.md: $_status_out"; exit 1; }
-echo "$_status_out" | grep "copilot" -A 2 | grep -q "Options: instructions=" || { fail "status did not display copilot options: $_status_out"; exit 1; }
+echo "$_status_out" | grep "copilot" -A 2 | grep -q "Options: skills=" || { fail "status did not display copilot options: $_status_out"; exit 1; }
 
 # 9b: plugin info copilot shows configurable options with .github/skills/
 _pinfo_copilot="$(cd "$TEST_GOAL_WS" && ./rnex plugin info copilot 2>&1)"
@@ -902,6 +902,100 @@ grep -q "These are custom developer instructions" "$TEST_COPILOT_WS/AGENTS.md" |
 [ -f "$TEST_COPILOT_WS/AGENTS.md" ] || { fail "AGENTS.md missing after disabling copilot"; exit 1; }
 grep -q "REPO-NEXUS:START" "$TEST_COPILOT_WS/AGENTS.md" || { fail "REPO-NEXUS instructions not restored in AGENTS.md after disabling copilot"; exit 1; }
 grep -q "These are custom developer instructions" "$TEST_COPILOT_WS/AGENTS.md" || { fail "Custom developer instructions lost when restoring REPO-NEXUS in AGENTS.md"; exit 1; }
+
+pass
+
+# --------------------------------------------------------------------------
+run_test "Fix 26: Claude and Gemini auto_sync_on lifecycle hooks (.claude/settings.json & .agents/hooks.json) and rnex-env.sh .gemini deduplication"
+TEST_HOOKS_WS="$TEST_TMP/hooks-test-ws"
+mkdir -p "$TEST_HOOKS_WS"
+cp "$CLI" "$TEST_HOOKS_WS/rnex"
+chmod +x "$TEST_HOOKS_WS/rnex"
+cp "$DIR/package.json" "$TEST_HOOKS_WS/package.json"
+cp -r "$DIR/lib" "$TEST_HOOKS_WS/lib"
+cp -r "$DIR/toolkit" "$TEST_HOOKS_WS/toolkit"
+cp -r "$DIR/templates" "$TEST_HOOKS_WS/templates"
+
+# 1. Verify rnex-env.sh does not contain .gemini check
+! grep -q '\[ -d "\$RNEX_ROOT/\.gemini" \]' "$DIR/templates/rnex-env.sh" || { fail "templates/rnex-env.sh still contains .gemini check"; exit 1; }
+! grep -q '\[ -d "\$RNEX_ROOT/\.gemini" \]' "$DIR/.rnex/bin/rnex-env.sh" || { fail ".rnex/bin/rnex-env.sh still contains .gemini check"; exit 1; }
+
+# 2. Initialize workspace with claude and gemini plugins
+(cd "$TEST_HOOKS_WS" && ./rnex init -y --claude --gemini >/dev/null)
+
+# Verify instruction files created automatically without instructions: setting
+[ -f "$TEST_HOOKS_WS/CLAUDE.md" ] || { fail "CLAUDE.md not created by default"; exit 1; }
+[ -f "$TEST_HOOKS_WS/GEMINI.md" ] || { fail "GEMINI.md not created by default"; exit 1; }
+grep -q "CRITICAL: You MUST read and strictly follow" "$TEST_HOOKS_WS/CLAUDE.md" || { fail "CLAUDE.md missing directive"; exit 1; }
+grep -q "CRITICAL: You MUST read and strictly follow" "$TEST_HOOKS_WS/GEMINI.md" || { fail "GEMINI.md missing directive"; exit 1; }
+
+# Verify .claude/settings.json created with SessionStart auto-sync hook
+[ -f "$TEST_HOOKS_WS/.claude/settings.json" ] || { fail ".claude/settings.json not created"; exit 1; }
+grep -q '"SessionStart"' "$TEST_HOOKS_WS/.claude/settings.json" || { fail ".claude/settings.json missing SessionStart"; exit 1; }
+grep -q '"command"[ ]*:[ ]*"\.rnex/bin/auto-sync\.sh"' "$TEST_HOOKS_WS/.claude/settings.json" || { fail ".claude/settings.json missing auto-sync command"; exit 1; }
+
+# Verify .agents/hooks.json created with rnex-auto-sync SessionStart hook
+[ -f "$TEST_HOOKS_WS/.agents/hooks.json" ] || { fail ".agents/hooks.json not created"; exit 1; }
+grep -q '"rnex-auto-sync"' "$TEST_HOOKS_WS/.agents/hooks.json" || { fail ".agents/hooks.json missing rnex-auto-sync"; exit 1; }
+grep -q '"SessionStart"' "$TEST_HOOKS_WS/.agents/hooks.json" || { fail ".agents/hooks.json missing SessionStart"; exit 1; }
+grep -q '"command"[ ]*:[ ]*"\.rnex/bin/auto-sync\.sh"' "$TEST_HOOKS_WS/.agents/hooks.json" || { fail ".agents/hooks.json missing auto-sync command"; exit 1; }
+
+# 3. Status command displays auto_sync_on option
+_hooks_status="$(cd "$TEST_HOOKS_WS" && ./rnex status 2>&1)"
+echo "$_hooks_status" | grep "claude" -A 2 | grep -q "auto_sync_on=SessionStart" || { fail "status missing claude auto_sync_on: $_hooks_status"; exit 1; }
+echo "$_hooks_status" | grep "gemini" -A 2 | grep -q "auto_sync_on=SessionStart" || { fail "status missing gemini auto_sync_on: $_hooks_status"; exit 1; }
+
+# 4. Test disabling auto_sync_on: false in rnex.yaml
+cat <<'EOF_CFG_NO_HOOKS' > "$TEST_HOOKS_WS/rnex.yaml"
+version: 0.7.22
+repos_dir: ./repos
+code_workspace: false
+git_hooks: false
+plugins:
+  claude:
+    skills: true
+    auto_sync_on: false
+  gemini:
+    skills: true
+    autoSyncOn: false
+repos:
+EOF_CFG_NO_HOOKS
+
+(cd "$TEST_HOOKS_WS" && ./rnex sync -y >/dev/null)
+
+# Verify hooks removed from settings.json and hooks.json
+[ ! -f "$TEST_HOOKS_WS/.claude/settings.json" ] || { fail ".claude/settings.json should be removed when empty"; exit 1; }
+[ ! -f "$TEST_HOOKS_WS/.agents/hooks.json" ] || { fail ".agents/hooks.json should be removed when empty"; exit 1; }
+
+# 5. Test re-enabling with camelCase autoSyncOn: SessionStart
+cat <<'EOF_CFG_CAMEL' > "$TEST_HOOKS_WS/rnex.yaml"
+version: 0.7.22
+repos_dir: ./repos
+code_workspace: false
+git_hooks: false
+plugins:
+  claude:
+    skills: true
+    autoSyncOn: SessionStart
+  gemini:
+    skills: true
+    auto_sync_on: SessionStart
+repos:
+EOF_CFG_CAMEL
+
+(cd "$TEST_HOOKS_WS" && ./rnex sync -y >/dev/null)
+[ -f "$TEST_HOOKS_WS/.claude/settings.json" ] || { fail ".claude/settings.json not restored with autoSyncOn"; exit 1; }
+[ -f "$TEST_HOOKS_WS/.agents/hooks.json" ] || { fail ".agents/hooks.json not restored with auto_sync_on"; exit 1; }
+
+# 6. Test disabling plugins cleans up hooks
+(cd "$TEST_HOOKS_WS" && ./rnex plugin disable claude >/dev/null)
+(cd "$TEST_HOOKS_WS" && ./rnex plugin disable gemini >/dev/null)
+
+[ ! -f "$TEST_HOOKS_WS/.claude/settings.json" ] || { fail ".claude/settings.json not cleaned after disabling claude"; exit 1; }
+[ ! -f "$TEST_HOOKS_WS/.agents/hooks.json" ] || { fail ".agents/hooks.json not cleaned after disabling gemini"; exit 1; }
+[ ! -f "$TEST_HOOKS_WS/CLAUDE.md" ] || { fail "CLAUDE.md not cleaned after disabling claude"; exit 1; }
+[ ! -f "$TEST_HOOKS_WS/GEMINI.md" ] || { fail "GEMINI.md not cleaned after disabling gemini"; exit 1; }
+[ -f "$TEST_HOOKS_WS/AGENTS.md" ] || { fail "AGENTS.md not restored after disabling provider plugins"; exit 1; }
 
 pass
 

@@ -18,7 +18,6 @@ Or configure options in `rnex.yaml` or `.local.rnex.yaml`:
 ```yaml
 plugins:
   copilot:
-    instructions: true
     skills: true
 ```
 
@@ -26,6 +25,5 @@ plugins:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `instructions` | boolean | `true` | Maintain routing in `.github/copilot-instructions.md` |
 | `skills` | boolean | `true` | Generate user skills in `.github/skills/` |
 | `enabled` | boolean | `true` | Set to `false` in `.local.rnex.yaml` to override team config |

@@ -18,7 +18,6 @@ Or configure options in `rnex.yaml` or `.local.rnex.yaml`:
 ```yaml
 plugins:
   windsurf:
-    instructions: true
     skills: true
 ```
 
@@ -26,6 +25,5 @@ plugins:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `instructions` | boolean | `true` | Maintain routing in `.windsurfrules` |
 | `skills` | boolean | `true` | Generate user skills in `.windsurf/rules/` |
 | `enabled` | boolean | `true` | Set to `false` in `.local.rnex.yaml` to override team config |

@@ -50,10 +50,8 @@ repos:
 
 plugins:
   claude:
-    instructions: true
     skills: true
   cursor:
-    instructions: true
     skills: true
 ```
 

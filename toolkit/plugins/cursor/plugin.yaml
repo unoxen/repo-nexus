@@ -6,11 +6,9 @@ homepage: https://github.com/unoxen/repo-nexus
 skill_dir: .cursor/rules
 
 config_defaults:
-  instructions: true
   skills: true
 
 config_descriptions:
-  instructions: "true|false  (maintain provider instructions)"
   skills: "true|false        (generate user skills in {skill_dir})"
 
 instructions:

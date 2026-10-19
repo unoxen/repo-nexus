@@ -1,6 +1,6 @@
 {
   "name": "repo-nexus",
-  "version": "0.7.24",
+  "version": "0.7.25",
   "description": "Lightweight, zero-dependency Virtual Meta-Repo companion for multi-repo workspaces and shared AI context (no git submodules)",
   "bin": {
     "repo-nexus": "rnex",

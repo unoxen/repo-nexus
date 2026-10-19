@@ -8,7 +8,7 @@ if [ -z "$RNEX_PROVIDER_SKILL_DIRS" ]; then
   [ -d "$RNEX_ROOT/.cursor" ] && _dirs="${_dirs:+$_dirs }.cursor/rules"
   [ -d "$RNEX_ROOT/.claude" ] && _dirs="${_dirs:+$_dirs }.claude/skills"
   [ -d "$RNEX_ROOT/.windsurf" ] && _dirs="${_dirs:+$_dirs }.windsurf/rules"
-  [ -d "$RNEX_ROOT/.gemini" ] && _dirs="${_dirs:+$_dirs }.gemini/skills"
+  [ -d "$RNEX_ROOT/.agents" ] && _dirs="${_dirs:+$_dirs }.agents/skills"
   export RNEX_PROVIDER_SKILL_DIRS="$_dirs"
 fi
 
@@ -105,8 +105,54 @@ rnex_unregister_user_skill() {
 }
 
 # Provider configuration check helper
-if ! command -v provider_option_enabled >/dev/null 2>&1; then
-  provider_option_enabled() {
+if ! command -v provider_plugin_enabled >/dev/null 2>&1; then
+  provider_plugin_enabled() {
+    _p="$1"
+    _r="${NEXUS_DIR:-${RNEX_ROOT:-.}}"
+    _val=""
+    if [ -f "$_r/.local.rnex.yaml" ]; then
+      _val="$(awk -v p="$_p" '
+        /^plugins:/ { in_p=1; next }
+        in_p && /^[^ #]/ { in_p=0; in_target=0 }
+        in_p && match($0, "^[ ]*" p ":[ ]*(#.*)?$") { in_target=1; next }
+        in_p && match($0, "^[ ]*-[ ]*" p "[ ]*(#.*)?$") { print "true"; exit }
+        in_target && (/^[ ]{1,2}[^ #]/ || /^[^ #]/) { in_target=0 }
+        in_target && $0 ~ "^[ ]*enabled:[ ]*" {
+          sub("^[ ]*enabled:[ ]*", "")
+          sub(/[ ]*#.*/, "")
+          gsub(/["\047]/, "")
+          print
+          exit
+        }
+      ' "$_r/.local.rnex.yaml")"
+    fi
+    if [ -z "$_val" ] && [ -f "$_r/rnex.yaml" ]; then
+      _val="$(awk -v p="$_p" '
+        /^plugins:/ { in_p=1; next }
+        in_p && /^[^ #]/ { in_p=0; in_target=0 }
+        in_p && match($0, "^[ ]*" p ":[ ]*(#.*)?$") { in_target=1; next }
+        in_p && match($0, "^[ ]*-[ ]*" p "[ ]*(#.*)?$") { print "true"; exit }
+        in_target && (/^[ ]{1,2}[^ #]/ || /^[^ #]/) { in_target=0 }
+        in_target && $0 ~ "^[ ]*enabled:[ ]*" {
+          sub("^[ ]*enabled:[ ]*", "")
+          sub(/[ ]*#.*/, "")
+          gsub(/["\047]/, "")
+          print
+          exit
+        }
+      ' "$_r/rnex.yaml")"
+    fi
+    [ -n "$_val" ] || return 1
+    _val="$(printf '%s' "$_val" | tr '[:upper:]' '[:lower:]')"
+    case "$_val" in
+      false|no|0|disabled|off) return 1 ;;
+      *) return 0 ;;
+    esac
+  }
+fi
+
+if ! command -v provider_option_get >/dev/null 2>&1; then
+  provider_option_get() {
     _p="$1"; _opt="$2"
     _r="${NEXUS_DIR:-${RNEX_ROOT:-.}}"
     _val=""
@@ -140,11 +186,138 @@ if ! command -v provider_option_enabled >/dev/null 2>&1; then
         }
       ' "$_r/rnex.yaml")"
     fi
+    printf '%s' "$_val"
+  }
+fi
+
+if ! command -v provider_option_enabled >/dev/null 2>&1; then
+  provider_option_enabled() {
+    _p="$1"; _opt="$2"
+    _val="$(provider_option_get "$_p" "$_opt")"
     _val="$(printf '%s' "$_val" | tr '[:upper:]' '[:lower:]')"
     case "$_val" in
       false|no|0|disabled|off) return 1 ;;
       *) return 0 ;;
     esac
+  }
+fi
+
+if ! command -v provider_auto_sync_enabled >/dev/null 2>&1; then
+  provider_auto_sync_enabled() {
+    _p="$1"
+    _val="$(provider_option_get "$_p" "auto_sync_on")"
+    [ -z "$_val" ] && _val="$(provider_option_get "$_p" "autoSyncOn")"
+    [ -z "$_val" ] && _val="SessionStart"
+    _val="$(printf '%s' "$_val" | tr '[:upper:]' '[:lower:]')"
+    case "$_val" in
+      false|no|0|disabled|off|none) return 1 ;;
+      *) return 0 ;;
+    esac
+  }
+fi
+
+if ! command -v has_active_provider_instructions >/dev/null 2>&1; then
+  has_active_provider_instructions() {
+    provider_plugin_enabled "copilot" 2>/dev/null && return 0
+    provider_plugin_enabled "claude" 2>/dev/null && return 0
+    provider_plugin_enabled "gemini" 2>/dev/null && return 0
+    provider_plugin_enabled "cursor" 2>/dev/null && return 0
+    provider_plugin_enabled "windsurf" 2>/dev/null && return 0
+    return 1
+  }
+fi
+
+if ! command -v clean_claude_auto_sync_hook >/dev/null 2>&1; then
+  clean_claude_auto_sync_hook() {
+    _settings="$1"
+    [ -f "$_settings" ] || return 0
+    if grep -q "auto-sync.sh" "$_settings" 2>/dev/null; then
+      _tmp="$(mktemp)"
+      awk '
+        /\{[ \t]*"command"[ \t]*:[ \t]*"\.rnex\/bin\/auto-sync\.sh"[ \t]*\}/ { next }
+        /"command"[ \t]*:[ \t]*"\.rnex\/bin\/auto-sync\.sh"/ { next }
+        { print }
+      ' "$_settings" > "$_tmp"
+      _clean="$(tr -d " \t\r\n[]{}:,\"hooksSessionStart" < "$_tmp")"
+      if [ -z "$_clean" ]; then
+        rm -f "$_tmp" "$_settings"
+      else
+        awk '
+          { lines[NR] = $0 }
+          END {
+            for (i = 1; i <= NR; i++) {
+              if (i < NR && lines[i] ~ /,[ \t]*$/) {
+                next_is_bracket = 0
+                for (j = i + 1; j <= NR; j++) {
+                  if (lines[j] ~ /^[ \t]*$/) continue
+                  if (lines[j] ~ /^[ \t]*[\]\}]/) next_is_bracket = 1
+                  break
+                }
+                if (next_is_bracket) {
+                  sub(/,[ \t]*$/, "", lines[i])
+                }
+              }
+              print lines[i]
+            }
+          }
+        ' "$_tmp" > "$_settings"
+        rm -f "$_tmp"
+      fi
+    fi
+  }
+fi
+
+if ! command -v clean_agents_auto_sync_hook >/dev/null 2>&1; then
+  clean_agents_auto_sync_hook() {
+    _hooks="$1"
+    [ -f "$_hooks" ] || return 0
+    if grep -q '"rnex-auto-sync"' "$_hooks" 2>/dev/null; then
+      _tmp="$(mktemp)"
+      awk '
+        BEGIN { skip=0; depth=0 }
+        /"rnex-auto-sync"[ \t]*:[ \t]*\{/ { skip=1; depth=1; next }
+        skip {
+          for (i=1; i<=length($0); i++) {
+            c = substr($0, i, 1)
+            if (c == "{") depth++
+            if (c == "}") {
+              depth--
+              if (depth == 0) {
+                skip = 0
+                next
+              }
+            }
+          }
+          next
+        }
+        { print }
+      ' "$_hooks" > "$_tmp"
+      _clean="$(tr -d " \t\r\n{}" < "$_tmp")"
+      if [ -z "$_clean" ]; then
+        rm -f "$_tmp" "$_hooks"
+      else
+        awk '
+          { lines[NR] = $0 }
+          END {
+            for (i = 1; i <= NR; i++) {
+              if (i < NR && lines[i] ~ /,[ \t]*$/) {
+                next_is_brace = 0
+                for (j = i + 1; j <= NR; j++) {
+                  if (lines[j] ~ /^[ \t]*$/) continue
+                  if (lines[j] ~ /^[ \t]*\}/) next_is_brace = 1
+                  break
+                }
+                if (next_is_brace) {
+                  sub(/,[ \t]*$/, "", lines[i])
+                }
+              }
+              print lines[i]
+            }
+          }
+        ' "$_tmp" > "$_hooks"
+        rm -f "$_tmp"
+      fi
+    fi
   }
 fi
 

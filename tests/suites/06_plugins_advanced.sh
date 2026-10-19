@@ -126,7 +126,6 @@ run_test "Disabling plugin in rnex.yaml followed by rnex sync cleanly removes in
 cat <<'EOF_CFG2' > "$TEST_KWIKI_WS/rnex.yaml"
 plugins:
   claude:
-    instructions: true
     skills: true
   karpathy-llm:
     wiki_dir: docs/wiki
@@ -147,7 +146,6 @@ echo "$_kw_active_ai" | grep -q "Karpathy LLM Wiki Knowledge Architecture" || { 
 cat <<'EOF_CFG3' > "$TEST_KWIKI_WS/rnex.yaml"
 plugins:
   claude:
-    instructions: true
     skills: true
   karpathy-llm:
     enabled: false
@@ -399,7 +397,6 @@ code_workspace: false
 git_hooks: false
 plugins:
   claude:
-    instructions: true
     skills: true
   karpathy-llm: {}
 repos:

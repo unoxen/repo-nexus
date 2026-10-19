@@ -213,10 +213,20 @@ cmd_status() {
         else
           printf '  %b●%b %-18s %b(v%s)%b %s\n' "$_G" "$_NC" "$_pname" "$_DIM" "${_ver:-0.1.0}" "$_NC" "${_desc:+- $_desc}"
           printf '    %bScoped directory: .rnex/plugins/%s%b\n' "$_DIM" "$_pname" "$_NC"
-          if [ -n "$_pdir" ] && { grep -q "instructions:" "$_pdir/plugin.yaml" 2>/dev/null || [ -n "$(yaml_plugin_get "$_pname" "instructions" 2>/dev/null)" ]; }; then
-            printf '    %b↳ Options: instructions=%s, skills=%s%b\n' "$_DIM" \
-              "$(provider_option_enabled "$_pname" "instructions" && echo "true" || echo "false")" \
-              "$(provider_option_enabled "$_pname" "skills" && echo "true" || echo "false")" "$_NC"
+          if [ -n "$_pdir" ] && [ -f "$_pdir/plugin.yaml" ]; then
+            _opts=""
+            if grep -q "skills:" "$_pdir/plugin.yaml" 2>/dev/null || [ -n "$(yaml_plugin_get "$_pname" "skills" 2>/dev/null)" ]; then
+              _opts="${_opts:+$_opts, }skills=$(provider_option_enabled "$_pname" "skills" && echo "true" || echo "false")"
+            fi
+            if grep -q "auto_sync_on:" "$_pdir/plugin.yaml" 2>/dev/null || grep -q "autoSyncOn:" "$_pdir/plugin.yaml" 2>/dev/null || [ -n "$(yaml_plugin_get "$_pname" "auto_sync_on" 2>/dev/null)" ] || [ -n "$(yaml_plugin_get "$_pname" "autoSyncOn" 2>/dev/null)" ]; then
+              _aso="$(yaml_plugin_get "$_pname" "auto_sync_on" 2>/dev/null || true)"
+              [ -z "$_aso" ] && _aso="$(yaml_plugin_get "$_pname" "autoSyncOn" 2>/dev/null || true)"
+              [ -z "$_aso" ] && _aso="SessionStart"
+              _opts="${_opts:+$_opts, }auto_sync_on=$_aso"
+            fi
+            if [ -n "$_opts" ]; then
+              printf '    %b↳ Options: %s%b\n' "$_DIM" "$_opts" "$_NC"
+            fi
           fi
         fi
       else

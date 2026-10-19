@@ -142,16 +142,9 @@ if ! command -v clean_provider_user_skills >/dev/null 2>&1; then
   }
 fi
 
-_inst="$(provider_option_enabled "copilot" "instructions" 2>/dev/null && echo "true" || echo "false")"
-if [ "$_inst" = "true" ]; then
-  mkdir -p "$_root/.github"
-  if command -v merge_rnex_instructions >/dev/null 2>&1; then
-    merge_rnex_instructions "$_root/.github/copilot-instructions.md"
-  fi
-else
-  if command -v clean_rnex_instructions >/dev/null 2>&1; then
-    clean_rnex_instructions "$_root/.github/copilot-instructions.md"
-  fi
+mkdir -p "$_root/.github"
+if command -v merge_rnex_instructions >/dev/null 2>&1; then
+  merge_rnex_instructions "$_root/.github/copilot-instructions.md"
 fi
 
 _sk="$(provider_option_enabled "copilot" "skills" 2>/dev/null && echo "true" || echo "false")"

@@ -20,23 +20,18 @@ elif ! grep -q '!repos/\*' "$_ci" 2>/dev/null; then
   [ "${RNEX_QUIET:-0}" -eq 0 ] && log_dim "Added !repos/* to .cursorignore"
 fi
 
-_inst="$(provider_option_enabled "cursor" "instructions" 2>/dev/null && echo "true" || echo "false")"
-if [ "$_inst" = "true" ]; then
-  merge_rnex_instructions "$_root/.cursorrules"
-  mkdir -p "$_root/.cursor/rules"
-  _c_body="$(mktemp)"
-  get_rnex_instructions > "$_c_body"
-  {
-    printf -- '---\ndescription: Repo Nexus Virtual Meta-Repo routing protocol\nglobs: *\nalwaysApply: true\n---\n\n%s\n' "${AI_MARKER_START:-<!-- REPO-NEXUS:START -->}"
-    cat "$_c_body"
-    printf '\n%s\n' "${AI_MARKER_END:-<!-- REPO-NEXUS:END -->}"
-  } > "$_root/.cursor/rules/rnex-context.mdc"
-  rm -f "$_c_body"
-  rm -f "$_root/.cursor/rules/repo-nexus.mdc" 2>/dev/null || true
-else
-  clean_rnex_instructions "$_root/.cursorrules"
-  rm -f "$_root/.cursor/rules/rnex-context.mdc" "$_root/.cursor/rules/repo-nexus.mdc" 2>/dev/null || true
-fi
+# Instructions management (always maintained when cursor plugin is enabled)
+merge_rnex_instructions "$_root/.cursorrules"
+mkdir -p "$_root/.cursor/rules"
+_c_body="$(mktemp)"
+get_rnex_instructions > "$_c_body"
+{
+  printf -- '---\ndescription: Repo Nexus Virtual Meta-Repo routing protocol\nglobs: *\nalwaysApply: true\n---\n\n%s\n' "${AI_MARKER_START:-<!-- REPO-NEXUS:START -->}"
+  cat "$_c_body"
+  printf '\n%s\n' "${AI_MARKER_END:-<!-- REPO-NEXUS:END -->}"
+} > "$_root/.cursor/rules/rnex-context.mdc"
+rm -f "$_c_body"
+rm -f "$_root/.cursor/rules/repo-nexus.mdc" 2>/dev/null || true
 
 _sk="$(provider_option_enabled "cursor" "skills" 2>/dev/null && echo "true" || echo "false")"
 if [ "$_sk" != "true" ]; then

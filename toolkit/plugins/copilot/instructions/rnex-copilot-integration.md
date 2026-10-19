@@ -12,7 +12,6 @@ Configure plugin options in `rnex.yaml` or override them per developer in `.loca
 ```yaml
 plugins:
   copilot:
-    instructions: true   # Maintain routing in .github/copilot-instructions.md (default: true)
     skills: true         # Generate user skills in .github/skills/ (default: true)
 ```
 
