@@ -238,7 +238,7 @@ if ! command -v clean_claude_auto_sync_hook >/dev/null 2>&1; then
         /"command"[ \t]*:[ \t]*"\.rnex\/bin\/auto-sync\.sh"/ { next }
         { print }
       ' "$_settings" > "$_tmp"
-      _clean="$(tr -d " \t\r\n[]{}:,\"hooksSessionStart" < "$_tmp")"
+      _clean="$(sed -e 's/"hooks"//g' -e 's/"SessionStart"//g' < "$_tmp" | tr -d ' \t\r\n[]{}:,"')"
       if [ -z "$_clean" ]; then
         rm -f "$_tmp" "$_settings"
       else

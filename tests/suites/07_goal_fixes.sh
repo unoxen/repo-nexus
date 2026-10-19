@@ -917,7 +917,9 @@ cp -r "$DIR/toolkit" "$TEST_HOOKS_WS/toolkit"
 cp -r "$DIR/templates" "$TEST_HOOKS_WS/templates"
 
 # 1. Verify rnex-env.sh does not contain .gemini check
+# shellcheck disable=SC2016
 ! grep -q '\[ -d "\$RNEX_ROOT/\.gemini" \]' "$DIR/templates/rnex-env.sh" || { fail "templates/rnex-env.sh still contains .gemini check"; exit 1; }
+# shellcheck disable=SC2016
 ! grep -q '\[ -d "\$RNEX_ROOT/\.gemini" \]' "$DIR/.rnex/bin/rnex-env.sh" || { fail ".rnex/bin/rnex-env.sh still contains .gemini check"; exit 1; }
 
 # 2. Initialize workspace with claude and gemini plugins
