@@ -130,6 +130,7 @@ echo "# prompt hook change" >> "$TEST_WORKSPACE/rnex.yaml"
   cd "$TEST_WORKSPACE"
   _rnex_auto_sync() {
     [ -f rnex.yaml ] || return 0
+    # shellcheck disable=SC3013
     if [ ! -f .rnex/sync_stamp ] || [ rnex.yaml -nt .rnex/sync_stamp ] || \
        { [ -f .local.rnex.yaml ] && [ .local.rnex.yaml -nt .rnex/sync_stamp ]; }; then
       ./rnex sync -y --quiet

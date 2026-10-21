@@ -20,10 +20,10 @@ if ! command -v clean_rnex_instructions >/dev/null 2>&1 || ! command -v clean_pr
     done
   fi
   if [ -n "${RNEX_LIB_DIR:-}" ] && [ -d "$RNEX_LIB_DIR" ]; then
-    [ -f "$RNEX_LIB_DIR/core.sh" ] && . "$RNEX_LIB_DIR/core.sh" 2>/dev/null || true
-    [ -f "$RNEX_LIB_DIR/workspace.sh" ] && . "$RNEX_LIB_DIR/workspace.sh" 2>/dev/null || true
-    [ -f "$RNEX_LIB_DIR/yaml.sh" ] && . "$RNEX_LIB_DIR/yaml.sh" 2>/dev/null || true
-    [ -f "$RNEX_LIB_DIR/ai.sh" ] && . "$RNEX_LIB_DIR/ai.sh" 2>/dev/null || true
+    if [ -f "$RNEX_LIB_DIR/core.sh" ]; then . "$RNEX_LIB_DIR/core.sh" 2>/dev/null || true; fi
+    if [ -f "$RNEX_LIB_DIR/workspace.sh" ]; then . "$RNEX_LIB_DIR/workspace.sh" 2>/dev/null || true; fi
+    if [ -f "$RNEX_LIB_DIR/yaml.sh" ]; then . "$RNEX_LIB_DIR/yaml.sh" 2>/dev/null || true; fi
+    if [ -f "$RNEX_LIB_DIR/ai.sh" ]; then . "$RNEX_LIB_DIR/ai.sh" 2>/dev/null || true; fi
   fi
   if [ -f "$_root/.rnex/bin/rnex-env.sh" ]; then
     . "$_root/.rnex/bin/rnex-env.sh"

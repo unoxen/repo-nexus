@@ -179,7 +179,7 @@ Legacy instructions without mandatory startup
 OLD_AGENTS
 
 # rnex status should detect version inconsistency without mutating
-_status_audit="$(cd "$TEST_UPGRADE_WS" && ./rnex status 2>&1 || true)"
+_status_audit="$(cd "$TEST_UPGRADE_WS" && { ./rnex status 2>&1 || true; })"
 echo "$_status_audit" | grep -q "older than CLI" || { fail "rnex status did not audit version mismatch"; exit 1; }
 grep -q "ai_instructions:" "$TEST_UPGRADE_WS/rnex.yaml" || { fail "rnex status mutated rnex.yaml"; exit 1; }
 

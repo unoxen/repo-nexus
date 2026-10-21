@@ -302,7 +302,9 @@ sync_plugins() {
           rm -rf "${_scoped_dest:?}/$_sub"
           mkdir -p "$_scoped_dest/$_sub"
           cp -R "$_pdir/$_sub"/. "$_scoped_dest/$_sub"/ 2>/dev/null || true
-          [ "$_sub" = "hooks" ] && chmod +x "$_scoped_dest/hooks"/* 2>/dev/null || true
+          if [ "$_sub" = "hooks" ]; then
+            chmod +x "$_scoped_dest/hooks"/* 2>/dev/null || true
+          fi
         else
           rm -rf "${_scoped_dest:?}/$_sub"
         fi
@@ -360,7 +362,9 @@ sync_plugins() {
       if [ -f "$_src_path" ] && [ ! -f "$_dest_path" ]; then
         mkdir -p "$(dirname "$_dest_path")"
         plugin_instantiate_template "$_pname" "$_pdir" "$_src_path" "$_dest_path"
-        [ -x "$_src_path" ] && chmod +x "$_dest_path" 2>/dev/null || true
+        if [ -x "$_src_path" ]; then
+          chmod +x "$_dest_path" 2>/dev/null || true
+        fi
         log_ok "Initialized template: $_d"
       fi
     done

@@ -115,7 +115,9 @@ EOF
         rm -rf "${_dest_pdir:?}/$_sub"
         mkdir -p "$_dest_pdir/$_sub"
         cp -R "$_pdir/$_sub"/. "$_dest_pdir/$_sub"/ 2>/dev/null || true
-        [ "$_sub" = "hooks" ] && chmod +x "$_dest_pdir/hooks"/* 2>/dev/null || true
+        if [ "$_sub" = "hooks" ]; then
+          chmod +x "$_dest_pdir/hooks"/* 2>/dev/null || true
+        fi
       else
         rm -rf "${_dest_pdir:?}/$_sub"
       fi
