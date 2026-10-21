@@ -499,16 +499,18 @@ echo "$_hook_root_out" | grep -q "\[WIKI\] Changes committed to docs/ or \.rnex/
 pass
 
 # --------------------------------------------------------------------------
-run_test "Fix 15: README.md documentation accuracy and ingest_member_readmes toggle"
-# 15a: README documentation check
+run_test "Fix 15: README.md documentation accuracy, removal of ingest_member_readmes, and raw_dir to sources migration"
+# 15a: README & plugin.yaml documentation check
 _readme_file="$DIR/toolkit/plugins/karpathy-llm/README.md"
 [ -f "$_readme_file" ] || { fail "README.md missing"; exit 1; }
-grep -q "ingest_member_readmes" "$_readme_file" || { fail "README.md does not document ingest_member_readmes"; exit 1; }
+grep -q "sources" "$_readme_file" || { fail "README.md does not document sources"; exit 1; }
+! grep -q "ingest_member_readmes" "$_readme_file" || { fail "README.md still mentions obsolete ingest_member_readmes"; exit 1; }
+! grep -q "ingest_member_readmes" "$DIR/toolkit/plugins/karpathy-llm/plugin.yaml" || { fail "plugin.yaml still mentions obsolete ingest_member_readmes"; exit 1; }
 ! grep -q "auto_index" "$_readme_file" || { fail "README.md still mentions auto_index"; exit 1; }
 ! grep -q "run_deterministic_checks" "$_readme_file" || { fail "README.md still mentions run_deterministic_checks"; exit 1; }
 ! grep -q "ai_cmd" "$_readme_file" || { fail "README.md still mentions ai_cmd"; exit 1; }
 
-# 15b: ingest_member_readmes: false toggle
+# 15b: Legacy raw_dir rewritten to sources on sync, and member README skipped when sources only lists docs
 TEST_TOGGLE_WS="$TEST_TMP/toggle-ingest-ws"
 mkdir -p "$TEST_TOGGLE_WS"
 cp "$CLI" "$TEST_TOGGLE_WS/rnex"
@@ -528,13 +530,18 @@ cat <<'EOF_TOG' > "$TEST_TOGGLE_WS/rnex.yaml"
 version: 0.6.16
 plugins:
   karpathy-llm:
+    raw_dir: docs
     ingest_member_readmes: false
 repos:
   skipped-repo: {}
 EOF_TOG
 
 (cd "$TEST_TOGGLE_WS" && ./rnex sync -y >/dev/null)
-[ ! -f "$TEST_TOGGLE_WS/.rnex/wiki/repo-skipped-repo.md" ] || { fail "repo-skipped-repo.md was generated despite ingest_member_readmes: false"; exit 1; }
+! grep -q "raw_dir:" "$TEST_TOGGLE_WS/rnex.yaml" || { fail "raw_dir was not rewritten to sources in rnex.yaml"; exit 1; }
+! grep -q "ingest_member_readmes" "$TEST_TOGGLE_WS/rnex.yaml" || { fail "ingest_member_readmes was not stripped from rnex.yaml"; exit 1; }
+grep -q "^    sources:$" "$TEST_TOGGLE_WS/rnex.yaml" || { fail "sources key missing in rnex.yaml after migration"; exit 1; }
+grep -q "^      - docs$" "$TEST_TOGGLE_WS/rnex.yaml" || { fail "'- docs' item missing in rnex.yaml after migration"; exit 1; }
+[ ! -f "$TEST_TOGGLE_WS/.rnex/wiki/repo-skipped-repo.md" ] || { fail "repo-skipped-repo.md was generated despite sources only containing docs"; exit 1; }
 pass
 
 # --------------------------------------------------------------------------

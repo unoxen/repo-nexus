@@ -180,11 +180,6 @@ plugin_instantiate_template() {
 
 # Sync plugins into scoped directories: .rnex/plugins/<plugin-name>/
 sync_plugins() {
-  # Emit the legacy raw_dir deprecation notice once per sync (stdout discarded)
-  if yaml_plugin_enabled "karpathy-llm" 2>/dev/null; then
-    get_plugin_config_list "karpathy-llm" "sources" >/dev/null
-  fi
-
   # Clean up any bogus placeholder directories accidentally created in workspace root
   for _bogus in \
     "$NEXUS_DIR/\"{wiki_dir}" \

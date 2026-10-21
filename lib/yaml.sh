@@ -233,7 +233,7 @@ get_plugin_config_list() {
     karpathy-llm:sources)
       _gpl_raw="$(plugin_legacy_raw_dir "$_gpl_plugin")"
       if [ -n "$_gpl_raw" ]; then
-        log_warn "plugins.$_gpl_plugin.raw_dir is deprecated; replace it with a 'sources' list in ${RNEX_CONFIG_FILE:-rnex.yaml} (or ${RNEX_LOCAL_CONFIG_FILE:-.local.rnex.yaml}) and run 'rnex sync'." >&2
+        log_warn "plugins.$_gpl_plugin.raw_dir is deprecated; run 'rnex sync' to rewrite it to 'sources' in ${RNEX_CONFIG_FILE:-rnex.yaml}." >&2
         printf '%s\n' "$_gpl_raw"
       else
         printf '%s\n' "docs" "repos/**/README.md"

@@ -208,6 +208,97 @@ _load_git_hooks() {
   GIT_HOOKS_CONFIG="$_gh"
 }
 
+migrate_karpathy_llm_config() {
+  _mkc_f="$1"
+  [ -f "$_mkc_f" ] || return 0
+
+  _mkc_has_sources=0
+  if command -v _yaml_plugin_list_from_file >/dev/null 2>&1; then
+    [ -n "$(_yaml_plugin_list_from_file "$_mkc_f" "karpathy-llm" "sources")" ] && _mkc_has_sources=1
+  elif grep -q '^[ \t]*sources:[ \t]*' "$_mkc_f" 2>/dev/null; then
+    _mkc_has_sources=1
+  fi
+
+  _mkc_tmp="$(mktemp)"
+  awk -v has_sources="$_mkc_has_sources" '
+    /^[ \t]*plugins:[ \t]*(#.*)?$/ { in_plugins=1; in_target=0; plugin_indent=-1; print; next }
+    in_plugins && /^[^ \t#]/ { in_plugins=0; in_target=0 }
+    {
+      match($0, /^[ \t]*/)
+      indent = RLENGTH
+      trimmed = substr($0, indent + 1)
+    }
+    trimmed ~ /^ingest_member_readmes:[ \t]*/ {
+      next
+    }
+    !in_plugins || trimmed ~ /^([#]|$)/ {
+      print
+      next
+    }
+
+    in_target && (indent <= plugin_indent) {
+      in_target=0
+    }
+
+    !in_target {
+      k = trimmed
+      sub(/:.*/, "", k)
+      gsub(/^["\047]|["\047]$/, "", k)
+      gsub(/[[:space:]]/, "", k)
+      if (k == "karpathy-llm" && trimmed ~ /:[ \t]*(#.*)?$/) {
+        in_target=1
+        plugin_indent=indent
+      }
+      print
+      next
+    }
+
+    in_target && (indent > plugin_indent) {
+      k = trimmed
+      sub(/:.*/, "", k)
+      gsub(/^["\047]|["\047]$/, "", k)
+      gsub(/[[:space:]]/, "", k)
+      if (k == "raw_dir" && trimmed ~ /:[ \t]*/) {
+        if (has_sources == 1) {
+          next
+        }
+        val = trimmed
+        sub(/^[^:]*:[ \t]*/, "", val)
+        if (val ~ /^"[^"]*"/) {
+          match(val, /^"[^"]*"/)
+          val = substr(val, 2, RLENGTH - 2)
+        } else if (val ~ /^\047[^\047]*\047/) {
+          match(val, /^\047[^\047]*\047/)
+          val = substr(val, 2, RLENGTH - 2)
+        } else {
+          sub(/[ \t]*#.*$/, "", val)
+          sub(/[ \t]+$/, "", val)
+        }
+        while (sub(/^\.\//, "", val)) {}
+        if (val != "." && val != "/") {
+          sub(/\/+$/, "", val)
+        }
+        if (length(val) == 0) val = "docs"
+        ind = substr($0, 1, indent)
+        if (val ~ /[*?\[]|[ \t]/) {
+          printf "%ssources:\n%s  - \"%s\"\n", ind, ind, val
+        } else {
+          printf "%ssources:\n%s  - %s\n", ind, ind, val
+        }
+        has_sources=1
+        next
+      }
+    }
+    { print }
+  ' "$_mkc_f" > "$_mkc_tmp"
+
+  if ! cmp -s "$_mkc_f" "$_mkc_tmp"; then
+    mv "$_mkc_tmp" "$_mkc_f"
+  else
+    rm -f "$_mkc_tmp"
+  fi
+}
+
 upgrade_workspace_config() {
   _f="$1"
   _ver="$2"
@@ -302,6 +393,9 @@ upgrade_workspace_config() {
       }
     ' "$_f" > "$_tmp" && mv "$_tmp" "$_f"
   fi
+
+  # 5. Migrate legacy karpathy-llm raw_dir to sources and strip obsolete ingest_member_readmes
+  migrate_karpathy_llm_config "$_f"
 
   rm -f "$_tmp"
 }

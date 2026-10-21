@@ -71,6 +71,10 @@ cmd_sync() {
     [ "$_sync_quiet" -eq 0 ] && log_ok "Upgraded workspace configuration and routing instructions to v$RNEX_VERSION"
   fi
 
+  # Reconcile legacy plugin settings (e.g. karpathy-llm raw_dir -> sources, strip ingest_member_readmes)
+  migrate_karpathy_llm_config "$WORKSPACE_YAML"
+  [ -f "$WORKSPACE_LOCAL_YAML" ] && migrate_karpathy_llm_config "$WORKSPACE_LOCAL_YAML"
+
   # --------------------------------------------------------------------------
   # Step 1: Sync hardcoded files & invoke commands that do not depend on config
   # --------------------------------------------------------------------------

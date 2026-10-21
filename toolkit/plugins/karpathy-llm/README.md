@@ -131,10 +131,6 @@ plugins:
 
     # Directory paths relative to workspace root (defaults shown)
     wiki_dir: .rnex/wiki        # Directory for curated atomic markdown pages
-
-    # Member repository README auto-ingestion (default: true)
-    # Automatically registers member repos into wiki pages and hot.md during rnex sync
-    ingest_member_readmes: true
 ```
 
 ### 2. Local Machine Configuration (`.local.rnex.yaml`)
@@ -158,11 +154,6 @@ plugins:
 
 ### Detailed Option Descriptions
 
-#### `ingest_member_readmes` (Repo Config)
-* **What it does:** Automatically ingests member repository READMEs into atomic wiki pages (`repo-<name>.md`) and registers them in `hot.md`.
-* **How it works:** During `rnex sync`, the plugin discovers configured repositories in `rnex.yaml`, extracts top-level README summaries, creates initial `repo-<name>.md` pages non-destructively, logs ingestion in `_log.md`, and updates the catalog in `hot.md`.
-* **Why you need it:** Provides newly onboarded AI assistants immediate context and navigation for all member repositories in the multi-repo workspace. If set to `false`, member repositories are not automatically scanned or ingested during sync.
-
 #### `lint_trigger` (Local Config)
 * **What it does:** Optional git hook trigger to automate wiki graph audits and maintenance workflows (`wiki-lint` and `wiki-ingest`).
 * **Default:** Unset / omitted. Automated triggers are **disabled by default**; wiki maintenance is purely manual unless you explicitly opt into a Git hook here.
@@ -183,10 +174,8 @@ plugins:
 
 | Field | Scope / File | Type | Default | Values / Behavior |
 |:---|:---|:---|:---|:---|
-| `ingest_member_readmes` | Repo (`rnex.yaml`) | `boolean` | `true` | Automatically ingests member repo READMEs into `repo-<name>.md` and `hot.md` during `rnex sync`. |
 | `sources` | Repo (`rnex.yaml`) | `list` | `[docs, "repos/**/README.md"]` | Directory paths and/or glob patterns for intake documents. |
 | `wiki_dir` | Repo (`rnex.yaml`) | `string` | `.rnex/wiki` | Directory containing atomic domain pages. |
-| `raw_dir` | Repo (`rnex.yaml`) | `string` | `./docs` | *(Deprecated)* Append-only directory for unmodified source materials. Use `sources` instead. |
 | `lint_trigger` | Local (`.local.rnex.yaml`) | `string` | *(unset)* | Optional opt-in Git hook: `git-post-commit`, `git-pre-push`, `git-post-merge`. Unset = purely manual. |
 | `notify_on_changes` | Local (`.local.rnex.yaml`) | `boolean` | `true` | Terminal alerts printed right after git commit/push when `./docs/` or `.rnex/wiki/` needs attention. |
 

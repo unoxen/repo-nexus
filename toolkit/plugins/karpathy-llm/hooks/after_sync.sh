@@ -72,7 +72,6 @@ get_cfg() {
 _wiki="$(get_cfg "wiki_dir" ".rnex/wiki")"
 _wiki="$(printf '%s' "$_wiki" | sed -e 's#^/##' -e 's#/$##')"
 _wiki_path="$_root/$_wiki"
-_ingest_readmes="$(get_cfg "ingest_member_readmes" "true")"
 
 mkdir -p "$_wiki_path"
 
@@ -420,12 +419,7 @@ LOG_EOF
   fi
 }
 
-# 2. Automatically ingest README.md from all registered/enabled member repositories
-case "$(printf '%s' "$_ingest_readmes" | tr '[:upper:]' '[:lower:]')" in
-  false|no|0|disabled|off) _skip_all_readmes=1 ;;
-  *) _skip_all_readmes=0 ;;
-esac
-
+# 2. Automatically ingest README.md from registered/enabled member repositories when included in sources
 _rd=""
 for _cfg in "$_root/.local.rnex.yaml" "$_root/rnex.yaml"; do
   [ -f "$_cfg" ] || continue
@@ -447,6 +441,24 @@ for _cfg in "$_root/.local.rnex.yaml" "$_root/rnex.yaml"; do
 done
 REPOS_DIR="${_rd:-./repos}"
 _clean_repos="$(printf '%s' "$REPOS_DIR" | sed -e 's#^[[:space:]]*##' -e 's#[[:space:]]*$##' -e 's#^\./##' -e 's#^/##' -e 's#/$##')"
+
+_skip_all_readmes=0
+if command -v get_plugin_config_list >/dev/null 2>&1; then
+  _src_list="$(NEXUS_DIR="$_root" WORKSPACE_YAML="$_root/rnex.yaml" WORKSPACE_LOCAL_YAML="$_root/.local.rnex.yaml" get_plugin_config_list "karpathy-llm" "sources" 2>/dev/null || true)"
+  if [ -n "$_src_list" ]; then
+    _skip_all_readmes=1
+    while IFS= read -r _s_item || [ -n "$_s_item" ]; do
+      case "$_s_item" in
+        *README*|*readme*|repos/*|"./repos/"*|"$_clean_repos"/*|*"**"*)
+          _skip_all_readmes=0
+          break
+          ;;
+      esac
+    done <<EOF_SRC
+$_src_list
+EOF_SRC
+  fi
+fi
 
 list_configured_repos() {
   for _cfg_file in "$_root/.local.rnex.yaml" "$_root/rnex.yaml"; do
@@ -475,7 +487,6 @@ if [ "$_skip_all_readmes" -ne 1 ]; then
     
     # Check if this repository is explicitly disabled in .local.rnex.yaml or rnex.yaml (block-scoped)
     _is_disabled=""
-    _repo_ingest=""
     for _cfg_file in "$RNEX_ROOT/.local.rnex.yaml" "$RNEX_ROOT/rnex.yaml"; do
       [ -f "$_cfg_file" ] || continue
       _en="$(awk -v repo="$repo_name" '
@@ -499,27 +510,6 @@ if [ "$_skip_all_readmes" -ne 1 ]; then
         esac
       fi
 
-      _ingest_val="$(awk -v repo="$repo_name" '
-        /^repos:[ ]*$/ || /^repos:[ ]*#/ { r=1; next }
-        r && /^[^ #]/ { r=0 }
-        r && match($0, "^  " repo ":[ ]*(\\{\\})?[ ]*(#.*)?$") { in_target=1; next }
-        in_target && /^  [^ #]/ { in_target=0 }
-        in_target && match($0, "^    ingest_member_readmes:[ ]*") {
-          line = $0
-          sub("^    ingest_member_readmes:[ ]*", "", line)
-          sub(/[ ]*#.*$/, "", line)
-          gsub(/^["\047]|["\047]$/, "", line)
-          print line
-          exit
-        }
-      ' "$_cfg_file")"
-      if [ -n "$_ingest_val" ] && [ -z "$_repo_ingest" ]; then
-        case "$(printf '%s' "$_ingest_val" | tr '[:upper:]' '[:lower:]')" in
-          false|no|0|disabled|off) _repo_ingest=0 ;;
-          *) _repo_ingest=1 ;;
-        esac
-      fi
-
       if [ -z "$_custom_path" ]; then
         _cp="$(awk -v repo="$repo_name" '
           /^repos:[ ]*$/ || /^repos:[ ]*#/ { r=1; next }
@@ -539,7 +529,6 @@ if [ "$_skip_all_readmes" -ne 1 ]; then
       fi
     done
     [ "$_is_disabled" = "1" ] && continue
-    [ "$_repo_ingest" = "0" ] && continue
 
     # Resolve physical repository path and relative location
     _repo_rel=""

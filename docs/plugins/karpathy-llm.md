@@ -105,9 +105,6 @@ plugins:
     # Notify developer when changes are committed to intake sources or .rnex/wiki/
     notify_on_changes: true
 
-    # Ingest member repository READMEs into atomic wiki pages
-    ingest_member_readmes: true
-
     # Enable or disable
     enabled: true
 ```
@@ -116,10 +113,8 @@ plugins:
 |:---|:---|:---|:---|
 | `wiki_dir` | string | `.rnex/wiki` | Directory containing curated atomic markdown pages. |
 | `sources` | list | `[docs, "repos/**/README.md"]` | Intake directories and/or glob patterns relative to workspace root. Overridable in `.local.rnex.yaml`. |
-| `raw_dir` | string | *(deprecated)* | Deprecated legacy intake directory. Transparently treated as a single `sources` entry with a migration warning. |
 | `lint_trigger` | string | `manual` | Git hook event that triggers wiki change detection (`git-post-merge`, `git-post-commit`, `git-pre-commit`, `git-pre-push`, `manual`). |
 | `notify_on_changes` | boolean | `true` | Show notification banner when changes are committed to intake sources or `.rnex/wiki/`. |
-| `ingest_member_readmes` | boolean | `true` | Automatically ingest member repository READMEs into atomic wiki pages. |
 | `enabled` | boolean | `true` | Enable or disable the plugin. Overridable in `.local.rnex.yaml`. |
 
 ---
@@ -133,7 +128,7 @@ The `sources` setting defines where the Karpathy LLM Wiki discovers raw intake d
 - **Single-Level Globs (e.g. `repos/*/README.md` or `docs/*.md`)**: Matches files at a fixed directory level.
 - **Active Repository Filtering**: Any resolved path located within `repos/<name>/` is checked against member repository status. If a repository is disabled (`enabled: false`) in `rnex.yaml` or `.local.rnex.yaml`, its files are automatically excluded.
 - **Two-Level Configuration Precedence**: If `sources` is declared in `.local.rnex.yaml`, it completely overrides the `sources` list defined in `rnex.yaml`.
-- **Legacy Fallback & Migration**: Existing configurations with `raw_dir: ./path` continue to work without disruption. Repo Nexus reads `raw_dir` as a single-element sources list and emits a non-fatal deprecation notice advising you to migrate to `sources`.
+- **Legacy Migration**: Existing configurations with `raw_dir: <dir>` are automatically rewritten to a `sources` list during `rnex sync`.
 - **Directory Provisioning**: When running `rnex sync`, explicit directory entries (such as `docs`) are created automatically if missing. Glob patterns (containing `*`, `?`, or `[`) and file targets are never converted into directories.
 
 ---

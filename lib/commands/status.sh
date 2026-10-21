@@ -228,7 +228,7 @@ cmd_status() {
               printf '    %b↳ Options: %s%b\n' "$_DIM" "$_opts" "$_NC"
             fi
             if [ "$_pname" = "karpathy-llm" ] && [ -n "$(plugin_legacy_raw_dir "$_pname" 2>/dev/null)" ]; then
-              printf '    %b↳ [!] Deprecated: raw_dir — replace it with a sources list and run rnex sync%b\n' "$_Y" "$_NC"
+              printf '    %b↳ [!] Deprecated: raw_dir — run "rnex sync" to rewrite to sources%b\n' "$_Y" "$_NC"
             fi
           fi
         fi

@@ -543,13 +543,14 @@ echo "$_resolved_override" | grep -q "^repos/api/README.md$" || { fail "repos/ap
 ! echo "$_resolved_override" | grep -q "^docs/arch.md$" || { fail "docs/arch.md was not overridden by local sources list: $_resolved_override"; exit 1; }
 ! echo "$_resolved_override" | grep -q "^repos/api/pkg/README.md$" || { fail "repos/*/README.md incorrectly matched nested README: $_resolved_override"; exit 1; }
 
-# 5. Legacy raw_dir fallback with deprecation notice
+# 5. Legacy raw_dir fallback and automatic rewrite to sources on rnex sync
 rm -f "$TEST_SOURCES_WS/.local.rnex.yaml"
 cat <<'EOF_LEGACY' > "$TEST_SOURCES_WS/rnex.yaml"
 version: 0.7.22
 plugins:
   karpathy-llm:
     raw_dir: custom_raw
+    ingest_member_readmes: true
 repos:
   api: {}
 EOF_LEGACY
@@ -557,16 +558,22 @@ EOF_LEGACY
 mkdir -p "$TEST_SOURCES_WS/custom_raw"
 echo "# Legacy Source" > "$TEST_SOURCES_WS/custom_raw/legacy.md"
 
-_sync_legacy_out="$(cd "$TEST_SOURCES_WS" && ./rnex sync -y 2>&1)"
-echo "$_sync_legacy_out" | grep -q "deprecated; replace it with a 'sources' list" || { fail "Deprecation warning missing on rnex sync with legacy raw_dir: $_sync_legacy_out"; exit 1; }
-[ -d "$TEST_SOURCES_WS/custom_raw" ] || { fail "custom_raw missing after sync"; exit 1; }
-
 _status_legacy_out="$(cd "$TEST_SOURCES_WS" && ./rnex status 2>&1)"
 echo "$_status_legacy_out" | grep -q "Deprecated: raw_dir" || { fail "Deprecation notice missing in rnex status with legacy raw_dir: $_status_legacy_out"; exit 1; }
 
+_sync_legacy_out="$(cd "$TEST_SOURCES_WS" && ./rnex sync -y 2>&1)"
+! grep -q "raw_dir:" "$TEST_SOURCES_WS/rnex.yaml" || { fail "raw_dir was not rewritten to sources on rnex sync: $(cat "$TEST_SOURCES_WS/rnex.yaml")"; exit 1; }
+! grep -q "ingest_member_readmes" "$TEST_SOURCES_WS/rnex.yaml" || { fail "ingest_member_readmes was not removed on rnex sync: $(cat "$TEST_SOURCES_WS/rnex.yaml")"; exit 1; }
+grep -q "^    sources:$" "$TEST_SOURCES_WS/rnex.yaml" || { fail "sources key missing after rnex sync rewrite: $(cat "$TEST_SOURCES_WS/rnex.yaml")"; exit 1; }
+grep -q "^      - custom_raw$" "$TEST_SOURCES_WS/rnex.yaml" || { fail "sources list item '- custom_raw' missing after rnex sync rewrite: $(cat "$TEST_SOURCES_WS/rnex.yaml")"; exit 1; }
+[ -d "$TEST_SOURCES_WS/custom_raw" ] || { fail "custom_raw missing after sync"; exit 1; }
+
+_status_after_sync="$(cd "$TEST_SOURCES_WS" && ./rnex status 2>&1)"
+! echo "$_status_after_sync" | grep -q "Deprecated: raw_dir" || { fail "Deprecation notice still present in rnex status after sync rewrite: $_status_after_sync"; exit 1; }
+
 _resolved_legacy="$(cd "$TEST_SOURCES_WS" && . "$TEST_SOURCES_WS/lib/core.sh" && . "$TEST_SOURCES_WS/lib/workspace.sh" && . "$TEST_SOURCES_WS/lib/yaml.sh" && . "$TEST_SOURCES_WS/lib/plugins.sh" && NEXUS_DIR="$TEST_SOURCES_WS" resolve_plugin_sources "$(get_plugin_config_list karpathy-llm sources 2>/dev/null)")"
 
-echo "$_resolved_legacy" | grep -q "^custom_raw/legacy.md$" || { fail "Legacy custom_raw source was not resolved: $_resolved_legacy"; exit 1; }
+echo "$_resolved_legacy" | grep -q "^custom_raw/legacy.md$" || { fail "Migrated custom_raw source was not resolved: $_resolved_legacy"; exit 1; }
 
 # 6. Flow array syntax [docs, "repos/*/README.md"]
 cat <<'EOF_FLOW' > "$TEST_SOURCES_WS/rnex.yaml"

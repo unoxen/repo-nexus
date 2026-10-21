@@ -105,11 +105,9 @@ plugins:
   #     - docs                    #   directory: all files (hidden dirs and node_modules pruned)
   #     - "repos/**/README.md"    #   recursive glob (quote it); disabled repos are excluded
   #                               # A sources list in .local.rnex.yaml replaces this list entirely.
-  #                               # Legacy 'raw_dir' is still read as a single source (deprecated).
   #   wiki_dir: ".rnex/wiki"      # Directory for curated atomic markdown pages (default: .rnex/wiki)
   #   lint_trigger: "manual"      # Runs manually via 'rnex sync' or validation checklists (git-post-merge, git-post-commit, git-pre-commit, git-pre-push, manual)
   #   notify_on_changes: true     # Show notification when changes are committed to ./docs or .rnex/wiki
-  #   ingest_member_readmes: true # Automatically ingest member repository READMEs into atomic wiki pages (default: true)
 
 
 # ------------------------------------------------------------------------------
