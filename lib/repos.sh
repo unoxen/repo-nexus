@@ -27,13 +27,7 @@ ensure_repos_dir() {
 # ---- Member Repo .rnex Isolation ------------------------------------------
 
 repo_rnex_dir_enabled() {
-  _name="$1"
-  _val="$(yaml_get "$_name" "rnex_dir")"
-  _val="$(printf '%s' "$_val" | tr '[:upper:]' '[:lower:]')"
-  case "$_val" in
-    false|no|0|disabled|off) return 1 ;;
-    *) return 0 ;;
-  esac
+  is_enabled_val "$(yaml_get "$1" "rnex_dir")"
 }
 
 clean_repo_rnex() {
@@ -105,31 +99,6 @@ EOF
     _pdir="$(find_plugin_dir "$_pname" 2>/dev/null || true)"
     [ -n "$_pdir" ] || continue
 
-    _dest_pdir="$_r_rnex/plugins/$_pname"
-    mkdir -p "$_dest_pdir"
-
-    # Deterministically sync plugin asset directories into member repo (no prompts in plugins)
-    rm -rf "${_dest_pdir:?}/prompts" 2>/dev/null || true
-    for _sub in rules workflows instructions skills agents templates hooks; do
-      if [ -d "$_pdir/$_sub" ]; then
-        rm -rf "${_dest_pdir:?}/$_sub"
-        mkdir -p "$_dest_pdir/$_sub"
-        cp -R "$_pdir/$_sub"/. "$_dest_pdir/$_sub"/ 2>/dev/null || true
-        if [ "$_sub" = "hooks" ]; then
-          chmod +x "$_dest_pdir/hooks"/* 2>/dev/null || true
-        fi
-      else
-        rm -rf "${_dest_pdir:?}/$_sub"
-      fi
-    done
-    if [ -f "$_pdir/plugin.yaml" ]; then
-      cp "$_pdir/plugin.yaml" "$_dest_pdir/plugin.yaml"
-    fi
-    if [ -f "$_pdir/instructions.md" ]; then
-      cp "$_pdir/instructions.md" "$_dest_pdir/instructions.md"
-    fi
-    if [ -f "$_pdir/README.md" ]; then
-      cp "$_pdir/README.md" "$_dest_pdir/README.md"
-    fi
+    sync_plugin_bundle "$_pdir" "$_r_rnex/plugins/$_pname"
   done
 }

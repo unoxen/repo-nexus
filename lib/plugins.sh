@@ -131,7 +131,7 @@ plugin_resolve_placeholders() {
       fi
       case "$_k" in
         *_dir|dir)
-          _v="$(printf '%s' "$_v" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d "'\"" | sed -e 's#^\./##' -e 's#^/##' -e 's#/$##')"
+          _v="$(normalize_rel_path "$_v")"
           ;;
       esac
       _res="$(printf '%s' "$_res" | sed -e "s|{$_k}|$_v|g")"
@@ -140,8 +140,8 @@ plugin_resolve_placeholders() {
 
   # Fallback resolution for core wiki/raw placeholders and legacy prefixes
   _w_val="$(yaml_plugin_get "$_p" "wiki_dir" 2>/dev/null || true)"
-  [ -z "$_w_val" ] && _w_val=".rnex/wiki"
-  _w_val="$(printf '%s' "$_w_val" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d "'\"" | sed -e 's#^\./##' -e 's#^/##' -e 's#/$##')"
+  [ -n "$_w_val" ] || _w_val=".rnex/wiki"
+  _w_val="$(normalize_rel_path "$_w_val")"
 
   # {raw_dir} (legacy alias) resolves to the first explicit directory source; when no
   # directory source exists it stays unresolved so callers can skip the destination.
@@ -176,6 +176,33 @@ plugin_instantiate_template() {
       -e "s|{raw_dir}|$_r_val|g" \
       -e "s|{sources}|$_s_val|g" \
       "$_src" > "$_dest"
+}
+
+# Deterministically sync plugin asset directories and manifest files into destination
+sync_plugin_bundle() {
+  _spb_src="$1"; _spb_dest="$2"
+  [ -n "$_spb_src" ] && [ -n "$_spb_dest" ] || return 0
+  [ "$_spb_src" != "$_spb_dest" ] || return 0
+
+  mkdir -p "$_spb_dest"
+  rm -rf "${_spb_dest:?}/prompts" 2>/dev/null || true
+  for _sub in rules workflows instructions skills agents templates hooks; do
+    if [ -d "$_spb_src/$_sub" ]; then
+      rm -rf "${_spb_dest:?}/$_sub"
+      mkdir -p "$_spb_dest/$_sub"
+      cp -R "$_spb_src/$_sub"/. "$_spb_dest/$_sub"/ 2>/dev/null || true
+      if [ "$_sub" = "hooks" ]; then
+        chmod +x "$_spb_dest/hooks"/* 2>/dev/null || true
+      fi
+    else
+      rm -rf "${_spb_dest:?}/$_sub"
+    fi
+  done
+  for _meta in plugin.yaml instructions.md README.md; do
+    if [ -f "$_spb_src/$_meta" ]; then
+      cp "$_spb_src/$_meta" "$_spb_dest/$_meta"
+    fi
+  done
 }
 
 # Sync plugins into scoped directories: .rnex/plugins/<plugin-name>/
@@ -286,36 +313,7 @@ sync_plugins() {
       continue
     fi
 
-    _scoped_dest="$NEXUS_DIR/.rnex/plugins/$_pname"
-    if [ "$_pdir" != "$_scoped_dest" ]; then
-      mkdir -p "$_scoped_dest"
-
-      # Deterministically sync plugin asset directories (clean stale files; no prompts in plugins)
-      rm -rf "${_scoped_dest:?}/prompts" 2>/dev/null || true
-      for _sub in rules workflows instructions skills agents templates hooks; do
-        if [ -d "$_pdir/$_sub" ]; then
-          rm -rf "${_scoped_dest:?}/$_sub"
-          mkdir -p "$_scoped_dest/$_sub"
-          cp -R "$_pdir/$_sub"/. "$_scoped_dest/$_sub"/ 2>/dev/null || true
-          if [ "$_sub" = "hooks" ]; then
-            chmod +x "$_scoped_dest/hooks"/* 2>/dev/null || true
-          fi
-        else
-          rm -rf "${_scoped_dest:?}/$_sub"
-        fi
-      done
-
-      # Copy plugin manifest, instructions, and documentation
-      if [ -f "$_pdir/plugin.yaml" ]; then
-        cp "$_pdir/plugin.yaml" "$_scoped_dest/plugin.yaml"
-      fi
-      if [ -f "$_pdir/instructions.md" ]; then
-        cp "$_pdir/instructions.md" "$_scoped_dest/instructions.md"
-      fi
-      if [ -f "$_pdir/README.md" ]; then
-        cp "$_pdir/README.md" "$_scoped_dest/README.md"
-      fi
-    fi
+    sync_plugin_bundle "$_pdir" "$NEXUS_DIR/.rnex/plugins/$_pname"
 
     # Provision explicit directory sources declared under plugins.<name>.sources (e.g. ./docs)
     for _sdir in $(plugin_source_dirs "$_pname" 2>/dev/null); do

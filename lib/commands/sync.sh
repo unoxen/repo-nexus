@@ -124,12 +124,7 @@ cmd_sync() {
         if [ "$_cur_hp" != ".rnex/hooks" ] && [ "$_cur_hp" != "$NEXUS_DIR/.rnex/hooks" ]; then
           cmd_hooks_install_dir "$NEXUS_DIR"
         elif [ "${_RNEX_INSIDE_HOOK:-0}" -ne 1 ]; then
-          _hooks_dir="$NEXUS_DIR/.rnex/hooks"
-          _create_hook_script "$_hooks_dir/post-merge" "post-merge"
-          _create_hook_script "$_hooks_dir/post-checkout" "post-checkout"
-          _create_hook_script "$_hooks_dir/post-commit" "post-commit"
-          _create_hook_script "$_hooks_dir/pre-commit" "pre-commit"
-          _create_hook_script "$_hooks_dir/pre-push" "pre-push"
+          _install_managed_hook_scripts "$NEXUS_DIR/.rnex/hooks"
         fi
       fi
       ;;
@@ -137,12 +132,7 @@ cmd_sync() {
       _cur_hp="$(git -C "$NEXUS_DIR" config --get core.hooksPath 2>/dev/null || true)"
       if [ "$_cur_hp" = ".rnex/hooks" ] || [ "$_cur_hp" = "$NEXUS_DIR/.rnex/hooks" ]; then
         if [ "${_RNEX_INSIDE_HOOK:-0}" -ne 1 ]; then
-          _hooks_dir="$NEXUS_DIR/.rnex/hooks"
-          _create_hook_script "$_hooks_dir/post-merge" "post-merge"
-          _create_hook_script "$_hooks_dir/post-checkout" "post-checkout"
-          _create_hook_script "$_hooks_dir/post-commit" "post-commit"
-          _create_hook_script "$_hooks_dir/pre-commit" "pre-commit"
-          _create_hook_script "$_hooks_dir/pre-push" "pre-push"
+          _install_managed_hook_scripts "$NEXUS_DIR/.rnex/hooks"
         fi
       fi
       ;;
