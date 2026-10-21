@@ -52,6 +52,29 @@ resolve_path() {
   esac
 }
 
+# Return 0 unless value is explicitly falsy (false, no, 0, disabled, off, none)
+is_enabled_val() {
+  _iev="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
+  case "$_iev" in
+    false|no|0|disabled|off|none) return 1 ;;
+    *) return 0 ;;
+  esac
+}
+
+# Return 0 if value is explicitly truthy (true, yes, 1, on, enabled)
+is_truthy() {
+  _it="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
+  case "$_it" in
+    true|yes|1|on|enabled) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Strip surrounding whitespace, quotes, leading ./ or /, and trailing /
+normalize_rel_path() {
+  printf '%s' "$1" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d "'\"" | sed -e 's#^\./##' -e 's#^/##' -e 's#/$##'
+}
+
 
 # ---- Version Resolution (package.json is single source of truth) ----------
 

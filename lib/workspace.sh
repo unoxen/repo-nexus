@@ -144,26 +144,11 @@ _init_local_yaml() {
 }
 
 _load_workspace_version() {
-  _wv=""
-  if [ -f "$WORKSPACE_LOCAL_YAML" ]; then
-    _wv="$(awk '/^version:/ { sub(/^version:[ ]*/, ""); sub(/[ ]*#.*/, ""); val=$0 } END { if (val) print val }' "$WORKSPACE_LOCAL_YAML")"
-  fi
-  if [ -z "$_wv" ] && [ -f "$WORKSPACE_YAML" ]; then
-    _wv="$(awk '/^version:/ { sub(/^version:[ ]*/, ""); sub(/[ ]*#.*/, ""); val=$0 } END { if (val) print val }' "$WORKSPACE_YAML")"
-  fi
-  _wv="$(echo "$_wv" | tr -d " \t\r\n'\"")"
-  WORKSPACE_CONFIG_VERSION="$_wv"
+  WORKSPACE_CONFIG_VERSION="$(yaml_get_top_level "version")"
 }
 
 _load_repos_dir() {
-  _rd=""
-  if [ -f "$WORKSPACE_LOCAL_YAML" ]; then
-    _rd="$(awk '/^repos_dir:/ { sub(/^repos_dir:[ ]*/, ""); sub(/[ ]*#.*/, ""); val=$0 } END { if (val) print val }' "$WORKSPACE_LOCAL_YAML")"
-  fi
-  if [ -z "$_rd" ] && [ -f "$WORKSPACE_YAML" ]; then
-    _rd="$(awk '/^repos_dir:/ { sub(/^repos_dir:[ ]*/, ""); sub(/[ ]*#.*/, ""); val=$0 } END { if (val) print val }' "$WORKSPACE_YAML")"
-  fi
-  _rd="${_rd:-./repos}"
+  _rd="$(yaml_get_top_level "repos_dir" "./repos")"
   case "$_rd" in
     /*) REPOS_DIR="$_rd" ;;
     *)  REPOS_DIR="$NEXUS_DIR/$_rd" ;;
@@ -171,14 +156,7 @@ _load_repos_dir() {
 }
 
 _load_code_workspace() {
-  _cw=""
-  if [ -f "$WORKSPACE_LOCAL_YAML" ]; then
-    _cw="$(awk '/^(code_workspace|vscode_workspace):/ { sub(/^[a-zA-Z0-9_]+:[ ]*/, ""); sub(/[ ]*#.*/, ""); val=$0 } END { if (val) print val }' "$WORKSPACE_LOCAL_YAML")"
-  fi
-  if [ -z "$_cw" ] && [ -f "$WORKSPACE_YAML" ]; then
-    _cw="$(awk '/^(code_workspace|vscode_workspace):/ { sub(/^[a-zA-Z0-9_]+:[ ]*/, ""); sub(/[ ]*#.*/, ""); val=$0 } END { if (val) print val }' "$WORKSPACE_YAML")"
-  fi
-  _cw="$(echo "$_cw" | tr -d " \t\r\n'\"")"
+  _cw="$(yaml_get_top_level "code_workspace|vscode_workspace")"
   case "$_cw" in
     true|yes|1)
       _ws_basename="$(basename "$NEXUS_DIR")"
@@ -197,15 +175,7 @@ _load_code_workspace() {
 }
 
 _load_git_hooks() {
-  _gh=""
-  if [ -f "$WORKSPACE_LOCAL_YAML" ]; then
-    _gh="$(awk '/^(git_hooks|hooks):/ { sub(/^[a-zA-Z0-9_]+:[ ]*/, ""); sub(/[ ]*#.*/, ""); val=$0 } END { if (val) print val }' "$WORKSPACE_LOCAL_YAML")"
-  fi
-  if [ -z "$_gh" ] && [ -f "$WORKSPACE_YAML" ]; then
-    _gh="$(awk '/^(git_hooks|hooks):/ { sub(/^[a-zA-Z0-9_]+:[ ]*/, ""); sub(/[ ]*#.*/, ""); val=$0 } END { if (val) print val }' "$WORKSPACE_YAML")"
-  fi
-  _gh="$(echo "$_gh" | tr -d " \t\r\n'\"")"
-  GIT_HOOKS_CONFIG="$_gh"
+  GIT_HOOKS_CONFIG="$(yaml_get_top_level "git_hooks|hooks")"
 }
 
 migrate_karpathy_llm_config() {
