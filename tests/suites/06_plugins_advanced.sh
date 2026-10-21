@@ -462,6 +462,132 @@ touch "$TEST_SEPARATION_WS/.claude/skills/rnex-wiki-lint/SKILL.md"
 
 pass
 
+# --------------------------------------------------------------------------
+run_test "Karpathy LLM multi-source intake: sources list, recursive glob, pruning, disabled repo filtering, two-level override, and legacy raw_dir fallback"
+TEST_SOURCES_WS="$TEST_TMP/sources-intake-ws"
+mkdir -p "$TEST_SOURCES_WS"
+cp "$CLI" "$TEST_SOURCES_WS/rnex"
+chmod +x "$TEST_SOURCES_WS/rnex"
+cp -r "$DIR/toolkit" "$TEST_SOURCES_WS/toolkit"
+cp -r "$DIR/lib" "$TEST_SOURCES_WS/lib"
+cp -r "$DIR/templates" "$TEST_SOURCES_WS/templates"
+cp "$DIR/package.json" "$TEST_SOURCES_WS/package.json"
+git -C "$TEST_SOURCES_WS" init -q
+
+# 1. Default sources initialization on rnex init --karpathy
+"$TEST_SOURCES_WS/rnex" init -y --karpathy "$TEST_SOURCES_WS" >/dev/null
+grep -q "sources:" "$TEST_SOURCES_WS/rnex.yaml" || { fail "rnex.yaml missing sources after init --karpathy"; exit 1; }
+grep -q -- "- docs" "$TEST_SOURCES_WS/rnex.yaml" || { fail "rnex.yaml missing - docs under sources"; exit 1; }
+grep -q -- '- "repos/\*\*/README.md"' "$TEST_SOURCES_WS/rnex.yaml" || { fail "rnex.yaml missing - \"repos/**/README.md\" under sources"; exit 1; }
+[ -d "$TEST_SOURCES_WS/docs" ] || { fail "Default docs directory was not created"; exit 1; }
+[ -f "$TEST_SOURCES_WS/docs/.gitkeep" ] || { fail "Default docs/.gitkeep was not created"; exit 1; }
+[ ! -d "$TEST_SOURCES_WS/repos/**" ] || { fail "Wildcard glob mistakenly created as directory"; exit 1; }
+
+# 2. Recursive glob and pruning
+mkdir -p "$TEST_SOURCES_WS/repos/api/pkg" "$TEST_SOURCES_WS/repos/api/node_modules/pkg" "$TEST_SOURCES_WS/repos/api/.rnex" "$TEST_SOURCES_WS/repos/api/.git" "$TEST_SOURCES_WS/repos/web"
+echo "# Arch" > "$TEST_SOURCES_WS/docs/arch.md"
+echo "# API" > "$TEST_SOURCES_WS/repos/api/README.md"
+echo "# Pkg" > "$TEST_SOURCES_WS/repos/api/pkg/README.md"
+echo "# Leaked Node" > "$TEST_SOURCES_WS/repos/api/node_modules/pkg/README.md"
+echo "# Leaked Rnex" > "$TEST_SOURCES_WS/repos/api/.rnex/README.md"
+echo "# Leaked Git" > "$TEST_SOURCES_WS/repos/api/.git/README.md"
+echo "# Web" > "$TEST_SOURCES_WS/repos/web/README.md"
+
+cat <<'EOF_REPOS' >> "$TEST_SOURCES_WS/rnex.yaml"
+repos:
+  api: {}
+  web: {}
+EOF_REPOS
+
+_resolved="$(cd "$TEST_SOURCES_WS" && . "$TEST_SOURCES_WS/lib/core.sh" && . "$TEST_SOURCES_WS/lib/workspace.sh" && . "$TEST_SOURCES_WS/lib/yaml.sh" && . "$TEST_SOURCES_WS/lib/plugins.sh" && NEXUS_DIR="$TEST_SOURCES_WS" resolve_plugin_sources "$(get_plugin_config_list karpathy-llm sources)")"
+
+echo "$_resolved" | grep -q "^docs/arch.md$" || { fail "docs/arch.md not resolved in sources: $_resolved"; exit 1; }
+echo "$_resolved" | grep -q "^repos/api/README.md$" || { fail "repos/api/README.md not resolved in sources: $_resolved"; exit 1; }
+echo "$_resolved" | grep -q "^repos/api/pkg/README.md$" || { fail "repos/api/pkg/README.md not resolved in sources: $_resolved"; exit 1; }
+echo "$_resolved" | grep -q "^repos/web/README.md$" || { fail "repos/web/README.md not resolved in sources: $_resolved"; exit 1; }
+! echo "$_resolved" | grep -q "node_modules" || { fail "node_modules not pruned from resolved sources: $_resolved"; exit 1; }
+! echo "$_resolved" | grep -q "\.rnex" || { fail ".rnex not pruned from resolved sources: $_resolved"; exit 1; }
+! echo "$_resolved" | grep -q "\.git" || { fail ".git not pruned from resolved sources: $_resolved"; exit 1; }
+
+# Verify plugin info displays effective sources list
+_pinfo_out="$(cd "$TEST_SOURCES_WS" && ./rnex plugin info karpathy-llm)"
+echo "$_pinfo_out" | grep -q "sources" || { fail "plugin info missing sources option: $_pinfo_out"; exit 1; }
+echo "$_pinfo_out" | grep -q "docs, repos/\*\*/README.md" || { fail "plugin info missing effective sources list: $_pinfo_out"; exit 1; }
+
+# 3. Disabled repo exclusion via .local.rnex.yaml
+cat <<'EOF_LOCAL_DIS' > "$TEST_SOURCES_WS/.local.rnex.yaml"
+repos:
+  web:
+    enabled: false
+EOF_LOCAL_DIS
+
+_resolved_dis="$(cd "$TEST_SOURCES_WS" && . "$TEST_SOURCES_WS/lib/core.sh" && . "$TEST_SOURCES_WS/lib/workspace.sh" && . "$TEST_SOURCES_WS/lib/yaml.sh" && . "$TEST_SOURCES_WS/lib/plugins.sh" && NEXUS_DIR="$TEST_SOURCES_WS" resolve_plugin_sources "$(get_plugin_config_list karpathy-llm sources)")"
+
+echo "$_resolved_dis" | grep -q "^repos/api/README.md$" || { fail "repos/api/README.md missing after disabling web: $_resolved_dis"; exit 1; }
+! echo "$_resolved_dis" | grep -q "^repos/web/README.md$" || { fail "Disabled repos/web/README.md was not excluded: $_resolved_dis"; exit 1; }
+_dis_count="$(printf '%s\n' "$_resolved_dis" | wc -l | tr -d ' ')"
+[ "$_dis_count" -eq 3 ] || { fail "Expected exactly 3 resolved files after disabling web, got $_dis_count: $_resolved_dis"; exit 1; }
+
+# 4. Two-level config override: .local.rnex.yaml sources replaces rnex.yaml sources entirely
+cat <<'EOF_LOCAL_SRC' >> "$TEST_SOURCES_WS/.local.rnex.yaml"
+plugins:
+  karpathy-llm:
+    sources:
+      - "repos/*/README.md"
+EOF_LOCAL_SRC
+
+_resolved_override="$(cd "$TEST_SOURCES_WS" && . "$TEST_SOURCES_WS/lib/core.sh" && . "$TEST_SOURCES_WS/lib/workspace.sh" && . "$TEST_SOURCES_WS/lib/yaml.sh" && . "$TEST_SOURCES_WS/lib/plugins.sh" && NEXUS_DIR="$TEST_SOURCES_WS" resolve_plugin_sources "$(get_plugin_config_list karpathy-llm sources)")"
+
+# Should contain repos/api/README.md, but NOT docs/arch.md (overridden) and NOT repos/api/pkg/README.md (single-level glob)
+echo "$_resolved_override" | grep -q "^repos/api/README.md$" || { fail "repos/api/README.md missing in single-level glob: $_resolved_override"; exit 1; }
+! echo "$_resolved_override" | grep -q "^docs/arch.md$" || { fail "docs/arch.md was not overridden by local sources list: $_resolved_override"; exit 1; }
+! echo "$_resolved_override" | grep -q "^repos/api/pkg/README.md$" || { fail "repos/*/README.md incorrectly matched nested README: $_resolved_override"; exit 1; }
+
+# 5. Legacy raw_dir fallback with deprecation notice
+rm -f "$TEST_SOURCES_WS/.local.rnex.yaml"
+cat <<'EOF_LEGACY' > "$TEST_SOURCES_WS/rnex.yaml"
+version: 0.7.22
+plugins:
+  karpathy-llm:
+    raw_dir: custom_raw
+repos:
+  api: {}
+EOF_LEGACY
+
+mkdir -p "$TEST_SOURCES_WS/custom_raw"
+echo "# Legacy Source" > "$TEST_SOURCES_WS/custom_raw/legacy.md"
+
+_sync_legacy_out="$(cd "$TEST_SOURCES_WS" && ./rnex sync -y 2>&1)"
+echo "$_sync_legacy_out" | grep -q "deprecated; replace it with a 'sources' list" || { fail "Deprecation warning missing on rnex sync with legacy raw_dir: $_sync_legacy_out"; exit 1; }
+[ -d "$TEST_SOURCES_WS/custom_raw" ] || { fail "custom_raw missing after sync"; exit 1; }
+
+_status_legacy_out="$(cd "$TEST_SOURCES_WS" && ./rnex status 2>&1)"
+echo "$_status_legacy_out" | grep -q "Deprecated: raw_dir" || { fail "Deprecation notice missing in rnex status with legacy raw_dir: $_status_legacy_out"; exit 1; }
+
+_resolved_legacy="$(cd "$TEST_SOURCES_WS" && . "$TEST_SOURCES_WS/lib/core.sh" && . "$TEST_SOURCES_WS/lib/workspace.sh" && . "$TEST_SOURCES_WS/lib/yaml.sh" && . "$TEST_SOURCES_WS/lib/plugins.sh" && NEXUS_DIR="$TEST_SOURCES_WS" resolve_plugin_sources "$(get_plugin_config_list karpathy-llm sources 2>/dev/null)")"
+
+echo "$_resolved_legacy" | grep -q "^custom_raw/legacy.md$" || { fail "Legacy custom_raw source was not resolved: $_resolved_legacy"; exit 1; }
+
+# 6. Flow array syntax [docs, "repos/*/README.md"]
+cat <<'EOF_FLOW' > "$TEST_SOURCES_WS/rnex.yaml"
+version: 0.7.26
+plugins:
+  karpathy-llm:
+    sources: [docs, "repos/*/README.md"]
+repos:
+  api: {}
+  web:
+    enabled: false
+EOF_FLOW
+
+_resolved_flow="$(cd "$TEST_SOURCES_WS" && . "$TEST_SOURCES_WS/lib/core.sh" && . "$TEST_SOURCES_WS/lib/workspace.sh" && . "$TEST_SOURCES_WS/lib/yaml.sh" && . "$TEST_SOURCES_WS/lib/plugins.sh" && NEXUS_DIR="$TEST_SOURCES_WS" resolve_plugin_sources "$(get_plugin_config_list karpathy-llm sources)")"
+echo "$_resolved_flow" | grep -q "^docs/arch.md$" || { fail "Flow array missing docs/arch.md: $_resolved_flow"; exit 1; }
+echo "$_resolved_flow" | grep -q "^repos/api/README.md$" || { fail "Flow array missing repos/api/README.md: $_resolved_flow"; exit 1; }
+! echo "$_resolved_flow" | grep -q "^repos/web/README.md$" || { fail "Flow array included disabled repos/web/README.md: $_resolved_flow"; exit 1; }
+! echo "$_resolved_flow" | grep -q "^repos/api/pkg/README.md$" || { fail "Flow array single-level glob matched nested pkg: $_resolved_flow"; exit 1; }
+
+pass
+
 if [ "${_STANDALONE_RUN:-0}" -eq 1 ]; then
   report_results
 fi

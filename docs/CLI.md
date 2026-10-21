@@ -93,7 +93,7 @@ Hooks have access to POSIX helper functions for managing User Skill pointers:
 ### Karpathy LLM Wiki Plugin
 The `karpathy-llm` plugin uses lifecycle hooks to manage its domain directories:
 - **Default curated knowledge base (`wiki_dir`)**: `.rnex/wiki`
-- **Default append-only raw intake (`raw_dir`)**: `./docs`
+- **Default intake sources (`sources`)**: `docs` directory and `"repos/**/README.md"` glob pattern (legacy scalar `raw_dir` supported with deprecation notice)
 - **Master navigation index**: `.rnex/wiki/index.md`
 - **Rolling orientation cache**: `.rnex/wiki/hot.md`
 - **Operation log**: `.rnex/wiki/_log.md`

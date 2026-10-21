@@ -100,6 +100,10 @@ cmd_plugin_info() {
 
         _cur="$(yaml_plugin_get "$_name" "$_opt" 2>/dev/null || true)"
         if [ -z "$_cur" ]; then
+          # List-valued options (e.g. sources): show the effective list, comma-separated
+          _cur="$(get_plugin_config_list "$_name" "$_opt" 2>/dev/null | awk '{ out = (NR == 1) ? $0 : out ", " $0 } END { if (NR) print out }')"
+        fi
+        if [ -z "$_cur" ]; then
           _cur="$(awk -v k="$_opt" '
             /^config_defaults:[ ]*$/ || /^config_defaults:[ ]*#/ { in_c=1; next }
             in_c && /^[^ #]/ { exit }

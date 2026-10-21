@@ -66,6 +66,26 @@ _raw="$(get_cfg "raw_dir" "./docs")"
 _wiki="$(printf '%s' "$_wiki" | sed -e 's#^/##' -e 's#/$##')"
 _raw="$(printf '%s' "$_raw" | sed -e 's#^\./##' -e 's#^/##' -e 's#/$##')"
 
+NEXUS_DIR="$_root"
+RNEX_ROOT="$_root"
+export NEXUS_DIR RNEX_ROOT
+
+if ! command -v plugin_primary_source_dir >/dev/null 2>&1; then
+  if [ -n "${RNEX_LIB_DIR:-}" ] && [ -f "$RNEX_LIB_DIR/plugins.sh" ]; then
+    . "$RNEX_LIB_DIR/core.sh" 2>/dev/null || true
+    . "$RNEX_LIB_DIR/yaml.sh" 2>/dev/null || true
+    . "$RNEX_LIB_DIR/plugins.sh" 2>/dev/null || true
+  elif [ -f "$_root/lib/plugins.sh" ]; then
+    . "$_root/lib/core.sh" 2>/dev/null || true
+    . "$_root/lib/yaml.sh" 2>/dev/null || true
+    . "$_root/lib/plugins.sh" 2>/dev/null || true
+  fi
+fi
+if command -v plugin_primary_source_dir >/dev/null 2>&1; then
+  _psd="$(plugin_primary_source_dir "karpathy-llm" 2>/dev/null || true)"
+  [ -n "$_psd" ] && _raw="$_psd"
+fi
+
 _trigger="$(get_cfg "lint_trigger" "manual")"
 if [ "$_trigger" = "git-post-merge" ] || [ "$_trigger" = "post-merge" ]; then
   if git -C "$_root" diff-tree -r --name-only ORIG_HEAD HEAD 2>/dev/null | grep -qE "(^|/)($_raw|$_wiki)/"; then

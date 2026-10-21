@@ -107,15 +107,7 @@ cmd_init() {
       _pdir="$(find_plugin_dir "$_p" 2>/dev/null || true)"
       _cfg_lines=""
       if [ -n "$_pdir" ] && [ -f "$_pdir/plugin.yaml" ]; then
-        _cfg_lines="$(awk '
-          /^config_defaults:[ ]*$/ || /^config_defaults:[ ]*#/ { in_c=1; next }
-          in_c && /^[^ #]/ { exit }
-          in_c && /^[ ]*[a-zA-Z0-9_.-]+:[ ]*/ {
-            line = $0
-            sub(/^[ ]*/, "    ", line)
-            print line
-          }
-        ' "$_pdir/plugin.yaml")"
+        _cfg_lines="$(plugin_config_default_lines "$_pdir/plugin.yaml")"
       fi
       if [ -n "$_cfg_lines" ]; then
         _init_plugins="${_init_plugins}  ${_p}:\n${_cfg_lines}\n"

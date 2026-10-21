@@ -44,9 +44,9 @@ _yaml_list_plugins_from_file() {
 
 yaml_list_plugins() {
   _wy="${WORKSPACE_YAML:-}"
-  [ -z "$_wy" ] && _wy="${NEXUS_DIR:-.}/$RNEX_CONFIG_FILE"
+  [ -z "$_wy" ] && _wy="${NEXUS_DIR:-${RNEX_ROOT:-.}}/${RNEX_CONFIG_FILE:-rnex.yaml}"
   _wly="${WORKSPACE_LOCAL_YAML:-}"
-  [ -z "$_wly" ] && _wly="${NEXUS_DIR:-.}/$RNEX_LOCAL_CONFIG_FILE"
+  [ -z "$_wly" ] && _wly="${NEXUS_DIR:-${RNEX_ROOT:-.}}/${RNEX_LOCAL_CONFIG_FILE:-.local.rnex.yaml}"
   {
     _yaml_list_plugins_from_file "$_wy"
     _yaml_list_plugins_from_file "$_wly"
@@ -111,15 +111,170 @@ _yaml_plugin_get_from_file() {
 yaml_plugin_get() {
   _pname="$1"; _key="$2"
   _wy="${WORKSPACE_YAML:-}"
-  [ -z "$_wy" ] && _wy="${NEXUS_DIR:-.}/$RNEX_CONFIG_FILE"
+  [ -z "$_wy" ] && _wy="${NEXUS_DIR:-${RNEX_ROOT:-.}}/${RNEX_CONFIG_FILE:-rnex.yaml}"
   _wly="${WORKSPACE_LOCAL_YAML:-}"
-  [ -z "$_wly" ] && _wly="${NEXUS_DIR:-.}/$RNEX_LOCAL_CONFIG_FILE"
+  [ -z "$_wly" ] && _wly="${NEXUS_DIR:-${RNEX_ROOT:-.}}/${RNEX_LOCAL_CONFIG_FILE:-.local.rnex.yaml}"
   _val="$(_yaml_plugin_get_from_file "$_wly" "$_pname" "$_key")"
   if [ -n "$_val" ]; then
     printf '%s' "$_val"
     return 0
   fi
   _yaml_plugin_get_from_file "$_wy" "$_pname" "$_key"
+}
+
+# Extract list items under plugins.<plugin>.<key> from a single config file.
+# Supports block sequences ("- item", nested deeper or at the key's indent),
+# inline flow sequences ("[a, \"b\"]") and a plain scalar (single item).
+# Surrounding quotes and inline comments are stripped. One item per line.
+_yaml_plugin_list_from_file() {
+  _ypl_f="$1"; _ypl_plugin="$2"; _ypl_key="$3"
+  [ -f "$_ypl_f" ] || return 0
+  awk -v plugin="$_ypl_plugin" -v key="$_ypl_key" '
+    function unquote(v) {
+      sub(/^[ \t]+/, "", v)
+      if (v ~ /^"/) {
+        v = substr(v, 2); sub(/".*$/, "", v)
+      } else if (v ~ /^\047/) {
+        v = substr(v, 2); sub(/\047.*$/, "", v)
+      } else {
+        sub(/[ \t]+#.*$/, "", v)
+        sub(/[ \t]+$/, "", v)
+      }
+      return v
+    }
+    /^[ \t]*plugins:[ \t]*(#.*)?$/ { in_plugins=1; in_target=0; in_list=0; plugin_indent=-1; next }
+    in_plugins && /^[^ \t#]/ {
+      if (in_list) exit
+      in_plugins=0; in_target=0
+      next
+    }
+    !in_plugins { next }
+    {
+      match($0, /^[ \t]*/)
+      indent = RLENGTH
+      trimmed = substr($0, indent + 1)
+    }
+    trimmed ~ /^([#]|$)/ { next }
+
+    in_list {
+      if (indent > key_indent || (indent == key_indent && trimmed ~ /^-([ \t]|$)/)) {
+        if (trimmed ~ /^-([ \t]|$)/) {
+          item = unquote(substr(trimmed, 2))
+          if (length(item) > 0) print item
+        }
+        next
+      }
+      exit
+    }
+
+    in_target && (indent <= plugin_indent) { in_target=0 }
+
+    !in_target {
+      k = trimmed
+      sub(/:.*/, "", k)
+      gsub(/^["\047]|["\047]$/, "", k)
+      gsub(/[[:space:]]/, "", k)
+      if (k == plugin && trimmed ~ /:[ \t]*(#.*)?$/) {
+        in_target=1
+        plugin_indent=indent
+      }
+      next
+    }
+
+    in_target && (indent > plugin_indent) {
+      k = trimmed
+      sub(/:.*/, "", k)
+      gsub(/^["\047]|["\047]$/, "", k)
+      gsub(/[[:space:]]/, "", k)
+      if (k != key) next
+      val = trimmed
+      sub(/^[^:]*:[ \t]*/, "", val)
+      if (val ~ /^(#.*)?$/) {
+        in_list=1
+        key_indent=indent
+        next
+      }
+      if (val ~ /^\[/) {
+        sub(/^\[/, "", val)
+        sub(/\][ \t]*(#.*)?$/, "", val)
+        n = split(val, parts, ",")
+        for (i = 1; i <= n; i++) {
+          item = unquote(parts[i])
+          if (length(item) > 0) print item
+        }
+        exit
+      }
+      item = unquote(val)
+      if (length(item) > 0) print item
+      exit
+    }
+  ' "$_ypl_f"
+}
+
+# Get a list-valued plugin setting as newline-separated items.
+# Precedence: .local.rnex.yaml (if non-empty) overrides the entire list in rnex.yaml.
+# For karpathy-llm "sources": falls back to the legacy scalar raw_dir (with a
+# deprecation warning on stderr), then to the defaults "docs" and "repos/**/README.md".
+get_plugin_config_list() {
+  _gpl_plugin="$1"; _gpl_key="$2"
+  _gpl_wy="${WORKSPACE_YAML:-}"
+  [ -z "$_gpl_wy" ] && _gpl_wy="${NEXUS_DIR:-${RNEX_ROOT:-.}}/${RNEX_CONFIG_FILE:-rnex.yaml}"
+  _gpl_wly="${WORKSPACE_LOCAL_YAML:-}"
+  [ -z "$_gpl_wly" ] && _gpl_wly="${NEXUS_DIR:-${RNEX_ROOT:-.}}/${RNEX_LOCAL_CONFIG_FILE:-.local.rnex.yaml}"
+
+  _gpl_items="$(_yaml_plugin_list_from_file "$_gpl_wly" "$_gpl_plugin" "$_gpl_key")"
+  [ -z "$_gpl_items" ] && _gpl_items="$(_yaml_plugin_list_from_file "$_gpl_wy" "$_gpl_plugin" "$_gpl_key")"
+  if [ -n "$_gpl_items" ]; then
+    printf '%s\n' "$_gpl_items"
+    return 0
+  fi
+
+  case "$_gpl_plugin:$_gpl_key" in
+    karpathy-llm:sources)
+      _gpl_raw="$(plugin_legacy_raw_dir "$_gpl_plugin")"
+      if [ -n "$_gpl_raw" ]; then
+        log_warn "plugins.$_gpl_plugin.raw_dir is deprecated; replace it with a 'sources' list in ${RNEX_CONFIG_FILE:-rnex.yaml} (or ${RNEX_LOCAL_CONFIG_FILE:-.local.rnex.yaml}) and run 'rnex sync'." >&2
+        printf '%s\n' "$_gpl_raw"
+      else
+        printf '%s\n' "docs" "repos/**/README.md"
+      fi
+      ;;
+  esac
+}
+
+# Print the legacy scalar raw_dir value when it is still in effect, i.e. when no
+# 'sources' list is configured in either config file. Prints nothing otherwise.
+plugin_legacy_raw_dir() {
+  _plr_plugin="$1"
+  _plr_wy="${WORKSPACE_YAML:-}"
+  [ -z "$_plr_wy" ] && _plr_wy="${NEXUS_DIR:-${RNEX_ROOT:-.}}/${RNEX_CONFIG_FILE:-rnex.yaml}"
+  _plr_wly="${WORKSPACE_LOCAL_YAML:-}"
+  [ -z "$_plr_wly" ] && _plr_wly="${NEXUS_DIR:-${RNEX_ROOT:-.}}/${RNEX_LOCAL_CONFIG_FILE:-.local.rnex.yaml}"
+  [ -n "$(_yaml_plugin_list_from_file "$_plr_wly" "$_plr_plugin" "sources")" ] && return 0
+  [ -n "$(_yaml_plugin_list_from_file "$_plr_wy" "$_plr_plugin" "sources")" ] && return 0
+  yaml_plugin_get "$_plr_plugin" "raw_dir" 2>/dev/null || true
+}
+
+# Emit a plugin's config_defaults block from plugin.yaml, re-indented for insertion
+# under plugins.<name> in rnex.yaml: keys at 4 spaces, list items at 6 spaces.
+plugin_config_default_lines() {
+  _pcd_file="$1"
+  [ -f "$_pcd_file" ] || return 0
+  awk '
+    /^config_defaults:[ ]*$/ || /^config_defaults:[ ]*#/ { in_c=1; next }
+    in_c && /^[^ #]/ { exit }
+    in_c && /^[ ]*[a-zA-Z0-9_.-]+:[ ]*/ {
+      line = $0
+      sub(/^[ ]*/, "    ", line)
+      print line
+      next
+    }
+    in_c && /^[ ]+-([ ]|$)/ {
+      line = $0
+      sub(/^[ ]*/, "      ", line)
+      print line
+    }
+  ' "$_pcd_file"
 }
 
 yaml_has_plugin() {
@@ -326,15 +481,7 @@ yaml_enable_plugin() {
     _pdir="$(find_plugin_dir "$_name" 2>/dev/null || true)"
     _cfg_lines=""
     if [ -n "$_pdir" ] && [ -f "$_pdir/plugin.yaml" ]; then
-      _cfg_lines="$(awk '
-        /^config_defaults:[ ]*$/ || /^config_defaults:[ ]*#/ { in_c=1; next }
-        in_c && /^[^ #]/ { exit }
-        in_c && /^[ ]*[a-zA-Z0-9_.-]+:[ ]*/ {
-          line = $0
-          sub(/^[ ]*/, "    ", line)
-          print line
-        }
-      ' "$_pdir/plugin.yaml")"
+      _cfg_lines="$(plugin_config_default_lines "$_pdir/plugin.yaml")"
     fi
 
     _tmp="$(mktemp)"
@@ -423,9 +570,13 @@ _yaml_list_repos_from_file() {
 
 # Parse list of repos merged from repo and local configs (order preserved, deduplicated)
 yaml_list_repos() {
+  _w_y="${WORKSPACE_YAML:-}"
+  [ -z "$_w_y" ] && _w_y="${NEXUS_DIR:-${RNEX_ROOT:-.}}/${RNEX_CONFIG_FILE:-rnex.yaml}"
+  _w_ly="${WORKSPACE_LOCAL_YAML:-}"
+  [ -z "$_w_ly" ] && _w_ly="${NEXUS_DIR:-${RNEX_ROOT:-.}}/${RNEX_LOCAL_CONFIG_FILE:-.local.rnex.yaml}"
   {
-    _yaml_list_repos_from_file "$WORKSPACE_YAML"
-    _yaml_list_repos_from_file "$WORKSPACE_LOCAL_YAML"
+    _yaml_list_repos_from_file "$_w_y"
+    _yaml_list_repos_from_file "$_w_ly"
   } | awk '!seen[$0]++'
 }
 
@@ -452,12 +603,16 @@ _yaml_get_from_file() {
 # Get field value (local config overrides repo config)
 yaml_get() {
   _repo="$1"; _field="$2"
-  _val="$(_yaml_get_from_file "$WORKSPACE_LOCAL_YAML" "$_repo" "$_field")"
+  _w_y="${WORKSPACE_YAML:-}"
+  [ -z "$_w_y" ] && _w_y="${NEXUS_DIR:-${RNEX_ROOT:-.}}/${RNEX_CONFIG_FILE:-rnex.yaml}"
+  _w_ly="${WORKSPACE_LOCAL_YAML:-}"
+  [ -z "$_w_ly" ] && _w_ly="${NEXUS_DIR:-${RNEX_ROOT:-.}}/${RNEX_LOCAL_CONFIG_FILE:-.local.rnex.yaml}"
+  _val="$(_yaml_get_from_file "$_w_ly" "$_repo" "$_field")"
   if [ -n "$_val" ]; then
     printf '%s' "$_val"
     return 0
   fi
-  _yaml_get_from_file "$WORKSPACE_YAML" "$_repo" "$_field"
+  _yaml_get_from_file "$_w_y" "$_repo" "$_field"
 }
 
 yaml_has_repo() {

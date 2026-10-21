@@ -47,5 +47,5 @@ In a Repo Nexus workspace, independent repositories are organized into `./repos/
    - Rely on active workspace context, indexing, and compiled documentation rather than re-scanning raw files repeatedly.
 
 4. **Read-Only Intake & Source Directories:**
-   - `raw_dir` (`./docs`) and `./repos/` are strictly read-only inputs during wiki operations. Never create, copy, or modify files inside `./docs`; write generated output exclusively inside `wiki_dir` (`.rnex/wiki/`).
+   - Intake sources (`plugins.karpathy-llm.sources`, default: `docs`, `repos/**/README.md`) and `./repos/` are strictly read-only inputs during wiki operations. Never create, copy, or modify files inside configured sources; write generated output exclusively inside `wiki_dir` (`.rnex/wiki/`).
 

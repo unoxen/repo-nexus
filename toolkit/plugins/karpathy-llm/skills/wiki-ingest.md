@@ -11,11 +11,12 @@ Use this skill when ingesting new reference materials, architecture documentatio
 ## Ingestion Protocol
 
 1. **Resolve Configuration & Direct Source Paths:**
-   - Read `rnex.yaml` (and `.local.rnex.yaml` if present) to resolve the active `raw_dir` (default: `./docs`) and `wiki_dir` (default: `.rnex/wiki`) under `plugins.karpathy-llm`.
-   - Direct input scope explicitly reads:
-     1. All files in `raw_dir` (`./docs`) (read-only).
-     2. `./repos/<name>/README.md` for every enabled member repository in `rnex.yaml` / `.local.rnex.yaml` (read-only).
-   - `raw_dir` (`./docs`) and `./repos/` are strictly read-only inputs during wiki operations. Never create, copy, or modify files inside `./docs`; write generated output exclusively inside `wiki_dir` (`.rnex/wiki/`).
+   - Read `rnex.yaml` (and `.local.rnex.yaml` if present) to resolve the active `sources` list (default: `["docs", "repos/**/README.md"]`) and `wiki_dir` (default: `.rnex/wiki`) under `plugins.karpathy-llm`. For backward compatibility, if `sources` is absent, fall back to legacy `raw_dir` (default: `./docs`).
+   - Direct input scope resolves all files matching `sources` (read-only):
+     1. All files in configured directory sources (e.g. `docs/`) with hidden directories and `node_modules` pruned.
+     2. Files matching recursive or single-level glob patterns (e.g. `repos/**/README.md`), excluding disabled repositories (`enabled: false`).
+     3. `./repos/<name>/README.md` for every enabled member repository in `rnex.yaml` / `.local.rnex.yaml` (read-only).
+   - Intake sources and `./repos/` are strictly read-only inputs during wiki operations. Never create, copy, or modify files inside intake sources; write generated output exclusively inside `wiki_dir` (`.rnex/wiki/`).
    - Scan direct source paths for source materials not yet recorded in `<wiki_dir>/_log.md`.
    - All source material is read directly in-place without staging copies. Never write directly to `<wiki_dir>/` without ingesting.
 
@@ -35,7 +36,7 @@ Use this skill when ingesting new reference materials, architecture documentatio
    title: ""
    tags: []
    last_updated: YYYY-MM-DD
-   sources: []          # direct source files (<raw_dir>/... or repos/<name>/README.md) this page was derived from
+   sources: []          # direct source files (<source_path> or repos/<name>/README.md) this page was derived from
    related: []          # thematically related wiki pages
    extends: []          # pages this one builds upon or specialises
    contradicts: []      # pages with conflicting information

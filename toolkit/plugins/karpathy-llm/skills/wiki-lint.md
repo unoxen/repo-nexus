@@ -11,12 +11,13 @@ Use this skill to perform health checks and maintenance on the curated wiki know
 ## Maintenance Protocol
 
 1. **Resolve Configuration & Verify Paths:**
-   - Read `rnex.yaml` (and `.local.rnex.yaml` if present) to resolve `wiki_dir` (default: `.rnex/wiki`) and `raw_dir` (default: `./docs`) under `plugins.karpathy-llm`.
-   - Direct input scope explicitly reads:
-     1. All files in `raw_dir` (`./docs`) (read-only).
-     2. `./repos/<name>/README.md` for every enabled member repository in `rnex.yaml` / `.local.rnex.yaml` (read-only).
-   - `raw_dir` (`./docs`) and `./repos/` are strictly read-only inputs during wiki operations. Never create, copy, or modify files inside `./docs`; write generated output exclusively inside `wiki_dir` (`.rnex/wiki/`).
-   - For every page under `<wiki_dir>/`, verify that all paths in frontmatter relation fields (`related`, `extends`, `contradicts`, `sources`) resolve to existing files under `<wiki_dir>/`, `<raw_dir>/`, or `./repos/<name>/README.md`.
+   - Read `rnex.yaml` (and `.local.rnex.yaml` if present) to resolve `wiki_dir` (default: `.rnex/wiki`) and `sources` (default: `["docs", "repos/**/README.md"]`; legacy `raw_dir` fallback) under `plugins.karpathy-llm`.
+   - Direct input scope resolves all files matching `sources` (read-only):
+     1. All files in configured directory sources (e.g. `docs/`) with hidden directories and `node_modules` pruned.
+     2. Files matching recursive or single-level glob patterns (e.g. `repos/**/README.md`), excluding disabled member repositories.
+     3. `./repos/<name>/README.md` for every enabled member repository in `rnex.yaml` / `.local.rnex.yaml` (read-only).
+   - Intake sources and `./repos/` are strictly read-only inputs during wiki operations. Never create, copy, or modify files inside intake sources; write generated output exclusively inside `wiki_dir` (`.rnex/wiki/`).
+   - For every page under `<wiki_dir>/`, verify that all paths in frontmatter relation fields (`related`, `extends`, `contradicts`, `sources`) resolve to existing files under `<wiki_dir>/`, active configured intake sources, or `./repos/<name>/README.md`.
    - Fix or flag broken paths.
 
 2. **Recompute `mentioned_in` Relations:**

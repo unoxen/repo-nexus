@@ -101,7 +101,11 @@ plugins:
   # windsurf:
   #   skills: true              # generate user skills in .windsurf/rules/ (default: true)
   # karpathy-llm:
-  #   raw_dir: "./docs"           # Append-only directory for unmodified intake documents (default: ./docs)
+  #   sources:                    # Intake documents: directories and/or glob patterns (default below)
+  #     - docs                    #   directory: all files (hidden dirs and node_modules pruned)
+  #     - "repos/**/README.md"    #   recursive glob (quote it); disabled repos are excluded
+  #                               # A sources list in .local.rnex.yaml replaces this list entirely.
+  #                               # Legacy 'raw_dir' is still read as a single source (deprecated).
   #   wiki_dir: ".rnex/wiki"      # Directory for curated atomic markdown pages (default: .rnex/wiki)
   #   lint_trigger: "manual"      # Runs manually via 'rnex sync' or validation checklists (git-post-merge, git-post-commit, git-pre-commit, git-pre-push, manual)
   #   notify_on_changes: true     # Show notification when changes are committed to ./docs or .rnex/wiki

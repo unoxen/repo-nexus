@@ -70,18 +70,65 @@ get_cfg() {
 }
 
 _wiki="$(get_cfg "wiki_dir" ".rnex/wiki")"
-_raw="$(get_cfg "raw_dir" "./docs")"
+_wiki="$(printf '%s' "$_wiki" | sed -e 's#^/##' -e 's#/$##')"
+_wiki_path="$_root/$_wiki"
 _ingest_readmes="$(get_cfg "ingest_member_readmes" "true")"
 
-# Clean relative paths
-_wiki="$(printf '%s' "$_wiki" | sed -e 's#^/##' -e 's#/$##')"
-_raw="$(printf '%s' "$_raw" | sed -e 's#^\./##' -e 's#^/##' -e 's#/$##')"
+mkdir -p "$_wiki_path"
 
-_wiki_path="$_root/$_wiki"
+# Helper fallback in case lib modules aren't already in environment
+if ! command -v plugin_source_dirs >/dev/null 2>&1; then
+  if [ -n "${RNEX_LIB_DIR:-}" ] && [ -f "$RNEX_LIB_DIR/plugins.sh" ]; then
+    . "$RNEX_LIB_DIR/core.sh" 2>/dev/null || true
+    . "$RNEX_LIB_DIR/yaml.sh" 2>/dev/null || true
+    . "$RNEX_LIB_DIR/plugins.sh" 2>/dev/null || true
+  elif [ -f "$_root/lib/plugins.sh" ]; then
+    . "$_root/lib/core.sh" 2>/dev/null || true
+    . "$_root/lib/yaml.sh" 2>/dev/null || true
+    . "$_root/lib/plugins.sh" 2>/dev/null || true
+  fi
+fi
+
+_raw=""
+_has_src_dirs=0
+if command -v plugin_source_dirs >/dev/null 2>&1; then
+  for _sdir in $(plugin_source_dirs "karpathy-llm"); do
+    [ -n "$_sdir" ] || continue
+    case "$_sdir" in
+      *'*'*|*'?'*|*'['*|*.md|*.txt) continue ;;
+    esac
+    _has_src_dirs=1
+    mkdir -p "$_root/$_sdir"
+    [ -f "$_root/$_sdir/.gitkeep" ] || touch "$_root/$_sdir/.gitkeep"
+  done
+  _raw="$(plugin_primary_source_dir "karpathy-llm" 2>/dev/null || true)"
+fi
+
+if [ -z "$_raw" ]; then
+  _raw="$(get_cfg "raw_dir" "./docs")"
+  _raw="$(printf '%s' "$_raw" | sed -e 's#^\./##' -e 's#^/##' -e 's#/$##')"
+  case "$_raw" in
+    *'*'*|*'?'*|*'['*|*.md|*.txt) ;;
+    *)
+      if [ "$_has_src_dirs" -eq 0 ]; then
+        _has_sources=""
+        for _cf in "$_root/.local.rnex.yaml" "$_root/rnex.yaml"; do
+          [ -f "$_cf" ] || continue
+          if grep -q "^[ ]*sources:[ ]*" "$_cf" 2>/dev/null; then
+            _has_sources="1"
+            break
+          fi
+        done
+        if [ "$_has_sources" != "1" ]; then
+          mkdir -p "$_root/$_raw"
+          [ -f "$_root/$_raw/.gitkeep" ] || touch "$_root/$_raw/.gitkeep"
+        fi
+      fi
+      ;;
+  esac
+fi
+[ -z "$_raw" ] && _raw="docs"
 _raw_path="$_root/$_raw"
-
-mkdir -p "$_wiki_path" "$_raw_path"
-[ -f "$_raw_path/.gitkeep" ] || touch "$_raw_path/.gitkeep"
 
 # Clean up obsolete leaked root ./raw and ./wiki directories if non-default paths are configured
 if [ "$_raw" != "raw" ] && [ -d "$_root/raw" ]; then
@@ -566,5 +613,13 @@ if [ -f "$_wiki_path/hot.md" ]; then
       fi
     fi
   fi
+fi
+
+# 4. Ensure sync stamp is updated
+if command -v update_sync_stamp >/dev/null 2>&1; then
+  update_sync_stamp "$_root"
+elif [ -f "$_root/lib/workspace.sh" ]; then
+  . "$_root/lib/workspace.sh" 2>/dev/null || true
+  update_sync_stamp "$_root" 2>/dev/null || true
 fi
 

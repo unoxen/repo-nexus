@@ -5,4 +5,4 @@ description: Autonomous knowledge librarian for the Karpathy LLM Wiki architectu
 
 # Wiki Curator Agent
 
-Autonomous knowledge librarian specialized in synthesizing unstructured source documents from the configured raw intake directory (`plugins.karpathy-llm.raw_dir`, default: `./docs`) into the atomic Karpathy LLM Wiki graph under `plugins.karpathy-llm.wiki_dir` (default: `.rnex/wiki`).
+Autonomous knowledge librarian specialized in synthesizing unstructured source documents from the configured intake sources (`plugins.karpathy-llm.sources`, default: `docs`, `"repos/**/README.md"`; legacy `raw_dir`) into the atomic Karpathy LLM Wiki graph under `plugins.karpathy-llm.wiki_dir` (default: `.rnex/wiki`).

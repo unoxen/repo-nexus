@@ -147,7 +147,10 @@ run_plugin_git_hooks() {
     if [ -n "$_h_cand" ] && [ -f "$_h_cand" ]; then
       chmod +x "$_h_cand" 2>/dev/null || true
       (
-        export RNEX_ROOT RNEX_CONFIG_MERGED RNEX_PLUGIN_DIR RNEX_CMD RNEX_ARGS RNEX_QUIET
+        NEXUS_DIR="$RNEX_ROOT"
+        WORKSPACE_YAML="$RNEX_ROOT/${RNEX_CONFIG_FILE:-rnex.yaml}"
+        WORKSPACE_LOCAL_YAML="$RNEX_ROOT/${RNEX_LOCAL_CONFIG_FILE:-.local.rnex.yaml}"
+        export RNEX_ROOT RNEX_CONFIG_MERGED RNEX_PLUGIN_DIR RNEX_CMD RNEX_ARGS RNEX_QUIET NEXUS_DIR WORKSPACE_YAML WORKSPACE_LOCAL_YAML RNEX_CONFIG_FILE RNEX_LOCAL_CONFIG_FILE
         if [ -n "$_stdin_data" ]; then
           printf '%s\n' "$_stdin_data" | "$_h_cand" "$@"
         else

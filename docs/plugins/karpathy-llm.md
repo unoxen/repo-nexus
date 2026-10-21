@@ -93,14 +93,20 @@ plugins:
   karpathy-llm:
     # Directory paths relative to workspace root (defaults shown)
     wiki_dir: .rnex/wiki        # Directory for curated atomic markdown pages
-    raw_dir: ./docs             # Append-only directory for unmodified intake documents
+    sources:                    # Intake documents: directories and/or glob patterns
+      - docs                    #   directory: all files (hidden dirs and node_modules pruned)
+      - "repos/**/README.md"    #   recursive glob (quote it); disabled repos are excluded
+                                # A sources list in .local.rnex.yaml replaces this list entirely.
 
     # Automated Git hook trigger for wiki verification
     # Options: git-post-merge, git-post-commit, git-pre-commit, git-pre-push, manual
     lint_trigger: manual
 
-    # Notify developer when changes are committed to ./docs/ or .rnex/wiki/
+    # Notify developer when changes are committed to intake sources or .rnex/wiki/
     notify_on_changes: true
+
+    # Ingest member repository READMEs into atomic wiki pages
+    ingest_member_readmes: true
 
     # Enable or disable
     enabled: true
@@ -109,17 +115,33 @@ plugins:
 | Option | Type | Default | Description |
 |:---|:---|:---|:---|
 | `wiki_dir` | string | `.rnex/wiki` | Directory containing curated atomic markdown pages. |
-| `raw_dir` | string | `./docs` | Append-only directory for unmodified source intake documents. |
+| `sources` | list | `[docs, "repos/**/README.md"]` | Intake directories and/or glob patterns relative to workspace root. Overridable in `.local.rnex.yaml`. |
+| `raw_dir` | string | *(deprecated)* | Deprecated legacy intake directory. Transparently treated as a single `sources` entry with a migration warning. |
 | `lint_trigger` | string | `manual` | Git hook event that triggers wiki change detection (`git-post-merge`, `git-post-commit`, `git-pre-commit`, `git-pre-push`, `manual`). |
-| `notify_on_changes` | boolean | `true` | Show notification banner when changes are committed to `./docs/` or `.rnex/wiki/`. |
+| `notify_on_changes` | boolean | `true` | Show notification banner when changes are committed to intake sources or `.rnex/wiki/`. |
+| `ingest_member_readmes` | boolean | `true` | Automatically ingest member repository READMEs into atomic wiki pages. |
 | `enabled` | boolean | `true` | Enable or disable the plugin. Overridable in `.local.rnex.yaml`. |
+
+---
+
+### Intake Sources (`sources`)
+
+The `sources` setting defines where the Karpathy LLM Wiki discovers raw intake documents for `wiki-ingest` and change verification:
+
+- **Directory Paths (e.g. `docs`, `notes`)**: Repo Nexus recursively scans the directory for all files. Hidden directories (starting with `.`) and `node_modules` are automatically pruned.
+- **Recursive Globs (e.g. `"repos/**/README.md"`)**: Pure POSIX `/bin/sh` pattern resolution matches files at arbitrary directory depths. Always quote globs containing `*` in YAML. Directories named `.git`, `.rnex`, and `node_modules` are pruned during traversal.
+- **Single-Level Globs (e.g. `repos/*/README.md` or `docs/*.md`)**: Matches files at a fixed directory level.
+- **Active Repository Filtering**: Any resolved path located within `repos/<name>/` is checked against member repository status. If a repository is disabled (`enabled: false`) in `rnex.yaml` or `.local.rnex.yaml`, its files are automatically excluded.
+- **Two-Level Configuration Precedence**: If `sources` is declared in `.local.rnex.yaml`, it completely overrides the `sources` list defined in `rnex.yaml`.
+- **Legacy Fallback & Migration**: Existing configurations with `raw_dir: ./path` continue to work without disruption. Repo Nexus reads `raw_dir` as a single-element sources list and emits a non-fatal deprecation notice advising you to migrate to `sources`.
+- **Directory Provisioning**: When running `rnex sync`, explicit directory entries (such as `docs`) are created automatically if missing. Glob patterns (containing `*`, `?`, or `[`) and file targets are never converted into directories.
 
 ---
 
 ## Automated Git Hooks Integration
 
 When workspace Git hooks are installed (`rnex hooks install`), the `karpathy-llm` plugin links directly into Git events:
-- **`post-merge`**: Detects if incoming commits touched `./docs/` or `.rnex/wiki/`, warning the developer to review or re-lint.
+- **`post-merge`**: Detects if incoming commits touched intake sources or `.rnex/wiki/`, warning the developer to review or re-lint.
 - **`post-commit`**: Reminds the developer to run `wiki-lint` or `wiki-ingest` if wiki files were committed.
 - **`pre-commit` & `pre-push`**: Emits trigger notices if unvalidated wiki files are staged or about to be pushed.
 

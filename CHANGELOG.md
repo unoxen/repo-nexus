@@ -5,6 +5,27 @@ All notable changes to Repo Nexus (`rnex`) will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.26] - 2026-10-21
+
+### Added
+- **Multi-Source Intake Configuration for Karpathy LLM Wiki (`sources`)**:
+  - Replaced single `raw_dir` scalar configuration with multi-value `sources` list under `plugins.karpathy-llm.sources`.
+  - Added pure POSIX `/bin/sh` glob and directory resolver (`resolve_plugin_sources`) supporting both explicit directory paths (e.g. `docs`) and recursive/single-level glob patterns (e.g. `"repos/**/README.md"`, `repos/*/README.md`).
+  - Implemented automatic exclusion of member repositories disabled locally or globally (`enabled: false`) from resolved intake paths.
+  - Enforced two-level configuration precedence: `.local.rnex.yaml` takes full precedence over `rnex.yaml` when defining `sources`.
+  - Added automatic directory pruning for `.git`, `.rnex`, and `node_modules` during recursive file traversal.
+  - Added safe directory provisioning in `rnex sync` that creates explicit directory sources (such as `docs`) while skipping wildcard patterns and file targets.
+
+### Changed
+- **Default Intake Sources**:
+  - Default sources for `karpathy-llm` plugin are now `docs` and `"repos/**/README.md"`.
+  - Updated `rnex init` templates, `rnex status`, and plugin scaffolding to render and configure multi-line `sources`.
+  - Updated plugin lifecycle hooks (`after_sync.sh`, `git_*.sh`) and agentic skills (`wiki-ingest.md`, `wiki-lint.md`) to resolve documentation from `sources`.
+
+### Deprecated
+- **Legacy `raw_dir` Configuration**:
+  - `plugins.karpathy-llm.raw_dir` is deprecated in favor of `sources`. Workspaces configuring `raw_dir` are automatically read via transparent fallback with a non-fatal deprecation notice advising migration to `sources`.
+
 ## [0.7.7] - 2026-10-15
 
 ### Added

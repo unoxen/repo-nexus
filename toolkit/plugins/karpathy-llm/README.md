@@ -20,7 +20,7 @@ Reference specification: [setup-karpathy-wiki.md](https://github.com/unoxen/ai-t
 * Guidelines tailored for Repo Nexus workspaces respecting member repository autonomy and physical repository boundaries.
 
 ### 3. Complete Karpathy LLM Wiki Architecture (`instructions/rnex-wiki-architecture.md`)
-* **Intake Directory (`raw_dir`, default: `./docs`):** Append-only directory where unmodified source material (articles, transcripts, docs, meeting notes) is deposited. Includes `.gitkeep`.
+* **Intake Sources (`sources`, default: `["docs", "repos/**/README.md"]`):** Multi-value array of directory paths and glob patterns for unmodified source material (articles, transcripts, docs, meeting notes, repo READMEs). Legacy `raw_dir` (default: `./docs`) remains supported as a backward-compatible fallback.
 * **Curated Knowledge Base (`wiki_dir`, default: `.rnex/wiki`):** Interlinked atomic markdown pages, each with typed frontmatter relations (`sources`, `related`, `extends`, `contradicts`, `mentioned_in`).
 * **Navigation Index (`<wiki_dir>/index.md`, default: `.rnex/wiki/index.md`):** Master categorized catalog organizing atomic concepts, architecture decisions, and cross-project knowledge.
 * **Rolling Context Cache (`<wiki_dir>/hot.md`, default: `.rnex/wiki/hot.md`):** High-density ~500-word orientation summary for rapid agent onboarding without full wiki scans (especially for codebase knowledge and second-brain wikis).
@@ -124,9 +124,13 @@ The plugin supports two levels of configuration:
 ```yaml
 plugins:
   karpathy-llm:
+    # Intake sources (directories and/or glob patterns)
+    sources:
+      - docs
+      - "repos/**/README.md"
+
     # Directory paths relative to workspace root (defaults shown)
     wiki_dir: .rnex/wiki        # Directory for curated atomic markdown pages
-    raw_dir: ./docs             # Append-only directory for unmodified intake documents
 
     # Member repository README auto-ingestion (default: true)
     # Automatically registers member repos into wiki pages and hot.md during rnex sync
@@ -180,8 +184,9 @@ plugins:
 | Field | Scope / File | Type | Default | Values / Behavior |
 |:---|:---|:---|:---|:---|
 | `ingest_member_readmes` | Repo (`rnex.yaml`) | `boolean` | `true` | Automatically ingests member repo READMEs into `repo-<name>.md` and `hot.md` during `rnex sync`. |
+| `sources` | Repo (`rnex.yaml`) | `list` | `[docs, "repos/**/README.md"]` | Directory paths and/or glob patterns for intake documents. |
 | `wiki_dir` | Repo (`rnex.yaml`) | `string` | `.rnex/wiki` | Directory containing atomic domain pages. |
-| `raw_dir` | Repo (`rnex.yaml`) | `string` | `./docs` | Append-only directory for unmodified source materials. |
+| `raw_dir` | Repo (`rnex.yaml`) | `string` | `./docs` | *(Deprecated)* Append-only directory for unmodified source materials. Use `sources` instead. |
 | `lint_trigger` | Local (`.local.rnex.yaml`) | `string` | *(unset)* | Optional opt-in Git hook: `git-post-commit`, `git-pre-push`, `git-post-merge`. Unset = purely manual. |
 | `notify_on_changes` | Local (`.local.rnex.yaml`) | `boolean` | `true` | Terminal alerts printed right after git commit/push when `./docs/` or `.rnex/wiki/` needs attention. |
 

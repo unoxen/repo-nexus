@@ -5,15 +5,18 @@ author: unoxen
 homepage: https://github.com/unoxen/repo-nexus
 
 config_defaults:
-  raw_dir: "./docs"
+  sources:
+    - docs
+    - "repos/**/README.md"
   wiki_dir: ".rnex/wiki"
   lint_trigger: "manual" # Default changed to manual to avoid unsolicited background trigger tasks
   notify_on_changes: true
   ingest_member_readmes: true
 
 config_descriptions:
+  sources: "<list>  (intake directories and/or glob patterns; .local.rnex.yaml list replaces rnex.yaml list)"
   wiki_dir: "<dir>  (directory for curated markdown pages)"
-  raw_dir: "<dir>   (directory for unmodified intake documents)"
+  raw_dir: "<dir>   (deprecated: single intake directory, used only when sources is unset)"
   lint_trigger: "git-post-merge|git-post-commit|git-pre-commit|git-pre-push|manual"
   notify_on_changes: "true|false  (show notification when raw/wiki changes are committed)"
   ingest_member_readmes: "true|false  (automatically track member repository READMEs in wiki)"
