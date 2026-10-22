@@ -1,7 +1,7 @@
 # Repo Nexus workspace configuration
 # See templates/rnex.example.yaml for a comprehensive example with all options.
 
-version: 0.7.31
+version: 0.7.32
 
 # Directory for member repository clones (relative to this file or absolute)
 repos_dir: ./repos

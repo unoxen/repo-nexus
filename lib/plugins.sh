@@ -205,6 +205,58 @@ sync_plugin_bundle() {
   done
 }
 
+# Clean up obsolete leaked root ./raw and ./wiki directories if non-default paths are configured
+_clean_leaked_plugin_dirs() {
+  _cld_root="${1:-$NEXUS_DIR}"
+  _cld_raw="$2"
+  _cld_wiki="$3"
+
+  if [ "$_cld_raw" != "raw" ] && [ -d "$_cld_root/raw" ] && \
+     ! plugin_source_dirs "karpathy-llm" 2>/dev/null | grep -qx 'raw'; then
+    if ! rmdir "$_cld_root/raw" 2>/dev/null; then
+      _can_clean=1
+      for _f in "$_cld_root/raw"/* "$_cld_root/raw"/.[!.]* "$_cld_root/raw"/..?*; do
+        [ -e "$_f" ] || continue
+        _b="$(basename "$_f")"
+        [ "$_b" = ".gitkeep" ] && continue
+        [ -f "$_cld_root/$_cld_raw/$_b" ] && cmp -s "$_f" "$_cld_root/$_cld_raw/$_b" && continue
+        _can_clean=0
+        break
+      done
+      if [ "$_can_clean" -eq 1 ]; then
+        rm -rf "$_cld_root/raw" 2>/dev/null || true
+        log_dim "Cleaned up obsolete root raw/ directory"
+      fi
+    else
+      log_dim "Removed empty obsolete root raw/ directory"
+    fi
+  fi
+
+  if [ "$_cld_wiki" != "wiki" ] && [ -d "$_cld_root/wiki" ]; then
+    if ! rmdir "$_cld_root/wiki" 2>/dev/null; then
+      _can_clean=1
+      for _f in "$_cld_root/wiki"/* "$_cld_root/wiki"/.[!.]* "$_cld_root/wiki"/..?*; do
+        [ -e "$_f" ] || continue
+        _b="$(basename "$_f")"
+        case "$_b" in
+          index.md|_log.md|hot.md|.gitkeep) continue ;;
+          *)
+            [ -f "$_cld_root/$_cld_wiki/$_b" ] && cmp -s "$_f" "$_cld_root/$_cld_wiki/$_b" && continue
+            _can_clean=0
+            break
+            ;;
+        esac
+      done
+      if [ "$_can_clean" -eq 1 ]; then
+        rm -rf "$_cld_root/wiki" 2>/dev/null || true
+        log_dim "Cleaned up obsolete root wiki/ directory"
+      fi
+    else
+      log_dim "Removed empty obsolete root wiki/ directory"
+    fi
+  fi
+}
+
 # Sync plugins into scoped directories: .rnex/plugins/<plugin-name>/
 sync_plugins() {
   # Clean up any bogus placeholder directories accidentally created in workspace root
@@ -221,64 +273,11 @@ sync_plugins() {
 
   # Clean up obsolete leaked root ./raw and ./wiki directories if non-default paths are configured
   _raw_cfg="$(plugin_primary_source_dir "karpathy-llm" 2>/dev/null || true)"
-  [ -z "$_raw_cfg" ] && _raw_cfg="docs"
-
+  [ -n "$_raw_cfg" ] || _raw_cfg="docs"
   _wiki_cfg="$(yaml_plugin_get "karpathy-llm" "wiki_dir" 2>/dev/null || true)"
-  [ -z "$_wiki_cfg" ] && _wiki_cfg=".rnex/wiki"
-  _wiki_cfg="$(printf '%s' "$_wiki_cfg" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d "'\"" | sed -e 's#^\./##' -e 's#^/##' -e 's#/$##')"
-
-  if [ "$_raw_cfg" != "raw" ] && [ -d "$NEXUS_DIR/raw" ] && \
-     ! plugin_source_dirs "karpathy-llm" 2>/dev/null | grep -qx 'raw'; then
-    if ! rmdir "$NEXUS_DIR/raw" 2>/dev/null; then
-      _can_clean=1
-      for _f in "$NEXUS_DIR/raw"/* "$NEXUS_DIR/raw"/.[!.]* "$NEXUS_DIR/raw"/..?*; do
-        [ -e "$_f" ] || continue
-        _b="$(basename "$_f")"
-        if [ "$_b" = ".gitkeep" ]; then
-          continue
-        fi
-        if [ -f "$NEXUS_DIR/$_raw_cfg/$_b" ] && cmp -s "$_f" "$NEXUS_DIR/$_raw_cfg/$_b"; then
-          continue
-        fi
-        _can_clean=0
-        break
-      done
-      if [ "$_can_clean" -eq 1 ]; then
-        rm -rf "$NEXUS_DIR/raw"
-        log_dim "Cleaned up obsolete root raw/ directory"
-      fi
-    else
-      log_dim "Removed empty obsolete root raw/ directory"
-    fi
-  fi
-
-  if [ "$_wiki_cfg" != "wiki" ] && [ -d "$NEXUS_DIR/wiki" ]; then
-    if ! rmdir "$NEXUS_DIR/wiki" 2>/dev/null; then
-      _can_clean=1
-      for _f in "$NEXUS_DIR/wiki"/* "$NEXUS_DIR/wiki"/.[!.]* "$NEXUS_DIR/wiki"/..?*; do
-        [ -e "$_f" ] || continue
-        _b="$(basename "$_f")"
-        case "$_b" in
-          index.md|_log.md|hot.md|.gitkeep)
-            continue
-            ;;
-          *)
-            if [ -f "$NEXUS_DIR/$_wiki_cfg/$_b" ] && cmp -s "$_f" "$NEXUS_DIR/$_wiki_cfg/$_b"; then
-              continue
-            fi
-            _can_clean=0
-            break
-            ;;
-        esac
-      done
-      if [ "$_can_clean" -eq 1 ]; then
-        rm -rf "$NEXUS_DIR/wiki"
-        log_dim "Cleaned up obsolete root wiki/ directory"
-      fi
-    else
-      log_dim "Removed empty obsolete root wiki/ directory"
-    fi
-  fi
+  [ -n "$_wiki_cfg" ] || _wiki_cfg=".rnex/wiki"
+  _wiki_cfg="$(normalize_rel_path "$_wiki_cfg")"
+  _clean_leaked_plugin_dirs "$NEXUS_DIR" "$_raw_cfg" "$_wiki_cfg"
 
   # 1. Prune plugins that are disabled or no longer enabled in config
   if [ -d "$NEXUS_DIR/.rnex/plugins" ]; then

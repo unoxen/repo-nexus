@@ -4,91 +4,16 @@ set -e
 # Exit early if rnex utilities aren't available 
 [ -z "$RNEX_ROOT" ] && { echo "Error: RNEX_ROOT not set"; exit 1; }
 
-# Resolve root workspace
-_root="$RNEX_ROOT"
-
-
-# Helper to read plugin config
-get_cfg() {
-  _key="$1"; _def="$2"
-  _val=""
-  for _cfg in "$_root/.local.rnex.yaml" "$_root/rnex.yaml"; do
-    [ -f "$_cfg" ] || continue
-    _val="$(awk -v plugin="karpathy-llm" -v key="$_key" '
-      /^[ \t]*plugins:[ \t]*(#.*)?$/ { in_plugins=1; in_target=0; plugin_indent=-1; next }
-      in_plugins && /^[^ \t#]/ { in_plugins=0; in_target=0 }
-      !in_plugins { next }
-      {
-        match($0, /^[ \t]*/)
-        indent = RLENGTH
-        trimmed = substr($0, indent + 1)
-      }
-      trimmed ~ /^([#]|$)/ { next }
-
-      in_target && (indent <= plugin_indent) {
-        in_target=0
-      }
-
-      !in_target {
-        k = trimmed
-        sub(/:.*/, "", k)
-        gsub(/^["\047]|["\047]$/, "", k)
-        gsub(/[[:space:]]/, "", k)
-        if (k == plugin && trimmed ~ /:[ \t]*(#.*)?$/) {
-          in_target=1
-          plugin_indent=indent
-          next
-        }
-      }
-
-      in_target && (indent > plugin_indent) {
-        k = trimmed
-        sub(/:.*/, "", k)
-        gsub(/^["\047]|["\047]$/, "", k)
-        gsub(/[[:space:]]/, "", k)
-        if (k == key && trimmed ~ /:[ \t]*/) {
-          val = trimmed
-          sub(/^[^:]*:[ \t]*/, "", val)
-          if (val ~ /^"[^"]*"/) {
-            match(val, /^"[^"]*"/)
-            val = substr(val, 2, RLENGTH - 2)
-          } else if (val ~ /^\047[^\047]*\047/) {
-            match(val, /^\047[^\047]*\047/)
-            val = substr(val, 2, RLENGTH - 2)
-          } else {
-            sub(/[ \t]*#.*$/, "", val)
-            sub(/[ \t]+$/, "", val)
-          }
-          print val
-          exit
-        }
-      }
-    ' "$_cfg")"
-    [ -n "$_val" ] && break
-  done
-  [ -n "$_val" ] && printf '%s' "$_val" || printf '%s' "$_def"
-}
-
-_wiki="$(get_cfg "wiki_dir" ".rnex/wiki")"
-_wiki="$(printf '%s' "$_wiki" | sed -e 's#^/##' -e 's#/$##')"
-_wiki_path="$_root/$_wiki"
+for _kl_common in \
+  "${RNEX_PLUGIN_DIR:-}/hooks/_common.sh" \
+  "$(dirname "$0")/_common.sh" \
+  "${RNEX_ROOT:-.}/.rnex/plugins/karpathy-llm/hooks/_common.sh" \
+  "${RNEX_ROOT:-.}/toolkit/plugins/karpathy-llm/hooks/_common.sh"; do
+  [ -f "$_kl_common" ] && { . "$_kl_common"; break; }
+done
 
 mkdir -p "$_wiki_path"
 
-# Helper fallback in case lib modules aren't already in environment
-if ! command -v plugin_source_dirs >/dev/null 2>&1; then
-  if [ -n "${RNEX_LIB_DIR:-}" ] && [ -f "$RNEX_LIB_DIR/plugins.sh" ]; then
-    . "$RNEX_LIB_DIR/core.sh" 2>/dev/null || true
-    . "$RNEX_LIB_DIR/yaml.sh" 2>/dev/null || true
-    . "$RNEX_LIB_DIR/plugins.sh" 2>/dev/null || true
-  elif [ -f "$_root/lib/plugins.sh" ]; then
-    . "$_root/lib/core.sh" 2>/dev/null || true
-    . "$_root/lib/yaml.sh" 2>/dev/null || true
-    . "$_root/lib/plugins.sh" 2>/dev/null || true
-  fi
-fi
-
-_raw=""
 _has_src_dirs=0
 if command -v plugin_source_dirs >/dev/null 2>&1; then
   for _sdir in $(plugin_source_dirs "karpathy-llm"); do
@@ -100,81 +25,28 @@ if command -v plugin_source_dirs >/dev/null 2>&1; then
     mkdir -p "$_root/$_sdir"
     [ -f "$_root/$_sdir/.gitkeep" ] || touch "$_root/$_sdir/.gitkeep"
   done
-  _raw="$(plugin_primary_source_dir "karpathy-llm" 2>/dev/null || true)"
 fi
 
-if [ -z "$_raw" ]; then
-  _raw="$(get_cfg "raw_dir" "./docs")"
-  _raw="$(printf '%s' "$_raw" | sed -e 's#^\./##' -e 's#^/##' -e 's#/$##')"
-  case "$_raw" in
+if [ "$_has_src_dirs" -eq 0 ]; then
+  _raw_legacy="$(get_cfg "raw_dir" "./docs")"
+  _raw_legacy="$(printf '%s' "$_raw_legacy" | sed -e 's#^\./##' -e 's#^/##' -e 's#/$##')"
+  case "$_raw_legacy" in
     *'*'*|*'?'*|*'['*|*.md|*.txt) ;;
     *)
-      if [ "$_has_src_dirs" -eq 0 ]; then
-        _has_sources=""
-        for _cf in "$_root/.local.rnex.yaml" "$_root/rnex.yaml"; do
-          [ -f "$_cf" ] || continue
-          if grep -q "^[ ]*sources:[ ]*" "$_cf" 2>/dev/null; then
-            _has_sources="1"
-            break
-          fi
-        done
-        if [ "$_has_sources" != "1" ]; then
-          mkdir -p "$_root/$_raw"
-          [ -f "$_root/$_raw/.gitkeep" ] || touch "$_root/$_raw/.gitkeep"
-        fi
+      _has_sources=""
+      for _cf in "$_root/.local.rnex.yaml" "$_root/rnex.yaml"; do
+        [ -f "$_cf" ] && grep -q "^[ ]*sources:[ ]*" "$_cf" 2>/dev/null && { _has_sources="1"; break; }
+      done
+      if [ "$_has_sources" != "1" ]; then
+        mkdir -p "$_root/$_raw_legacy"
+        [ -f "$_root/$_raw_legacy/.gitkeep" ] || touch "$_root/$_raw_legacy/.gitkeep"
       fi
       ;;
   esac
 fi
-[ -z "$_raw" ] && _raw="docs"
-_raw_path="$_root/$_raw"
 
 # Clean up obsolete leaked root ./raw and ./wiki directories if non-default paths are configured
-if [ "$_raw" != "raw" ] && [ -d "$_root/raw" ]; then
-  if ! rmdir "$_root/raw" 2>/dev/null; then
-    _clean_raw_leak=1
-    for _rf in "$_root/raw"/* "$_root/raw"/.[!.]* "$_root/raw"/..?*; do
-      [ -e "$_rf" ] || continue
-      _rf_base="$(basename "$_rf")"
-      if [ "$_rf_base" = ".gitkeep" ]; then
-        continue
-      fi
-      if [ -f "$_raw_path/$_rf_base" ] && cmp -s "$_rf" "$_raw_path/$_rf_base"; then
-        continue
-      fi
-      _clean_raw_leak=0
-      break
-    done
-    if [ "$_clean_raw_leak" -eq 1 ]; then
-      rm -rf "$_root/raw" 2>/dev/null || true
-    fi
-  fi
-fi
-
-if [ "$_wiki" != "wiki" ] && [ -d "$_root/wiki" ]; then
-  if ! rmdir "$_root/wiki" 2>/dev/null; then
-    _clean_wiki_leak=1
-    for _wf in "$_root/wiki"/* "$_root/wiki"/.[!.]* "$_root/wiki"/..?*; do
-      [ -e "$_wf" ] || continue
-      _wf_base="$(basename "$_wf")"
-      case "$_wf_base" in
-        index.md|_log.md|hot.md|.gitkeep)
-          continue
-          ;;
-        *)
-          if [ -f "$_wiki_path/$_wf_base" ] && cmp -s "$_wf" "$_wiki_path/$_wf_base"; then
-            continue
-          fi
-          _clean_wiki_leak=0
-          break
-          ;;
-      esac
-    done
-    if [ "$_clean_wiki_leak" -eq 1 ]; then
-      rm -rf "$_root/wiki" 2>/dev/null || true
-    fi
-  fi
-fi
+command -v _clean_leaked_plugin_dirs >/dev/null 2>&1 && _clean_leaked_plugin_dirs "$_root" "$_raw" "$_wiki"
 
 # Clean up legacy staging directory only if empty or positively verified as managed duplicate copies
 if [ -d "$_wiki_path/raw" ]; then
@@ -420,31 +292,12 @@ LOG_EOF
 }
 
 # 2. Automatically ingest README.md from registered/enabled member repositories when included in sources
-_rd=""
-for _cfg in "$_root/.local.rnex.yaml" "$_root/rnex.yaml"; do
-  [ -f "$_cfg" ] || continue
-  _val="$(awk '
-    /^[[:space:]]*repos_dir:[ ]*/ {
-      sub(/^[[:space:]]*repos_dir:[ ]*/, "")
-      sub(/[ ]*#.*/, "")
-      sub(/^[[:space:]]+/, "")
-      sub(/[[:space:]]+$/, "")
-      gsub(/^["\047]|["\047]$/, "")
-      val=$0
-    }
-    END { if (val) print val }
-  ' "$_cfg")"
-  if [ -n "$_val" ]; then
-    _rd="$_val"
-    break
-  fi
-done
-REPOS_DIR="${_rd:-./repos}"
-_clean_repos="$(printf '%s' "$REPOS_DIR" | sed -e 's#^[[:space:]]*##' -e 's#[[:space:]]*$##' -e 's#^\./##' -e 's#^/##' -e 's#/$##')"
+REPOS_DIR="$(yaml_get_top_level "repos_dir" "./repos")"
+_clean_repos="$(normalize_rel_path "$REPOS_DIR")"
 
 _skip_all_readmes=0
 if command -v get_plugin_config_list >/dev/null 2>&1; then
-  _src_list="$(NEXUS_DIR="$_root" WORKSPACE_YAML="$_root/rnex.yaml" WORKSPACE_LOCAL_YAML="$_root/.local.rnex.yaml" get_plugin_config_list "karpathy-llm" "sources" 2>/dev/null || true)"
+  _src_list="$(get_plugin_config_list "karpathy-llm" "sources" 2>/dev/null || true)"
   if [ -n "$_src_list" ]; then
     _skip_all_readmes=1
     while IFS= read -r _s_item || [ -n "$_s_item" ]; do
@@ -460,75 +313,14 @@ EOF_SRC
   fi
 fi
 
-list_configured_repos() {
-  for _cfg_file in "$_root/.local.rnex.yaml" "$_root/rnex.yaml"; do
-    [ -f "$_cfg_file" ] || continue
-    awk '
-      /^repos:[ ]*$/ || /^repos:[ ]*#/ { r=1; next }
-      r && /^[^ #]/ { r=0 }
-      r && /^  [a-zA-Z0-9_.-]+:[ ]*(\{\})?[ ]*(#.*)?$/ {
-        line = $0
-        sub(/^[ ]*/, "", line)
-        sub(/:.*/, "", line)
-        gsub(/[[:space:]]/, "", line)
-        if (length(line) > 0) print line
-      }
-    ' "$_cfg_file"
-  done | awk '!seen[$0]++'
-}
-
 _ALL_INGESTED_REPOS=""
 _ALL_INGESTED_COUNT=0
 
 if [ "$_skip_all_readmes" -ne 1 ]; then
-  for repo_name in $(list_configured_repos); do
+  for repo_name in $(yaml_list_repos); do
     [ -n "$repo_name" ] || continue
-    _custom_path=""
-    
-    # Check if this repository is explicitly disabled in .local.rnex.yaml or rnex.yaml (block-scoped)
-    _is_disabled=""
-    for _cfg_file in "$RNEX_ROOT/.local.rnex.yaml" "$RNEX_ROOT/rnex.yaml"; do
-      [ -f "$_cfg_file" ] || continue
-      _en="$(awk -v repo="$repo_name" '
-        /^repos:[ ]*$/ || /^repos:[ ]*#/ { r=1; next }
-        r && /^[^ #]/ { r=0 }
-        r && match($0, "^  " repo ":[ ]*(\\{\\})?[ ]*(#.*)?$") { in_target=1; next }
-        in_target && /^  [^ #]/ { in_target=0 }
-        in_target && match($0, "^    enabled:[ ]*") {
-          line = $0
-          sub("^    enabled:[ ]*", "", line)
-          sub(/[ ]*#.*$/, "", line)
-          gsub(/^["\047]|["\047]$/, "", line)
-          print line
-          exit
-        }
-      ' "$_cfg_file")"
-      if [ -n "$_en" ] && [ -z "$_is_disabled" ]; then
-        case "$(printf '%s' "$_en" | tr '[:upper:]' '[:lower:]')" in
-          false|no|0|disabled|off) _is_disabled=1 ;;
-          *) _is_disabled=0 ;;
-        esac
-      fi
-
-      if [ -z "$_custom_path" ]; then
-        _cp="$(awk -v repo="$repo_name" '
-          /^repos:[ ]*$/ || /^repos:[ ]*#/ { r=1; next }
-          r && /^[^ #]/ { r=0 }
-          r && match($0, "^  " repo ":[ ]*(\\{\\})?[ ]*(#.*)?$") { in_target=1; next }
-          in_target && (/^[ ]{1,2}[^ #]/ || /^[^ #]/) { in_target=0 }
-          in_target && match($0, "^    path:[ ]*") {
-            line = $0
-            sub("^    path:[ ]*", "", line)
-            sub(/[ ]*#.*$/, "", line)
-            gsub(/^["\047]|["\047]$/, "", line)
-            print line
-            exit
-          }
-        ' "$_cfg_file")"
-        [ -n "$_cp" ] && _custom_path="$_cp"
-      fi
-    done
-    [ "$_is_disabled" = "1" ] && continue
+    yaml_repo_enabled "$repo_name" || continue
+    _custom_path="$(yaml_get "$repo_name" "path")"
 
     # Resolve physical repository path and relative location
     _repo_rel=""
