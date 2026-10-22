@@ -168,10 +168,22 @@ cmd_exec() {
   return 0
 }
 
-cmd_enable() {
+_repo_set_config_and_log() {
+  _rname="$1"; _key="$2"; _val="$3"; _local_flag="$4"; _verb="$5"
+  if [ "$_local_flag" -eq 1 ]; then
+    yaml_set_local "$_rname" "$_key" "$_val"
+    log_ok "$_verb '$_rname' locally in $(basename "$WORKSPACE_LOCAL_YAML")"
+  else
+    yaml_set "$_rname" "$_key" "$_val"
+    log_ok "$_verb '$_rname' in $(basename "$WORKSPACE_YAML")"
+  fi
+}
+
+_repo_toggle_state() {
   require_workspace
-  _is_local=0
-  _name=""
+  _target_val="$1"; _verb="$2"
+  shift 2
+  _is_local=0; _name=""
   while [ $# -gt 0 ]; do
     case "$1" in
       --local) _is_local=1 ;;
@@ -179,42 +191,22 @@ cmd_enable() {
     esac
     shift
   done
-  [ -n "$_name" ] || die "Usage: rnex enable [--local] <name>"
+  _cmd_lbl="enable"
+  [ "$_target_val" = "false" ] && _cmd_lbl="disable"
+  [ -n "$_name" ] || die "Usage: rnex $_cmd_lbl [--local] <name>"
   yaml_has_repo "$_name" || die "Repo '$_name' is not registered"
+  _repo_set_config_and_log "$_name" "enabled" "$_target_val" "$_is_local" "$_verb"
+}
 
-  if [ "$_is_local" -eq 1 ]; then
-    yaml_set_local "$_name" "enabled" "true"
-    log_ok "Enabled repo '$_name' locally in $(basename "$WORKSPACE_LOCAL_YAML")"
-  else
-    yaml_set "$_name" "enabled" "true"
-    log_ok "Enabled repo '$_name' in $(basename "$WORKSPACE_YAML")"
-  fi
+cmd_enable() {
+  _repo_toggle_state "true" "Enabled repo" "$@"
   sync_repo_rnex "$_name"
   sync_code_workspace
   run_hook "after_sync" "$@"
 }
 
 cmd_disable() {
-  require_workspace
-  _is_local=0
-  _name=""
-  while [ $# -gt 0 ]; do
-    case "$1" in
-      --local) _is_local=1 ;;
-      *) _name="$1" ;;
-    esac
-    shift
-  done
-  [ -n "$_name" ] || die "Usage: rnex disable [--local] <name>"
-  yaml_has_repo "$_name" || die "Repo '$_name' is not registered"
-
-  if [ "$_is_local" -eq 1 ]; then
-    yaml_set_local "$_name" "enabled" "false"
-    log_ok "Disabled repo '$_name' locally in $(basename "$WORKSPACE_LOCAL_YAML")"
-  else
-    yaml_set "$_name" "enabled" "false"
-    log_ok "Disabled repo '$_name' in $(basename "$WORKSPACE_YAML")"
-  fi
+  _repo_toggle_state "false" "Disabled repo" "$@"
   sync_code_workspace
 }
 

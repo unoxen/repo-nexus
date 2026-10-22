@@ -1,4 +1,5 @@
 #!/bin/sh
+# shellcheck shell=sh disable=SC2154
 set -e
 for _kl_common in \
   "${RNEX_PLUGIN_DIR:-}/hooks/_common.sh" \

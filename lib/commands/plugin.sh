@@ -245,29 +245,16 @@ cmd_rnex_dir() {
   done
 
   case "$_action" in
-    enable)
+    enable|disable)
       [ -n "$_name" ] || die "Usage: rnex rnex-dir <enable|disable> <name> [--local]"
       yaml_has_repo "$_name" || die "Repo '$_name' is not registered"
-      if [ "$_is_local" -eq 1 ]; then
-        yaml_set_local "$_name" "rnex_dir" "true"
-        log_ok "Enabled member .rnex directory for '$_name' locally in $(basename "$WORKSPACE_LOCAL_YAML")"
+      if [ "$_action" = "enable" ]; then
+        _repo_set_config_and_log "$_name" "rnex_dir" "true" "$_is_local" "Enabled member .rnex directory for"
+        sync_repo_rnex "$_name"
       else
-        yaml_set "$_name" "rnex_dir" "true"
-        log_ok "Enabled member .rnex directory for '$_name' in $(basename "$WORKSPACE_YAML")"
+        _repo_set_config_and_log "$_name" "rnex_dir" "false" "$_is_local" "Disabled member .rnex directory for"
+        clean_repo_rnex "$_name"
       fi
-      sync_repo_rnex "$_name"
-      ;;
-    disable)
-      [ -n "$_name" ] || die "Usage: rnex rnex-dir <enable|disable> <name> [--local]"
-      yaml_has_repo "$_name" || die "Repo '$_name' is not registered"
-      if [ "$_is_local" -eq 1 ]; then
-        yaml_set_local "$_name" "rnex_dir" "false"
-        log_ok "Disabled member .rnex directory for '$_name' locally in $(basename "$WORKSPACE_LOCAL_YAML")"
-      else
-        yaml_set "$_name" "rnex_dir" "false"
-        log_ok "Disabled member .rnex directory for '$_name' in $(basename "$WORKSPACE_YAML")"
-      fi
-      clean_repo_rnex "$_name"
       ;;
     *)
       die "Usage: rnex rnex-dir <enable|disable> <name> [--local]"

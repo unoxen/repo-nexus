@@ -1,4 +1,5 @@
 #!/bin/sh
+# shellcheck shell=sh disable=SC2154
 set -e
 
 # Exit early if rnex utilities aren't available 

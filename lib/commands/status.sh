@@ -4,6 +4,23 @@
 # lib/commands/status.sh — Workspace health and status diagnostics
 # ============================================================================
 
+_status_active_plugin_trigger() {
+  for _p in $(yaml_list_plugins 2>/dev/null || true); do
+    yaml_plugin_enabled "$_p" 2>/dev/null || continue
+    _trig="$(yaml_plugin_get "$_p" "lint_trigger" 2>/dev/null || true)"
+    [ -z "$_trig" ] && _trig="$(yaml_plugin_get "$_p" "trigger" 2>/dev/null || true)"
+    if [ -n "$_trig" ] && [ "$_trig" != "manual" ]; then
+      printf '%s' "$_trig"
+      return 0
+    fi
+  done
+  return 0
+}
+
+_status_has_rnex_skills() {
+  [ -d "$1" ] && { ls "$1"/rnex-*.md >/dev/null 2>&1 || ls -d "$1"/rnex-* >/dev/null 2>&1; }
+}
+
 cmd_status() {
   require_workspace
   ensure_repos_dir
@@ -90,16 +107,7 @@ cmd_status() {
       ;;
     true|yes|1)
       if [ "$_gh_active" -eq 1 ]; then
-        _active_trigger=""
-        for _p in $(yaml_list_plugins 2>/dev/null || true); do
-          yaml_plugin_enabled "$_p" 2>/dev/null || continue
-          _trig="$(yaml_plugin_get "$_p" "lint_trigger" 2>/dev/null || true)"
-          [ -z "$_trig" ] && _trig="$(yaml_plugin_get "$_p" "trigger" 2>/dev/null || true)"
-          if [ -n "$_trig" ] && [ "$_trig" != "manual" ]; then
-            _active_trigger="$_trig"
-            break
-          fi
-        done
+        _active_trigger="$(_status_active_plugin_trigger)"
         if [ -n "$_active_trigger" ]; then
           printf '  %b✓%b Git Hooks:     active (git_hooks: true, .rnex/hooks — %s)\n' "$_G" "$_NC" "$_active_trigger"
         else
@@ -111,16 +119,7 @@ cmd_status() {
       ;;
     *)
       if [ "$_gh_active" -eq 1 ]; then
-        _active_trigger=""
-        for _p in $(yaml_list_plugins 2>/dev/null || true); do
-          yaml_plugin_enabled "$_p" 2>/dev/null || continue
-          _trig="$(yaml_plugin_get "$_p" "lint_trigger" 2>/dev/null || true)"
-          [ -z "$_trig" ] && _trig="$(yaml_plugin_get "$_p" "trigger" 2>/dev/null || true)"
-          if [ -n "$_trig" ] && [ "$_trig" != "manual" ]; then
-            _active_trigger="$_trig"
-            break
-          fi
-        done
+        _active_trigger="$(_status_active_plugin_trigger)"
         if [ -n "$_active_trigger" ]; then
           printf '  %b✓%b Git Hooks:     active (.rnex/hooks — post-merge auto-sync, %s)\n' "$_G" "$_NC" "$_active_trigger"
         else
@@ -145,21 +144,18 @@ cmd_status() {
   elif ! has_active_provider_instructions "$NEXUS_DIR"; then
     printf '  %b✗%b %s %b(standard instructions directive — MISSING; run "rnex sync" to create)%b\n' "$_R" "$_NC" "AGENTS.md" "$_R" "$_NC"
   fi
-  if [ -f "$NEXUS_DIR/CLAUDE.md" ]; then
-    printf '  %b✓%b %s %b(Claude instructions)%b\n' "$_G" "$_NC" "CLAUDE.md" "$_DIM" "$_NC"
-  fi
-  if [ -f "$NEXUS_DIR/GEMINI.md" ]; then
-    printf '  %b✓%b %s %b(Gemini instructions)%b\n' "$_G" "$_NC" "GEMINI.md" "$_DIM" "$_NC"
-  fi
-  if [ -f "$NEXUS_DIR/.cursorrules" ]; then
-    printf '  %b✓%b %s %b(Cursor instructions)%b\n' "$_G" "$_NC" ".cursorrules" "$_DIM" "$_NC"
-  fi
-  if [ -f "$NEXUS_DIR/.windsurfrules" ]; then
-    printf '  %b✓%b %s %b(Windsurf instructions)%b\n' "$_G" "$_NC" ".windsurfrules" "$_DIM" "$_NC"
-  fi
-  if [ -f "$NEXUS_DIR/.github/copilot-instructions.md" ]; then
-    printf '  %b✓%b %s %b(Copilot instructions)%b\n' "$_G" "$_NC" ".github/copilot-instructions.md" "$_DIM" "$_NC"
-  fi
+  for _pair in \
+    "CLAUDE.md:Claude" \
+    "GEMINI.md:Gemini" \
+    ".cursorrules:Cursor" \
+    ".windsurfrules:Windsurf" \
+    ".github/copilot-instructions.md:Copilot"; do
+    _ifile="${_pair%%:*}"
+    _ilbl="${_pair#*:}"
+    if [ -f "$NEXUS_DIR/$_ifile" ]; then
+      printf '  %b✓%b %s %b(%s instructions)%b\n' "$_G" "$_NC" "$_ifile" "$_DIM" "$_ilbl" "$_NC"
+    fi
+  done
   if [ -n "$CODE_WORKSPACE_FILE" ]; then
     if [ -f "$NEXUS_DIR/$CODE_WORKSPACE_FILE" ]; then
       printf '  %b✓%b %s %b(VS Code / Cursor workspace)%b\n' "$_G" "$_NC" "$CODE_WORKSPACE_FILE" "$_DIM" "$_NC"
@@ -178,23 +174,20 @@ cmd_status() {
   if [ -d "$NEXUS_DIR/.rnex/skills" ]; then
     printf '  %b✓%b %s %b(workspace skills)%b\n' "$_G" "$_NC" ".rnex/skills/" "$_DIM" "$_NC"
   fi
-  if [ -d "$NEXUS_DIR/.cursor/rules" ] && ls "$NEXUS_DIR/.cursor/rules"/rnex-*.md >/dev/null 2>&1; then
-    printf '  %b✓%b %s %b(Cursor user skills)%b\n' "$_G" "$_NC" ".cursor/rules/" "$_DIM" "$_NC"
-  fi
-  if [ -d "$NEXUS_DIR/.claude/skills" ] && { ls "$NEXUS_DIR/.claude/skills"/rnex-*.md >/dev/null 2>&1 || ls -d "$NEXUS_DIR/.claude/skills"/rnex-* >/dev/null 2>&1; }; then
-    printf '  %b✓%b %s %b(Claude user skills)%b\n' "$_G" "$_NC" ".claude/skills/" "$_DIM" "$_NC"
-  fi
-  if [ -d "$NEXUS_DIR/.windsurf/rules" ] && ls "$NEXUS_DIR/.windsurf/rules"/rnex-*.md >/dev/null 2>&1; then
-    printf '  %b✓%b %s %b(Windsurf user skills)%b\n' "$_G" "$_NC" ".windsurf/rules/" "$_DIM" "$_NC"
-  fi
-  if [ -d "$NEXUS_DIR/.agents/skills" ] && { ls "$NEXUS_DIR/.agents/skills"/rnex-*.md >/dev/null 2>&1 || ls -d "$NEXUS_DIR/.agents/skills"/rnex-* >/dev/null 2>&1; }; then
-    printf '  %b✓%b %s %b(Gemini user skills)%b\n' "$_G" "$_NC" ".agents/skills/" "$_DIM" "$_NC"
-  elif [ -d "$NEXUS_DIR/.gemini/skills" ] && { ls "$NEXUS_DIR/.gemini/skills"/rnex-*.md >/dev/null 2>&1 || ls -d "$NEXUS_DIR/.gemini/skills"/rnex-* >/dev/null 2>&1; }; then
-    printf '  %b✓%b %s %b(Gemini user skills)%b\n' "$_G" "$_NC" ".gemini/skills/" "$_DIM" "$_NC"
-  fi
-  if [ -d "$NEXUS_DIR/.github/skills" ] && { ls "$NEXUS_DIR/.github/skills"/rnex-*.md >/dev/null 2>&1 || ls -d "$NEXUS_DIR/.github/skills"/rnex-* >/dev/null 2>&1; }; then
-    printf '  %b✓%b %s %b(Copilot user skills)%b\n' "$_G" "$_NC" ".github/skills/" "$_DIM" "$_NC"
-  fi
+  for _spair in \
+    ".cursor/rules/:Cursor" \
+    ".claude/skills/:Claude" \
+    ".windsurf/rules/:Windsurf" \
+    ".agents/skills/:Gemini" \
+    ".gemini/skills/:Gemini" \
+    ".github/skills/:Copilot"; do
+    _sdir="${_spair%%:*}"
+    _slbl="${_spair#*:}"
+    [ "$_sdir" = ".gemini/skills/" ] && _status_has_rnex_skills "$NEXUS_DIR/.agents/skills" && continue
+    if _status_has_rnex_skills "$NEXUS_DIR/${_sdir%/}"; then
+      printf '  %b✓%b %s %b(%s user skills)%b\n' "$_G" "$_NC" "$_sdir" "$_DIM" "$_slbl" "$_NC"
+    fi
+  done
   printf '\n'
 
   printf '%bActive Plugins:%b\n' "$_BOLD" "$_NC"

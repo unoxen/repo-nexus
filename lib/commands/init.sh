@@ -17,18 +17,8 @@ cmd_init() {
       -y|--yes) _non_interactive=1 ;;
       --hooks) _cli_hooks="true" ;;
       --no-hooks) _cli_no_hooks=1; _cli_hooks="false" ;;
-      --copilot) _cli_plugins="${_cli_plugins:+$_cli_plugins }copilot" ;;
-      --no-copilot) _cli_plugins="$(printf '%s' " $_cli_plugins " | sed -e 's/ copilot / /g' -e 's/^ *//;s/ *$//')" ;;
-      --claude) _cli_plugins="${_cli_plugins:+$_cli_plugins }claude" ;;
-      --no-claude) _cli_plugins="$(printf '%s' " $_cli_plugins " | sed -e 's/ claude / /g' -e 's/^ *//;s/ *$//')" ;;
-      --gemini) _cli_plugins="${_cli_plugins:+$_cli_plugins }gemini" ;;
-      --no-gemini) _cli_plugins="$(printf '%s' " $_cli_plugins " | sed -e 's/ gemini / /g' -e 's/^ *//;s/ *$//')" ;;
-      --cursor) _cli_plugins="${_cli_plugins:+$_cli_plugins }cursor" ;;
-      --no-cursor) _cli_plugins="$(printf '%s' " $_cli_plugins " | sed -e 's/ cursor / /g' -e 's/^ *//;s/ *$//')" ;;
-      --windsurf) _cli_plugins="${_cli_plugins:+$_cli_plugins }windsurf" ;;
-      --no-windsurf) _cli_plugins="$(printf '%s' " $_cli_plugins " | sed -e 's/ windsurf / /g' -e 's/^ *//;s/ *$//')" ;;
-      --karpathy|--karpathy-llm) _cli_plugins="${_cli_plugins:+$_cli_plugins }karpathy-llm" ;;
-      --no-karpathy|--no-karpathy-llm) _cli_plugins="$(printf '%s' " $_cli_plugins " | sed -e 's/ karpathy-llm / /g' -e 's/^ *//;s/ *$//')" ;;
+      --karpathy) _cli_plugins="${_cli_plugins:+$_cli_plugins }karpathy-llm" ;;
+      --no-karpathy) _cli_plugins="$(printf '%s' " $_cli_plugins " | sed -e 's/ karpathy-llm / /g' -e 's/^ *//;s/ *$//')" ;;
       --plugin|--enable-plugin)
         shift
         [ -n "$1" ] && _cli_plugins="${_cli_plugins:+$_cli_plugins }$1"
@@ -51,6 +41,18 @@ cmd_init() {
               esac
               ;;
           esac
+        fi
+        ;;
+      --no-*)
+        _pflag="${1#--no-}"
+        if find_plugin_dir "$_pflag" >/dev/null 2>&1; then
+          _cli_plugins="$(printf '%s' " $_cli_plugins " | sed -e "s/ $_pflag / /g" -e 's/^ *//;s/ *$//')"
+        fi
+        ;;
+      --*)
+        _pflag="${1#--}"
+        if find_plugin_dir "$_pflag" >/dev/null 2>&1; then
+          _cli_plugins="${_cli_plugins:+$_cli_plugins }$_pflag"
         fi
         ;;
       *)
@@ -155,9 +157,6 @@ YAML_EOF
   fi
 
   # Set active workspace context for initialization
-  _orig_nexus="$NEXUS_DIR"
-  _orig_yaml="$WORKSPACE_YAML"
-  _orig_local_yaml="$WORKSPACE_LOCAL_YAML"
   NEXUS_DIR="$_init_dir"
   WORKSPACE_YAML="$_target_yaml"
   WORKSPACE_LOCAL_YAML="$_init_dir/$RNEX_LOCAL_CONFIG_FILE"
@@ -166,11 +165,9 @@ YAML_EOF
   if ! has_active_provider_instructions "$_init_dir"; then
     merge_rnex_instructions "$_init_dir/AGENTS.md"
   fi
-  [ -f "$_init_dir/CLAUDE.md" ] && merge_rnex_instructions "$_init_dir/CLAUDE.md"
-  [ -f "$_init_dir/GEMINI.md" ] && merge_rnex_instructions "$_init_dir/GEMINI.md"
-  [ -f "$_init_dir/.cursorrules" ] && merge_rnex_instructions "$_init_dir/.cursorrules"
-  [ -f "$_init_dir/.windsurfrules" ] && merge_rnex_instructions "$_init_dir/.windsurfrules"
-  [ -f "$_init_dir/.github/copilot-instructions.md" ] && merge_rnex_instructions "$_init_dir/.github/copilot-instructions.md"
+  for _if in CLAUDE.md GEMINI.md .cursorrules .windsurfrules .github/copilot-instructions.md; do
+    [ -f "$_init_dir/$_if" ] && merge_rnex_instructions "$_init_dir/$_if"
+  done
 
   # ---- 3. Create repos directory with .gitkeep -----------------------------
   _repos_dir="$_init_dir/repos"
@@ -183,50 +180,21 @@ YAML_EOF
   sync_plugins
   build_ai_instructions "$_init_dir"
   sync_skills
-  WORKSPACE_LOCAL_YAML="$_orig_local_yaml"
-  WORKSPACE_YAML="$_orig_yaml"
-  NEXUS_DIR="$_orig_nexus"
 
   # ---- 5. Ensure repos/ and local configs are gitignored ---------
   reconcile_gitignore "$_init_dir"
 
   # ---- 6. Generate VS Code / Cursor workspace if configured ----------------
-  _target_cw="$_cli_code_workspace"
-  if [ -z "$_target_cw" ] && [ -f "$_init_dir/$RNEX_LOCAL_CONFIG_FILE" ]; then
-    _target_cw="$(awk '/^(code_workspace|vscode_workspace):/ { sub(/^[a-zA-Z0-9_]+:[ ]*/, ""); sub(/[ ]*#.*/, ""); val=$0 } END { if (val) print val }' "$_init_dir/$RNEX_LOCAL_CONFIG_FILE")"
-  fi
-  if [ -z "$_target_cw" ] && [ -f "$_target_yaml" ]; then
-    _target_cw="$(awk '/^(code_workspace|vscode_workspace):/ { sub(/^[a-zA-Z0-9_]+:[ ]*/, ""); sub(/[ ]*#.*/, ""); val=$0 } END { if (val) print val }' "$_target_yaml")"
-  fi
-  _target_cw="$(echo "$_target_cw" | tr -d " \t\r\n'\"")"
-  case "$_target_cw" in
-    true|yes|1)
-      _cw_name="$(basename "$_init_dir").code-workspace"
-      ;;
-    false|no|0|none|"")
-      _cw_name=""
-      ;;
-    *)
-      case "$_target_cw" in
-        *.code-workspace) _cw_name="$_target_cw" ;;
-        *) _cw_name="$_target_cw.code-workspace" ;;
-      esac
-      ;;
-  esac
-
+  _orig_repos="$REPOS_DIR"
+  _orig_cw="$CODE_WORKSPACE_FILE"
+  _load_code_workspace "$_cli_code_workspace"
+  _cw_name="$CODE_WORKSPACE_FILE"
   if [ -n "$_cw_name" ]; then
-    _orig_nexus="$NEXUS_DIR"
-    _orig_repos="$REPOS_DIR"
-    _orig_cw="$CODE_WORKSPACE_FILE"
-    CODE_WORKSPACE_FILE="$_cw_name"
-    NEXUS_DIR="$_init_dir"
-    _repos_rel="repos"
-    REPOS_DIR="$_init_dir/$_repos_rel"
+    REPOS_DIR="$_init_dir/repos"
     sync_code_workspace
-    NEXUS_DIR="$_orig_nexus"
-    REPOS_DIR="$_orig_repos"
-    CODE_WORKSPACE_FILE="$_orig_cw"
   fi
+  REPOS_DIR="$_orig_repos"
+  CODE_WORKSPACE_FILE="$_orig_cw"
 
   # ---- 7. Setup automated Git hooks if inside a Git repository ------------
   if [ "$_is_git_ws" -eq 1 ]; then
@@ -239,10 +207,6 @@ YAML_EOF
 
   _write_auto_sync_script "$_init_dir"
   update_sync_stamp "$_init_dir"
-
-  NEXUS_DIR="$_init_dir"
-  WORKSPACE_YAML="$_target_yaml"
-  WORKSPACE_LOCAL_YAML="$_init_dir/$RNEX_LOCAL_CONFIG_FILE"
 
   if [ "$_config_created" -eq 1 ]; then
     printf '\n'
