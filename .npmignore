@@ -1,2 +1,3 @@
-# Exclude VitePress config, cache, and dist from npm package
+# Exclude documentation, VitePress config, cache, and dist from npm package
+/docs/
 docs/.vitepress/

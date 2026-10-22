@@ -1010,6 +1010,47 @@ EOF_CFG_CAMEL
 
 pass
 
+# --------------------------------------------------------------------------
+run_test "Fix 27: Exclude docs/ from installations, npm packaging, and remove remaining .gitkeep files"
+# 1. Verify package.json files array excludes docs/
+grep -q '"docs/"' "$DIR/package.json" && { fail "package.json files array still includes docs/"; exit 1; }
+grep -q '"rnex"' "$DIR/package.json" || { fail "package.json missing rnex in files"; exit 1; }
+grep -q '"lib/"' "$DIR/package.json" || { fail "package.json missing lib/ in files"; exit 1; }
+grep -q '"templates/"' "$DIR/package.json" || { fail "package.json missing templates/ in files"; exit 1; }
+grep -q '"toolkit/"' "$DIR/package.json" || { fail "package.json missing toolkit/ in files"; exit 1; }
+
+# 2. Verify .npmignore contains /docs/
+grep -q '/docs/' "$DIR/.npmignore" || { fail ".npmignore missing /docs/"; exit 1; }
+
+# 3. Verify no tracked .gitkeep files remain in repository
+_gitkeep_count="$(git -C "$DIR" ls-files "*.gitkeep" 2>/dev/null | wc -l | tr -d ' ')"
+[ "$_gitkeep_count" -eq 0 ] || { fail "Found $_gitkeep_count tracked .gitkeep files"; exit 1; }
+
+# 4. Verify rnex install copies runtime assets and excludes docs/
+TEST_CLI_INST_BIN="$TEST_TMP/test-cli-inst-bin"
+TEST_CLI_INST_SHARE="$TEST_TMP/test-cli-inst-share"
+mkdir -p "$TEST_CLI_INST_BIN" "$TEST_CLI_INST_SHARE"
+RNEX_INSTALL_DIR="$TEST_CLI_INST_SHARE" "$DIR/rnex" install "$TEST_CLI_INST_BIN" >/dev/null
+[ -x "$TEST_CLI_INST_BIN/rnex" ] || { fail "rnex install did not create executable in bin dir"; exit 1; }
+[ -d "$TEST_CLI_INST_SHARE/lib" ] || { fail "rnex install did not copy lib/ to install dir"; exit 1; }
+[ -d "$TEST_CLI_INST_SHARE/templates" ] || { fail "rnex install did not copy templates/ to install dir"; exit 1; }
+[ -d "$TEST_CLI_INST_SHARE/toolkit" ] || { fail "rnex install did not copy toolkit/ to install dir"; exit 1; }
+[ ! -d "$TEST_CLI_INST_SHARE/docs" ] || { fail "rnex install leaked docs/ into install dir"; exit 1; }
+[ ! -d "$TEST_CLI_INST_BIN/docs" ] || { fail "rnex install leaked docs/ into bin dir"; exit 1; }
+
+# 5. Verify scripts/install.sh copies runtime assets and excludes docs/
+TEST_SCRIPT_INST_BIN="$TEST_TMP/test-script-inst-bin"
+TEST_SCRIPT_INST_SHARE="$TEST_TMP/test-script-inst-share"
+mkdir -p "$TEST_SCRIPT_INST_BIN" "$TEST_SCRIPT_INST_SHARE"
+RNEX_REPO_URL="$DIR" RNEX_INSTALL_DIR="$TEST_SCRIPT_INST_SHARE" RNEX_BIN_DIR="$TEST_SCRIPT_INST_BIN" sh "$DIR/scripts/install.sh" >/dev/null
+[ -x "$TEST_SCRIPT_INST_BIN/rnex" ] || { fail "scripts/install.sh did not create executable in bin dir"; exit 1; }
+[ -d "$TEST_SCRIPT_INST_SHARE/lib" ] || { fail "scripts/install.sh did not copy lib/ to install dir"; exit 1; }
+[ -d "$TEST_SCRIPT_INST_SHARE/templates" ] || { fail "scripts/install.sh did not copy templates/ to install dir"; exit 1; }
+[ -d "$TEST_SCRIPT_INST_SHARE/toolkit" ] || { fail "scripts/install.sh did not copy toolkit/ to install dir"; exit 1; }
+[ ! -d "$TEST_SCRIPT_INST_SHARE/docs" ] || { fail "scripts/install.sh leaked docs/ into install dir"; exit 1; }
+
+pass
+
 if [ "${_STANDALONE_RUN:-0}" -eq 1 ]; then
   report_results
 fi

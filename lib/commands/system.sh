@@ -5,17 +5,45 @@
 # ============================================================================
 
 cmd_install() {
-  _target_bin="${1:-$HOME/.local/bin}"
+  _target_bin="${1:-${RNEX_BIN_DIR:-$HOME/.local/bin}}"
   _target_bin="$(resolve_path "$_target_bin")"
   mkdir -p "$_target_bin"
 
-  _source_cli="$SCRIPT_LOCATION/rnex"
-  [ -f "$_source_cli" ] || _source_cli="$SCRIPT_LOCATION"
+  _src_root="$SCRIPT_LOCATION"
+  [ -f "$_src_root/rnex" ] || _src_root="$(dirname "$SCRIPT_LOCATION")"
+  _source_cli="$_src_root/rnex"
   [ -f "$_source_cli" ] || die "Could not locate source CLI executable to install"
 
-  chmod +x "$_source_cli"
-  ln -sf "$_source_cli" "$_target_bin/rnex"
-  ln -sf "$_source_cli" "$_target_bin/repo-nexus"
+  if [ -n "${RNEX_INSTALL_DIR:-}" ]; then
+    _install_dir="$(resolve_path "$RNEX_INSTALL_DIR")"
+  elif [ -n "${1:-}" ]; then
+    case "$(basename "$_target_bin")" in
+      bin) _install_dir="$(dirname "$_target_bin")/share/repo-nexus" ;;
+      *)   _install_dir="$_target_bin" ;;
+    esac
+  else
+    _install_dir="$HOME/.local/share/repo-nexus"
+  fi
+
+  mkdir -p "$_install_dir"
+  if [ "$_src_root" != "$_install_dir" ]; then
+    rm -rf "$_install_dir/docs"
+    cp "$_source_cli" "$_install_dir/rnex"
+    [ -f "$_src_root/package.json" ] && cp "$_src_root/package.json" "$_install_dir/package.json"
+    for _asset in lib templates toolkit; do
+      if [ -d "$_src_root/$_asset" ]; then
+        rm -rf "${_install_dir:?}/$_asset"
+        cp -R "$_src_root/$_asset" "$_install_dir/$_asset"
+      fi
+    done
+  fi
+
+  _installed_cli="$_install_dir/rnex"
+  chmod +x "$_installed_cli"
+  if [ "$_target_bin" != "$_install_dir" ]; then
+    ln -sf "$_installed_cli" "$_target_bin/rnex"
+  fi
+  ln -sf "$_installed_cli" "$_target_bin/repo-nexus"
 
   log_ok "Installed 'rnex' and 'repo-nexus' into $_target_bin"
   case ":$PATH:" in
