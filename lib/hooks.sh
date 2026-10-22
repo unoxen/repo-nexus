@@ -252,14 +252,8 @@ _sync_if_hook_config_changed() {
   _shc_hook="$1"
   shift || true
   _cfg_changed=0
-  _stamp_file=""
-  if [ -f "$NEXUS_DIR/.rnex/sync_stamp" ]; then
-    _stamp_file="$NEXUS_DIR/.rnex/sync_stamp"
-  elif [ -f "$NEXUS_DIR/.rnex/.sync_stamp" ]; then
-    _stamp_file="$NEXUS_DIR/.rnex/.sync_stamp"
-  fi
-
-  if [ -z "$_stamp_file" ] || [ "$(get_config_sum "$NEXUS_DIR")" != "$(cat "$_stamp_file" 2>/dev/null)" ]; then
+  _stamp_file="$NEXUS_DIR/.rnex/sync_stamp"
+  if [ ! -f "$_stamp_file" ] || [ "$(get_config_sum "$NEXUS_DIR")" != "$(cat "$_stamp_file" 2>/dev/null)" ]; then
     _cfg_changed=1
   else
     case "$_shc_hook" in

@@ -1,6 +1,6 @@
 {
   "name": "repo-nexus",
-  "version": "0.7.35",
+  "version": "0.7.36",
   "description": "Lightweight, zero-dependency Virtual Meta-Repo companion for multi-repo workspaces and shared AI context (no git submodules)",
   "bin": {
     "repo-nexus": "rnex",
@@ -55,6 +55,10 @@
     "linux"
   ],
   "devDependencies": {
-    "vitepress": "^1.6.0"
+    "vitepress": "^1.6.4"
+  },
+  "overrides": {
+    "esbuild": "^0.25.0",
+    "vite": "^6.4.4"
   }
 }

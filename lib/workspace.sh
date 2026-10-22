@@ -42,10 +42,11 @@ update_sync_stamp() {
   _dir="${1:-${NEXUS_DIR:-.}}"
   mkdir -p "$_dir/.rnex"
   if [ ! -f "$_dir/.rnex/.gitignore" ]; then
-    printf ".sync_stamp\nsync_stamp\n" > "$_dir/.rnex/.gitignore"
+    printf "sync_stamp\n" > "$_dir/.rnex/.gitignore"
   else
-    if ! grep -q "^\.sync_stamp" "$_dir/.rnex/.gitignore" 2>/dev/null; then
-      printf ".sync_stamp\n" >> "$_dir/.rnex/.gitignore"
+    if grep -q "^\.sync_stamp" "$_dir/.rnex/.gitignore" 2>/dev/null; then
+      _tmp_gi="$(mktemp)"
+      grep -v "^\.sync_stamp" "$_dir/.rnex/.gitignore" > "$_tmp_gi" && mv "$_tmp_gi" "$_dir/.rnex/.gitignore"
     fi
     if ! grep -q "^sync_stamp" "$_dir/.rnex/.gitignore" 2>/dev/null; then
       printf "sync_stamp\n" >> "$_dir/.rnex/.gitignore"
@@ -77,7 +78,6 @@ check_auto_sync() {
   fi
   [ -f "$_cfg_file" ] || return 0
   _stamp="$_ws/.rnex/sync_stamp"
-  [ -f "$_stamp" ] || _stamp="$_ws/.rnex/.sync_stamp"
   if [ ! -f "$_stamp" ] || [ "$(get_config_sum "$_ws")" != "$(cat "$_stamp" 2>/dev/null)" ]; then
     cmd_sync -y --quiet
   fi

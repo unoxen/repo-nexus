@@ -55,10 +55,8 @@ complete -F _rnex_completions repo-nexus
 # Prompt hook for zero-fork auto-synchronization
 _rnex_auto_sync() {
   [ -f rnex.yaml ] || return 0
-  _stamp=""
-  [ -f .rnex/sync_stamp ] && _stamp=".rnex/sync_stamp"
-  [ -z "$_stamp" ] && [ -f .rnex/.sync_stamp ] && _stamp=".rnex/.sync_stamp"
-  if [ -z "$_stamp" ] || [ rnex.yaml -nt "$_stamp" ] || \
+  _stamp=".rnex/sync_stamp"
+  if [ ! -f "$_stamp" ] || [ rnex.yaml -nt "$_stamp" ] || \
      { [ -f .local.rnex.yaml ] && [ .local.rnex.yaml -nt "$_stamp" ]; }; then
     rnex sync -y --quiet
   fi
@@ -146,10 +144,8 @@ _rnex "$@"
 # Prompt hook for zero-fork auto-synchronization
 _rnex_auto_sync() {
   [ -f rnex.yaml ] || return 0
-  _stamp=""
-  [ -f .rnex/sync_stamp ] && _stamp=".rnex/sync_stamp"
-  [ -z "$_stamp" ] && [ -f .rnex/.sync_stamp ] && _stamp=".rnex/.sync_stamp"
-  if [ -z "$_stamp" ] || [ rnex.yaml -nt "$_stamp" ] || \
+  _stamp=".rnex/sync_stamp"
+  if [ ! -f "$_stamp" ] || [ rnex.yaml -nt "$_stamp" ] || \
      { [ -f .local.rnex.yaml ] && [ .local.rnex.yaml -nt "$_stamp" ]; }; then
     rnex sync -y --quiet
   fi
@@ -185,13 +181,8 @@ complete -c rnex -n "__fish_use_subcommand" -a version -d "Show version"
 
 function _rnex_auto_sync --on-event fish_prompt
   test -f rnex.yaml; or return 0
-  set -l _stamp ""
-  if test -f .rnex/sync_stamp
-    set _stamp .rnex/sync_stamp
-  else if test -f .rnex/.sync_stamp
-    set _stamp .rnex/.sync_stamp
-  end
-  if test -z "$_stamp"; or test rnex.yaml -nt "$_stamp"; or test -f .local.rnex.yaml -a .local.rnex.yaml -nt "$_stamp"
+  set -l _stamp .rnex/sync_stamp
+  if not test -f "$_stamp"; or test rnex.yaml -nt "$_stamp"; or test -f .local.rnex.yaml -a .local.rnex.yaml -nt "$_stamp"
     rnex sync -y --quiet
   end
 end

@@ -21,36 +21,35 @@ $RNEX_LOCAL_CONFIG_FILE
 .rnex.local.yaml
 GI_EOF
     log_ok "Created .gitignore (ignoring repos/ and $RNEX_LOCAL_CONFIG_FILE)"
-    return 0
-  fi
+  else
+    # 1. Strip any legacy lint_trigger_counter entries if present
+    if grep -q "lint_trigger_counter" "$_gi" 2>/dev/null; then
+      _tmp="$(mktemp)"
+      grep -v "lint_trigger_counter" "$_gi" > "$_tmp" && mv "$_tmp" "$_gi"
+      log_ok "Removed legacy lint trigger counter entries from .gitignore"
+    fi
 
-  # 1. Strip any legacy lint_trigger_counter entries if present
-  if grep -q "lint_trigger_counter" "$_gi" 2>/dev/null; then
-    _tmp="$(mktemp)"
-    grep -v "lint_trigger_counter" "$_gi" > "$_tmp" && mv "$_tmp" "$_gi"
-    log_ok "Removed legacy lint trigger counter entries from .gitignore"
-  fi
+    # 2. Strip legacy .rnex/ entries if present (.rnex/ contains tracked plugins, skills, and hooks)
+    if grep -qE '^[ ]*#?[ ]*Repo Nexus internal state' "$_gi" 2>/dev/null || grep -qE '^\.rnex/?$' "$_gi" 2>/dev/null; then
+      _tmp="$(mktemp)"
+      grep -vE '(^[ ]*#?[ ]*Repo Nexus internal state|^\.rnex/?$)' "$_gi" > "$_tmp" && mv "$_tmp" "$_gi"
+      log_ok "Removed .rnex/ from .gitignore (.rnex should be tracked in git)"
+    fi
 
-  # 2. Strip legacy .rnex/ entries if present (.rnex/ contains tracked plugins, skills, and hooks)
-  if grep -qE '^[ ]*#?[ ]*Repo Nexus internal state' "$_gi" 2>/dev/null || grep -qE '^\.rnex/?$' "$_gi" 2>/dev/null; then
-    _tmp="$(mktemp)"
-    grep -vE '(^[ ]*#?[ ]*Repo Nexus internal state|^\.rnex/?$)' "$_gi" > "$_tmp" && mv "$_tmp" "$_gi"
-    log_ok "Removed .rnex/ from .gitignore (.rnex should be tracked in git)"
-  fi
+    # 3. Ensure repos/* is ignored
+    if ! grep -q "^repos" "$_gi" 2>/dev/null; then
+      printf '\n# Member repos (managed by rnex)\nrepos/*\n!repos/.gitkeep\n' >> "$_gi"
+      log_dim "Added repos/* to .gitignore"
+    fi
 
-  # 3. Ensure repos/* is ignored
-  if ! grep -q "^repos" "$_gi" 2>/dev/null; then
-    printf '\n# Member repos (managed by rnex)\nrepos/*\n!repos/.gitkeep\n' >> "$_gi"
-    log_dim "Added repos/* to .gitignore"
-  fi
-
-  # 4. Ensure local config files are ignored
-  if ! grep -qF "$RNEX_LOCAL_CONFIG_FILE" "$_gi" 2>/dev/null; then
-    printf '\n# Local machine-specific configuration\n%s\n' "$RNEX_LOCAL_CONFIG_FILE" >> "$_gi"
-    log_dim "Added $RNEX_LOCAL_CONFIG_FILE to .gitignore"
-  fi
-  if ! grep -qF ".rnex.local.yaml" "$_gi" 2>/dev/null; then
-    printf '.rnex.local.yaml\n' >> "$_gi"
+    # 4. Ensure local config files are ignored
+    if ! grep -qF "$RNEX_LOCAL_CONFIG_FILE" "$_gi" 2>/dev/null; then
+      printf '\n# Local machine-specific configuration\n%s\n' "$RNEX_LOCAL_CONFIG_FILE" >> "$_gi"
+      log_dim "Added $RNEX_LOCAL_CONFIG_FILE to .gitignore"
+    fi
+    if ! grep -qF ".rnex.local.yaml" "$_gi" 2>/dev/null; then
+      printf '.rnex.local.yaml\n' >> "$_gi"
+    fi
   fi
 
   # Universal search tool ignore file (ripgrep, Claude Code, VS Code, Zed)
