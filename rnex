@@ -47,10 +47,11 @@ fi
 
 # Load modules
 . "$RNEX_LIB_DIR/core.sh"
-. "$RNEX_LIB_DIR/workspace.sh"
 . "$RNEX_LIB_DIR/yaml.sh"
+. "$RNEX_LIB_DIR/workspace.sh"
 . "$RNEX_LIB_DIR/repos.sh"
 . "$RNEX_LIB_DIR/plugins.sh"
+. "$RNEX_LIB_DIR/sdk.sh"
 . "$RNEX_LIB_DIR/ai.sh"
 . "$RNEX_LIB_DIR/hooks.sh"
 . "$RNEX_LIB_DIR/commands.sh"

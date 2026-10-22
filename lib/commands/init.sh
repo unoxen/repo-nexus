@@ -238,7 +238,6 @@ YAML_EOF
   fi
 
   _write_auto_sync_script "$_init_dir"
-  _sync_ai_session_start_hooks "$_init_dir"
   update_sync_stamp "$_init_dir"
 
   NEXUS_DIR="$_init_dir"

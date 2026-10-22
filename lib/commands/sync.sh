@@ -32,11 +32,6 @@ EOF
   chmod +x "$_script"
 }
 
-_sync_ai_session_start_hooks() {
-  # Claude and other providers manage their own session start hooks in hooks/after_sync.sh
-  :
-}
-
 cmd_sync() {
   require_workspace
   ensure_repos_dir
@@ -88,9 +83,8 @@ cmd_sync() {
     merge_rnex_instructions "$NEXUS_DIR/AGENTS.md"
   fi
 
-  # 1.3. Generate auto-sync script and AI session-start hooks (hardcoded harness)
+  # 1.3. Generate auto-sync script (hardcoded harness)
   _write_auto_sync_script "$NEXUS_DIR"
-  _sync_ai_session_start_hooks "$NEXUS_DIR"
 
   # 1.4. Sync core agentic skills into .rnex/skills/ and write rnex-env.sh
   sync_skills

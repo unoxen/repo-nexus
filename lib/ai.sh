@@ -1,10 +1,10 @@
 #!/bin/sh
 # shellcheck shell=sh
 # ============================================================================
-# lib/ai.sh — AI Instructions, workspace context, and AI provider synchronization
+# lib/ai.sh — Workspace AI context, .gitignore/.ignore, and skill orchestration
 # ============================================================================
 
-# ---- AI Instructions Management (Routing-Only) ----------------------------
+# ---- Gitignore & Search Tool Ignore Reconciliation -------------------------
 
 reconcile_gitignore() {
   _dir="${1:-$NEXUS_DIR}"
@@ -31,7 +31,7 @@ GI_EOF
     log_ok "Removed legacy lint trigger counter entries from .gitignore"
   fi
 
-  # 2. Strip legacy .rnex/ entries if present (.rnex/ contains tracked prompts, plugins, and hooks)
+  # 2. Strip legacy .rnex/ entries if present (.rnex/ contains tracked plugins, skills, and hooks)
   if grep -qE '^[ ]*#?[ ]*Repo Nexus internal state' "$_gi" 2>/dev/null || grep -qE '^\.rnex/?$' "$_gi" 2>/dev/null; then
     _tmp="$(mktemp)"
     grep -vE '(^[ ]*#?[ ]*Repo Nexus internal state|^\.rnex/?$)' "$_gi" > "$_tmp" && mv "$_tmp" "$_gi"
@@ -54,28 +54,12 @@ GI_EOF
   fi
 
   # Universal search tool ignore file (ripgrep, Claude Code, VS Code, Zed)
-  # Un-ignores member repositories for search tools while Git continues to ignore them
-  _ign="$_dir/.ignore"
-  if [ ! -f "$_ign" ]; then
-    cat > "$_ign" <<IGN_EOF
-# Member repos (un-ignored for ripgrep, Claude Code, VS Code, and search tools)
-!repos/*
-IGN_EOF
-    log_ok "Created .ignore (un-ignoring member repos for search tools)"
-  elif ! grep -q '!repos/\*' "$_ign" 2>/dev/null; then
-    printf '\n# Member repos (un-ignored for search tools)\n!repos/*\n' >> "$_ign"
-    log_dim "Added !repos/* to .ignore"
-  fi
+  ensure_provider_ignore "$_dir/.ignore" \
+    "Member repos (un-ignored for ripgrep, Claude Code, VS Code, and search tools)" \
+    "Created .ignore (un-ignoring member repos for search tools)"
 }
 
-# ---- AI Instructions Management (Routing-Only) ----------------------------
-
-AI_MARKER_START="<!-- REPO-NEXUS:START -->"
-AI_MARKER_END="<!-- REPO-NEXUS:END -->"
-
-get_rnex_instructions() {
-  printf "CRITICAL: You MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\` before executing any task or answering any query in this workspace.\n"
-}
+# ---- AI Instructions Compilation (.rnex/ai-instructions.md) ----------------
 
 build_ai_instructions() {
   _dir="${1:-$NEXUS_DIR}"
@@ -165,135 +149,7 @@ BASE_AI_EOF
   mv "$_out_tmp" "$_ai_file"
 }
 
-merge_rnex_instructions() {
-  _dst="$1"
-  _body_tmp="$(mktemp)"
-  get_rnex_instructions > "$_body_tmp"
-
-  if [ ! -f "$_dst" ]; then
-    mkdir -p "$(dirname "$_dst")"
-    {
-      printf '%s\n' "$AI_MARKER_START"
-      cat "$_body_tmp"
-      printf '%s\n' "$AI_MARKER_END"
-    } > "$_dst"
-    rm -f "$_body_tmp"
-    log_ok "Created $(basename "$_dst") with Repo Nexus routing instructions"
-    return 0
-  fi
-
-  if grep -q "CRITICAL: You MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\`" "$_dst" 2>/dev/null && ! grep -qF "$AI_MARKER_START" "$_dst" 2>/dev/null; then
-    {
-      printf '%s\n' "$AI_MARKER_START"
-      cat "$_body_tmp"
-      printf '%s\n' "$AI_MARKER_END"
-    } > "$_dst"
-    rm -f "$_body_tmp"
-    return 0
-  fi
-
-  # Case 1: If delimiters already exist, update the block in-place
-  if grep -qF "$AI_MARKER_START" "$_dst" 2>/dev/null; then
-    _tmp="$(mktemp)"
-    awk -v s="$AI_MARKER_START" -v e="$AI_MARKER_END" -v src="$_body_tmp" '
-      $0 == s {
-        in_b = 1
-        print s
-        while ((getline line < src) > 0) print line
-        close(src)
-        next
-      }
-      $0 == e {
-        in_b = 0
-        print e
-        next
-      }
-      !in_b { print }
-    ' "$_dst" > "$_tmp" && mv "$_tmp" "$_dst"
-    rm -f "$_body_tmp"
-    log_ok "Updated Repo Nexus routing instructions in $(basename "$_dst")"
-    return 0
-  fi
-
-  # Case 2: If no delimiters, check for legacy un-delimited Repo Nexus block
-  # (e.g. starting with "# Multi-Repo AI Workspace Context" or containing "Symlink Write-Through")
-  if grep -q "Multi-Repo AI Workspace Context" "$_dst" 2>/dev/null || grep -q "Symlink Write-Through" "$_dst" 2>/dev/null; then
-    _tmp="$(mktemp)"
-    awk -v s="$AI_MARKER_START" -v e="$AI_MARKER_END" -v src="$_body_tmp" '
-      BEGIN { in_legacy = 0; replaced = 0 }
-      /^# Multi-Repo AI Workspace Context/ {
-        in_legacy = 1
-        if (!replaced) {
-          print s
-          while ((getline line < src) > 0) print line
-          close(src)
-          print e
-          replaced = 1
-        }
-        next
-      }
-      in_legacy {
-        if (/^# [^#]/ && !/^# Multi-Repo/) {
-          in_legacy = 0
-          print
-          next
-        }
-        next
-      }
-      !in_legacy { print }
-      END {
-        if (!replaced) {
-          print s
-          while ((getline line < src) > 0) print line
-          close(src)
-          print e
-        }
-      }
-    ' "$_dst" > "$_tmp" && mv "$_tmp" "$_dst"
-    rm -f "$_body_tmp"
-    log_ok "Upgraded legacy instructions to Repo Nexus routing block in $(basename "$_dst")"
-    return 0
-  fi
-
-  # Case 3: Completely custom instructions file without rnex context — append delimited block
-  _tmp="$(mktemp)"
-  cp "$_dst" "$_tmp"
-  if [ -s "$_tmp" ] && [ -n "$(tail -c 1 "$_tmp" 2>/dev/null)" ]; then
-    printf '\n' >> "$_tmp"
-  fi
-  {
-    printf '\n%s\n' "$AI_MARKER_START"
-    cat "$_body_tmp"
-    printf '\n%s\n' "$AI_MARKER_END"
-  } >> "$_tmp"
-  mv "$_tmp" "$_dst"
-  rm -f "$_body_tmp"
-  log_ok "Merged Repo Nexus routing instructions with existing $(basename "$_dst")"
-}
-
-clean_rnex_instructions() {
-  _dst="$1"
-  [ -f "$_dst" ] || return 0
-  if grep -qF "$AI_MARKER_START" "$_dst" 2>/dev/null; then
-    _non_rnex="$(awk -v s="$AI_MARKER_START" -v e="$AI_MARKER_END" '
-      $0 == s { skip=1; next }
-      $0 == e { skip=0; next }
-      !skip { print }
-    ' "$_dst" | tr -d " \t\r\n")"
-    if [ -z "$_non_rnex" ]; then
-      rm -f "$_dst"
-      log_ok "Removed $(basename "$_dst")"
-    else
-      _tmp="$(mktemp)"
-      awk -v s="$AI_MARKER_START" -v e="$AI_MARKER_END" '
-        $0 == s { skip=1; next }
-        $0 == e { skip=0; next }
-        !skip { print }
-      ' "$_dst" > "$_tmp" && mv "$_tmp" "$_dst"
-      log_ok "Removed Repo Nexus routing instructions from $(basename "$_dst")"
-    fi
-  fi
-}
+# ---- Multi-Root IDE Workspace (.code-workspace) ----------------------------
 
 sync_code_workspace() {
   [ -n "$CODE_WORKSPACE_FILE" ] || return 0
@@ -363,27 +219,28 @@ sync_code_workspace() {
   fi
 }
 
-# ---- Provider Skill Directory & User Skill Generator API -------------------
+# ---- Provider Skill Directory & Base Asset Synchronization -----------------
 
 write_rnex_env_script() {
   _dir="${1:-$NEXUS_DIR}"
   _bin_dir="$_dir/.rnex/bin"
   mkdir -p "$_bin_dir"
   _env_script="$_bin_dir/rnex-env.sh"
-  _tmpl_env=""
+  _src_sdk=""
   for _cand in \
+    "${RNEX_LIB_DIR:-}/sdk.sh" \
+    "$SCRIPT_LOCATION/lib/sdk.sh" \
+    "$(dirname "$SCRIPT_LOCATION")/lib/sdk.sh" \
+    "$_dir/lib/sdk.sh" \
     "$_dir/templates/rnex-env.sh" \
-    "$SCRIPT_LOCATION/templates/rnex-env.sh" \
-    "$(dirname "$SCRIPT_LOCATION")/templates/rnex-env.sh" \
-    "${RNEX_LIB_DIR:-}/../templates/rnex-env.sh" \
-    "./templates/rnex-env.sh"; do
-    if [ -f "$_cand" ]; then
-      _tmpl_env="$_cand"
+    "$SCRIPT_LOCATION/templates/rnex-env.sh"; do
+    if [ -n "$_cand" ] && [ -f "$_cand" ]; then
+      _src_sdk="$_cand"
       break
     fi
   done
-  if [ -n "$_tmpl_env" ]; then
-    cp "$_tmpl_env" "$_env_script"
+  if [ -n "$_src_sdk" ]; then
+    cp "$_src_sdk" "$_env_script"
   fi
   chmod +x "$_env_script" 2>/dev/null || true
 }
@@ -417,172 +274,6 @@ get_active_provider_skill_dirs() {
     fi
   done
   printf '%s' "$_dirs"
-}
-
-_tmpl_env=""
-for _cand in \
-  "$SCRIPT_LOCATION/templates/rnex-env.sh" \
-  "$(dirname "$SCRIPT_LOCATION")/templates/rnex-env.sh" \
-  "${RNEX_LIB_DIR:-}/../templates/rnex-env.sh" \
-  "./templates/rnex-env.sh"; do
-  if [ -f "$_cand" ]; then
-    _tmpl_env="$_cand"
-    break
-  fi
-done
-if [ -n "$_tmpl_env" ]; then
-  # shellcheck source=/dev/null
-  . "$_tmpl_env"
-fi
-
-clean_provider_user_skills() {
-  _sk_dir="$1"
-  [ -d "$_sk_dir" ] || return 0
-  rm -f "$_sk_dir"/rnex-*.md 2>/dev/null || true
-  for _d in "$_sk_dir"/rnex-*; do
-    [ -d "$_d" ] || continue
-    rm -rf "$_d" 2>/dev/null || true
-  done
-  rmdir "$_sk_dir" 2>/dev/null || true
-}
-
-clean_plugin_user_skills() {
-  _pdir="$1"
-  [ -d "$_pdir" ] || return 0
-  _pname="$(basename "$_pdir")"
-  if [ -d "$_pdir/skills" ]; then
-    for _sk_file in "$_pdir/skills"/*.md; do
-      [ -f "$_sk_file" ] || continue
-      _sk_name="$(basename "$_sk_file" .md)"
-      rnex_unregister_user_skill "$_sk_name" "$_pname"
-      rnex_unregister_user_skill "$_sk_name"
-    done
-  fi
-}
-
-clean_provider_ignore() {
-  _file="$1"
-  [ -f "$_file" ] || return 0
-  if grep -q '!repos/\*' "$_file" 2>/dev/null; then
-    _non_rnex="$(grep -vE '^[ ]*#.*(Cursor|Gemini|Repo Nexus|member repos)' "$_file" 2>/dev/null | grep -v '^!repos/\*' | tr -d " \t\r\n")"
-    if [ -z "$_non_rnex" ]; then
-      rm -f "$_file"
-      log_ok "Removed $(basename "$_file")"
-    else
-      _tmp="$(mktemp)"
-      grep -vE '(^[ ]*#.*(Cursor|Gemini|Repo Nexus|member repos)|!repos/\*)' "$_file" > "$_tmp" && mv "$_tmp" "$_file"
-      log_ok "Removed !repos/* un-ignore from $(basename "$_file")"
-    fi
-  fi
-}
-
-clean_provider_agents() {
-  _ag_dir="$1"
-  _ext="${2:-.md}"
-  [ -d "$_ag_dir" ] || return 0
-
-  for _pdir in "$SCRIPT_LOCATION/toolkit/plugins"/* "$NEXUS_DIR/toolkit/plugins"/* "$NEXUS_DIR/.rnex/plugins"/*; do
-    [ -d "$_pdir" ] || continue
-    [ -d "$_pdir/agents" ] || continue
-    for _afile in "$_pdir/agents"/*.md; do
-      [ -f "$_afile" ] || continue
-      _aname="$(basename "$_afile" .agent.md)"
-      _aname="$(basename "$_aname" .md)"
-      rm -f "$_ag_dir/${_aname}${_ext}" 2>/dev/null || true
-    done
-  done
-
-  rmdir "$_ag_dir" 2>/dev/null || true
-}
-
-clean_claude_auto_sync_hook() {
-  _settings="$1"
-  [ -f "$_settings" ] || return 0
-  if grep -q "auto-sync.sh" "$_settings" 2>/dev/null; then
-    _tmp="$(mktemp)"
-    awk '
-      /\{[ \t]*"command"[ \t]*:[ \t]*"\.rnex\/bin\/auto-sync\.sh"[ \t]*\}/ { next }
-      /"command"[ \t]*:[ \t]*"\.rnex\/bin\/auto-sync\.sh"/ { next }
-      { print }
-    ' "$_settings" > "$_tmp"
-    _clean="$(sed -e 's/"hooks"//g' -e 's/"SessionStart"//g' < "$_tmp" | tr -d ' \t\r\n[]{}:,"')"
-    if [ -z "$_clean" ]; then
-      rm -f "$_tmp" "$_settings"
-    else
-      awk '
-        { lines[NR] = $0 }
-        END {
-          for (i = 1; i <= NR; i++) {
-            if (i < NR && lines[i] ~ /,[ \t]*$/) {
-              next_is_bracket = 0
-              for (j = i + 1; j <= NR; j++) {
-                if (lines[j] ~ /^[ \t]*$/) continue
-                if (lines[j] ~ /^[ \t]*[\]\}]/) next_is_bracket = 1
-                break
-              }
-              if (next_is_bracket) {
-                sub(/,[ \t]*$/, "", lines[i])
-              }
-            }
-            print lines[i]
-          }
-        }
-      ' "$_tmp" > "$_settings"
-      rm -f "$_tmp"
-    fi
-  fi
-}
-
-clean_agents_auto_sync_hook() {
-  _hooks="$1"
-  [ -f "$_hooks" ] || return 0
-  if grep -q '"rnex-auto-sync"' "$_hooks" 2>/dev/null; then
-    _tmp="$(mktemp)"
-    awk '
-      BEGIN { skip=0; depth=0 }
-      /"rnex-auto-sync"[ \t]*:[ \t]*\{/ { skip=1; depth=1; next }
-      skip {
-        for (i=1; i<=length($0); i++) {
-          c = substr($0, i, 1)
-          if (c == "{") depth++
-          if (c == "}") {
-            depth--
-            if (depth == 0) {
-              skip = 0
-              next
-            }
-          }
-        }
-        next
-      }
-      { print }
-    ' "$_hooks" > "$_tmp"
-    _clean="$(tr -d " \t\r\n{}" < "$_tmp")"
-    if [ -z "$_clean" ]; then
-      rm -f "$_tmp" "$_hooks"
-    else
-      awk '
-        { lines[NR] = $0 }
-        END {
-          for (i = 1; i <= NR; i++) {
-            if (i < NR && lines[i] ~ /,[ \t]*$/) {
-              next_is_brace = 0
-              for (j = i + 1; j <= NR; j++) {
-                if (lines[j] ~ /^[ \t]*$/) continue
-                if (lines[j] ~ /^[ \t]*\}/) next_is_brace = 1
-                break
-              }
-              if (next_is_brace) {
-                sub(/,[ \t]*$/, "", lines[i])
-              }
-            }
-            print lines[i]
-          }
-        }
-      ' "$_tmp" > "$_hooks"
-      rm -f "$_tmp"
-    fi
-  fi
 }
 
 sync_rnex_base_assets() {
@@ -636,52 +327,7 @@ sync_rnex_base_assets() {
   done
 }
 
-sync_claude() {
-  if yaml_plugin_enabled "claude" 2>/dev/null; then
-    run_plugin_hook "claude" "after_sync"
-  else
-    run_plugin_hook "claude" "before_plugin_disable"
-  fi
-}
-
-sync_gemini() {
-  if yaml_plugin_enabled "gemini" 2>/dev/null; then
-    run_plugin_hook "gemini" "after_sync"
-  else
-    run_plugin_hook "gemini" "before_plugin_disable"
-  fi
-}
-
-sync_cursor() {
-  if yaml_plugin_enabled "cursor" 2>/dev/null; then
-    run_plugin_hook "cursor" "after_sync"
-  else
-    run_plugin_hook "cursor" "before_plugin_disable"
-  fi
-}
-
-sync_windsurf() {
-  if yaml_plugin_enabled "windsurf" 2>/dev/null; then
-    run_plugin_hook "windsurf" "after_sync"
-  else
-    run_plugin_hook "windsurf" "before_plugin_disable"
-  fi
-}
-
-sync_copilot() {
-  if yaml_plugin_enabled "copilot" 2>/dev/null; then
-    run_plugin_hook "copilot" "after_sync"
-  else
-    run_plugin_hook "copilot" "before_plugin_disable"
-  fi
-}
-
-sync_ai_providers() {
-  :
-}
-
 sync_skills() {
   write_rnex_env_script "$NEXUS_DIR"
   sync_rnex_base_assets
 }
-
