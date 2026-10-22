@@ -586,7 +586,7 @@ _yaml_file="$DIR/toolkit/plugins/karpathy-llm/plugin.yaml"
 
 # Assert placeholders are quoted in plugin.yaml
 grep -q 'templates/index\.md:[ ]*"{wiki_dir}/index\.md"' "$_yaml_file" || { fail "index.md placeholder not quoted in plugin.yaml"; exit 1; }
-grep -q 'templates/raw\.gitkeep:[ ]*"{raw_dir}/\.gitkeep"' "$_yaml_file" || { fail "raw.gitkeep placeholder not quoted in plugin.yaml"; exit 1; }
+grep -q 'templates/hot\.md:[ ]*"{wiki_dir}/hot\.md"' "$_yaml_file" || { fail "hot.md placeholder not quoted in plugin.yaml"; exit 1; }
 
 # Verify valid YAML parsing if ruby is available
 if command -v ruby >/dev/null 2>&1; then
@@ -923,14 +923,16 @@ cp -r "$DIR/lib" "$TEST_HOOKS_WS/lib"
 cp -r "$DIR/toolkit" "$TEST_HOOKS_WS/toolkit"
 cp -r "$DIR/templates" "$TEST_HOOKS_WS/templates"
 
-# 1. Verify rnex-env.sh does not contain .gemini check
+# 1. Verify sdk.sh does not contain .gemini check
 # shellcheck disable=SC2016
-! grep -q '\[ -d "\$RNEX_ROOT/\.gemini" \]' "$DIR/templates/rnex-env.sh" || { fail "templates/rnex-env.sh still contains .gemini check"; exit 1; }
-# shellcheck disable=SC2016
-! grep -q '\[ -d "\$RNEX_ROOT/\.gemini" \]' "$DIR/.rnex/bin/rnex-env.sh" || { fail ".rnex/bin/rnex-env.sh still contains .gemini check"; exit 1; }
+! grep -q '\[ -d "\$RNEX_ROOT/\.gemini" \]' "$DIR/lib/sdk.sh" || { fail "lib/sdk.sh still contains .gemini check"; exit 1; }
 
 # 2. Initialize workspace with claude and gemini plugins
 (cd "$TEST_HOOKS_WS" && ./rnex init -y --claude --gemini >/dev/null)
+
+# Verify generated .rnex/bin/rnex-env.sh does not contain .gemini check
+# shellcheck disable=SC2016
+! grep -q '\[ -d "\$RNEX_ROOT/\.gemini" \]' "$TEST_HOOKS_WS/.rnex/bin/rnex-env.sh" || { fail ".rnex/bin/rnex-env.sh still contains .gemini check"; exit 1; }
 
 # Verify instruction files created automatically without instructions: setting
 [ -f "$TEST_HOOKS_WS/CLAUDE.md" ] || { fail "CLAUDE.md not created by default"; exit 1; }

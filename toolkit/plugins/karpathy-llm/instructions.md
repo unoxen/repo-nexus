@@ -1,1 +1,0 @@
-instructions/rnex-wiki-architecture.md

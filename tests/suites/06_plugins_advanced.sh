@@ -106,7 +106,7 @@ _kw_info="$(cd "$TEST_KWIKI_WS" && ./rnex plugin info karpathy-llm 2>&1)"
 echo "$_kw_info" | grep -q "current: docs/wiki" || { fail "plugin info did not report custom wiki_dir"; exit 1; }
 echo "$_kw_info" | grep -q "current: intake/raw" || { fail "plugin info did not report custom raw_dir"; exit 1; }
 echo "$_kw_info" | grep -q "docs/wiki/index.md" || { fail "plugin info did not report template mapped to docs/wiki/index.md"; exit 1; }
-echo "$_kw_info" | grep -q "intake/raw/.gitkeep" || { fail "plugin info did not report template mapped to intake/raw/.gitkeep"; exit 1; }
+echo "$_kw_info" | grep -q "docs/wiki/hot.md" || { fail "plugin info did not report template mapped to docs/wiki/hot.md"; exit 1; }
 
 # Verify Git hooks trigger detects custom paths
 git -C "$TEST_KWIKI_WS" config user.email "test@example.com"

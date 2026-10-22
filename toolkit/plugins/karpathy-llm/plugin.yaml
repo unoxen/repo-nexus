@@ -29,6 +29,5 @@ templates:
   - templates/index.md: "{wiki_dir}/index.md"
   - templates/_log.md: "{wiki_dir}/_log.md"
   - templates/hot.md: "{wiki_dir}/hot.md"
-  - templates/raw.gitkeep: "{raw_dir}/.gitkeep"
   - templates/rnex-wiki-page.sample.md: .rnex/plugins/karpathy-llm/templates/rnex-wiki-page.template.md
   - templates/rnex-llm-wiki.sample.md: .rnex/plugins/karpathy-llm/templates/rnex-llm-wiki.sample.md

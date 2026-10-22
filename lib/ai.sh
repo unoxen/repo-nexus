@@ -231,9 +231,7 @@ write_rnex_env_script() {
     "${RNEX_LIB_DIR:-}/sdk.sh" \
     "$SCRIPT_LOCATION/lib/sdk.sh" \
     "$(dirname "$SCRIPT_LOCATION")/lib/sdk.sh" \
-    "$_dir/lib/sdk.sh" \
-    "$_dir/templates/rnex-env.sh" \
-    "$SCRIPT_LOCATION/templates/rnex-env.sh"; do
+    "$_dir/lib/sdk.sh"; do
     if [ -n "$_cand" ] && [ -f "$_cand" ]; then
       _src_sdk="$_cand"
       break
