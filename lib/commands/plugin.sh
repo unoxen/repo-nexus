@@ -4,6 +4,7 @@
 # lib/commands/plugin.sh — Plugin management commands
 # ============================================================================
 
+# List all available, enabled, and disabled plugins found in the workspace toolkit.
 cmd_plugin_list() {
   require_workspace
   printf '\n%b%s%b\n' "$_B" "Repo Nexus Plugins" "$_NC"
@@ -35,6 +36,7 @@ cmd_plugin_list() {
   printf '\n'
 }
 
+# Display detailed metadata, configurable options, and template paths for a specific plugin.
 cmd_plugin_info() {
   require_workspace
   _pname="$1"
@@ -73,6 +75,7 @@ cmd_plugin_info() {
     gemini)   _skill_target=".agents/skills/" ;;
     cursor)   _skill_target=".cursor/rules/" ;;
     windsurf) _skill_target=".windsurf/rules/" ;;
+    codex)    _skill_target=".codex/skills/" ;;
   esac
   case "$_skill_target" in
     */|"") ;;
@@ -144,6 +147,7 @@ cmd_plugin_info() {
   printf '\n'
 }
 
+# Enable a plugin in workspace configuration (team or local) and sync assets.
 cmd_plugin_enable() {
   require_workspace
   _is_local=0
@@ -176,6 +180,7 @@ cmd_plugin_enable() {
   log_ok "Plugin '$_name' active in workspace (.rnex/plugins/$_name)"
 }
 
+# Disable a plugin, dispatch before_plugin_disable hook, and prune its assets.
 cmd_plugin_disable() {
   require_workspace
   _is_local=0
@@ -215,6 +220,9 @@ cmd_plugin_disable() {
   cmd_sync -q
 }
 
+# Toggle the member repository .rnex harness (enable or disable) for a specific repo.
+# Usage:
+#   rnex rnex-dir <enable|disable> <name> [--local]
 cmd_rnex_dir() {
   require_workspace
   _action=""

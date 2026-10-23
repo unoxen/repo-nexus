@@ -14,7 +14,9 @@ Execute in sequence before task execution:
 Autonomous subagents are defined under `.rnex/agents/` and active plugin agents under `.rnex/plugins/<plugin-name>/agents/`.
 
 ## Member Repositories (`repos/<name>/`)
-Each member repository is an autonomous Git repository. For repository-specific instructions, inspect `repos/<name>/.rnex/`. Inspect only targeted files required for the task.
+Each member repository is an autonomous Git repository. Inspect only targeted files required for the task.
+If repository-specific context exists, it is stored under `repos/<name>/.rnex/`.
+Repositories marked `readonly: true` in configuration are reference-only: DO NOT modify, write to, or commit changes in read-only repositories; use them strictly for information, code exploration, and schema references.
 
 ## Workspace Maintenance
 When workspace configuration, routing blocks, plugin assets, or member repository structures require reconciliation or schema upgrades:
@@ -22,4 +24,4 @@ When workspace configuration, routing blocks, plugin assets, or member repositor
 - Use `rnex sync -y` to non-destructively apply configuration version upgrades automatically.
 
 ## Git Operations
-Commit and push changes directly within the respective member repository root (`repos/<name>/`).
+Commit and push changes directly within the respective member repository root (`repos/<name>/`). For read-only repositories (`readonly: true`), never commit, edit, or push changes.

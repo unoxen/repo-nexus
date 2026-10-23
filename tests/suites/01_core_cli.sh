@@ -35,11 +35,10 @@ echo "$_reinit_output" | grep -q "rnex sync" || { fail "No rnex sync suggestion"
 pass
 
 # --------------------------------------------------------------------------
-run_test "Add member repository (clones into repos/ and creates member .rnex/)"
+run_test "Add member repository (clones into repos/ cleanly without member .rnex/)"
 "$TEST_WORKSPACE/rnex" add test-app "$TEST_REPO" >/dev/null
 [ -d "$TEST_WORKSPACE/repos/test-app/.git" ] || { fail "Physical clone in repos/test-app missing"; exit 1; }
-[ -d "$TEST_WORKSPACE/repos/test-app/.rnex" ] || { fail ".rnex/ missing in member repo"; exit 1; }
-[ -f "$TEST_WORKSPACE/repos/test-app/.rnex/README.md" ] || { fail ".rnex/README.md missing in member repo"; exit 1; }
+[ ! -d "$TEST_WORKSPACE/repos/test-app/.rnex" ] || { fail ".rnex/ should not be created in member repo by default"; exit 1; }
 grep -q "test-app:" "$TEST_WORKSPACE/rnex.yaml" || { fail "test-app not in rnex.yaml"; exit 1; }
 pass
 

@@ -23,10 +23,10 @@ Active plugins are mirrored into each active member repository under `repos/<nam
 Repo Nexus decouples functional plugins from AI provider plugins:
 - **Core Skills (`toolkit/skills/` $\rightarrow$ `.rnex/skills/`)**: Workspace-level capabilities owned by Repo Nexus core.
 - **Plugin Skills (`toolkit/plugins/<plugin>/skills/` $\rightarrow$ `.rnex/plugins/<plugin>/skills/`)**: Scoped domain skills owned exclusively by individual plugins.
-- **User Skills**: Provider plugins (`copilot`, `claude`, `gemini`, `cursor`, and `windsurf`) project zero-logic user skill pointers into active provider directories using native `SKILL.md` bundles with YAML frontmatter in skill directories (`.github/skills/`, `.claude/skills/`, `.agents/skills/`) and flat files in rule directories (`.cursor/rules/`, `.windsurf/rules/`), redirecting AI assistants directly to the underlying agentic skills in `.rnex/`.
+- **User Skills**: Provider plugins (`copilot`, `claude`, `codex`, `gemini`, `cursor`, and `windsurf`) project zero-logic user skill pointers into active provider directories using native `SKILL.md` bundles with YAML frontmatter in skill directories (`.github/skills/`, `.claude/skills/`, `.codex/skills/`, `.agents/skills/`) and flat files in rule directories (`.cursor/rules/`, `.windsurf/rules/`), redirecting AI assistants directly to the underlying agentic skills in `.rnex/`.
 
 ### 4. Non-Destructive Delimited Merging
-When plugins update root instruction files (`AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `.cursorrules`, `.windsurfrules`), Repo Nexus isolates auto-managed routing between explicit delimiters:
+When plugins update root instruction files (`AGENTS.md`, `CLAUDE.md`, `CODEX.md`, `GEMINI.md`, `.cursorrules`, `.windsurfrules`), Repo Nexus isolates auto-managed routing between explicit delimiters:
 
 ```markdown
 <!-- REPO-NEXUS:START -->
@@ -47,6 +47,8 @@ Developer-authored instructions outside of these delimiters are strictly preserv
 | Plugin | Category | Description | Documentation |
 |:---|:---|:---|:---|
 | [`claude`](claude.md) | AI Provider | Anthropic Claude Code & Desktop integration: maintains `CLAUDE.md` and generates user skills in `.claude/skills/`. | [Read Guide](claude.md) |
+| [`codex`](codex.md) | AI Provider | OpenAI Codex integration: maintains `CODEX.md` and generates user skills in `.codex/skills/`. | [Read Guide](codex.md) |
+| [`copilot`](copilot.md) | AI Provider | GitHub Copilot integration: maintains `.github/copilot-instructions.md` and generates user skills in `.github/skills/`. | [Read Guide](copilot.md) |
 | [`cursor`](cursor.md) | AI Provider | Cursor IDE integration: maintains `.cursorrules`, `.cursorignore`, and generates user skills in `.cursor/rules/`. | [Read Guide](cursor.md) |
 | [`gemini`](gemini.md) | AI Provider | Google Gemini CLI & Antigravity IDE integration: maintains `GEMINI.md`, `.geminiignore`, and generates user skills in `.agents/skills/`. | [Read Guide](gemini.md) |
 | [`windsurf`](windsurf.md) | AI Provider | Windsurf IDE integration: maintains `.windsurfrules` and generates user skills in `.windsurf/rules/`. | [Read Guide](windsurf.md) |
@@ -99,6 +101,9 @@ plugins:
   claude:
     skills: true
     auto_sync_on: SessionStart
+
+  codex:
+    skills: true
 
   gemini:
     skills: true

@@ -4,6 +4,7 @@
 # lib/commands/system.sh — System commands: install, version, help
 # ============================================================================
 
+# Install rnex and repo-nexus executables and asset libraries into user bin and share directories.
 cmd_install() {
   _target_bin="${1:-${RNEX_BIN_DIR:-$HOME/.local/bin}}"
   _target_bin="$(resolve_path "$_target_bin")"
@@ -56,10 +57,12 @@ cmd_install() {
   esac
 }
 
+# Output current Repo Nexus version from package.json.
 cmd_version() {
   printf 'rnex %s\n' "$RNEX_VERSION"
 }
 
+# Check workspace configuration version against current CLI and run sync to upgrade if needed.
 cmd_update() {
   require_workspace
   _cmp=0
@@ -76,6 +79,7 @@ cmd_upgrade() {
   cmd_update "$@"
 }
 
+# Display complete CLI usage, command catalog, options, and practical examples.
 cmd_help() {
   cat <<EOF
 
@@ -91,7 +95,7 @@ cmd_help() {
     -v, --version           Show version
 
   WORKSPACE & SYSTEM SETUP
-    init [-y] [--code-workspace [file]] [--hooks|--no-hooks] [--copilot] [--claude] [--gemini] [--cursor] [--windsurf] [--karpathy] [dir]
+    init [-y] [--code-workspace [file]] [--hooks|--no-hooks] [--copilot] [--claude] [--gemini] [--codex] [--cursor] [--windsurf] [--karpathy] [dir]
                             Initialize a new Repo Nexus workspace (default: AGENTS.md)
     install [dir]           Install rnex & repo-nexus globally into ~/.local/bin (or custom dir)
     sync [-y] [--quiet]     Reconcile workspace, plugins, skills, member .rnex directories, and compile AI instructions
@@ -103,15 +107,16 @@ cmd_help() {
     completion <shell>      Generate shell completion script (bash, zsh, fish)
 
   REPO MANAGEMENT
-    add [--local] [--disabled] [--no-rnex-dir] <name> <git-url>
+    add [--local] [--disabled] [--readonly] [<name>] <git-url>
                             Register and clone repo (--local writes to .local.rnex.yaml)
     clone                   Clone all missing enabled repositories declared in rnex.yaml
     exec <command...>       Execute a shell command across all active member repositories
     remove <name>           Unregister and delete member repository
     enable [--local] <name> Enable a member repository in active workspace
     disable [--local] <name> Disable a member repository in workspace
+    readonly [--local] <enable|disable> <name>
+                            Toggle read-only (information-only) status for a member repo
     list                    List all member repositories with clone state & active branch
-    rnex-dir <enable|disable> <name>  Toggle .rnex directory integration for a member repo
 
   PLUGIN MANAGEMENT
     plugin [list]           List available and enabled plugins

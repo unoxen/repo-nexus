@@ -62,6 +62,7 @@ if [ -z "${RNEX_PROVIDER_SKILL_DIRS:-}" ]; then
   [ -d "$RNEX_ROOT/.claude" ] && _sdk_dirs="${_sdk_dirs:+$_sdk_dirs }.claude/skills"
   [ -d "$RNEX_ROOT/.windsurf" ] && _sdk_dirs="${_sdk_dirs:+$_sdk_dirs }.windsurf/rules"
   [ -d "$RNEX_ROOT/.agents" ] && _sdk_dirs="${_sdk_dirs:+$_sdk_dirs }.agents/skills"
+  [ -d "$RNEX_ROOT/.codex" ] && _sdk_dirs="${_sdk_dirs:+$_sdk_dirs }.codex/skills"
   export RNEX_PROVIDER_SKILL_DIRS="$_sdk_dirs"
 fi
 
@@ -139,7 +140,7 @@ fi
 
 if ! command -v has_active_provider_instructions >/dev/null 2>&1; then
   has_active_provider_instructions() {
-    for _hapi_p in copilot claude gemini cursor windsurf; do
+    for _hapi_p in copilot claude gemini cursor windsurf codex; do
       provider_plugin_enabled "$_hapi_p" 2>/dev/null && return 0
     done
     return 1
@@ -155,6 +156,8 @@ get_rnex_instructions() {
   printf "CRITICAL: You MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\` before executing any task or answering any query in this workspace.\n"
 }
 
+# Safely merge delimited Repo Nexus routing instructions (<!-- REPO-NEXUS:START -->)
+# into an AI context file (e.g. AGENTS.md, CLAUDE.md), preserving any existing user content.
 merge_rnex_instructions() {
   _dst="$1"
   _body_tmp="$(mktemp)"
@@ -264,6 +267,8 @@ rnex_block_merge() {
   merge_rnex_instructions "$@"
 }
 
+# Strip delimited Repo Nexus routing instructions block from an AI context file,
+# removing the file entirely if it was solely created by Repo Nexus.
 clean_rnex_instructions() {
   _dst="$1"
   [ -f "$_dst" ] || return 0

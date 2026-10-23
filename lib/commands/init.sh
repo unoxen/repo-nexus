@@ -4,6 +4,11 @@
 # lib/commands/init.sh — Workspace initialization command
 # ============================================================================
 
+# Initialize a new Repo Nexus workspace in the specified directory (or current directory):
+# Sets up rnex.yaml, .rnex/ harness, gitignore rules, routing instructions in AGENTS.md,
+# enabled plugins (e.g. --claude, --gemini, --karpathy), and optional VS Code / Cursor workspace.
+# Usage:
+#   rnex init [-y|--yes] [--hooks|--no-hooks] [--<plugin>] [<directory>]
 cmd_init() {
   _non_interactive=0
   _init_dir=""
@@ -165,7 +170,7 @@ YAML_EOF
   if ! has_active_provider_instructions "$_init_dir"; then
     merge_rnex_instructions "$_init_dir/AGENTS.md"
   fi
-  for _if in CLAUDE.md GEMINI.md .cursorrules .windsurfrules .github/copilot-instructions.md; do
+  for _if in CLAUDE.md GEMINI.md CODEX.md .cursorrules .windsurfrules .github/copilot-instructions.md; do
     [ -f "$_init_dir/$_if" ] && merge_rnex_instructions "$_init_dir/$_if"
   done
 
@@ -216,7 +221,7 @@ YAML_EOF
     log_dim "Created $_created_items"
     printf '\n'
     log_info "Next steps:"
-    log_dim "1. Add repositories with: rnex add <name> <git-url>"
+    log_dim "1. Add repositories with: rnex add [<name>] <git-url>"
     log_dim "2. Clone team repositories: rnex clone"
     log_dim "3. Run commands across all repos: rnex exec <command>"
   fi

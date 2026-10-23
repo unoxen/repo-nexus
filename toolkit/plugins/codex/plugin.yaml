@@ -1,0 +1,15 @@
+name: codex
+version: 0.5.1
+description: OpenAI Codex and ChatGPT integration (maintains CODEX.md instructions and generates user skills in .codex/skills/)
+author: unoxen
+homepage: https://github.com/unoxen/repo-nexus
+skill_dir: .codex/skills
+
+config_defaults:
+  skills: true
+
+config_descriptions:
+  skills: "true|false        (generate user skills in {skill_dir})"
+
+instructions:
+  - instructions/rnex-codex-integration.md: .rnex/plugins/codex/instructions/rnex-codex-integration.md

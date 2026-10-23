@@ -4,6 +4,8 @@
 # lib/commands/sync.sh — Workspace reconciliation and compilation
 # ============================================================================
 
+# Write the standalone .rnex/bin/auto-sync.sh helper used by hooks and subshells
+# to rapidly verify workspace stamp checksum and trigger rnex sync on config changes.
 _write_auto_sync_script() {
   _dir="${1:-$NEXUS_DIR}"
   _bin_dir="$_dir/.rnex/bin"
@@ -31,6 +33,12 @@ EOF
   chmod +x "$_script"
 }
 
+# Primary workspace reconciliation command:
+# Reconciles workspace configuration version, .gitignore / .ignore routing, AGENTS.md,
+# core skills, AI instruction compilation, active plugins, Git hooks, member .rnex
+# harnesses, and VS Code / Cursor workspace files.
+# Usage:
+#   rnex sync [-y|--yes] [-q|--quiet] [--upgrade]
 cmd_sync() {
   require_workspace
   ensure_repos_dir

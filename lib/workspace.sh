@@ -9,6 +9,8 @@ RNEX_LOCAL_CONFIG_FILE=".local.rnex.yaml"
 
 # ---- Workspace Detection (Context-Aware) ----------------------------------
 
+# Search upwards from current directory to filesystem root for rnex.yaml or .rnex.yaml.
+# Returns the absolute path of the containing workspace root, or non-zero if not found.
 find_workspace_dir() {
   _curr="$(pwd -P 2>/dev/null || pwd)"
   while [ -n "$_curr" ] && [ "$_curr" != "/" ]; do
@@ -27,6 +29,7 @@ find_workspace_dir() {
 
 # ---- Config Checksum & Sync Stamp -----------------------------------------
 
+# Compute a combined checksum of rnex.yaml and .local.rnex.yaml to detect configuration changes.
 get_config_sum() {
   _dir="${1:-${NEXUS_DIR:-.}}"
   _yaml="rnex.yaml"
@@ -38,6 +41,7 @@ get_config_sum() {
   ( cd "$_dir" 2>/dev/null && cksum "$_yaml" .local.rnex.yaml 2>/dev/null | cksum | awk '{print $1, $2}' )
 }
 
+# Update the workspace sync stamp (.rnex/sync_stamp) with current config checksum.
 update_sync_stamp() {
   _dir="${1:-${NEXUS_DIR:-.}}"
   mkdir -p "$_dir/.rnex"
@@ -57,6 +61,7 @@ update_sync_stamp() {
   rm -f "$_dir/.rnex/.sync_stamp"
 }
 
+# Compare current config checksum against .rnex/sync_stamp and trigger silent sync if stale.
 check_auto_sync() {
   _ws="${NEXUS_DIR:-}"
   if [ -z "$_ws" ]; then

@@ -6,6 +6,8 @@
 
 # ---- Config Path & File Initialization Helpers -----------------------------
 
+# Resolve default paths for team workspace configuration (rnex.yaml) and
+# local overrides (.local.rnex.yaml) if not already set in the environment.
 _yaml_resolve_files() {
   _wy="${WORKSPACE_YAML:-}"
   [ -n "$_wy" ] || _wy="${NEXUS_DIR:-${RNEX_ROOT:-.}}/${RNEX_CONFIG_FILE:-rnex.yaml}"
@@ -13,6 +15,7 @@ _yaml_resolve_files() {
   [ -n "$_wly" ] || _wly="${NEXUS_DIR:-${RNEX_ROOT:-.}}/${RNEX_LOCAL_CONFIG_FILE:-.local.rnex.yaml}"
 }
 
+# Create a skeletal .local.rnex.yaml file with explanatory comments if it does not yet exist.
 _ensure_local_yaml_file() {
   _ely_sec="${1:-}"
   if [ ! -f "$WORKSPACE_LOCAL_YAML" ]; then
@@ -30,6 +33,8 @@ EOF
 
 # ---- Generic Top-Level & Section YAML Primitives ---------------------------
 
+# Read a top-level scalar property matching a regex pattern from a YAML file.
+# Strips surrounding whitespace, comments, and quotes using awk.
 _yaml_top_level_from_file() {
   _ytf_f="$1"; _ytf_pat="$2"
   [ -f "$_ytf_f" ] || return 0
@@ -47,6 +52,8 @@ _yaml_top_level_from_file() {
   ' "$_ytf_f"
 }
 
+# Read a top-level configuration key, checking .local.rnex.yaml first (local override),
+# then falling back to rnex.yaml, and finally the provided default value.
 yaml_get_top_level() {
   _ygt_pat="$1"; _ygt_def="${2:-}"
   _yaml_resolve_files
@@ -59,6 +66,8 @@ yaml_get_top_level() {
   fi
 }
 
+# Extract all item keys defined under a given top-level section (e.g., 'repos' or 'plugins').
+# Handles map items ("  name:") and list items ("  - name").
 _yaml_section_keys() {
   _ysk_f="$1"; _ysk_sec="$2"
   [ -f "$_ysk_f" ] || return 0
@@ -97,6 +106,8 @@ _yaml_section_keys() {
   ' "$_ysk_f"
 }
 
+# Read the value of a specific property ($key) within an item ($item) of a section ($sec).
+# Example: _yaml_section_get "rnex.yaml" "repos" "backend" "url"
 _yaml_section_get() {
   _ysg_f="$1"; _ysg_sec="$2"; _ysg_item="$3"; _ysg_key="$4"
   [ -f "$_ysg_f" ] || return 0
@@ -152,6 +163,8 @@ _yaml_section_get() {
   ' "$_ysg_f"
 }
 
+# Update or insert a key-value property ($field: $value) under a specific item ($item)
+# within a top-level section ($sec). Preserves comments and formatting.
 _yaml_section_set() {
   _yss_file="$1"; _yss_sec="$2"; _yss_item="$3"; _yss_field="$4"; _yss_value="$5"
   if [ ! -f "$_yss_file" ]; then
@@ -473,6 +486,10 @@ windsurf_plugin_enabled() { provider_plugin_enabled "windsurf"; }
 windsurf_instructions_enabled() { provider_plugin_enabled "windsurf"; }
 windsurf_skills_enabled() { provider_option_enabled "windsurf" "skills"; }
 
+codex_plugin_enabled() { provider_plugin_enabled "codex"; }
+codex_instructions_enabled() { provider_plugin_enabled "codex"; }
+codex_skills_enabled() { provider_option_enabled "codex" "skills"; }
+
 has_active_provider_instructions() {
   _saved_ws_yaml="${WORKSPACE_YAML:-}"
   _saved_local_yaml="${WORKSPACE_LOCAL_YAML:-}"
@@ -485,7 +502,8 @@ has_active_provider_instructions() {
      claude_instructions_enabled || \
      gemini_instructions_enabled || \
      cursor_instructions_enabled || \
-     windsurf_instructions_enabled; then
+     windsurf_instructions_enabled || \
+     codex_instructions_enabled; then
     _res=0
   fi
   if [ -n "$1" ] && [ -d "$1" ]; then
@@ -622,18 +640,24 @@ yaml_repo_enabled() {
   is_enabled_val "$(yaml_get "$1" "enabled")"
 }
 
+# Check if a repo is readonly: default is false unless explicitly set to true/yes/1
+yaml_repo_readonly() {
+  is_truthy "$(yaml_get "$1" "readonly")"
+}
+
+# Add a new repository entry under 'repos:' in the main workspace configuration (rnex.yaml).
 yaml_add_repo() {
-  _name="$1"; _url="$2"; _rnex_dir="${3:-true}"; _enabled="${4:-true}"
+  _name="$1"; _url="$2"; _enabled="${3:-true}"; _readonly="${4:-false}"
   if ! grep -q '^repos:' "$WORKSPACE_YAML" 2>/dev/null; then
     printf '\nrepos:\n' >> "$WORKSPACE_YAML"
   fi
   _tmp="$(mktemp)"
-  awk -v name="$_name" -v url="$_url" -v rd="$_rnex_dir" -v en="$_enabled" '
+  awk -v name="$_name" -v url="$_url" -v en="$_enabled" -v ro="$_readonly" '
     /^repos:/ {
       print
       printf "  %s:\n    url: %s\n", name, url
-      if (rd == "false") printf "    rnex_dir: false\n"
       if (en == "false") printf "    enabled: false\n"
+      if (ro == "true") printf "    readonly: true\n"
       added=1
       next
     }
@@ -645,6 +669,7 @@ _yaml_remove_repo_from_file() {
   _yaml_section_remove "$1" "repos" "$2"
 }
 
+# Remove a repository entry from both rnex.yaml and .local.rnex.yaml.
 yaml_remove_repo() {
   _name="$1"
   _yaml_remove_repo_from_file "$WORKSPACE_YAML" "$_name"
@@ -655,10 +680,12 @@ _yaml_set_in_file() {
   _yaml_section_set "$1" "repos" "$2" "$3" "$4"
 }
 
+# Set a field value for a repo in team config (rnex.yaml).
 yaml_set() {
   _yaml_set_in_file "$WORKSPACE_YAML" "$1" "$2" "$3"
 }
 
+# Set a field value for a repo in local machine config (.local.rnex.yaml).
 yaml_set_local() {
   _ensure_local_yaml_file "repos"
   _yaml_set_in_file "$WORKSPACE_LOCAL_YAML" "$1" "$2" "$3"
@@ -666,6 +693,7 @@ yaml_set_local() {
 
 # ---- Top-Level Key Setters -------------------------------------------------
 
+# Set a top-level key/value pair in a specific YAML file, inserting before 'plugins:' or 'repos:'.
 _yaml_set_top_level_in_file() {
   _file="$1"; _key="$2"; _val="$3"
   [ -f "$_file" ] || return 0

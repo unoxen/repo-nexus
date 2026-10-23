@@ -4,6 +4,10 @@
 # lib/commands/completion.sh — Shell completion generators (bash, zsh, fish)
 # ============================================================================
 
+# Generate tab-completion script for the requested shell (bash, zsh, or fish).
+# Usage:
+#   source <(rnex completion bash)
+#   source <(rnex completion zsh)
 cmd_completion() {
   _shell="${1:-bash}"
   case "$_shell" in
@@ -14,7 +18,7 @@ _rnex_completions() {
   COMPREPLY=()
   cur="${COMP_WORDS[COMP_CWORD]}"
   prev="${COMP_WORDS[COMP_CWORD-1]}"
-  commands="init install add clone exec remove enable disable list sync status rnex-dir update upgrade hooks plugin completion version help"
+  commands="init install add clone exec remove enable disable readonly list sync status rnex-dir update upgrade hooks plugin completion version help"
 
   case "$prev" in
     rnex)
@@ -37,7 +41,7 @@ _rnex_completions() {
       COMPREPLY=( $(compgen -W "install uninstall status" -- "$cur") )
       return 0
       ;;
-    enable|disable|remove|show|hide|rnex-dir)
+    enable|disable|readonly|remove|show|hide|rnex-dir)
       local repos
       repos=$(rnex list 2>/dev/null | awk 'NR>2 {print $1}')
       COMPREPLY=( $(compgen -W "$repos" -- "$cur") )
@@ -81,6 +85,7 @@ _rnex() {
     'remove:Unregister and delete a repository'
     'enable:Enable a repository in active workspace'
     'disable:Disable a repository in workspace'
+    'readonly:Toggle read-only (information-only) status for a repo'
     'list:List member repositories'
     'sync:Reconcile workspace, plugins, skills, and member .rnex directories'
     'status:Inspect workspace health and status (read-only)'
@@ -124,7 +129,7 @@ _rnex() {
           hook_cmds=('install:Install Git hooks' 'uninstall:Uninstall Git hooks' 'status:Show Git hooks status')
           _describe -t hook_cmds 'hooks command' hook_cmds
           ;;
-        enable|disable|remove|show|hide|rnex-dir)
+        enable|disable|readonly|remove|show|hide|rnex-dir)
           local -a repos
           repos=($(rnex list 2>/dev/null | awk 'NR>2 {print $1}'))
           _describe -t repos 'repository' repos
@@ -163,6 +168,9 @@ complete -c rnex -n "__fish_use_subcommand" -a exec -d "Execute command across m
 complete -c rnex -n "__fish_use_subcommand" -a remove -d "Remove a repository"
 complete -c rnex -n "__fish_use_subcommand" -a enable -d "Enable a repository"
 complete -c rnex -n "__fish_use_subcommand" -a disable -d "Disable a repository"
+complete -c rnex -n "__fish_use_subcommand" -a readonly -d "Toggle read-only status for a repo"
+complete -c rnex -n "__fish_seen_subcommand_from readonly" -a "enable disable"
+complete -c rnex -n "__fish_seen_subcommand_from readonly" -l local -d "Apply locally"
 complete -c rnex -n "__fish_use_subcommand" -a list -d "List repositories"
 complete -c rnex -n "__fish_use_subcommand" -a rnex-dir -d "Toggle .rnex directory integration for a repo"
 complete -c rnex -n "__fish_seen_subcommand_from rnex-dir" -a "enable disable"

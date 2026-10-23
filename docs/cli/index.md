@@ -23,6 +23,7 @@ description: Fast reference cheatsheet for rnex commands, global options, enviro
 | [`rnex list`](repos.md#rnex-list) | Repositories | Print table of registered member repositories. |
 | [`rnex enable`](repos.md#rnex-enable-rnex-disable) | Repositories | Enable a repository (include in sync and exec). |
 | [`rnex disable`](repos.md#rnex-enable-rnex-disable) | Repositories | Disable a repository (exclude from sync and exec). |
+| [`rnex readonly`](repos.md#rnex-readonly) | Repositories | Toggle read-only (information-only) status for a member repository. |
 | [`rnex remove`](repos.md#rnex-remove) | Repositories | Unregister repository and delete clone from disk. |
 | [`rnex rnex-dir`](repos.md#rnex-rnex-dir) | Repositories | Toggle `.rnex/` context inside member repository. |
 | [`rnex exec`](execution.md) | Execution | Run arbitrary shell commands across all active repos. |

@@ -6,6 +6,10 @@
 
 # ---- Gitignore & Search Tool Ignore Reconciliation -------------------------
 
+# Reconcile workspace root .gitignore and .ignore:
+# - Ensures repos/ is ignored in git to prevent accidental commits of member repos
+# - Ensures .local.rnex.yaml is ignored
+# - Ensures .ignore un-ignores repos/* so ripgrep and AI tools can index member files
 reconcile_gitignore() {
   _dir="${1:-$NEXUS_DIR}"
   _gi="$_dir/.gitignore"
@@ -60,6 +64,8 @@ GI_EOF
 
 # ---- AI Instructions Compilation (.rnex/ai-instructions.md) ----------------
 
+# Compile the unified .rnex/ai-instructions.md file consumed by AI coding agents.
+# Aggregates sample template instructions and active plugin instruction sections.
 build_ai_instructions() {
   _dir="${1:-$NEXUS_DIR}"
   _ai_file="$_dir/.rnex/ai-instructions.md"
@@ -97,7 +103,9 @@ Execute in sequence before task execution:
 Autonomous subagents are defined under `.rnex/agents/` and active plugin agents under `.rnex/plugins/<plugin-name>/agents/`.
 
 ## Member Repositories (`repos/<name>/`)
-Each member repository is an autonomous Git repository. For repository-specific instructions, inspect `repos/<name>/.rnex/`. Inspect only targeted files required for the task.
+Each member repository is an autonomous Git repository. Inspect only targeted files required for the task.
+If repository-specific context exists, it is stored under `repos/<name>/.rnex/`.
+Repositories marked `readonly: true` in configuration are reference-only: DO NOT modify, write to, or commit changes in read-only repositories; use them strictly for information, code exploration, and schema references.
 
 ## Workspace Maintenance
 When workspace configuration, routing blocks, plugin assets, or member repository structures require reconciliation or schema upgrades:
@@ -105,7 +113,7 @@ When workspace configuration, routing blocks, plugin assets, or member repositor
 - Use `rnex sync -y` to non-destructively apply configuration version upgrades automatically.
 
 ## Git Operations
-Commit and push changes directly within the respective member repository root (`repos/<name>/`).
+Commit and push changes directly within the respective member repository root (`repos/<name>/`). For read-only repositories (`readonly: true`), never commit, edit, or push changes.
 BASE_AI_EOF
   fi
 
@@ -150,6 +158,8 @@ BASE_AI_EOF
 
 # ---- Multi-Root IDE Workspace (.code-workspace) ----------------------------
 
+# Generate and maintain a multi-root VS Code / Cursor workspace file (.code-workspace).
+# Adds workspace root and each active member repository as first-class workspace folders.
 sync_code_workspace() {
   [ -n "$CODE_WORKSPACE_FILE" ] || return 0
   _ws_path="$NEXUS_DIR/$CODE_WORKSPACE_FILE"
@@ -260,6 +270,7 @@ get_active_provider_skill_dirs() {
           claude)   _sdir=".claude/skills" ;;
           windsurf) _sdir=".windsurf/rules" ;;
           gemini)   _sdir=".agents/skills" ;;
+          codex)    _sdir=".codex/skills" ;;
         esac
       fi
       if [ -n "$_sdir" ]; then
@@ -273,6 +284,8 @@ get_active_provider_skill_dirs() {
   printf '%s' "$_dirs"
 }
 
+# Synchronize built-in core agentic skills into .rnex/skills/ and register
+# zero-logic user skill pointers across all active AI assistant directories.
 sync_rnex_base_assets() {
   _src_toolkit=""
   if [ -d "$SCRIPT_LOCATION/toolkit" ]; then

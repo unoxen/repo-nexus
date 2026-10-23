@@ -171,11 +171,11 @@ run_test "Fix 8: Path resolution & flag inconsistencies in repo commands"
 [ ! -d "$TEST_GOAL_WS/repos/remove-flag-repo" ] || { fail "remove -y <name> failed to delete repo directory"; exit 1; }
 ! grep -q "remove-flag-repo" "$TEST_GOAL_WS/rnex.yaml" || { fail "remove -y <name> failed to unregister repo from rnex.yaml"; exit 1; }
 
-# 8b: cmd_rnex_dir supports --local
-(cd "$TEST_GOAL_WS" && ./rnex add rnexdir-test "$TEST_REPO" >/dev/null)
-(cd "$TEST_GOAL_WS" && ./rnex rnex-dir disable rnexdir-test --local >/dev/null)
-[ -f "$TEST_GOAL_WS/.local.rnex.yaml" ] || { fail ".local.rnex.yaml not created by rnex-dir --local"; exit 1; }
-grep -q "rnex_dir: false" "$TEST_GOAL_WS/.local.rnex.yaml" || { fail "rnex_dir: false not set in .local.rnex.yaml"; exit 1; }
+# 8b: cmd_readonly supports --local
+(cd "$TEST_GOAL_WS" && ./rnex add readonly-test "$TEST_REPO" >/dev/null)
+(cd "$TEST_GOAL_WS" && ./rnex readonly enable readonly-test --local >/dev/null)
+[ -f "$TEST_GOAL_WS/.local.rnex.yaml" ] || { fail ".local.rnex.yaml not created by readonly --local"; exit 1; }
+grep -q "readonly: true" "$TEST_GOAL_WS/.local.rnex.yaml" || { fail "readonly: true not set in .local.rnex.yaml"; exit 1; }
 
 # 8c: cmd_clone uses resolve_repo_path (custom path resolution)
 mkdir -p "$TEST_GOAL_WS/custom-repos"
@@ -190,11 +190,11 @@ mv "$TEST_GOAL_WS/rnex.yaml.tmp" "$TEST_GOAL_WS/rnex.yaml"
 (cd "$TEST_GOAL_WS" && ./rnex clone >/dev/null)
 [ -d "$TEST_GOAL_WS/custom-repos/my-custom-repo/.git" ] || { fail "cmd_clone did not use resolve_repo_path to clone into custom path"; exit 1; }
 
-# 8d: completion.sh includes rnex-dir in zsh and fish
+# 8d: completion.sh includes readonly in zsh and fish
 _zsh_out="$("$TEST_GOAL_WS/rnex" completion zsh)"
-echo "$_zsh_out" | grep -q "rnex-dir" || { fail "zsh completion missing rnex-dir"; exit 1; }
+echo "$_zsh_out" | grep -q "readonly" || { fail "zsh completion missing readonly"; exit 1; }
 _fish_out="$("$TEST_GOAL_WS/rnex" completion fish)"
-echo "$_fish_out" | grep -q "rnex-dir" || { fail "fish completion missing rnex-dir"; exit 1; }
+echo "$_fish_out" | grep -q "readonly" || { fail "fish completion missing readonly"; exit 1; }
 pass
 
 # --------------------------------------------------------------------------
@@ -1048,6 +1048,160 @@ RNEX_REPO_URL="$DIR" RNEX_INSTALL_DIR="$TEST_SCRIPT_INST_SHARE" RNEX_BIN_DIR="$T
 [ -d "$TEST_SCRIPT_INST_SHARE/templates" ] || { fail "scripts/install.sh did not copy templates/ to install dir"; exit 1; }
 [ -d "$TEST_SCRIPT_INST_SHARE/toolkit" ] || { fail "scripts/install.sh did not copy toolkit/ to install dir"; exit 1; }
 [ ! -d "$TEST_SCRIPT_INST_SHARE/docs" ] || { fail "scripts/install.sh leaked docs/ into install dir"; exit 1; }
+
+pass
+
+# --------------------------------------------------------------------------
+run_test "Fix 28: rnex add infers repository name from URL or path when name argument is omitted"
+TEST_INFER_WS="$TEST_TMP/infer-name-workspace"
+mkdir -p "$TEST_INFER_WS"
+"$DIR/rnex" init -y "$TEST_INFER_WS" >/dev/null
+
+# 1. rnex add with local repo path clones and infers name from directory
+(cd "$TEST_INFER_WS" && "$CLI" add "$TEST_REPO" >/dev/null)
+[ -d "$TEST_INFER_WS/repos/dummy-repo/.git" ] || { fail "dummy-repo not cloned when name omitted"; exit 1; }
+grep -q "dummy-repo:" "$TEST_INFER_WS/rnex.yaml" || { fail "dummy-repo not registered in rnex.yaml"; exit 1; }
+
+# 2. rnex add with HTTPS URL ending in .git infers name
+(cd "$TEST_INFER_WS" && "$CLI" add https://github.com/example-org/inferred-service.git --disabled >/dev/null)
+grep -q "inferred-service:" "$TEST_INFER_WS/rnex.yaml" || { fail "inferred-service not registered from .git URL"; exit 1; }
+
+# 3. rnex add with URL with trailing slash and --local infers name
+(cd "$TEST_INFER_WS" && "$CLI" add --local https://github.com/example-org/inferred-local/ --disabled >/dev/null)
+grep -q "inferred-local:" "$TEST_INFER_WS/.local.rnex.yaml" || { fail "inferred-local not registered in local config"; exit 1; }
+
+# 4. rnex add with SSH scp-like URL infers name
+(cd "$TEST_INFER_WS" && "$CLI" add git@github.com:example-org/ssh-service.git --disabled >/dev/null)
+grep -q "ssh-service:" "$TEST_INFER_WS/rnex.yaml" || { fail "ssh-service not registered from SSH URL"; exit 1; }
+
+# 5. Explicit 2-argument form still works as expected
+(cd "$TEST_INFER_WS" && "$CLI" add custom-alias https://github.com/example-org/other.git --disabled >/dev/null)
+grep -q "custom-alias:" "$TEST_INFER_WS/rnex.yaml" || { fail "custom-alias not registered from 2-arg form"; exit 1; }
+
+pass
+
+# --------------------------------------------------------------------------
+run_test "Fix 29: Codex plugin lifecycle (enable, CODEX.md, .codex/skills, status, and disable cleanup)"
+TEST_CODEX_WS="$TEST_TMP/codex-lifecycle-ws"
+mkdir -p "$TEST_CODEX_WS"
+cp "$CLI" "$TEST_CODEX_WS/rnex"
+chmod +x "$TEST_CODEX_WS/rnex"
+cp -r "$DIR/toolkit" "$TEST_CODEX_WS/toolkit"
+cp "$DIR/package.json" "$TEST_CODEX_WS/package.json"
+git -C "$TEST_CODEX_WS" init -q
+
+# 1. Initialize workspace with --codex
+"$TEST_CODEX_WS/rnex" init -y --codex "$TEST_CODEX_WS" >/dev/null
+[ ! -f "$TEST_CODEX_WS/AGENTS.md" ] || { fail "Redundant AGENTS.md created after init --codex"; exit 1; }
+[ -f "$TEST_CODEX_WS/CODEX.md" ] || { fail "CODEX.md missing after init --codex"; exit 1; }
+grep -q "REPO-NEXUS:START" "$TEST_CODEX_WS/CODEX.md" || { fail "REPO-NEXUS routing block missing in CODEX.md"; exit 1; }
+
+# 2. Verify User Skills generated in .codex/skills/
+[ -d "$TEST_CODEX_WS/.codex/skills" ] || { fail ".codex/skills directory missing after init --codex"; exit 1; }
+[ -f "$TEST_CODEX_WS/.codex/skills/rnex-clone-sync/SKILL.md" ] || { fail "rnex-clone-sync/SKILL.md missing in .codex/skills/"; exit 1; }
+[ -f "$TEST_CODEX_WS/.codex/skills/rnex-batch-exec/SKILL.md" ] || { fail "rnex-batch-exec/SKILL.md missing in .codex/skills/"; exit 1; }
+grep -q "name: rnex-clone-sync" "$TEST_CODEX_WS/.codex/skills/rnex-clone-sync/SKILL.md" || { fail "Codex user skill missing YAML frontmatter"; exit 1; }
+grep -q "\.rnex/skills/clone-sync\.md" "$TEST_CODEX_WS/.codex/skills/rnex-clone-sync/SKILL.md" || { fail "Codex user skill missing target skill path"; exit 1; }
+
+# 3. Verify compiled instructions in .rnex/ai-instructions.md
+[ -f "$TEST_CODEX_WS/.rnex/ai-instructions.md" ] || { fail ".rnex/ai-instructions.md missing"; exit 1; }
+grep -q "OpenAI Codex Integration for Repo Nexus" "$TEST_CODEX_WS/.rnex/ai-instructions.md" || { fail "Codex instructions not compiled into .rnex/ai-instructions.md"; exit 1; }
+
+# 4. Status inspection
+_codex_status="$(cd "$TEST_CODEX_WS" && ./rnex status 2>&1)"
+echo "$_codex_status" | grep -q "CODEX.md" || { fail "Status did not report CODEX.md: $_codex_status"; exit 1; }
+echo "$_codex_status" | grep -q "\.codex/skills/" || { fail "Status did not report .codex/skills/: $_codex_status"; exit 1; }
+echo "$_codex_status" | grep "codex" -A 2 | grep -q "Options: skills=" || { fail "Status did not report codex plugin options: $_codex_status"; exit 1; }
+
+# 5. Plugin info inspection
+_codex_pinfo="$(cd "$TEST_CODEX_WS" && ./rnex plugin info codex 2>&1)"
+echo "$_codex_pinfo" | grep -q "OpenAI Codex" || { fail "Plugin info missing title/summary: $_codex_pinfo"; exit 1; }
+echo "$_codex_pinfo" | grep -q "Configurable Options" || { fail "Plugin info missing configurable options: $_codex_pinfo"; exit 1; }
+echo "$_codex_pinfo" | grep -q "\.codex/skills/" || { fail "Plugin info missing .codex/skills/ reference: $_codex_pinfo"; exit 1; }
+
+# 6. Preserve custom developer rules & skills across sync
+printf "\n# Custom Codex Rules\n" >> "$TEST_CODEX_WS/CODEX.md"
+mkdir -p "$TEST_CODEX_WS/.codex/skills/custom-skill"
+echo "custom" > "$TEST_CODEX_WS/.codex/skills/custom-skill/SKILL.md"
+(cd "$TEST_CODEX_WS" && ./rnex sync -y --quiet >/dev/null)
+grep -q "# Custom Codex Rules" "$TEST_CODEX_WS/CODEX.md" || { fail "Custom section lost in CODEX.md after sync"; exit 1; }
+grep -q "REPO-NEXUS:START" "$TEST_CODEX_WS/CODEX.md" || { fail "REPO-NEXUS block missing after sync"; exit 1; }
+[ -f "$TEST_CODEX_WS/.codex/skills/custom-skill/SKILL.md" ] || { fail "Custom user skill lost after sync"; exit 1; }
+
+# 7. Disable codex plugin, verify cleanup & AGENTS.md restoration
+(cd "$TEST_CODEX_WS" && ./rnex plugin disable codex >/dev/null)
+(cd "$TEST_CODEX_WS" && ./rnex sync -y --quiet >/dev/null)
+[ -f "$TEST_CODEX_WS/AGENTS.md" ] || { fail "AGENTS.md not restored when codex disabled"; exit 1; }
+[ -f "$TEST_CODEX_WS/CODEX.md" ] || { fail "CODEX.md with custom content was deleted"; exit 1; }
+! grep -q "REPO-NEXUS:START" "$TEST_CODEX_WS/CODEX.md" || { fail "REPO-NEXUS block not stripped from CODEX.md after disable"; exit 1; }
+grep -q "# Custom Codex Rules" "$TEST_CODEX_WS/CODEX.md" || { fail "Custom rules lost from CODEX.md after disable"; exit 1; }
+[ ! -d "$TEST_CODEX_WS/.codex/skills/rnex-clone-sync" ] || { fail "rnex User Skills not cleaned from .codex/skills"; exit 1; }
+[ -f "$TEST_CODEX_WS/.codex/skills/custom-skill/SKILL.md" ] || { fail "Custom skill deleted when codex disabled"; exit 1; }
+! grep -q "OpenAI Codex Integration for Repo Nexus" "$TEST_CODEX_WS/.rnex/ai-instructions.md" || { fail "Codex instructions not stripped from .rnex/ai-instructions.md after disable"; exit 1; }
+
+pass
+
+# --------------------------------------------------------------------------
+run_test "Fix 30: Member repository lazy/on-demand .rnex model and readonly: <boolean> setting"
+TEST_RO_WS="$TEST_TMP/ro-lazy-ws"
+mkdir -p "$TEST_RO_WS"
+cp "$CLI" "$TEST_RO_WS/rnex"
+chmod +x "$TEST_RO_WS/rnex"
+cp -r "$DIR/toolkit" "$TEST_RO_WS/toolkit"
+cp "$DIR/package.json" "$TEST_RO_WS/package.json"
+git -C "$TEST_RO_WS" init -q
+
+"$TEST_RO_WS/rnex" init -y "$TEST_RO_WS" >/dev/null
+
+# 1. rnex add clones repo cleanly without creating member .rnex/
+(cd "$TEST_RO_WS" && ./rnex add standard-repo "$TEST_REPO" >/dev/null)
+[ -d "$TEST_RO_WS/repos/standard-repo/.git" ] || { fail "standard-repo not cloned"; exit 1; }
+[ ! -d "$TEST_RO_WS/repos/standard-repo/.rnex" ] || { fail "standard-repo has unexpected .rnex/ folder"; exit 1; }
+! grep -q "rnex_dir" "$TEST_RO_WS/rnex.yaml" || { fail "rnex_dir setting unexpectedly written to rnex.yaml"; exit 1; }
+
+# 2. rnex list shows READONLY column defaulting to false
+_list_out="$(cd "$TEST_RO_WS" && ./rnex list 2>&1)"
+echo "$_list_out" | grep -q "READONLY" || { fail "rnex list missing READONLY column: $_list_out"; exit 1; }
+echo "$_list_out" | grep "standard-repo" | grep -q "false" || { fail "standard-repo readonly not false in list: $_list_out"; exit 1; }
+
+# 3. rnex add --readonly marks repository readonly
+(cd "$TEST_RO_WS" && ./rnex add --readonly reference-repo "$TEST_REPO" >/dev/null)
+grep -q "readonly: true" "$TEST_RO_WS/rnex.yaml" || { fail "readonly: true not found in rnex.yaml"; exit 1; }
+[ ! -d "$TEST_RO_WS/repos/reference-repo/.rnex" ] || { fail "reference-repo has unexpected .rnex/"; exit 1; }
+
+# 4. Status and list reflect readonly status
+_list_out="$(cd "$TEST_RO_WS" && ./rnex list 2>&1)"
+echo "$_list_out" | grep "reference-repo" | grep -q "true" || { fail "reference-repo readonly not true in list: $_list_out"; exit 1; }
+_status_out="$(cd "$TEST_RO_WS" && ./rnex status 2>&1)"
+echo "$_status_out" | grep "reference-repo" | grep -q "\[readonly\]" || { fail "reference-repo missing [readonly] in status: $_status_out"; exit 1; }
+
+# 5. rnex readonly toggle commands (global and local)
+(cd "$TEST_RO_WS" && ./rnex readonly disable reference-repo >/dev/null)
+grep -q "readonly: false" "$TEST_RO_WS/rnex.yaml" || { fail "readonly: false not updated in rnex.yaml"; exit 1; }
+
+(cd "$TEST_RO_WS" && ./rnex readonly enable --local standard-repo >/dev/null)
+[ -f "$TEST_RO_WS/.local.rnex.yaml" ] || { fail ".local.rnex.yaml missing"; exit 1; }
+grep -q "readonly: true" "$TEST_RO_WS/.local.rnex.yaml" || { fail "readonly: true not in .local.rnex.yaml"; exit 1; }
+
+# 6. Verify AI instructions mention readonly rules
+[ -f "$TEST_RO_WS/.rnex/ai-instructions.md" ] || { fail ".rnex/ai-instructions.md missing"; exit 1; }
+grep -q "readonly: true" "$TEST_RO_WS/.rnex/ai-instructions.md" || { fail "readonly directive missing from compiled AI instructions"; exit 1; }
+
+# 7. Lazy on-demand .rnex behavior:
+# - If user or plugin creates a custom file in member .rnex/, it is preserved
+mkdir -p "$TEST_RO_WS/repos/standard-repo/.rnex"
+echo "custom member context" > "$TEST_RO_WS/repos/standard-repo/.rnex/custom.txt"
+(cd "$TEST_RO_WS" && ./rnex sync -y --quiet >/dev/null)
+[ -f "$TEST_RO_WS/repos/standard-repo/.rnex/custom.txt" ] || { fail "custom member .rnex file deleted during sync"; exit 1; }
+
+# - If member repo only has boilerplate README, rnex sync prunes it
+mkdir -p "$TEST_RO_WS/repos/reference-repo/.rnex"
+cat <<'EOF_BOILERPLATE' > "$TEST_RO_WS/repos/reference-repo/.rnex/README.md"
+# .rnex — Repo Nexus Workspace Integration
+Repo Nexus Workspace Integration boilerplate
+EOF_BOILERPLATE
+(cd "$TEST_RO_WS" && ./rnex sync -y --quiet >/dev/null)
+[ ! -d "$TEST_RO_WS/repos/reference-repo/.rnex" ] || { fail "boilerplate .rnex was not pruned by sync"; exit 1; }
 
 pass
 

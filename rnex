@@ -60,9 +60,11 @@ fi
 # Entry Point & Option Parsing
 # ============================================================================
 
+# Global configuration override path (set via --config, -c, or RNEX_CONFIG env var)
 CUSTOM_CONFIG=""
 [ -n "$RNEX_CONFIG" ] && CUSTOM_CONFIG="$RNEX_CONFIG"
 
+# Parse global options (--config / -c) while preserving all other arguments in order
 ORIG_COUNT=$#
 i=0
 while [ "$i" -lt "$ORIG_COUNT" ]; do
@@ -86,12 +88,14 @@ while [ "$i" -lt "$ORIG_COUNT" ]; do
   esac
 done
 
+# Pre-flight auto-sync: reconcile workspace if configuration changed on disk
 case "${1:-help}" in
-  list|exec|clone|add|remove|enable|disable|plugin|rnex-dir|update|upgrade|hooks)
+  list|exec|clone|add|remove|enable|disable|readonly|plugin|rnex-dir|update|upgrade|hooks)
     auto_sync_if_needed
     ;;
 esac
 
+# Execute action wrapped in before_<action> and after_<action> lifecycle hooks
 dispatch_action() {
   _action="$1"
   shift
@@ -106,6 +110,7 @@ dispatch_action() {
     remove)      cmd_remove "$@" ;;
     enable)      cmd_enable "$@" ;;
     disable)     cmd_disable "$@" ;;
+    readonly)    cmd_readonly "$@" ;;
     rnex-dir)    cmd_rnex_dir "$@" ;;
     sync)        cmd_sync "$@" ;;
     update)      cmd_update "$@" ;;
@@ -120,8 +125,9 @@ dispatch_action() {
   return $_rc
 }
 
+# Subcommand routing table
 case "${1:-help}" in
-  init|install|add|clone|exec|remove|enable|disable|rnex-dir|sync|update|upgrade|hooks|plugin)
+  init|install|add|clone|exec|remove|enable|disable|readonly|rnex-dir|sync|update|upgrade|hooks|plugin)
     _cmd="$1"
     shift
     dispatch_action "$_cmd" "$@"

@@ -4,6 +4,7 @@
 # lib/commands/status.sh — Workspace health and status diagnostics
 # ============================================================================
 
+# Query active plugins for any non-manual lint triggers (e.g. git hook triggers).
 _status_active_plugin_trigger() {
   for _p in $(yaml_list_plugins 2>/dev/null || true); do
     yaml_plugin_enabled "$_p" 2>/dev/null || continue
@@ -17,10 +18,14 @@ _status_active_plugin_trigger() {
   return 0
 }
 
+# Check if a directory contains any rnex-* user skills or skill symlinks.
 _status_has_rnex_skills() {
   [ -d "$1" ] && { ls "$1"/rnex-*.md >/dev/null 2>&1 || ls -d "$1"/rnex-* >/dev/null 2>&1; }
 }
 
+# Print comprehensive read-only workspace diagnostic report:
+# Shows config versions, gitignore rules, AI context routing, registered plugins,
+# git hooks status, and member repository status.
 cmd_status() {
   require_workspace
   ensure_repos_dir
@@ -146,6 +151,7 @@ cmd_status() {
   for _pair in \
     "CLAUDE.md:Claude" \
     "GEMINI.md:Gemini" \
+    "CODEX.md:Codex" \
     ".cursorrules:Cursor" \
     ".windsurfrules:Windsurf" \
     ".github/copilot-instructions.md:Copilot"; do
@@ -179,6 +185,7 @@ cmd_status() {
     ".windsurf/rules/:Windsurf" \
     ".agents/skills/:Gemini" \
     ".gemini/skills/:Gemini" \
+    ".codex/skills/:Codex" \
     ".github/skills/:Copilot"; do
     _sdir="${_spair%%:*}"
     _slbl="${_spair#*:}"
@@ -235,7 +242,7 @@ cmd_status() {
   printf '%b%s%b\n' "$_BOLD" "Member Repositories:" "$_NC"
   _all_repos="$(yaml_list_repos)"
   if [ -z "$_all_repos" ]; then
-    printf '  %b%s%b\n' "$_DIM" "(No repositories registered yet. Use 'rnex add <name> <git-url>')" "$_NC"
+    printf '  %b%s%b\n' "$_DIM" "(No repositories registered yet. Use 'rnex add [<name>] <git-url>')" "$_NC"
   else
     echo "$_all_repos" | while read -r _name; do
       [ -n "$_name" ] || continue
@@ -247,17 +254,14 @@ cmd_status() {
         printf '  %b○%b %-18s %b[disabled]%b %s\n' "$_DIM" "$_NC" "$_name" "$_DIM" "$_NC" "${_url:+- $_url}"
       elif [ -d "$_rdir/.git" ]; then
         _b="$(git -C "$_rdir" symbolic-ref --short HEAD 2>/dev/null || git -C "$_rdir" rev-parse --short HEAD 2>/dev/null || echo "head")"
-        _rnex_tag=""
-        if repo_rnex_dir_enabled "$_name"; then
-          if [ -d "$_rdir/.rnex" ]; then
-            _rnex_tag=" ${_DIM}[.rnex ✓]${_NC}"
-          else
-            _rnex_tag=" ${_Y}[.rnex pending]${_NC}"
-          fi
-        else
-          _rnex_tag=" ${_DIM}[.rnex off]${_NC}"
+        _tags=""
+        if yaml_repo_readonly "$_name"; then
+          _tags=" ${_Y}[readonly]${_NC}"
         fi
-        printf '  %b●%b %-18s %b[%s]%b%b %s\n' "$_G" "$_NC" "$_name" "$_C" "$_b" "$_NC" "$_rnex_tag" "${_url:+- $_url}"
+        if [ -d "$_rdir/.rnex" ]; then
+          _tags="${_tags} ${_DIM}[.rnex]${_NC}"
+        fi
+        printf '  %b●%b %-18s %b[%s]%b%b %s\n' "$_G" "$_NC" "$_name" "$_C" "$_b" "$_NC" "$_tags" "${_url:+- $_url}"
       else
         printf '  %b✗%b %-18s %b[missing — run "rnex clone"]%b %s\n' "$_R" "$_NC" "$_name" "$_R" "$_NC" "${_url:+- $_url}"
       fi

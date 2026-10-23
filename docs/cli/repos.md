@@ -15,22 +15,25 @@ Registers a repository in configuration and immediately clones it into `./repos/
 
 ### Syntax
 ```sh
-rnex add [options] <name> <git-url>
+rnex add [options] [<name>] <git-url>
 ```
 
 ### Parameters & Options
 | Option | Type | Default | Description |
 |:---|:---|:---|:---|
-| `<name>` | string | *(required)* | Short identifier for repository (used as folder name in `./repos/`). |
-| `<git-url>` | string | *(required)* | Remote Git clone URL (SSH or HTTPS). |
+| `<name>` | string | *(optional)* | Short identifier for repository (folder name in `./repos/`). If omitted, defaults to the last path component of `<git-url>` (without `.git` suffix). |
+| `<git-url>` | string | *(required)* | Remote Git clone URL (SSH or HTTPS) or local repository path. |
 | `--local` | boolean | `false` | Registers repository in `.local.rnex.yaml` instead of team `rnex.yaml`. |
 | `--disabled` | boolean | `false` | Registers repository with `enabled: false` (skips immediate clone). |
-| `--no-rnex-dir` | boolean | `false` | Sets `rnex_dir: false`, leaving member repository completely untouched. |
+| `--readonly` | boolean | `false` | Sets `readonly: true`; designates repository as reference-only / information-only. |
 
 ### Examples
 ```bash
-# Register and clone a shared team service
+# Register and clone a service using explicit name
 rnex add backend git@github.com:myorg/backend-api.git
+
+# Register and clone without providing a name (name defaults to 'web-app')
+rnex add https://github.com/myorg/web-app.git
 
 # Register a private experiment on local machine only
 rnex add --local experiment git@github.com:myorg/exp.git
@@ -65,7 +68,7 @@ Teammates cloning the meta-repo run `rnex clone` to fetch all member repositorie
 
 ## `rnex list`
 
-Outputs a formatted table of all registered member repositories, their active branches, clone state, and `.rnex` directory status.
+Outputs a formatted table of all registered member repositories, their active branches, clone state, and readonly status.
 
 ### Syntax
 ```sh
@@ -73,10 +76,34 @@ rnex list
 ```
 
 ```text
-Name       Enabled  Cloned  Branch  rnex-dir  URL
-backend    yes      yes     main    yes       git@github.com:myorg/backend-api.git
-frontend   yes      yes     develop yes       git@github.com:myorg/frontend-web.git
-analytics  no       no      -       no        git@github.com:myorg/analytics.git
+NAME               STATE      CLONED   BRANCH         READONLY   URL
+----               -----      ------   ------         --------   ---
+backend            enabled    cloned   main           false      git@github.com:myorg/backend-api.git
+frontend           enabled    cloned   develop        false      git@github.com:myorg/frontend-web.git
+docs-reference     enabled    cloned   main           true       git@github.com:myorg/docs-ref.git
+analytics          disabled   missing  -              false      git@github.com:myorg/analytics.git
+```
+
+---
+
+## `rnex readonly`
+
+Toggles whether a member repository is read-only (`readonly: true`).
+
+### Syntax
+```sh
+rnex readonly <enable|disable> <name> [--local]
+```
+
+* When marked read-only, AI assistants use this repository strictly for information, code exploration, and schema references without editing files or committing code.
+* Pass `--local` to persist the toggle in `.local.rnex.yaml` without modifying team-wide `rnex.yaml`.
+
+```bash
+# Mark docs-reference as read-only across workspace
+rnex readonly enable docs-reference
+
+# Mark an internal dependency as read-only locally
+rnex readonly enable --local shared-libs
 ```
 
 ---
@@ -116,14 +143,13 @@ rnex remove <name>
 
 ---
 
-## `rnex rnex-dir`
+## `rnex rnex-dir` *(Legacy / Deprecated)*
 
-Toggles member-level context projection inside `repos/<name>/.rnex/`.
+Under the lazy/on-demand model, member repositories remain completely clean by default and `.rnex/` is only created when an active plugin requires member-level state. `rnex rnex-dir` is maintained for backward compatibility.
 
 ### Syntax
 ```sh
 rnex rnex-dir <enable|disable> <name>
 ```
 
-* When enabled, workspace skills and plugin context are projected into `repos/<name>/.rnex/` for localized AI assistants.
-* When disabled, the repository root remains completely pristine.
+* `rnex rnex-dir disable <name>` cleanly prunes orphaned `.rnex/` folders from member repositories.

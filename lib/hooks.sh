@@ -302,6 +302,11 @@ _delegate_repo_githook() {
   fi
 }
 
+# Manage automated workspace Git hooks (install, uninstall, or inspect status).
+# Usage:
+#   rnex hooks install [--local]
+#   rnex hooks uninstall [--local]
+#   rnex hooks status
 cmd_hooks() {
   case "${1:-status}" in
     install|uninstall)

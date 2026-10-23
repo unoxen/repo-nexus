@@ -74,7 +74,9 @@ git_hooks: true
 #
 # Built-in plugins:
 #   claude         — Anthropic Claude Code integration: manages CLAUDE.md; generates user skills in .claude/skills/
+#   codex          — OpenAI Codex integration: manages CODEX.md; generates user skills in .codex/skills/
 #   gemini         — Google Gemini / Antigravity integration: manages GEMINI.md; generates user skills in .agents/skills/
+#   copilot        — GitHub Copilot integration: manages .github/copilot-instructions.md; generates user skills in .github/skills/
 #   cursor         — Cursor IDE integration: manages .cursorrules & .cursor/rules/; generates user skills in .cursor/rules/
 #   windsurf       — Windsurf IDE integration: manages .windsurfrules; generates user skills in .windsurf/rules/
 #   karpathy-llm   — Andrej Karpathy's agent behavioral principles,
@@ -83,7 +85,7 @@ git_hooks: true
 # Note on AI Architecture:
 #   AGENTS.md at workspace root is the universal cross-tool standard. Assistants that read AGENTS.md
 #   all the time need no separate top-level instructions file. Assistants with native
-#   formats (Claude with CLAUDE.md, Gemini with GEMINI.md, Cursor with .cursorrules, Windsurf with .windsurfrules)
+#   formats (Claude with CLAUDE.md, Codex with CODEX.md, Gemini with GEMINI.md, Cursor with .cursorrules, Windsurf with .windsurfrules)
 #   have their instruction files maintained automatically when their plugin is enabled.
 #   Agentic skills live self-contained inside .rnex/skills/ (core) and .rnex/plugins/<plugin>/skills/ (plugins).
 #   Provider plugins generate zero-logic User Skills (prefixed with rnex-) into IDE-specific skill directories
@@ -93,6 +95,8 @@ plugins:
   # claude:
   #   skills: true              # generate user skills in .claude/skills/ (default: true)
   #   auto_sync_on: SessionStart # trigger auto-sync on lifecycle event (default: SessionStart, or false)
+  # codex:
+  #   skills: true              # generate user skills in .codex/skills/ (default: true)
   # gemini:
   #   skills: true              # generate user skills in .agents/skills/ (default: true)
   #   auto_sync_on: SessionStart # trigger auto-sync on lifecycle event (default: SessionStart, or false)
@@ -114,39 +118,47 @@ plugins:
 # repos — Member repositories managed by Repo Nexus
 # ------------------------------------------------------------------------------
 # Each repo has:
-#   url:      Git repository URL (SSH or HTTPS).
-#   enabled:  true (default) keeps the repo active in workspace.
-#             false disables the repo (skipped by rnex clone, rnex exec, etc.).
-#             Can be overridden locally in .local.rnex.yaml.
-#   rnex_dir: true (default) creates an isolated .rnex/ directory inside the member repo
-#             for storing rnex-related documents, rules, workflows, and scripts.
-#             Set to false to leave the member repository completely untouched.
+#   url:       Git repository URL (SSH or HTTPS).
+#   enabled:   true (default) keeps the repo active in workspace.
+#              false disables the repo (skipped by rnex clone, rnex exec, etc.).
+#              Can be overridden locally in .local.rnex.yaml.
+#   readonly:  false (default) allows normal active development and modifications.
+#              true designates the repository as read-only (used only for information).
+#              AI coding assistants and tools use this repository strictly for reference,
+#              context, and type definitions without modifying or committing code.
 #
 # Examples:
 #   backend:
 #     url: git@github.com:myorg/backend-api.git
 #     enabled: true        # default
-#     rnex_dir: true       # default
+#     readonly: false      # default
 #
 #   frontend:
 #     url: https://github.com/myorg/web-app.git
 #     enabled: true
-#     rnex_dir: true
+#
+#   docs-reference:
+#     url: git@github.com:myorg/docs-reference.git
+#     enabled: true
+#     readonly: true       # information-only repository
 #
 #   analytics:
 #     url: git@github.com:myorg/analytics.git
 #     enabled: false       # disabled: skipped by clone & exec
-#     rnex_dir: false
 
 repos:
   # backend:
   #   url: git@github.com:myorg/backend-api.git
-  #   rnex_dir: true
+  #   readonly: false
   #
   # frontend:
   #   url: https://github.com/myorg/web-app.git
-  #   rnex_dir: true
+  #
+  # docs-reference:
+  #   url: git@github.com:myorg/docs-reference.git
+  #   readonly: true
   #
   # analytics:
   #   url: git@github.com:myorg/analytics.git
+  #   enabled: false
   #   enabled: false

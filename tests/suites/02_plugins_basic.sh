@@ -44,7 +44,7 @@ grep -q "karpathy-llm" "$TEST_WORKSPACE/rnex.yaml" || { fail "karpathy-llm not i
 [ -f "$TEST_WORKSPACE/.rnex/plugins/karpathy-llm/skills/wiki-ingest.md" ] || { fail "wiki-ingest.md missing in scoped plugin dir"; exit 1; }
 [ -f "$TEST_WORKSPACE/.rnex/plugins/karpathy-llm/skills/wiki-lint.md" ] || { fail "wiki-lint.md missing in scoped plugin dir"; exit 1; }
 [ -f "$TEST_WORKSPACE/.rnex/plugins/karpathy-llm/instructions/rnex-wiki-architecture.md" ] || { fail "rnex-wiki-architecture.md missing in scoped plugin dir"; exit 1; }
-[ -d "$TEST_WORKSPACE/repos/test-app/.rnex/plugins/karpathy-llm" ] || { fail "Scoped plugin dir missing in member repo"; exit 1; }
+[ ! -d "$TEST_WORKSPACE/repos/test-app/.rnex" ] || { fail "Member repo should remain clean"; exit 1; }
 [ -f "$TEST_WORKSPACE/.rnex/wiki/index.md" ] || { fail ".rnex/wiki/index.md not initialized in workspace"; exit 1; }
 grep -q "title: Wiki Index" "$TEST_WORKSPACE/.rnex/wiki/index.md" || { fail ".rnex/wiki/index.md missing title: Wiki Index"; exit 1; }
 pass
@@ -54,7 +54,7 @@ run_test "Plugin disable command cleans up scoped plugin assets while preserving
 "$TEST_WORKSPACE/rnex" plugin disable karpathy-llm >/dev/null
 grep -q "karpathy-llm" "$TEST_WORKSPACE/rnex.yaml" && { fail "karpathy-llm still in rnex.yaml"; exit 1; }
 [ ! -d "$TEST_WORKSPACE/.rnex/plugins/karpathy-llm" ] || { fail "Scoped plugin dir still present in workspace"; exit 1; }
-[ ! -d "$TEST_WORKSPACE/repos/test-app/.rnex/plugins/karpathy-llm" ] || { fail "Scoped plugin dir still present in member repo"; exit 1; }
+[ ! -d "$TEST_WORKSPACE/repos/test-app/.rnex" ] || { fail "Member repo .rnex should not exist"; exit 1; }
 [ -f "$TEST_WORKSPACE/.rnex/wiki/index.md" ] || { fail "User wiki data was incorrectly deleted"; exit 1; }
 pass
 

@@ -15,6 +15,7 @@ Lightweight zero-dependency Virtual Meta-Repo companion for multi-repo workspace
 | `list` | `rnex list` | List all member repositories and their active status. |
 | `enable` | `rnex enable <name> [--local]` | Enable a member repository in active workspace. |
 | `disable` | `rnex disable <name> [--local]` | Disable a member repository in active workspace. |
+| `readonly` | `rnex readonly <enable\|disable> <name> [--local]` | Toggle read-only (information-only) status for a member repo. |
 | `remove` | `rnex remove <name> [-y]` | Unregister repository and remove its clone from disk. |
 | `rnex-dir`| `rnex rnex-dir <enable\|disable> <name>` | Toggle `.rnex/` harness inside a member repository. |
 | `update` | `rnex update [-y] [--quiet]` | Check configuration version and upgrade to latest schema (delegates to `sync`). |
@@ -38,7 +39,7 @@ rnex sync [-y|--yes] [-q|--quiet]
 3. **Plugin Sync**: Prunes disabled plugins and deterministically copies enabled plugin assets, rules, skills, templates, and executable lifecycle hooks into `.rnex/plugins/<plugin-name>/`.
 4. **Compiled AI Instructions**: Compiles `.rnex/ai-instructions.md` by combining the base template with active configuration and all enabled plugin `instructions.md` fragments. Top-level provider files (`AGENTS.md`, `CLAUDE.md`, etc.) receive only a single strict directive pointing to `.rnex/ai-instructions.md`.
 5. **Skill Reconciliation & User Skill Generation**: Copies core agentic skills from `toolkit/skills/` to `.rnex/skills/`, and generates lightweight, zero-logic User Skills (prefixed with `rnex-`) in configured AI assistant directories (`.cursor/rules/`, `.claude/skills/`, `.agents/skills/`, `.windsurf/rules/`) pointing directly to `.rnex/skills/` or plugin skill directories.
-6. **Harness Sync**: Reconciles root `.rnex/` and member repository harnesses (`repos/<name>/.rnex/`) for all enabled member repositories where `rnex_dir: true`.
+6. **Clean Member Repositories**: Member repositories remain clean by default; reconciles on-demand `.rnex/` harnesses only if required by active plugins.
 7. **Git Hooks**: Installs or reconciles workspace Git hooks in `.rnex/hooks` when `git_hooks: true`.
 8. **Multi-Root Workspace**: Synchronizes `.code-workspace` folder mappings when `code_workspace: true`.
 9. **Event-Driven Auto-Sync Scripts & Stamp**: Generates `.rnex/bin/auto-sync.sh` and updates `.rnex/sync_stamp`.

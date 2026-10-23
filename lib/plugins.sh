@@ -4,6 +4,7 @@
 # lib/plugins.sh — Plugin Engine (discovery, metadata, and scoped synchronization)
 # ============================================================================
 
+# Search all candidate toolkit directories and locate a plugin by name containing plugin.yaml.
 find_plugin_dir() {
   _query="$1"
   _sdir="$(dirname "$SCRIPT_LOCATION")"
@@ -26,6 +27,7 @@ find_plugin_dir() {
   return 1
 }
 
+# Scan and list all unique plugin directories across workspace and toolkit locations.
 list_all_available_plugin_dirs() {
   _sdir="$(dirname "$SCRIPT_LOCATION")"
   _dirs=""
@@ -57,6 +59,7 @@ list_all_available_plugin_dirs() {
   done
 }
 
+# Extract a top-level scalar field (e.g. name, version, description) from plugin.yaml.
 plugin_get_field() {
   _pdir="$1"; _fld="$2"
   [ -f "$_pdir/plugin.yaml" ] || return 1
@@ -69,6 +72,7 @@ plugin_get_field() {
   ' "$_pdir/plugin.yaml"
 }
 
+# Parse declared template source-to-destination mappings from plugin.yaml.
 plugin_list_templates() {
   _pdir="$1"
   [ -f "$_pdir/plugin.yaml" ] || return 0
@@ -84,6 +88,7 @@ plugin_list_templates() {
   ' "$_pdir/plugin.yaml"
 }
 
+# Parse declared instruction files from plugin.yaml.
 plugin_list_instructions() {
   _pdir="$1"
   [ -f "$_pdir/plugin.yaml" ] || return 0
@@ -98,6 +103,7 @@ plugin_list_instructions() {
   ' "$_pdir/plugin.yaml"
 }
 
+# Substitute configurable placeholders (e.g. {wiki_dir}, {raw_dir}) in template destination paths.
 plugin_resolve_placeholders() {
   _p="$1"; _pd="$2"; _str="$3"
   _res="$(printf '%s' "$_str" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d "'\"")"
