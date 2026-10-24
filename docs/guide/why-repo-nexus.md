@@ -38,7 +38,7 @@ Repo Nexus acts as a lightweight coordinator around your repositories without al
 |:---|:---|:---|:---|
 | **Repository Model** | Nested Git trees | Single giant repository | Virtual Meta-Repo umbrella |
 | **Git Complexity** | High (detached HEAD, pointer sync) | Low (single git log) | Zero (standard independent repos) |
-| **Migration Cost** | High | Massive (rewrite git history) | Instant (`rnex init` & `rnex add`) |
+| **Migration Cost** | High | Massive (rewrite git history) | Instant (`rnex init` & `rnex repo add`) |
 | **Runtime Dependencies** | Git | Node.js, Rust, or Go runtimes | Pure POSIX `/bin/sh` (zero deps) |
 | **AI Context Scoping** | Manual per repo | Root-level bleed | Delimited, multi-provider mirroring |
 | **Local Developer Overrides** | Hard / dirty git status | Difficult | Native via `.local.rnex.yaml` |

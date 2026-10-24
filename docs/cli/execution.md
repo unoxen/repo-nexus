@@ -37,6 +37,13 @@ rnex exec sh -c "npm test || true"
 ```
 :::
 
+::: tip Single-Repository Execution
+To execute a command in only a specific repository rather than across all active repositories, use [`rnex repo exec`](repos.md#rnex-repo-exec):
+```bash
+rnex repo exec backend npm test
+```
+:::
+
 ---
 
 ## Common Use Cases & Examples

@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/unoxen/repo-nexus/actions/workflows/ci.yml/badge.svg)](https://github.com/unoxen/repo-nexus/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/repo-nexus.svg)](https://www.npmjs.com/package/repo-nexus)
-[![License: MIT](https://img.shields.io/github/license/unoxen/repo-nexus)](LICENSE)
+[![License: Apache 2.0](https://img.shields.io/github/license/unoxen/repo-nexus)](LICENSE)
 [![POSIX Compatible](https://img.shields.io/badge/POSIX-compatible-success)](#)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey)](#)
 [![Documentation Site](https://img.shields.io/badge/docs-site-blue.svg)](https://unoxen.github.io/repo-nexus/)
@@ -16,7 +16,7 @@ A **Virtual Meta-Repo** companion for multi-repo workspaces and shared AI contex
 - **Two-Level Configuration as Source of Truth**: Shared team manifest in `rnex.yaml` with machine-specific overrides in `.local.rnex.yaml` (highest priority).
 - **One Command Team Onboarding**: Teammates clone the meta-repo and run `rnex clone` to clone and configure all member repos in seconds.
 - **Cross-Repo Batch Operations**: Run arbitrary commands across all active repositories with `rnex exec <command>`.
-- **Scoped Plugins & Context Packs**: Modular plugin packages scoped under `.rnex/plugins/<plugin-name>/` with support for domain directories (e.g. `.rnex/wiki` and `./docs` for `karpathy-llm`).
+- **Scoped Plugins & Context Packs**: Modular plugin packages scoped under `.rnex/plugins/<plugin-name>/` with support for domain directories (e.g. `wiki/` and `./docs` for `karpathy-llm`).
 - **Zero Dependencies**: Pure POSIX shell CLI (`rnex`). Works out of the box across macOS, Linux, and Windows (WSL/Git Bash).
 
 > 📖 **Documentation & Guides**
@@ -26,7 +26,7 @@ A **Virtual Meta-Repo** companion for multi-repo workspaces and shared AI contex
 > - 🚀 **[Getting Started](https://unoxen.github.io/repo-nexus/guide/getting-started)** — Step-by-step onboarding walkthrough and workspace setup
 > - 📐 **[Architecture](https://unoxen.github.io/repo-nexus/guide/architecture)** & **[Why Repo Nexus?](https://unoxen.github.io/repo-nexus/guide/why-repo-nexus)** — Virtual Meta-Repo model, directory layout, and design rationale
 > - 💻 **[CLI Reference](https://unoxen.github.io/repo-nexus/cli/)** — Complete command syntax, global flags, batch execution (`rnex exec`), and Git hooks
-> - 🧩 **[Plugins Guide](https://unoxen.github.io/repo-nexus/plugins/)** — AI provider integrations (Claude, Copilot, Cursor, Gemini, Windsurf) and Karpathy LLM Wiki
+> - 🧩 **[Plugins Guide](https://unoxen.github.io/repo-nexus/plugins/)** — AI provider integrations (Claude, Codex, Copilot, Cursor, Gemini, Windsurf) and Karpathy LLM Wiki
 > - ⚙️ **[Configuration Schema](https://unoxen.github.io/repo-nexus/guide/configuration)** — Two-level `rnex.yaml` and `.local.rnex.yaml` specification
 > - ❓ **[Frequently Asked Questions (FAQ)](https://unoxen.github.io/repo-nexus/faq/)** — Common questions, Git submodule differences, and context strategies
 
@@ -114,8 +114,8 @@ mkdir my-workspace && cd my-workspace
 rnex init
 
 # 2. Register and clone repositories
-rnex add backend git@github.com:myorg/backend-api.git
-rnex add frontend https://github.com/myorg/web-app.git
+rnex repo add git@github.com:myorg/backend-api.git --name backend
+rnex repo add https://github.com/myorg/web-app.git --name frontend
 
 # 3. Check workspace health
 rnex status
@@ -183,4 +183,4 @@ Contributions are welcome! Please read [CONTRIBUTION.md](CONTRIBUTION.md) for co
 
 ## License
 
-[MIT](LICENSE)
+[Apache 2.0](LICENSE)

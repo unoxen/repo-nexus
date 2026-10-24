@@ -14,15 +14,20 @@ cmd_completion() {
     bash)
       cat <<'EOF'
 _rnex_completions() {
-  local cur prev commands
+  local cur prev commands repo_subcommands
   COMPREPLY=()
   cur="${COMP_WORDS[COMP_CWORD]}"
   prev="${COMP_WORDS[COMP_CWORD-1]}"
-  commands="init install add clone exec remove enable disable readonly list sync status rnex-dir update upgrade hooks plugin completion version help"
+  commands="init install repo clone exec list sync status plugin completion version help"
+  repo_subcommands="add remove set clone status exec list"
 
   case "$prev" in
     rnex)
       COMPREPLY=( $(compgen -W "$commands" -- "$cur") )
+      return 0
+      ;;
+    repo)
+      COMPREPLY=( $(compgen -W "$repo_subcommands" -- "$cur") )
       return 0
       ;;
     sync)
@@ -34,14 +39,12 @@ _rnex_completions() {
       return 0
       ;;
     plugin)
-      COMPREPLY=( $(compgen -W "list info enable install update disable" -- "$cur") )
+      local plugins
+      plugins=$(rnex plugin list 2>/dev/null | awk 'NR>3 && $2 ~ /^\[/ {print $3}')
+      COMPREPLY=( $(compgen -W "list info enable install update disable help $plugins" -- "$cur") )
       return 0
       ;;
-    hooks)
-      COMPREPLY=( $(compgen -W "install uninstall status" -- "$cur") )
-      return 0
-      ;;
-    enable|disable|readonly|remove|show|hide|rnex-dir)
+    remove|clone|status|exec|set)
       local repos
       repos=$(rnex list 2>/dev/null | awk 'NR>2 {print $1}')
       COMPREPLY=( $(compgen -W "$repos" -- "$cur") )
@@ -79,20 +82,12 @@ _rnex() {
   commands=(
     'init:Initialize a new Repo Nexus workspace'
     'install:Install rnex globally into ~/.local/bin'
-    'add:Register and clone a member repository'
+    'repo:Single-repository management (add, remove, set, clone, status, exec, list)'
     'clone:Clone missing member repositories'
     'exec:Execute a command across all member repositories'
-    'remove:Unregister and delete a repository'
-    'enable:Enable a repository in active workspace'
-    'disable:Disable a repository in workspace'
-    'readonly:Toggle read-only (information-only) status for a repo'
     'list:List member repositories'
     'sync:Reconcile workspace, plugins, skills, and member .rnex directories'
     'status:Inspect workspace health and status (read-only)'
-    'rnex-dir:Toggle .rnex directory integration for a repo'
-    'update:Upgrade workspace configuration and routing instructions'
-    'upgrade:Alias for update'
-    'hooks:Manage automated Git hooks'
     'plugin:Manage plugins'
     'completion:Generate shell completions'
     'version:Display version'
@@ -112,6 +107,21 @@ _rnex() {
       ;;
     args)
       case "$words[1]" in
+        repo)
+          if [ "$CURRENT" -eq 2 ]; then
+            local -a repo_cmds
+            repo_cmds=('add:Add and optionally clone a member repository' 'remove:Remove a repository from configuration' 'set:Update repository configuration flags' 'clone:Clone a single repository' 'status:Show status of a repository' 'exec:Execute command in repository directory' 'list:List member repositories')
+            _describe -t repo_cmds 'repo subcommand' repo_cmds
+          elif [ "$words[2]" = "set" ]; then
+            local -a set_opts
+            set_opts=('--enable[Enable repository]' '--disable[Disable repository]' '--readonly[Mark repository read-only]' '--readwrite[Allow writing to repository]' '--global[Update team rnex.yaml]' '--local[Update workstation .local.rnex.yaml]')
+            _describe -t set_opts 'repo set option' set_opts
+          else
+            local -a repos
+            repos=($(rnex list 2>/dev/null | awk 'NR>2 {print $1}'))
+            _describe -t repos 'repository' repos
+          fi
+          ;;
         sync)
           local -a sync_opts
           sync_opts=('(-y --yes)'{-y,--yes}'[Automatically answer yes to prompts]' '(-q --quiet)'{-q,--quiet}'[Suppress non-error output]' '--upgrade[Upgrade workspace configuration schema]')
@@ -121,18 +131,8 @@ _rnex() {
           ;;
         plugin)
           local -a plugin_cmds
-          plugin_cmds=('list:List plugins' 'info:Show plugin details' 'enable:Enable plugin' 'install:Install/enable plugin' 'update:Update enabled plugin(s)' 'disable:Disable plugin')
+          plugin_cmds=('list:List plugins' 'info:Show plugin details' 'enable:Enable plugin' 'install:Install/enable plugin' 'update:Update enabled plugin(s)' 'disable:Disable plugin' 'help:Display plugin help')
           _describe -t plugin_cmds 'plugin command' plugin_cmds
-          ;;
-        hooks)
-          local -a hook_cmds
-          hook_cmds=('install:Install Git hooks' 'uninstall:Uninstall Git hooks' 'status:Show Git hooks status')
-          _describe -t hook_cmds 'hooks command' hook_cmds
-          ;;
-        enable|disable|readonly|remove|show|hide|rnex-dir)
-          local -a repos
-          repos=($(rnex list 2>/dev/null | awk 'NR>2 {print $1}'))
-          _describe -t repos 'repository' repos
           ;;
         completion)
           local -a shells
@@ -162,27 +162,22 @@ EOF
       cat <<'EOF'
 complete -c rnex -n "__fish_use_subcommand" -a init -d "Initialize a new workspace"
 complete -c rnex -n "__fish_use_subcommand" -a install -d "Install rnex globally"
-complete -c rnex -n "__fish_use_subcommand" -a add -d "Register and clone a repository"
+complete -c rnex -n "__fish_use_subcommand" -a repo -d "Member repository management"
+complete -c rnex -n "__fish_seen_subcommand_from repo" -a "add remove set clone status exec list"
+complete -c rnex -n "__fish_seen_subcommand_from set" -l readonly -d "Mark repository read-only"
+complete -c rnex -n "__fish_seen_subcommand_from set" -l readwrite -d "Allow writing to repository"
+complete -c rnex -n "__fish_seen_subcommand_from set" -l enable -d "Enable repository"
+complete -c rnex -n "__fish_seen_subcommand_from set" -l disable -d "Disable repository"
+complete -c rnex -n "__fish_seen_subcommand_from set" -l global -d "Apply in team configuration"
+complete -c rnex -n "__fish_seen_subcommand_from set" -l local -d "Apply in local configuration"
 complete -c rnex -n "__fish_use_subcommand" -a clone -d "Clone missing repositories"
 complete -c rnex -n "__fish_use_subcommand" -a exec -d "Execute command across member repos"
-complete -c rnex -n "__fish_use_subcommand" -a remove -d "Remove a repository"
-complete -c rnex -n "__fish_use_subcommand" -a enable -d "Enable a repository"
-complete -c rnex -n "__fish_use_subcommand" -a disable -d "Disable a repository"
-complete -c rnex -n "__fish_use_subcommand" -a readonly -d "Toggle read-only status for a repo"
-complete -c rnex -n "__fish_seen_subcommand_from readonly" -a "enable disable"
-complete -c rnex -n "__fish_seen_subcommand_from readonly" -l local -d "Apply locally"
 complete -c rnex -n "__fish_use_subcommand" -a list -d "List repositories"
-complete -c rnex -n "__fish_use_subcommand" -a rnex-dir -d "Toggle .rnex directory integration for a repo"
-complete -c rnex -n "__fish_seen_subcommand_from rnex-dir" -a "enable disable"
-complete -c rnex -n "__fish_seen_subcommand_from rnex-dir" -l local -d "Apply locally"
 complete -c rnex -n "__fish_use_subcommand" -a sync -d "Reconcile workspace, plugins, skills, and repos"
 complete -c rnex -n "__fish_seen_subcommand_from sync" -l yes -s y -d "Automatically answer yes to prompts"
 complete -c rnex -n "__fish_seen_subcommand_from sync" -l quiet -s q -d "Suppress non-error output"
 complete -c rnex -n "__fish_seen_subcommand_from sync" -l upgrade -d "Upgrade workspace configuration schema"
 complete -c rnex -n "__fish_use_subcommand" -a status -d "Inspect workspace status (read-only)"
-complete -c rnex -n "__fish_use_subcommand" -a update -d "Upgrade workspace configuration"
-complete -c rnex -n "__fish_use_subcommand" -a upgrade -d "Upgrade workspace configuration"
-complete -c rnex -n "__fish_use_subcommand" -a hooks -d "Manage Git hooks"
 complete -c rnex -n "__fish_use_subcommand" -a plugin -d "Manage plugins"
 complete -c rnex -n "__fish_use_subcommand" -a completion -d "Generate completions"
 complete -c rnex -n "__fish_use_subcommand" -a version -d "Show version"

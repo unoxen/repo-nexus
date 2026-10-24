@@ -102,5 +102,5 @@ rnex plugin disable cursor
 
 Repo Nexus automatically performs surgical cleanup:
 - Removes auto-generated user skills under `.cursor/rules/rnex-*.md`.
-- Cleans up managed routing instructions in `.cursorrules`.
+- Preserves routing instructions in `.cursorrules` and `AGENTS.md`.
 - Developer-created custom rules under `.cursor/` are preserved.

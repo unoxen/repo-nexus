@@ -30,7 +30,7 @@ Below is a complete annotated example of `rnex.yaml`:
 
 ```yaml
 # Workspace Schema Version
-version: 0.5.13
+version: 0.5.14
 
 # Directory where member repositories are cloned (default: ./repos)
 repos_dir: ./repos
@@ -39,8 +39,19 @@ repos_dir: ./repos
 # Options: false, true (generates <dir>.code-workspace), or custom filename
 code_workspace: workspace.code-workspace
 
-# Automated workspace Git hooks (default: true)
-git_hooks: true
+# Git Integration (Ignore rules & Git hooks)
+git:
+  ignore:
+    - "repos/"
+    - "**/.rnex*/"
+    - "**/rnex*/"
+  hooks:
+    post-merge:
+      - "rnex sync --quiet"
+    post-checkout:
+      - "rnex sync --quiet"
+    pre-commit: []
+    pre-push: []
 
 # Member Repositories
 repos:
@@ -48,7 +59,7 @@ repos:
     url: git@github.com:my-org/api-service.git
     branch: main
     enabled: true
-    shallow: false
+    readonly: false
 
   frontend:
     url: git@github.com:my-org/web-frontend.git
@@ -72,8 +83,10 @@ plugins:
 
   # Knowledge & Agent Protocol Plugins
   karpathy-llm:
-    lint_trigger: git-post-merge
-    notify_on_changes: true
+    wiki_dir: wiki
+    sources:
+      - docs
+      - "repos/**/README.md"
 ```
 
 ---
@@ -87,7 +100,8 @@ plugins:
 | `version` | string | Current CLI version | Schema version compatibility check. |
 | `repos_dir` | string | `./repos` | Relative or absolute path where member repos are cloned. |
 | `code_workspace` | boolean \| string | `false` | Enables `.code-workspace` generation. Pass a string for custom filename. |
-| `git_hooks` | boolean | `true` | Configures `.rnex/hooks` as `core.hooksPath` during `rnex sync`. |
+| `git.ignore` | list | `["repos/", "**/.rnex*/", "**/rnex*/"]` | Directory and file patterns added to `.gitignore`. |
+| `git.hooks` | map | `post-merge`, `post-checkout` | Mapping of Git hook names to command lists executed by native wrappers. |
 | `repos` | map | `{}` | Map of member repository specifications keyed by name. |
 | `plugins` | map | `{}` | Map of enabled plugins and their configuration options. |
 
@@ -98,6 +112,7 @@ plugins:
 | `url` | string | *(required)* | Remote Git clone URL (SSH or HTTPS). |
 | `branch` | string | Remote default | Target branch to checkout during clone or sync. |
 | `enabled` | boolean | `true` | If `false`, repository is skipped during clone, exec, and sync. |
+| `readonly` | boolean | `false` | If `true`, marks repository as read-only / reference-only for AI coding assistants. |
 | `shallow` | boolean | `false` | If `true`, clone with `--depth 1` for fast CI setup. |
 
 ---

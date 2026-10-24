@@ -23,7 +23,7 @@ It requires **zero external vector databases, embedding pipelines, or heavy MCP 
 - Guidelines tailored specifically for multi-repo virtual workspaces:
   - Always read workspace configuration (`.local.rnex.yaml` and `rnex.yaml`) first.
   - Respect member repository autonomy (`repos/<name>/`).
-  - Read `.rnex/wiki/hot.md` and `.rnex/wiki/index.md` once per session for orientation.
+  - Read `wiki/hot.md` and `wiki/index.md` once per session for orientation.
   - Perform Git commits directly inside individual member repositories.
 
 ### 3. Autonomous LLM Wiki Architecture
@@ -32,38 +32,38 @@ A self-healing, agent-maintained knowledge graph structured as:
 - **`./docs/` Intake Directory**:
   - Append-only directory where unmodified source material (articles, transcripts, docs, API references, meeting notes) is deposited.
   - Raw sources are immutable source-of-truth references for citations.
-- **`.rnex/wiki/` Curated Knowledge Base**:
-  - Interlinked atomic markdown pages, each representing a single concept, architectural pattern, or domain decision.
+- **`wiki/` Curated Knowledge Base**:
+  - Interlinked atomic markdown pages, each representing a single concept, architectural pattern, or domain decision (default directory: `wiki/` at workspace root).
   - Each page contains structured YAML frontmatter defining typed relations:
     ```yaml
     ---
     title: Workspace Configuration Protocol
     sources: [docs/rnex-design-spec.md]
-    related: [.rnex/wiki/member-repos.md, .rnex/wiki/ai-routing.md]
-    extends: [.rnex/wiki/multi-repo-architecture.md]
+    related: [wiki/member-repos.md, wiki/ai-routing.md]
+    extends: [wiki/multi-repo-architecture.md]
     contradicts: []
     mentioned_in: []
     ---
     ```
-- **`.rnex/wiki/index.md` Navigation Index**:
+- **`wiki/index.md` Navigation Index**:
   - Master categorized catalog organizing all atomic concepts, architecture decisions, and cross-project knowledge.
-- **`.rnex/wiki/hot.md` Rolling Context Cache**:
+- **`wiki/hot.md` Rolling Context Cache**:
   - High-density ~500-word orientation summary for rapid agent onboarding without full wiki scans. Agents read this once on startup.
-- **`.rnex/wiki/_log.md` Audit Trail**:
+- **`wiki/_log.md` Audit Trail**:
   - Append-only log recording every ingest and lint operation with timestamped details and source attribution.
 
 ### 4. Standardized Agent Workflows
 - **`wiki-ingest.md` (8-Step Ingestion Protocol)**:
   - Decomposes raw source documents from `./docs/` into 5–25 atomic wiki pages.
   - Formulates bi-directional frontmatter relations (`sources`, `related`, `extends`, `contradicts`).
-  - Appends operations to `.rnex/wiki/_log.md` and rebuilds `.rnex/wiki/index.md`.
+  - Appends operations to `wiki/_log.md` and rebuilds `wiki/index.md`.
 - **`wiki-lint.md` (10-Step Integrity Audit Protocol)**:
   - Validates inter-page link paths and file existence.
   - Recomputes reverse backlinks (`mentioned_in`).
   - Identifies and eliminates orphan pages.
   - Merges duplicate or overlapping pages.
   - Audits logical inconsistencies and flags outdated information.
-  - Updates `.rnex/wiki/hot.md` and rebuilds `.rnex/wiki/index.md`.
+  - Updates `wiki/hot.md` and rebuilds `wiki/index.md`.
 
 ### 5. Specialized Agent (`agents/wiki-curator.agent.md`)
 - A dedicated autonomous curator agent configured to maintain the LLM Wiki graph, execute ingestion protocols, and perform periodic graph integrity audits.
@@ -92,18 +92,11 @@ Configure options under `plugins.karpathy-llm` in `rnex.yaml` or `.local.rnex.ya
 plugins:
   karpathy-llm:
     # Directory paths relative to workspace root (defaults shown)
-    wiki_dir: .rnex/wiki        # Directory for curated atomic markdown pages
+    wiki_dir: wiki              # Directory for curated atomic markdown pages (default: wiki)
     sources:                    # Intake documents: directories and/or glob patterns
       - docs                    #   directory: all files (hidden dirs and node_modules pruned)
       - "repos/**/README.md"    #   recursive glob (quote it); disabled repos are excluded
                                 # A sources list in .local.rnex.yaml replaces this list entirely.
-
-    # Automated Git hook trigger for wiki verification
-    # Options: git-post-merge, git-post-commit, git-pre-commit, git-pre-push, manual
-    lint_trigger: manual
-
-    # Notify developer when changes are committed to intake sources or .rnex/wiki/
-    notify_on_changes: true
 
     # Enable or disable
     enabled: true
@@ -111,10 +104,8 @@ plugins:
 
 | Option | Type | Default | Description |
 |:---|:---|:---|:---|
-| `wiki_dir` | string | `.rnex/wiki` | Directory containing curated atomic markdown pages. |
+| `wiki_dir` | string | `wiki` | Directory containing curated atomic markdown pages. |
 | `sources` | list | `[docs, "repos/**/README.md"]` | Intake directories and/or glob patterns relative to workspace root. Overridable in `.local.rnex.yaml`. |
-| `lint_trigger` | string | `manual` | Git hook event that triggers wiki change detection (`git-post-merge`, `git-post-commit`, `git-pre-commit`, `git-pre-push`, `manual`). |
-| `notify_on_changes` | boolean | `true` | Show notification banner when changes are committed to intake sources or `.rnex/wiki/`. |
 | `enabled` | boolean | `true` | Enable or disable the plugin. Overridable in `.local.rnex.yaml`. |
 
 ---
@@ -133,17 +124,55 @@ The `sources` setting defines where the Karpathy LLM Wiki discovers raw intake d
 
 ---
 
+## Plugin CLI Commands
+
+The `karpathy-llm` plugin provides native command-line subcommands via the extensible `rnex plugin` engine:
+
+### `rnex plugin karpathy-llm ingest`
+
+Ingests raw intake documents and member repository READMEs into atomic, interlinked markdown pages in `wiki/`.
+
+```sh
+rnex plugin karpathy-llm ingest [options]
+```
+
+| Option | Type | Default | Description |
+|:---|:---|:---|:---|
+| `--source <path>` | string | *(all sources)* | Ingest a specific markdown file or intake directory instead of all configured `sources`. |
+| `--repo <name>` | string | *(all enabled repos)* | Ingest a specific member repository README (`repo-<name>.md`). |
+| `-q, --quiet` | boolean | `false` | Suppress non-error informational progress messages. |
+| `-h, --help` | boolean | `false` | Display command usage and options. |
+
+### `rnex plugin karpathy-llm lint`
+
+Audits wiki graph integrity, validates required YAML frontmatter keys, checks source file existence, flags orphan pages unreferenced in `index.md`, and enforces the ~500-word ceiling on `hot.md`.
+
+```sh
+rnex plugin karpathy-llm lint [options]
+```
+
+| Option | Type | Default | Description |
+|:---|:---|:---|:---|
+| `--strict` | boolean | `false` | Treat warnings (broken sources, orphaned pages, `hot.md` word overflow) as errors and exit with a non-zero code. |
+| `-q, --quiet` | boolean | `false` | Suppress non-error informational messages. |
+| `-h, --help` | boolean | `false` | Display command usage and options. |
+
+---
+
 ## Automated Git Hooks Integration
 
-When workspace Git hooks are installed (`rnex hooks install`), the `karpathy-llm` plugin links directly into Git events:
-- **`post-merge`**: Detects if incoming commits touched intake sources or `.rnex/wiki/`, warning the developer to review or re-lint.
-- **`post-commit`**: Reminds the developer to run `wiki-lint` or `wiki-ingest` if wiki files were committed.
-- **`pre-commit` & `pre-push`**: Emits trigger notices if unvalidated wiki files are staged or about to be pushed.
+Integrate wiki integrity checks into your Git workflow using the declarative `git.hooks` configuration in `rnex.yaml`:
 
-Inspect active trigger status anytime:
-```sh
-rnex hooks status
+```yaml
+git:
+  hooks:
+    pre-commit:
+      - "rnex plugin karpathy-llm lint"
+    post-merge:
+      - "rnex sync --quiet"
 ```
+
+During `rnex init` or `rnex sync`, Repo Nexus installs Git hook dispatchers in `.git/hooks/` that automatically execute the configured commands.
 
 ---
 
@@ -155,15 +184,18 @@ When `karpathy-llm` is enabled, it scaffolds:
 my-workspace/
 ├── docs/
 │   └── .gitkeep                     # Deposit unmodified source files here
+├── wiki/
+│   ├── index.md                     # Master navigation catalog
+│   ├── hot.md                       # High-density ~500-word orientation summary
+│   └── _log.md                      # Append-only audit history
 ├── .rnex/
-│   ├── wiki/
-│   │   ├── index.md                 # Master navigation catalog
-│   │   ├── hot.md                   # High-density ~500-word orientation summary
-│   │   └── _log.md                  # Append-only audit history
 │   └── plugins/
 │       └── karpathy-llm/
 │           ├── rules/
 │           │   └── behavioral.md         # 4 Cardinal principles & context engineering
+│           ├── commands/
+│           │   ├── ingest.sh             # CLI subcommand handler
+│           │   └── lint.sh               # CLI subcommand handler
 │           ├── skills/
 │           │   ├── wiki-ingest.md        # Agentic skill for wiki ingestion
 │           │   └── wiki-lint.md          # Agentic skill for wiki linting
@@ -200,4 +232,4 @@ rnex plugin disable karpathy-llm
 
 When disabled:
 - Scoped assets under `.rnex/plugins/karpathy-llm/` and member repository mirrors are cleanly removed.
-- **Your data in `./docs/` and `.rnex/wiki/` is preserved 100% intact.** Repo Nexus never deletes user-generated knowledge bases upon plugin disablement.
+- **Your data in `./docs/` and `wiki/` is preserved 100% intact.** Repo Nexus never deletes user-generated knowledge bases upon plugin disablement.

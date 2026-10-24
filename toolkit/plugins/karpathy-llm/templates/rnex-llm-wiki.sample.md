@@ -44,5 +44,5 @@
 ## 5. Agent Instructions for Updating This Wiki
 
 1. When introducing a new cross-repo API or altering an existing contract, update **Section 3**.
-2. When registering a new member repository via `rnex add`, add its entry to **Section 2**.
+2. When registering a new member repository via `rnex repo add`, add its entry to **Section 2**.
 3. Keep entries concise and factual. Do not duplicate code; provide references to source files.

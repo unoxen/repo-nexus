@@ -104,7 +104,6 @@ require_workspace() {
     _load_workspace_version
     _load_repos_dir
     _load_code_workspace
-    _load_git_hooks
     log_info "Using workspace at ${_BOLD}$NEXUS_DIR${_NC} ${_DIM}(via config: $WORKSPACE_YAML)${_NC}"
     return 0
   fi
@@ -133,7 +132,6 @@ require_workspace() {
   _load_workspace_version
   _load_repos_dir
   _load_code_workspace
-  _load_git_hooks
 
   log_info "Using workspace at ${_BOLD}$NEXUS_DIR${_NC} ${_DIM}($(basename "$WORKSPACE_YAML") found)${_NC}"
 }
@@ -178,10 +176,6 @@ _load_code_workspace() {
       esac
       ;;
   esac
-}
-
-_load_git_hooks() {
-  GIT_HOOKS_CONFIG="$(yaml_get_top_level "git_hooks|hooks")"
 }
 
 migrate_karpathy_llm_config() {
@@ -345,18 +339,34 @@ upgrade_workspace_config() {
     ' "$_f" > "$_tmp" && mv "$_tmp" "$_f"
   fi
 
-  # 4. Add git_hooks if missing
-  if ! grep -q '^[ ]*\(git_hooks\|hooks\):' "$_f" 2>/dev/null; then
-    _def_gh="false"
-    _cur_hp="$(git -C "$NEXUS_DIR" config --get core.hooksPath 2>/dev/null || true)"
-    if [ "$_cur_hp" = ".rnex/hooks" ] || [ "$_cur_hp" = "$NEXUS_DIR/.rnex/hooks" ]; then
-      _def_gh="true"
-    fi
-    awk -v def_gh="$_def_gh" '
+  # 4. Remove legacy git_hooks: setting and add structured git: section if missing
+  if grep -qE '^[ ]*(git_hooks|hooks):' "$_f" 2>/dev/null; then
+    _tmp="$(mktemp)"
+    awk '
+      /^[ ]*#.*[aA]utomated workspace Git hooks/ { next }
+      /^[ ]*(git_hooks|hooks):/ { next }
+      { print }
+    ' "$_f" > "$_tmp" && mv "$_tmp" "$_f"
+  fi
+
+  if ! grep -q '^[ ]*git:[ ]*$' "$_f" 2>/dev/null; then
+    _tmp="$(mktemp)"
+    awk '
       BEGIN { inserted=0 }
       /^[ ]*(plugins|repos):/ && !inserted {
-        print "# Automated workspace Git hooks (default: true; e.g. post-merge auto-sync, plugin triggers)"
-        print "git_hooks: " def_gh
+        print "# Git Integration (Ignore rules & Git hooks)"
+        print "git:"
+        print "  ignore:"
+        print "    - \"repos/\""
+        print "    - \"**/.rnex*/\""
+        print "    - \"**/rnex*/\""
+        print "  hooks:"
+        print "    post-merge:"
+        print "      - \"rnex sync --quiet\""
+        print "    post-checkout:"
+        print "      - \"rnex sync --quiet\""
+        print "    pre-commit: []"
+        print "    pre-push: []"
         print ""
         inserted=1
       }
@@ -364,7 +374,19 @@ upgrade_workspace_config() {
       END {
         if (!inserted) {
           print ""
-          print "git_hooks: " def_gh
+          print "# Git Integration (Ignore rules & Git hooks)"
+          print "git:"
+          print "  ignore:"
+          print "    - \"repos/\""
+          print "    - \"**/.rnex*/\""
+          print "    - \"**/rnex*/\""
+          print "  hooks:"
+          print "    post-merge:"
+          print "      - \"rnex sync --quiet\""
+          print "    post-checkout:"
+          print "      - \"rnex sync --quiet\""
+          print "    pre-commit: []"
+          print "    pre-push: []"
         }
       }
     ' "$_f" > "$_tmp" && mv "$_tmp" "$_f"

@@ -108,5 +108,5 @@ rnex plugin disable gemini
 
 Repo Nexus automatically performs surgical cleanup:
 - Removes auto-generated user skills under `.agents/skills/rnex-*`.
-- Cleans up managed routing instructions in `GEMINI.md`.
+- Preserves routing instructions in `GEMINI.md` and `AGENTS.md`.
 - Developer-created files under `.agents/` or `.gemini/` that do not originate from Repo Nexus are preserved.

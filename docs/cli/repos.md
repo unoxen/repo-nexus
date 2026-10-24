@@ -1,51 +1,164 @@
 ---
 title: Member Repository Commands
-description: CLI reference for managing member repositories in Repo Nexus, including add, clone, list, enable, disable, remove, and rnex-dir.
+description: CLI reference for managing member repositories in Repo Nexus via rnex repo subcommands, rnex clone, and rnex list.
 ---
 
 # Member Repository Commands
 
-Member repository commands register, clone, toggle, and manage individual git repositories managed under `./repos/`.
+Member repository commands register, clone, configure, inspect, and execute commands across individual Git repositories managed under `./repos/`.
 
 ---
 
-## `rnex add`
+## Single-Repository Operations (`rnex repo`)
 
-Registers a repository in configuration and immediately clones it into `./repos/<name>`.
+All operations targeting a single member repository are namespaced under `rnex repo`.
 
-### Syntax
+### `rnex repo add`
+
+Registers a repository in configuration and clones it into `./repos/<name>`.
+
+#### Syntax
 ```sh
-rnex add [options] [<name>] <git-url>
+rnex repo add <git-url> [options]
 ```
 
-### Parameters & Options
+#### Parameters & Options
 | Option | Type | Default | Description |
 |:---|:---|:---|:---|
-| `<name>` | string | *(optional)* | Short identifier for repository (folder name in `./repos/`). If omitted, defaults to the last path component of `<git-url>` (without `.git` suffix). |
 | `<git-url>` | string | *(required)* | Remote Git clone URL (SSH or HTTPS) or local repository path. |
+| `--name <name>` | string | *(optional)* | Short identifier for repository (folder name in `./repos/`). Defaults to the repository name from `<git-url>`. |
+| `--branch <branch>` | string | *(optional)* | Branch to track and checkout during initial clone. |
 | `--local` | boolean | `false` | Registers repository in `.local.rnex.yaml` instead of team `rnex.yaml`. |
 | `--disabled` | boolean | `false` | Registers repository with `enabled: false` (skips immediate clone). |
-| `--readonly` | boolean | `false` | Sets `readonly: true`; designates repository as reference-only / information-only. |
+| `--readonly` | boolean | `false` | Sets `readonly: true`; designates repository as reference-only. |
 
-### Examples
+#### Examples
 ```bash
-# Register and clone a service using explicit name
-rnex add backend git@github.com:myorg/backend-api.git
+# Register and clone a service using explicit name and branch
+rnex repo add git@github.com:myorg/backend-api.git --name backend --branch develop
 
 # Register and clone without providing a name (name defaults to 'web-app')
-rnex add https://github.com/myorg/web-app.git
+rnex repo add https://github.com/myorg/web-app.git
 
-# Register a private experiment on local machine only
-rnex add --local experiment git@github.com:myorg/exp.git
+# Register a private experiment on workstation only
+rnex repo add --local git@github.com:myorg/exp.git --name experiment
 ```
 
 ---
 
-## `rnex clone`
+### `rnex repo remove`
 
-Clones all registered, enabled repositories missing on disk.
+Unregisters a member repository from configuration and deletes its clone from `./repos/<name>`.
 
-### Syntax
+#### Syntax
+```sh
+rnex repo remove <name> [options]
+```
+
+#### Options
+| Option | Type | Default | Description |
+|:---|:---|:---|:---|
+| `--force` | boolean | `false` | Remove repository even if uncommitted changes or untracked files exist. |
+
+::: danger Destructive Operation
+`rnex repo remove` deletes the target repository folder from disk. Always ensure you have pushed any working branches or uncommitted changes to remote before removing.
+:::
+
+---
+
+### `rnex repo set`
+
+Configures options for an individual member repository, such as enabling/disabling or setting read-only mode.
+
+#### Syntax
+```sh
+rnex repo set <name> [options]
+```
+
+#### Options
+| Option | Type | Default | Description |
+|:---|:---|:---|:---|
+| `--enable` | boolean | `false` | Enable the repository (include in `rnex clone`, `rnex exec`, and AI routing). |
+| `--disable` | boolean | `false` | Disable the repository (exclude from batch clone, execution, and routing). |
+| `--readonly` | boolean | `false` | Mark repository as read-only (information-only for AI assistants). |
+| `--readwrite` | boolean | `false` | Mark repository as read-write. |
+| `--local` | boolean | `false` | Apply setting as a workstation override in `.local.rnex.yaml`. |
+
+#### Examples
+```bash
+# Disable a service across the workspace
+rnex repo set analytics --disable
+
+# Mark a reference repo as read-only locally
+rnex repo set docs-ref --readonly --local
+
+# Re-enable a disabled service
+rnex repo set backend --enable
+```
+
+---
+
+### `rnex repo clone`
+
+Clones a single registered member repository into `./repos/<name>`.
+
+#### Syntax
+```sh
+rnex repo clone <name>
+```
+
+#### Examples
+```bash
+rnex repo clone backend
+```
+
+---
+
+### `rnex repo status`
+
+Inspects current Git status, active branch, dirty working tree, and configuration flags for a specific member repository.
+
+#### Syntax
+```sh
+rnex repo status <name>
+```
+
+#### Examples
+```bash
+rnex repo status backend
+```
+
+---
+
+### `rnex repo exec`
+
+Executes an arbitrary shell command specifically inside the member repository directory (`./repos/<name>`).
+
+#### Syntax
+```sh
+rnex repo exec <name> <command...>
+```
+
+#### Examples
+```bash
+# Run tests inside the backend repository
+rnex repo exec backend npm test
+
+# Check Git log in the frontend repository
+rnex repo exec frontend git log -3 --oneline
+```
+
+---
+
+## Workspace-Level Repository Commands
+
+These commands operate across all member repositories declared in the workspace configuration.
+
+### `rnex clone`
+
+Clones all registered, enabled repositories that are currently missing from disk.
+
+#### Syntax
 ```sh
 rnex clone
 ```
@@ -61,16 +174,16 @@ Cloning into './repos/backend'...
 ```
 
 ::: tip Ideal for Onboarding
-Teammates cloning the meta-repo run `rnex clone` to fetch all member repositories in a single command.
+Teammates onboarding onto the meta-repo run `rnex clone` to fetch all member repositories in a single command.
 :::
 
 ---
 
-## `rnex list`
+### `rnex list`
 
 Outputs a formatted table of all registered member repositories, their active branches, clone state, and readonly status.
 
-### Syntax
+#### Syntax
 ```sh
 rnex list
 ```
@@ -83,73 +196,3 @@ frontend           enabled    cloned   develop        false      git@github.com:
 docs-reference     enabled    cloned   main           true       git@github.com:myorg/docs-ref.git
 analytics          disabled   missing  -              false      git@github.com:myorg/analytics.git
 ```
-
----
-
-## `rnex readonly`
-
-Toggles whether a member repository is read-only (`readonly: true`).
-
-### Syntax
-```sh
-rnex readonly <enable|disable> <name> [--local]
-```
-
-* When marked read-only, AI assistants use this repository strictly for information, code exploration, and schema references without editing files or committing code.
-* Pass `--local` to persist the toggle in `.local.rnex.yaml` without modifying team-wide `rnex.yaml`.
-
-```bash
-# Mark docs-reference as read-only across workspace
-rnex readonly enable docs-reference
-
-# Mark an internal dependency as read-only locally
-rnex readonly enable --local shared-libs
-```
-
----
-
-## `rnex enable` & `rnex disable`
-
-Toggles whether a member repository is active in workspace operations.
-
-### Syntax
-```sh
-rnex enable [--local] <name>
-rnex disable [--local] <name>
-```
-
-* When disabled, a repository is excluded from `rnex clone`, `rnex exec`, and AI agent routing.
-* Pass `--local` to persist the toggle in `.local.rnex.yaml` without modifying team-wide `rnex.yaml`.
-
-```bash
-# Disable a memory-heavy service locally
-rnex disable --local monolith
-```
-
----
-
-## `rnex remove`
-
-Unregisters a member repository from configuration and deletes its clone from `./repos/<name>`.
-
-### Syntax
-```sh
-rnex remove <name>
-```
-
-::: danger Destructive Operation
-`rnex remove` deletes the target repository folder from disk. Always ensure you have pushed any working branches or uncommitted changes to remote before confirming deletion.
-:::
-
----
-
-## `rnex rnex-dir` *(Legacy / Deprecated)*
-
-Under the lazy/on-demand model, member repositories remain completely clean by default and `.rnex/` is only created when an active plugin requires member-level state. `rnex rnex-dir` is maintained for backward compatibility.
-
-### Syntax
-```sh
-rnex rnex-dir <enable|disable> <name>
-```
-
-* `rnex rnex-dir disable <name>` cleanly prunes orphaned `.rnex/` folders from member repositories.

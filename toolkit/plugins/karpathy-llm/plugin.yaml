@@ -8,15 +8,15 @@ config_defaults:
   sources:
     - docs
     - "repos/**/README.md"
-  wiki_dir: ".rnex/wiki"
-  lint_trigger: "manual" # Default changed to manual to avoid unsolicited background trigger tasks
-  notify_on_changes: true
+  wiki_dir: "wiki"
 
 config_descriptions:
   sources: "<list>  (intake directories and/or glob patterns; .local.rnex.yaml list replaces rnex.yaml list)"
   wiki_dir: "<dir>  (directory for curated markdown pages)"
-  lint_trigger: "git-post-merge|git-post-commit|git-pre-commit|git-pre-push|manual"
-  notify_on_changes: "true|false  (show notification when raw/wiki changes are committed)"
+
+commands:
+  ingest: "Ingest intake sources and repo docs into the wiki [--source <path>] [--repo <name>] [--quiet]"
+  lint: "Validate wiki schema, link integrity, and word limits [--strict] [--quiet]"
 
 rules:
   - rules/behavioral.md: .rnex/plugins/karpathy-llm/rules/behavioral.md

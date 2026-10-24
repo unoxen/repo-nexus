@@ -52,7 +52,7 @@ Developer-authored instructions outside of these delimiters are strictly preserv
 | [`cursor`](cursor.md) | AI Provider | Cursor IDE integration: maintains `.cursorrules`, `.cursorignore`, and generates user skills in `.cursor/rules/`. | [Read Guide](cursor.md) |
 | [`gemini`](gemini.md) | AI Provider | Google Gemini CLI & Antigravity IDE integration: maintains `GEMINI.md`, `.geminiignore`, and generates user skills in `.agents/skills/`. | [Read Guide](gemini.md) |
 | [`windsurf`](windsurf.md) | AI Provider | Windsurf IDE integration: maintains `.windsurfrules` and generates user skills in `.windsurf/rules/`. | [Read Guide](windsurf.md) |
-| [`karpathy-llm`](karpathy-llm.md) | Knowledge & Rules | Andrej Karpathy's 4 cardinal principles for coding agents, multi-repo context engineering standards, and autonomous zero-dependency LLM Wiki architecture (`./docs`, `.rnex/wiki`). | [Read Guide](karpathy-llm.md) |
+| [`karpathy-llm`](karpathy-llm.md) | Knowledge & Rules | Andrej Karpathy's 4 cardinal principles for coding agents, multi-repo context engineering standards, and autonomous zero-dependency LLM Wiki architecture (`./docs`, `wiki/`). | [Read Guide](karpathy-llm.md) |
 
 ---
 
@@ -84,6 +84,9 @@ rnex plugin disable <name>
 
 # Disable a plugin locally on this workstation only
 rnex plugin disable --local <name>
+
+# Execute a plugin-defined CLI subcommand
+rnex plugin <name> <command> [options...]
 ```
 
 ---
@@ -111,8 +114,10 @@ plugins:
 
   # Functional / Knowledge Plugins
   karpathy-llm:
-    lint_trigger: manual
-    notify_on_changes: true
+    wiki_dir: wiki
+    sources:
+      - docs
+      - "repos/**/README.md"
 ```
 
 Whenever you modify plugin configuration manually, run:

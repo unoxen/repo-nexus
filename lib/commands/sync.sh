@@ -69,7 +69,6 @@ cmd_sync() {
     _load_workspace_version
     _load_repos_dir
     _load_code_workspace
-    _load_git_hooks
     [ "$_sync_quiet" -eq 0 ] && log_ok "Upgraded workspace configuration and routing instructions to v$RNEX_VERSION"
   fi
 
@@ -83,12 +82,8 @@ cmd_sync() {
   # 1.1. Ensure .gitignore ignores repos/, local configs; ensure .ignore has !repos/*
   reconcile_gitignore "$NEXUS_DIR"
 
-  # 1.2. Reconcile universal workspace instructions in AGENTS.md
-  if has_active_provider_instructions; then
-    clean_rnex_instructions "$NEXUS_DIR/AGENTS.md"
-  else
-    merge_rnex_instructions "$NEXUS_DIR/AGENTS.md"
-  fi
+  # 1.2. Reconcile universal workspace instructions in AGENTS.md (permanent main context file)
+  merge_rnex_instructions "$NEXUS_DIR/AGENTS.md"
 
   # 1.3. Generate auto-sync script (hardcoded harness)
   _write_auto_sync_script "$NEXUS_DIR"
@@ -111,33 +106,8 @@ cmd_sync() {
   # 3.1. Reconcile plugins (scopes, deterministic sync, lifecycle hooks copy, templates, leaked dir cleanup)
   sync_plugins
 
-  # 3.2. Reconcile Git hooks according to configuration
-  case "$GIT_HOOKS_CONFIG" in
-    false|no|0)
-      _cur_hp="$(git -C "$NEXUS_DIR" config --get core.hooksPath 2>/dev/null || true)"
-      if [ "$_cur_hp" = ".rnex/hooks" ] || [ "$_cur_hp" = "$NEXUS_DIR/.rnex/hooks" ]; then
-        cmd_hooks_uninstall_dir "$NEXUS_DIR"
-      fi
-      ;;
-    true|yes|1)
-      if git -C "$NEXUS_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-        _cur_hp="$(git -C "$NEXUS_DIR" config --get core.hooksPath 2>/dev/null || true)"
-        if [ "$_cur_hp" != ".rnex/hooks" ] && [ "$_cur_hp" != "$NEXUS_DIR/.rnex/hooks" ]; then
-          cmd_hooks_install_dir "$NEXUS_DIR"
-        elif [ "${_RNEX_INSIDE_HOOK:-0}" -ne 1 ]; then
-          _install_managed_hook_scripts "$NEXUS_DIR/.rnex/hooks"
-        fi
-      fi
-      ;;
-    *)
-      _cur_hp="$(git -C "$NEXUS_DIR" config --get core.hooksPath 2>/dev/null || true)"
-      if [ "$_cur_hp" = ".rnex/hooks" ] || [ "$_cur_hp" = "$NEXUS_DIR/.rnex/hooks" ]; then
-        if [ "${_RNEX_INSIDE_HOOK:-0}" -ne 1 ]; then
-          _install_managed_hook_scripts "$NEXUS_DIR/.rnex/hooks"
-        fi
-      fi
-      ;;
-  esac
+  # 3.2. Reconcile Git hooks
+  install_git_hooks "$NEXUS_DIR"
 
   # 3.3. Reconcile member repos (.rnex/ harness sync)
   yaml_list_repos | while read -r _name; do

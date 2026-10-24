@@ -22,7 +22,7 @@ Operational skills, rules, and subagents remain cleanly encapsulated within `.rn
 2. **Native Instruction Support via `CODEX.md` & `AGENTS.md`**:
    - OpenAI Codex natively looks for `CODEX.md` as its primary instruction file; it falls back to `AGENTS.md` when no `CODEX.md` exists in the project.
    - When enabled, the Codex plugin automatically synchronizes Repo Nexus routing instructions to `CODEX.md` (or merges them cleanly if you already have custom instructions).
-   - When the plugin is disabled, the routing block is removed, allowing Codex to fall back to `AGENTS.md` directly.
+   - Routing instructions in `CODEX.md` are permanently maintained across plugin state transitions (such as disabling the plugin), guaranteeing uninterrupted context routing without breaking assistant workflows.
 
 3. **Subagent & Skill Execution**:
    - Core skills reside under `.rnex/skills/`.
@@ -110,5 +110,5 @@ rnex plugin disable codex
 
 Repo Nexus automatically performs surgical cleanup:
 - Removes auto-generated user skills under `.codex/skills/rnex-*`.
-- Cleans up managed routing instructions in `CODEX.md`.
+- Preserves routing instructions in `CODEX.md` and `AGENTS.md`.
 - Developer-created custom skills and rules under `.codex/` are preserved.

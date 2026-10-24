@@ -30,7 +30,7 @@ umbrella-workspace/
 ## Configuration (`rnex.yaml`)
 
 ```yaml
-version: 0.5.13
+version: 0.5.14
 repos_dir: ./repos
 code_workspace: umbrella.code-workspace
 

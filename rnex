@@ -90,7 +90,7 @@ done
 
 # Pre-flight auto-sync: reconcile workspace if configuration changed on disk
 case "${1:-help}" in
-  list|exec|clone|add|remove|enable|disable|readonly|plugin|rnex-dir|update|upgrade|hooks)
+  list|exec|clone|repo|plugin)
     auto_sync_if_needed
     ;;
 esac
@@ -104,18 +104,10 @@ dispatch_action() {
   case "$_action" in
     init)        cmd_init "$@" ;;
     install)     cmd_install "$@" ;;
-    add)         cmd_add "$@" ;;
+    repo)        cmd_repo "$@" ;;
     clone)       cmd_clone "$@" ;;
     exec)        cmd_exec "$@" ;;
-    remove)      cmd_remove "$@" ;;
-    enable)      cmd_enable "$@" ;;
-    disable)     cmd_disable "$@" ;;
-    readonly)    cmd_readonly "$@" ;;
-    rnex-dir)    cmd_rnex_dir "$@" ;;
     sync)        cmd_sync "$@" ;;
-    update)      cmd_update "$@" ;;
-    upgrade)     cmd_upgrade "$@" ;;
-    hooks)       cmd_hooks "$@" ;;
     plugin)      cmd_plugin "$@" ;;
     *)           die "Unknown action: $_action" ;;
   esac
@@ -127,14 +119,17 @@ dispatch_action() {
 
 # Subcommand routing table
 case "${1:-help}" in
-  init|install|add|clone|exec|remove|enable|disable|readonly|rnex-dir|sync|update|upgrade|hooks|plugin)
+  _hook)
+    shift
+    run_git_hook "$@"
+    exit $?
+    ;;
+  init|install|repo|clone|exec|sync|plugin)
     _cmd="$1"
     shift
     dispatch_action "$_cmd" "$@"
     exit $?
     ;;
-  show)        shift; dispatch_action "enable" "$@"; exit $? ;;
-  hide)        shift; dispatch_action "disable" "$@"; exit $? ;;
   list)        shift; cmd_list "$@" ;;
   status)      shift; cmd_status "$@" ;;
   completion)  shift; cmd_completion "$@" ;;

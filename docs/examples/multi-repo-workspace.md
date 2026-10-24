@@ -27,10 +27,20 @@ my-fullstack-app/
 ## Configuration (`rnex.yaml`)
 
 ```yaml
-version: 0.5.13
+version: 0.5.14
 repos_dir: ./repos
 code_workspace: fullstack.code-workspace
-git_hooks: true
+
+git:
+  ignore:
+    - "repos/"
+    - "**/.rnex*/"
+    - "**/rnex*/"
+  hooks:
+    post-merge:
+      - "rnex sync --quiet"
+    post-checkout:
+      - "rnex sync --quiet"
 
 repos:
   contracts:
@@ -66,9 +76,9 @@ plugins:
 rnex init -y --code-workspace fullstack.code-workspace
 
 # Register member repositories
-rnex add contracts git@github.com:my-org/contracts.git
-rnex add api-server git@github.com:my-org/api-server.git
-rnex add web-client git@github.com:my-org/web-client.git
+rnex repo add git@github.com:my-org/contracts.git --name contracts
+rnex repo add git@github.com:my-org/api-server.git --name api-server
+rnex repo add git@github.com:my-org/web-client.git --name web-client
 ```
 
 ### 2. Open in VS Code or Cursor

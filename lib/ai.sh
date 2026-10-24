@@ -20,11 +20,17 @@ reconcile_gitignore() {
 repos/*
 !repos/.gitkeep
 
+# Recursive Repo Nexus directories (trailing slashes prevent ignoring rnex executable or rnex.yaml)
+**/.rnex*/
+**/rnex*/
+.rnex*/
+rnex*/
+
 # Local machine-specific configuration
 $RNEX_LOCAL_CONFIG_FILE
 .rnex.local.yaml
 GI_EOF
-    log_ok "Created .gitignore (ignoring repos/ and $RNEX_LOCAL_CONFIG_FILE)"
+    log_ok "Created .gitignore (ignoring repos/, recursive .rnex directories, and $RNEX_LOCAL_CONFIG_FILE)"
   else
     # 1. Strip any legacy lint_trigger_counter entries if present
     if grep -q "lint_trigger_counter" "$_gi" 2>/dev/null; then
@@ -33,11 +39,10 @@ GI_EOF
       log_ok "Removed legacy lint trigger counter entries from .gitignore"
     fi
 
-    # 2. Strip legacy .rnex/ entries if present (.rnex/ contains tracked plugins, skills, and hooks)
-    if grep -qE '^[ ]*#?[ ]*Repo Nexus internal state' "$_gi" 2>/dev/null || grep -qE '^\.rnex/?$' "$_gi" 2>/dev/null; then
+    # 2. Strip any legacy un-slashed .rnex or rnex rules that might match files
+    if grep -qE '^[ ]*#?[ ]*Repo Nexus internal state' "$_gi" 2>/dev/null || grep -qE '^(\.rnex|rnex)$' "$_gi" 2>/dev/null; then
       _tmp="$(mktemp)"
-      grep -vE '(^[ ]*#?[ ]*Repo Nexus internal state|^\.rnex/?$)' "$_gi" > "$_tmp" && mv "$_tmp" "$_gi"
-      log_ok "Removed .rnex/ from .gitignore (.rnex should be tracked in git)"
+      grep -vE '(^[ ]*#?[ ]*Repo Nexus internal state|^(\.rnex|rnex)$)' "$_gi" > "$_tmp" && mv "$_tmp" "$_gi"
     fi
 
     # 3. Ensure repos/* is ignored
@@ -46,7 +51,19 @@ GI_EOF
       log_dim "Added repos/* to .gitignore"
     fi
 
-    # 4. Ensure local config files are ignored
+    # 4. Ensure recursive directory-only rnex rules are present
+    _added_rnex_rules=0
+    for _pat in "**/.rnex*/" "**/rnex*/" ".rnex*/" "rnex*/"; do
+      if ! grep -qFx -- "$_pat" "$_gi" 2>/dev/null; then
+        if [ "$_added_rnex_rules" -eq 0 ]; then
+          printf '\n# Recursive Repo Nexus directories (trailing slashes prevent ignoring rnex binary or rnex.yaml)\n' >> "$_gi"
+          _added_rnex_rules=1
+        fi
+        printf '%s\n' "$_pat" >> "$_gi"
+      fi
+    done
+
+    # 5. Ensure local config files are ignored
     if ! grep -qF "$RNEX_LOCAL_CONFIG_FILE" "$_gi" 2>/dev/null; then
       printf '\n# Local machine-specific configuration\n%s\n' "$RNEX_LOCAL_CONFIG_FILE" >> "$_gi"
       log_dim "Added $RNEX_LOCAL_CONFIG_FILE to .gitignore"
@@ -54,6 +71,30 @@ GI_EOF
     if ! grep -qF ".rnex.local.yaml" "$_gi" 2>/dev/null; then
       printf '.rnex.local.yaml\n' >> "$_gi"
     fi
+  fi
+
+  # 6. Append any custom file and directory patterns from git.ignore
+  _custom_ignores="$(yaml_get_git_ignore 2>/dev/null || true)"
+  if [ -n "$_custom_ignores" ]; then
+    _added_custom_header=0
+    _old_ifs="$IFS"
+    IFS='
+'
+    for _ci in $_custom_ignores; do
+      IFS="$_old_ifs"
+      [ -n "$_ci" ] || continue
+      if [ "$_ci" = "repos/" ] && grep -qFx -- "repos/*" "$_gi" 2>/dev/null; then
+        continue
+      fi
+      if ! grep -qFx -- "$_ci" "$_gi" 2>/dev/null; then
+        if [ "$_added_custom_header" -eq 0 ]; then
+          printf '\n# Custom entries from git.ignore in workspace configuration\n' >> "$_gi"
+          _added_custom_header=1
+        fi
+        printf '%s\n' "$_ci" >> "$_gi"
+      fi
+    done
+    IFS="$_old_ifs"
   fi
 
   # Universal search tool ignore file (ripgrep, Claude Code, VS Code, Zed)

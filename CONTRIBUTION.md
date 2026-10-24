@@ -85,11 +85,11 @@ toolkit/plugins/<name>/
 ├── plugin.yaml                  # Required: Plugin manifest & configuration schema
 ├── instructions.md              # Optional: Markdown context compiled into .rnex/ai-instructions.md
 ├── README.md                    # Optional: Plugin documentation & recipes
+├── commands/                    # Optional: CLI subcommand scripts (*.sh)
 ├── hooks/                       # Optional: Lifecycle & Git event hooks
 │   ├── before_<cmd>.sh          # Executed before mutating command <cmd>
 │   ├── after_<cmd>.sh           # Executed after mutating command <cmd>
-│   ├── git_post-merge.sh        # Executed on Git post-merge events
-│   └── git_pre-commit.sh        # Executed on Git pre-commit events
+│   └── before_plugin_disable.sh # Executed before plugin deactivation
 ├── rules/                       # Optional: Coding rules (*.md)
 ├── skills/                      # Optional: Plugin-owned agentic skills (*.md)
 ├── agents/                      # Optional: Autonomous subagent declarations (*.agent.md)
@@ -111,7 +111,7 @@ templates:
 
 ### Lifecycle Hooks Contract
 Plugins can define executable POSIX `/bin/sh` scripts under `hooks/` to intercept mutating CLI commands:
-- **Available Commands**: `init`, `install`, `add`, `clone`, `exec`, `remove`, `enable`, `disable`, `rnex-dir`, `sync`, `update`, `hooks`, `plugin`.
+- **Available Commands**: `init`, `install`, `sync`, `repo`, `clone`, `exec`, `plugin`.
 - Read-only commands (`status`, `list`, `completion`) bypass lifecycle hooks.
 - **Hook Environment Variables**:
   - `RNEX_ROOT`: Absolute path to the workspace root.
@@ -142,7 +142,7 @@ Functional plugins encapsulate their own agentic skills:
 - During `rnex sync`, copied exclusively to `.rnex/plugins/<plugin>/skills/<skill-name>.md`.
 
 ### 3. User Skill Generator & Plugin Contract API
-- **Zero-Logic User Skills**: Generated on the fly in active AI provider directories (`.cursor/rules/`, `.claude/skills/`, `.gemini/skills/`, `.windsurf/rules/`) with mandatory `rnex-` prefix (`rnex-<skill-name>.md`). They contain zero operational instructions—only a direct reference link to the underlying agentic skill inside `.rnex/`.
+- **Zero-Logic User Skills**: Generated on the fly in active AI provider directories (`.cursor/rules/`, `.claude/skills/`, `.agents/skills/`, `.codex/skills/`, `.github/skills/`, `.windsurf/rules/`) with mandatory `rnex-` prefix (`rnex-<skill-name>.md` or `rnex-<skill-name>/SKILL.md`). They contain zero operational instructions—only a direct reference link to the underlying agentic skill inside `.rnex/`.
 - **Plugin Contract Helper Functions**:
   - `rnex_register_user_skill <skill_name> <target_path_in_rnex>`: Called in `after_sync.sh` to generate the User Skill pointer.
   - `rnex_unregister_user_skill <skill_name>`: Called in `before_plugin_disable.sh` to remove the User Skill pointer before plugin deactivation.

@@ -49,7 +49,7 @@ get_cfg() {
   [ -n "$_gc_val" ] && printf '%s' "$_gc_val" || printf '%s' "$_gc_def"
 }
 
-_wiki="$(get_cfg "wiki_dir" ".rnex/wiki")"
+_wiki="$(get_cfg "wiki_dir" "wiki")"
 _wiki="$(printf '%s' "$_wiki" | sed -e 's#^/##' -e 's#/$##')"
 _wiki_path="$_root/$_wiki"
 
@@ -61,6 +61,3 @@ if command -v plugin_primary_source_dir >/dev/null 2>&1; then
 fi
 [ -n "$_raw" ] || _raw="docs"
 _raw_path="$_root/$_raw"
-
-_trigger="$(get_cfg "lint_trigger" "manual")"
-_notify="$(get_cfg "notify_on_changes" "true")"

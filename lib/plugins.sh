@@ -146,7 +146,7 @@ plugin_resolve_placeholders() {
 
   # Fallback resolution for core wiki/raw placeholders and legacy prefixes
   _w_val="$(yaml_plugin_get "$_p" "wiki_dir" 2>/dev/null || true)"
-  [ -n "$_w_val" ] || _w_val=".rnex/wiki"
+  [ -n "$_w_val" ] || _w_val="wiki"
   _w_val="$(normalize_rel_path "$_w_val")"
 
   # {raw_dir} (legacy alias) resolves to the first explicit directory source; when no
@@ -167,7 +167,7 @@ plugin_instantiate_template() {
   _p="$1"; _pd="$2"; _src="$3"; _dest="$4"
 
   _w_val="$(yaml_plugin_get "$_p" "wiki_dir" 2>/dev/null || true)"
-  [ -z "$_w_val" ] && _w_val=".rnex/wiki"
+  [ -z "$_w_val" ] && _w_val="wiki"
   _w_val="$(printf '%s' "$_w_val" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d "'\"" | sed -e 's#^/##' -e 's#/$##')"
 
   _r_val="$(plugin_primary_source_dir "$_p" 2>/dev/null || true)"
@@ -192,13 +192,13 @@ sync_plugin_bundle() {
 
   mkdir -p "$_spb_dest"
   rm -rf "${_spb_dest:?}/prompts" 2>/dev/null || true
-  for _sub in rules workflows instructions skills agents templates hooks; do
+  for _sub in rules workflows instructions skills agents templates hooks commands; do
     if [ -d "$_spb_src/$_sub" ]; then
       rm -rf "${_spb_dest:?}/$_sub"
       mkdir -p "$_spb_dest/$_sub"
       cp -R "$_spb_src/$_sub"/. "$_spb_dest/$_sub"/ 2>/dev/null || true
-      if [ "$_sub" = "hooks" ]; then
-        chmod +x "$_spb_dest/hooks"/* 2>/dev/null || true
+      if [ "$_sub" = "hooks" ] || [ "$_sub" = "commands" ]; then
+        chmod +x "$_spb_dest/$_sub"/* 2>/dev/null || true
       fi
     else
       rm -rf "${_spb_dest:?}/$_sub"
@@ -281,7 +281,7 @@ sync_plugins() {
   _raw_cfg="$(plugin_primary_source_dir "karpathy-llm" 2>/dev/null || true)"
   [ -n "$_raw_cfg" ] || _raw_cfg="docs"
   _wiki_cfg="$(yaml_plugin_get "karpathy-llm" "wiki_dir" 2>/dev/null || true)"
-  [ -n "$_wiki_cfg" ] || _wiki_cfg=".rnex/wiki"
+  [ -n "$_wiki_cfg" ] || _wiki_cfg="wiki"
   _wiki_cfg="$(normalize_rel_path "$_wiki_cfg")"
   _clean_leaked_plugin_dirs "$NEXUS_DIR" "$_raw_cfg" "$_wiki_cfg"
 
@@ -591,4 +591,181 @@ resolve_plugin_sources() {
   WORKSPACE_LOCAL_YAML="$_saved_wly"
 
   printf '%s\n' "$_rs_out" | awk 'NF'
+}
+
+# ---- Plugin Command Engine (discovery, execution, and listings) -------------
+
+# Check if a plugin exists either in workspace, toolkit, or config.
+plugin_exists() {
+  _pe_name="$1"
+  [ -n "$_pe_name" ] || return 1
+  [ -d "$NEXUS_DIR/.rnex/plugins/$_pe_name" ] && return 0
+  find_plugin_dir "$_pe_name" >/dev/null 2>&1 && return 0
+  yaml_has_plugin "$_pe_name" 2>/dev/null && return 0
+  return 1
+}
+
+# Locate a custom command executable for a plugin.
+# Checks .rnex/plugins/<name>/commands/<command>.sh or <command>,
+# falling back to candidate toolkit directories (e.g. toolkit/plugins/<name>/commands/).
+plugin_find_command() {
+  _pfc_pname="$1"
+  _pfc_cmd="$2"
+  [ -n "$_pfc_pname" ] && [ -n "$_pfc_cmd" ] || return 1
+
+  # 1. Scoped directory in workspace
+  for _cand in \
+    "$NEXUS_DIR/.rnex/plugins/$_pfc_pname/commands/${_pfc_cmd}.sh" \
+    "$NEXUS_DIR/.rnex/plugins/$_pfc_pname/commands/${_pfc_cmd}"; do
+    if [ -f "$_cand" ]; then
+      printf '%s' "$_cand"
+      return 0
+    fi
+  done
+
+  # 2. Candidate source plugin directory
+  _pdir="$(find_plugin_dir "$_pfc_pname" 2>/dev/null || true)"
+  if [ -n "$_pdir" ]; then
+    for _cand in \
+      "$_pdir/commands/${_pfc_cmd}.sh" \
+      "$_pdir/commands/${_pfc_cmd}"; do
+      if [ -f "$_cand" ]; then
+        printf '%s' "$_cand"
+        return 0
+      fi
+    done
+  fi
+
+  return 1
+}
+
+# Test if a plugin declares or provides an executable command.
+plugin_has_command() {
+  _phc_path="$(plugin_find_command "$1" "$2")"
+  [ -n "$_phc_path" ] && [ -f "$_phc_path" ]
+}
+
+# List all custom command names declared for a plugin.
+# Scans commands/ directory in plugin directory and workspace scoped directory,
+# and parses any `commands:` section in plugin.yaml.
+plugin_list_commands() {
+  _plc_pname="$1"
+  [ -n "$_plc_pname" ] || return 0
+
+  _plc_cmds=""
+  # 1. From workspace scoped commands/
+  if [ -d "$NEXUS_DIR/.rnex/plugins/$_plc_pname/commands" ]; then
+    for _f in "$NEXUS_DIR/.rnex/plugins/$_plc_pname/commands"/*; do
+      [ -f "$_f" ] || continue
+      _cname="$(basename "$_f")"
+      _cname="${_cname%.sh}"
+      case " $_plc_cmds " in
+        *" $_cname "*) ;;
+        *) _plc_cmds="$_plc_cmds $_cname"; printf '%s\n' "$_cname" ;;
+      esac
+    done
+  fi
+
+  # 2. From plugin definition source directory commands/
+  _pdir="$(find_plugin_dir "$_plc_pname" 2>/dev/null || true)"
+  if [ -n "$_pdir" ] && [ -d "$_pdir/commands" ]; then
+    for _f in "$_pdir/commands"/*; do
+      [ -f "$_f" ] || continue
+      _cname="$(basename "$_f")"
+      _cname="${_cname%.sh}"
+      case " $_plc_cmds " in
+        *" $_cname "*) ;;
+        *) _plc_cmds="$_plc_cmds $_cname"; printf '%s\n' "$_cname" ;;
+      esac
+    done
+  fi
+
+  # 3. From plugin.yaml commands section (if declared)
+  if [ -n "$_pdir" ] && [ -f "$_pdir/plugin.yaml" ]; then
+    _yaml_cmds="$(awk '
+      /^commands:[ ]*$/ || /^commands:[ ]*#/ { in_cmd=1; next }
+      in_cmd && /^[^ #]/ { exit }
+      in_cmd && /^[ ]*-[ ]*[a-zA-Z0-9_.-]+:/ {
+        line = $0
+        sub(/^[ ]*-[ ]*/, "", line)
+        sub(/:.*/, "", line)
+        print line
+      }
+      in_cmd && /^[ ]*-[ ]*[a-zA-Z0-9_.-]+[ ]*$/ {
+        line = $0
+        sub(/^[ ]*-[ ]*/, "", line)
+        gsub(/[ "]/, "", line)
+        print line
+      }
+      in_cmd && /^[ ]*[a-zA-Z0-9_.-]+:[ ]*/ {
+        line = $0
+        sub(/^[ ]*/, "", line)
+        sub(/:.*/, "", line)
+        print line
+      }
+    ' "$_pdir/plugin.yaml")"
+    for _cname in $_yaml_cmds; do
+      [ -n "$_cname" ] || continue
+      case " $_plc_cmds " in
+        *" $_cname "*) ;;
+        *) _plc_cmds="$_plc_cmds $_cname"; printf '%s\n' "$_cname" ;;
+      esac
+    done
+  fi
+}
+
+# Retrieve the description of a plugin command declared in plugin.yaml.
+plugin_get_command_desc() {
+  _pgc_pname="$1"
+  _pgc_cmd="$2"
+  _pdir="$(find_plugin_dir "$_pgc_pname" 2>/dev/null || true)"
+  [ -n "$_pdir" ] && [ -f "$_pdir/plugin.yaml" ] || return 0
+
+  awk -v cmd="$_pgc_cmd" '
+    /^commands:[ ]*$/ || /^commands:[ ]*#/ { in_cmd=1; next }
+    in_cmd && /^[^ #]/ { exit }
+    in_cmd && ($0 ~ ("^[ ]*-[ ]*" cmd ":") || $0 ~ ("^[ ]*" cmd ":")) {
+      sub(/^[^:]*:[ ]*/, "")
+      sub(/[ ]*#.*/, "")
+      gsub(/^["\047]|["\047]$/, "")
+      print
+      exit
+    }
+  ' "$_pdir/plugin.yaml"
+}
+
+# Execute a plugin command, forwarding all arguments and exporting workspace environment variables.
+run_plugin_command() {
+  _rpc_plugin="$1"
+  _rpc_cmd="$2"
+  shift 2 2>/dev/null || true
+
+  _rpc_script="$(plugin_find_command "$_rpc_plugin" "$_rpc_cmd")"
+  if [ -z "$_rpc_script" ] || [ ! -f "$_rpc_script" ]; then
+    die "Command '$_rpc_cmd' not found for plugin '$_rpc_plugin'"
+  fi
+
+  chmod +x "$_rpc_script" 2>/dev/null || true
+
+  _rpc_root="${NEXUS_DIR:-${RNEX_ROOT:-$PWD}}"
+  _rpc_yaml="${WORKSPACE_YAML:-$_rpc_root/${RNEX_CONFIG_FILE:-rnex.yaml}}"
+  _rpc_local_yaml="${WORKSPACE_LOCAL_YAML:-${LOCAL_WORKSPACE_YAML:-$_rpc_root/${RNEX_LOCAL_CONFIG_FILE:-.local.rnex.yaml}}}"
+  _rpc_lib_dir="${RNEX_LIB_DIR:-$_rpc_root/lib}"
+
+  (
+    RNEX_ROOT="$_rpc_root"
+    NEXUS_DIR="$_rpc_root"
+    WORKSPACE_YAML="$_rpc_yaml"
+    WORKSPACE_LOCAL_YAML="$_rpc_local_yaml"
+    LOCAL_WORKSPACE_YAML="$_rpc_local_yaml"
+    RNEX_LIB_DIR="$_rpc_lib_dir"
+    RNEX_PLUGIN_NAME="$_rpc_plugin"
+    RNEX_PLUGIN_DIR="$_rpc_root/.rnex/plugins/$_rpc_plugin"
+    export RNEX_ROOT NEXUS_DIR WORKSPACE_YAML WORKSPACE_LOCAL_YAML LOCAL_WORKSPACE_YAML RNEX_LIB_DIR RNEX_PLUGIN_NAME RNEX_PLUGIN_DIR
+    if [ -x "$_rpc_script" ]; then
+      "$_rpc_script" "$@"
+    else
+      sh "$_rpc_script" "$@"
+    fi
+  )
 }

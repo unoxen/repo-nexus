@@ -74,7 +74,8 @@ git -C "$TEST_PROVIDERS_WS" init -q
 
 # Init workspace with claude flag
 "$TEST_PROVIDERS_WS/rnex" init -y --claude "$TEST_PROVIDERS_WS" >/dev/null
-[ ! -f "$TEST_PROVIDERS_WS/AGENTS.md" ] || { fail "Redundant AGENTS.md created after init --claude"; exit 1; }
+[ -f "$TEST_PROVIDERS_WS/AGENTS.md" ] || { fail "Permanent AGENTS.md missing after init --claude"; exit 1; }
+grep -q "REPO-NEXUS:START" "$TEST_PROVIDERS_WS/AGENTS.md" || { fail "AGENTS.md missing REPO-NEXUS instructions"; exit 1; }
 [ -f "$TEST_PROVIDERS_WS/CLAUDE.md" ] || { fail "CLAUDE.md missing after init --claude"; exit 1; }
 [ -f "$TEST_PROVIDERS_WS/.claude/skills/rnex-clone-sync/SKILL.md" ] || { fail "Claude user skill rnex-clone-sync/SKILL.md missing"; exit 1; }
 
@@ -131,14 +132,15 @@ echo "custom" > "$TEST_PROVIDERS_WS/.agents/skills/my-gemini-skill.md"
 echo "custom" > "$TEST_PROVIDERS_WS/.cursor/rules/my-user-rule.mdc"
 echo "custom" > "$TEST_PROVIDERS_WS/.windsurf/rules/my-user-rule.md"
 
-# Disable all provider plugins and verify AGENTS.md is restored
+# Disable all provider plugins and verify permanent AGENTS.md is retained
 (cd "$TEST_PROVIDERS_WS" && ./rnex plugin disable claude >/dev/null)
 (cd "$TEST_PROVIDERS_WS" && ./rnex plugin disable gemini >/dev/null)
 (cd "$TEST_PROVIDERS_WS" && ./rnex plugin disable cursor >/dev/null)
 (cd "$TEST_PROVIDERS_WS" && ./rnex plugin disable windsurf >/dev/null)
 (cd "$TEST_PROVIDERS_WS" && ./rnex sync -y --quiet >/dev/null)
 
-[ -f "$TEST_PROVIDERS_WS/AGENTS.md" ] || { fail "AGENTS.md not restored when all AI provider plugins disabled"; exit 1; }
+[ -f "$TEST_PROVIDERS_WS/AGENTS.md" ] || { fail "AGENTS.md missing when provider plugins disabled"; exit 1; }
+grep -q "REPO-NEXUS:START" "$TEST_PROVIDERS_WS/AGENTS.md" || { fail "AGENTS.md missing REPO-NEXUS instructions"; exit 1; }
 
 # Verify Repo Nexus generated User Skills were cleaned up
 [ ! -d "$TEST_PROVIDERS_WS/.claude/skills/rnex-clone-sync" ] || { fail "rnex User Skill not cleaned from claude"; exit 1; }
@@ -152,10 +154,10 @@ echo "custom" > "$TEST_PROVIDERS_WS/.windsurf/rules/my-user-rule.md"
 [ -f "$TEST_PROVIDERS_WS/.cursor/rules/my-user-rule.mdc" ] || { fail "User rule deleted from .cursor"; exit 1; }
 [ -f "$TEST_PROVIDERS_WS/.windsurf/rules/my-user-rule.md" ] || { fail "User rule deleted from .windsurf"; exit 1; }
 
-# Instruction files retained custom user content but stripped REPO-NEXUS block
+# Instruction files permanently retain routing instructions and custom user content
 for _f in CLAUDE.md GEMINI.md .cursorrules .windsurfrules; do
   [ -f "$TEST_PROVIDERS_WS/$_f" ] || { fail "$_f with custom content was deleted"; exit 1; }
-  ! grep -q "REPO-NEXUS:START" "$TEST_PROVIDERS_WS/$_f" || { fail "REPO-NEXUS block not stripped from $_f"; exit 1; }
+  grep -q "REPO-NEXUS:START" "$TEST_PROVIDERS_WS/$_f" || { fail "REPO-NEXUS block missing from $_f"; exit 1; }
 done
 grep -q "# Custom Section" "$TEST_PROVIDERS_WS/CLAUDE.md" || { fail "Custom content lost from CLAUDE.md"; exit 1; }
 grep -q "# Gemini Custom" "$TEST_PROVIDERS_WS/GEMINI.md" || { fail "Custom content lost from GEMINI.md"; exit 1; }
@@ -197,7 +199,7 @@ EOF_COPILOT
 (cd "$TEST_PROVIDERS_WS" && ./rnex sync -y --quiet >/dev/null)
 [ -f "$TEST_PROVIDERS_WS/.github/copilot-instructions.md" ] || { fail ".github/copilot-instructions.md with custom content was deleted"; exit 1; }
 grep -q "My Custom Copilot Developer Rules" "$TEST_PROVIDERS_WS/.github/copilot-instructions.md" || { fail "Custom Copilot developer rules lost after rnex sync"; exit 1; }
-! grep -q "REPO-NEXUS:START" "$TEST_PROVIDERS_WS/.github/copilot-instructions.md" || { fail "Legacy REPO-NEXUS block not stripped from .github/copilot-instructions.md"; exit 1; }
+grep -q "REPO-NEXUS:START" "$TEST_PROVIDERS_WS/.github/copilot-instructions.md" || { fail "REPO-NEXUS block missing from .github/copilot-instructions.md"; exit 1; }
 
 # Verify enabling copilot plugin manages .github/copilot-instructions.md and .github/skills/
 (cd "$TEST_PROVIDERS_WS" && ./rnex plugin enable copilot >/dev/null)
@@ -206,10 +208,10 @@ grep -q "REPO-NEXUS:START" "$TEST_PROVIDERS_WS/.github/copilot-instructions.md" 
 grep -q "My Custom Copilot Developer Rules" "$TEST_PROVIDERS_WS/.github/copilot-instructions.md" || { fail "Custom rules lost when copilot merged"; exit 1; }
 [ -f "$TEST_PROVIDERS_WS/.github/skills/rnex-batch-exec/SKILL.md" ] || { fail "User skills not generated in .github/skills/ when copilot enabled"; exit 1; }
 
-# Verify disabling copilot cleans routing block and user skills while preserving custom instructions
+# Verify disabling copilot preserves permanent routing block and cleans user skills while preserving custom instructions
 (cd "$TEST_PROVIDERS_WS" && ./rnex plugin disable copilot >/dev/null)
 (cd "$TEST_PROVIDERS_WS" && ./rnex sync -y --quiet >/dev/null)
-! grep -q "REPO-NEXUS:START" "$TEST_PROVIDERS_WS/.github/copilot-instructions.md" || { fail "REPO-NEXUS block not stripped after copilot disabled"; exit 1; }
+grep -q "REPO-NEXUS:START" "$TEST_PROVIDERS_WS/.github/copilot-instructions.md" || { fail "REPO-NEXUS block lost after copilot disabled"; exit 1; }
 grep -q "My Custom Copilot Developer Rules" "$TEST_PROVIDERS_WS/.github/copilot-instructions.md" || { fail "Custom Copilot rules lost after copilot disabled"; exit 1; }
 pass
 

@@ -2,6 +2,12 @@
 repos/*
 !repos/.gitkeep
 
+# Recursive Repo Nexus directories (trailing slashes prevent ignoring rnex executable or rnex.yaml)
+**/.rnex*/
+**/rnex*/
+.rnex*/
+rnex*/
+
 # OS
 .DS_Store
 

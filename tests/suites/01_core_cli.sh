@@ -36,7 +36,7 @@ pass
 
 # --------------------------------------------------------------------------
 run_test "Add member repository (clones into repos/ cleanly without member .rnex/)"
-"$TEST_WORKSPACE/rnex" add test-app "$TEST_REPO" >/dev/null
+"$TEST_WORKSPACE/rnex" repo add "$TEST_REPO" --name test-app >/dev/null
 [ -d "$TEST_WORKSPACE/repos/test-app/.git" ] || { fail "Physical clone in repos/test-app missing"; exit 1; }
 [ ! -d "$TEST_WORKSPACE/repos/test-app/.rnex" ] || { fail ".rnex/ should not be created in member repo by default"; exit 1; }
 grep -q "test-app:" "$TEST_WORKSPACE/rnex.yaml" || { fail "test-app not in rnex.yaml"; exit 1; }
@@ -50,8 +50,8 @@ echo "$_exec_out" | grep -q "succeeded" || { fail "rnex exec reported failure"; 
 pass
 
 # --------------------------------------------------------------------------
-run_test "Disable and enable repository"
-"$TEST_WORKSPACE/rnex" disable test-app >/dev/null
+run_test "Disable and enable repository (rnex repo set)"
+"$TEST_WORKSPACE/rnex" repo set test-app --disable >/dev/null
 _list_out="$("$TEST_WORKSPACE/rnex" list 2>&1)"
 echo "$_list_out" | grep "test-app" | grep -q "disabled" || { fail "test-app not listed as disabled"; exit 1; }
 
@@ -59,7 +59,7 @@ echo "$_list_out" | grep "test-app" | grep -q "disabled" || { fail "test-app not
 _exec_dis="$("$TEST_WORKSPACE/rnex" exec "echo running" 2>&1)"
 ! echo "$_exec_dis" | grep -q "running" || { fail "Disabled repo should be skipped by exec"; exit 1; }
 
-"$TEST_WORKSPACE/rnex" enable test-app >/dev/null
+"$TEST_WORKSPACE/rnex" repo set test-app --enable >/dev/null
 _list_en="$("$TEST_WORKSPACE/rnex" list 2>&1)"
 echo "$_list_en" | grep "test-app" | grep -q "enabled" || { fail "test-app not listed as enabled"; exit 1; }
 pass
@@ -156,11 +156,19 @@ cd "$TEST_WORKSPACE"
 pass
 
 # --------------------------------------------------------------------------
-run_test "Remove member repository (unregisters and deletes repos/<name>)"
-"$TEST_WORKSPACE/rnex" remove test-app >/dev/null
-[ ! -e "$TEST_WORKSPACE/repos/test-app" ] || { fail "Physical repo folder was not deleted on remove"; exit 1; }
+run_test "Remove member repository (unregisters and deletes repos/<name> via --purge)"
+"$TEST_WORKSPACE/rnex" repo remove test-app --purge >/dev/null
+[ ! -e "$TEST_WORKSPACE/repos/test-app" ] || { fail "Physical repo folder was not deleted on remove --purge"; exit 1; }
 ! grep -q "test-app:" "$TEST_WORKSPACE/rnex.yaml" || { fail "test-app still in rnex.yaml"; exit 1; }
 [ -d "$TEST_REPO/src" ] || { fail "Original source repo was deleted"; exit 1; }
+pass
+
+# --------------------------------------------------------------------------
+run_test "Legacy top-level single-repo and deleted commands fail with unknown command"
+for _bad_cmd in add remove enable disable readonly update upgrade hooks rnex-dir; do
+  _err_out="$("$TEST_WORKSPACE/rnex" "$_bad_cmd" 2>&1 || true)"
+  echo "$_err_out" | grep -qi "Unknown command" || { fail "Command 'rnex $_bad_cmd' did not fail with Unknown command: got '$_err_out'"; exit 1; }
+done
 pass
 
 # --------------------------------------------------------------------------

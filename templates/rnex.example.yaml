@@ -15,10 +15,10 @@
 # ------------------------------------------------------------------------------
 # version — Workspace configuration schema version
 # ------------------------------------------------------------------------------
-# Used by `rnex sync` and `rnex update` to safely detect and reconcile configuration
+# Used by `rnex sync` to safely detect and reconcile configuration
 # and routing instructions across CLI releases.
 #
-version: 0.5.0
+version: 0.7.39
 
 # ------------------------------------------------------------------------------
 # repos_dir — Directory for member repository clones
@@ -47,18 +47,25 @@ repos_dir: ./repos
 code_workspace: false
 
 # ------------------------------------------------------------------------------
-# git_hooks — Automated workspace Git hooks
+# git — Git Integration (Ignore rules & Git hooks)
 # ------------------------------------------------------------------------------
-# Enables automated Git hooks in `.rnex/hooks/` (post-merge auto-sync and
-# optional plugin triggers like Karpathy wiki lint on commit/push).
+# git.ignore: list of patterns added to .gitignore (directories starting with
+# .rnex or rnex are recursively ignored by default with trailing slashes).
+# git.hooks: mapping of hook names (post-merge, post-checkout, pre-commit, pre-push)
+# to command lists executed by the native Git hooks.
 #
-# Default: true (when initialized in a Git repository)
-#
-# Examples:
-#   git_hooks: true     # active (core.hooksPath = .rnex/hooks)
-#   git_hooks: false    # disabled
-#
-git_hooks: true
+git:
+  ignore:
+    - "repos/"
+    - "**/.rnex*/"
+    - "**/rnex*/"
+  hooks:
+    post-merge:
+      - "rnex sync --quiet"
+    post-checkout:
+      - "rnex sync --quiet"
+    pre-commit: []
+    pre-push: []
 
 # ------------------------------------------------------------------------------
 # plugins — Workspace plugins, tool integrations, and AI instruction packs
@@ -67,17 +74,18 @@ git_hooks: true
 # tool provider integrations (e.g. GitHub Copilot), and templates.
 #
 # Manage plugins with:
-#   rnex plugin list                 # View available and active plugins
+#   rnex plugin list                     # View available and active plugins
 #   rnex plugin enable [--local] <name>  # Enable plugin (global or local override)
 #   rnex plugin disable [--local] <name> # Disable plugin from workspace
-#   rnex plugin info <name>          # View plugin details & configurable options
+#   rnex plugin info <name>              # View plugin details & configurable options
+#   rnex plugin <name> <cmd> [options]   # Run plugin CLI subcommand (e.g. karpathy-llm lint)
 #
 # Built-in plugins:
 #   claude         — Anthropic Claude Code integration: manages CLAUDE.md; generates user skills in .claude/skills/
 #   codex          — OpenAI Codex integration: manages CODEX.md; generates user skills in .codex/skills/
-#   gemini         — Google Gemini / Antigravity integration: manages GEMINI.md; generates user skills in .agents/skills/
 #   copilot        — GitHub Copilot integration: manages .github/copilot-instructions.md; generates user skills in .github/skills/
 #   cursor         — Cursor IDE integration: manages .cursorrules & .cursor/rules/; generates user skills in .cursor/rules/
+#   gemini         — Google Gemini / Antigravity integration: manages GEMINI.md; generates user skills in .agents/skills/
 #   windsurf       — Windsurf IDE integration: manages .windsurfrules; generates user skills in .windsurf/rules/
 #   karpathy-llm   — Andrej Karpathy's agent behavioral principles,
 #                    context engineering guidelines, and LLM Wiki architecture
@@ -94,24 +102,36 @@ git_hooks: true
 plugins:
   # claude:
   #   skills: true              # generate user skills in .claude/skills/ (default: true)
+  #   instructions: true        # maintain routing instructions in CLAUDE.md (default: true)
   #   auto_sync_on: SessionStart # trigger auto-sync on lifecycle event (default: SessionStart, or false)
+  #
   # codex:
   #   skills: true              # generate user skills in .codex/skills/ (default: true)
-  # gemini:
-  #   skills: true              # generate user skills in .agents/skills/ (default: true)
-  #   auto_sync_on: SessionStart # trigger auto-sync on lifecycle event (default: SessionStart, or false)
+  #   instructions: true        # maintain routing instructions in CODEX.md (default: true)
+  #
+  # copilot:
+  #   skills: true              # generate user skills in .github/skills/ (default: true)
+  #   instructions: true        # maintain routing instructions in .github/copilot-instructions.md (default: true)
+  #
   # cursor:
   #   skills: true              # generate user skills in .cursor/rules/ (default: true)
+  #   instructions: true        # maintain routing instructions in .cursorrules (default: true)
+  #
+  # gemini:
+  #   skills: true              # generate user skills in .agents/skills/ (default: true)
+  #   instructions: true        # maintain routing instructions in GEMINI.md (default: true)
+  #   auto_sync_on: SessionStart # trigger auto-sync on lifecycle event (default: SessionStart, or false)
+  #
   # windsurf:
   #   skills: true              # generate user skills in .windsurf/rules/ (default: true)
+  #   instructions: true        # maintain routing instructions in .windsurfrules (default: true)
+  #
   # karpathy-llm:
-  #   sources:                    # Intake documents: directories and/or glob patterns (default below)
-  #     - docs                    #   directory: all files (hidden dirs and node_modules pruned)
-  #     - "repos/**/README.md"    #   recursive glob (quote it); disabled repos are excluded
-  #                               # A sources list in .local.rnex.yaml replaces this list entirely.
-  #   wiki_dir: ".rnex/wiki"      # Directory for curated atomic markdown pages (default: .rnex/wiki)
-  #   lint_trigger: "manual"      # Runs manually via 'rnex sync' or validation checklists (git-post-merge, git-post-commit, git-pre-commit, git-pre-push, manual)
-  #   notify_on_changes: true     # Show notification when changes are committed to ./docs or .rnex/wiki
+  #   wiki_dir: "wiki"          # Directory for curated atomic markdown pages (default: wiki)
+  #   sources:                  # Intake documents: directories and/or glob patterns (default below)
+  #     - docs                  #   directory: all files (hidden dirs and node_modules pruned)
+  #     - "repos/**/README.md"  #   recursive glob (quote it); disabled repos are excluded
+  #                             # A sources list in .local.rnex.yaml replaces this list entirely.
 
 
 # ------------------------------------------------------------------------------
@@ -119,6 +139,7 @@ plugins:
 # ------------------------------------------------------------------------------
 # Each repo has:
 #   url:       Git repository URL (SSH or HTTPS).
+#   branch:    Branch to checkout and track (optional).
 #   enabled:   true (default) keeps the repo active in workspace.
 #              false disables the repo (skipped by rnex clone, rnex exec, etc.).
 #              Can be overridden locally in .local.rnex.yaml.
@@ -130,17 +151,19 @@ plugins:
 # Examples:
 #   backend:
 #     url: git@github.com:myorg/backend-api.git
+#     branch: main
 #     enabled: true        # default
 #     readonly: false      # default
 #
 #   frontend:
 #     url: https://github.com/myorg/web-app.git
+#     branch: develop
 #     enabled: true
 #
 #   docs-reference:
 #     url: git@github.com:myorg/docs-reference.git
-#     enabled: true
 #     readonly: true       # information-only repository
+#     enabled: true
 #
 #   analytics:
 #     url: git@github.com:myorg/analytics.git
@@ -149,10 +172,12 @@ plugins:
 repos:
   # backend:
   #   url: git@github.com:myorg/backend-api.git
+  #   branch: main
   #   readonly: false
   #
   # frontend:
   #   url: https://github.com/myorg/web-app.git
+  #   branch: develop
   #
   # docs-reference:
   #   url: git@github.com:myorg/docs-reference.git
@@ -160,5 +185,4 @@ repos:
   #
   # analytics:
   #   url: git@github.com:myorg/analytics.git
-  #   enabled: false
   #   enabled: false

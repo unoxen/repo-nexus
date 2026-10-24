@@ -1,7 +1,7 @@
 # Repo Nexus workspace configuration
 # See templates/rnex.example.yaml for a comprehensive example with all options.
 
-version: 0.7.33
+version: 0.7.39
 
 # Directory for member repository clones (relative to this file or absolute)
 repos_dir: ./repos
@@ -9,8 +9,19 @@ repos_dir: ./repos
 # VS Code / Cursor multi-root workspace file (default: false; e.g. true or workspace.code-workspace)
 code_workspace: false
 
-# Automated workspace Git hooks (default: true; e.g. post-merge auto-sync, plugin triggers)
-git_hooks: false
+# Git Integration (Ignore rules & Git hooks)
+git:
+  ignore:
+    - "repos/"
+    - "**/.rnex*/"
+    - "**/rnex*/"
+  hooks:
+    post-merge:
+      - "rnex sync --quiet"
+    post-checkout:
+      - "rnex sync --quiet"
+    pre-commit: []
+    pre-push: []
 
 # Member repositories managed by Repo Nexus
 repos:

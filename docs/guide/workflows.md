@@ -63,27 +63,26 @@ If a command fails in any repository, `rnex exec` exits immediately with that co
 
 ## Git Hooks Automation
 
-Repo Nexus includes an automated hook runner configured via `core.hooksPath = .rnex/hooks`.
+Repo Nexus configures Git hooks declaratively through the `git.hooks` block in `rnex.yaml` (with optional workstation-specific overrides in `.local.rnex.yaml`). Dispatcher wrappers in `.git/hooks/` are installed and kept in sync automatically during `rnex init` and `rnex sync`.
 
-### Core Automated Hooks
-1. **`post-merge`**: When you pull updates to the meta-repo (`git pull`), the hook automatically executes `rnex sync -y --quiet` if `rnex.yaml` changed to:
-   * Clone newly declared member repositories.
-   * Update AI routing instructions (`AGENTS.md`, etc.).
-   * Sync plugin changes.
-2. **Plugin Triggers**: Plugins can subscribe to hook events (e.g. `karpathy-llm` running wiki consistency checks on merge).
+### Configuration
 
-### Managing Hooks
-
-```bash
-# Check current hook status
-rnex hooks status
-
-# Reinstall or repair hooks
-rnex hooks install
-
-# Uninstall hooks and restore git default
-rnex hooks uninstall
+```yaml
+git:
+  hooks:
+    post-merge:
+      - "rnex sync --quiet"
+    post-checkout:
+      - "rnex sync --quiet"
+    pre-commit:
+      - "rnex plugin karpathy-llm lint"
+    pre-push: []
 ```
+
+### Automated Lifecycle Events
+1. **`post-merge`**: When you pull updates to the meta-repo (`git pull`), the hook automatically executes `rnex sync --quiet` if `rnex.yaml` changed, reconciling repositories, instructions, and plugins.
+2. **`post-checkout`**: Ensures workspace state reflects branch transitions.
+3. **`pre-commit` & `pre-push`**: Run automated verifications before commits or pushes, such as `rnex plugin karpathy-llm lint`.
 
 ---
 

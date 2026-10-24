@@ -33,6 +33,7 @@ cmd_plugin_list() {
   log_dim "To enable a plugin:  rnex plugin enable <name>"
   log_dim "To view details:    rnex plugin info <name>"
   log_dim "To disable:         rnex plugin disable <name>"
+  log_dim "To run commands:    rnex plugin <name> <command> [options...]"
   printf '\n'
 }
 
@@ -131,6 +132,20 @@ cmd_plugin_info() {
 
   printf '\n%bScoped Directory:%b .rnex/plugins/%s\n' "$_BOLD" "$_NC" "$_name"
 
+  _cmds="$(plugin_list_commands "$_name" 2>/dev/null || true)"
+  if [ -n "$_cmds" ]; then
+    printf '\n%bCommands:%b\n' "$_BOLD" "$_NC"
+    echo "$_cmds" | while read -r _c; do
+      [ -n "$_c" ] || continue
+      _cdesc="$(plugin_get_command_desc "$_name" "$_c")"
+      if [ -n "$_cdesc" ]; then
+        printf '  - rnex plugin %s %-12s - %s\n' "$_name" "$_c" "$_cdesc"
+      else
+        printf '  - rnex plugin %s %s\n' "$_name" "$_c"
+      fi
+    done
+  fi
+
   _tmpl="$(plugin_list_templates "$_pdir")"
   if [ -n "$_tmpl" ]; then
     printf '\n%bExternal Directories & Templates:%b\n' "$_BOLD" "$_NC"
@@ -220,56 +235,6 @@ cmd_plugin_disable() {
   cmd_sync -q
 }
 
-# Toggle the member repository .rnex harness (enable or disable) for a specific repo.
-# Usage:
-#   rnex rnex-dir <enable|disable> <name> [--local]
-cmd_rnex_dir() {
-  require_workspace
-  _action=""
-  _name=""
-  _is_local=0
-
-  while [ $# -gt 0 ]; do
-    case "$1" in
-      --local) _is_local=1 ;;
-      enable|disable)
-        if [ -z "$_action" ]; then
-          _action="$1"
-        elif [ -z "$_name" ]; then
-          _name="$1"
-        fi
-        ;;
-      *)
-        if [ -z "$_action" ]; then
-          _action="$1"
-        elif [ -z "$_name" ]; then
-          _name="$1"
-        else
-          die "Unexpected argument: $1"
-        fi
-        ;;
-    esac
-    shift
-  done
-
-  case "$_action" in
-    enable|disable)
-      [ -n "$_name" ] || die "Usage: rnex rnex-dir <enable|disable> <name> [--local]"
-      yaml_has_repo "$_name" || die "Repo '$_name' is not registered"
-      if [ "$_action" = "enable" ]; then
-        _repo_set_config_and_log "$_name" "rnex_dir" "true" "$_is_local" "Enabled member .rnex directory for"
-        sync_repo_rnex "$_name"
-      else
-        _repo_set_config_and_log "$_name" "rnex_dir" "false" "$_is_local" "Disabled member .rnex directory for"
-        clean_repo_rnex "$_name"
-      fi
-      ;;
-    *)
-      die "Usage: rnex rnex-dir <enable|disable> <name> [--local]"
-      ;;
-  esac
-}
-
 cmd_plugin_update() {
   require_workspace
   _update_pname="$1"
@@ -289,15 +254,102 @@ cmd_plugin_update() {
   fi
 }
 
+cmd_plugin_help() {
+  printf '\n%bUsage:%b rnex plugin <action|plugin> [command] [options...]\n\n' "$_BOLD" "$_NC"
+  printf '%bPlugin Lifecycle Actions:%b\n' "$_BOLD" "$_NC"
+  printf '  rnex plugin list                         List available, enabled, and disabled plugins\n'
+  printf '  rnex plugin info <name>                  Display metadata, commands, and options for a plugin\n'
+  printf '  rnex plugin enable [--local] <name>      Enable a plugin in workspace\n'
+  printf '  rnex plugin disable [--local] <name>     Disable a plugin\n'
+  printf '  rnex plugin update [<name>]              Update enabled plugin(s)\n\n'
+  printf '%bPlugin Commands:%b\n' "$_BOLD" "$_NC"
+  printf '  rnex plugin <name> <command> [opts...]   Execute a command provided by a plugin\n'
+  printf '  rnex plugin <command> [opts...]          Execute command (shorthand across enabled plugins)\n\n'
+}
+
 cmd_plugin() {
-  _subcmd="${1:-list}"
-  shift 2>/dev/null || true
-  case "$_subcmd" in
-    list)                      cmd_plugin_list "$@" ;;
-    info)                      cmd_plugin_info "$@" ;;
-    enable|install)            cmd_plugin_enable "$@" ;;
-    disable|uninstall|remove)  cmd_plugin_disable "$@" ;;
-    update|upgrade)            cmd_plugin_update "$@" ;;
-    *)                         die "Unknown plugin subcommand: $_subcmd (try 'rnex plugin list')" ;;
+  require_workspace
+  _action="${1:-list}"
+
+  case "$_action" in
+    list)
+      shift
+      cmd_plugin_list "$@"
+      return $?
+      ;;
+    info)
+      shift
+      cmd_plugin_info "$@"
+      return $?
+      ;;
+    enable|install)
+      shift
+      cmd_plugin_enable "$@"
+      return $?
+      ;;
+    disable|uninstall|remove)
+      shift
+      cmd_plugin_disable "$@"
+      return $?
+      ;;
+    update|upgrade)
+      shift
+      cmd_plugin_update "$@"
+      return $?
+      ;;
+    help|-h|--help)
+      shift
+      cmd_plugin_help "$@"
+      return $?
+      ;;
   esac
+
+  # 1. Explicit plugin command invocation: rnex plugin <name> <command> [options...]
+  if plugin_exists "$_action"; then
+    _target_plugin="$1"
+    shift
+    if [ $# -eq 0 ]; then
+      cmd_plugin_info "$_target_plugin"
+      return $?
+    fi
+    _target_cmd="$1"
+    shift
+    if ! yaml_plugin_enabled "$_target_plugin"; then
+      die "Plugin '$_target_plugin' is not enabled in workspace (run 'rnex plugin enable $_target_plugin')"
+    fi
+    if ! plugin_has_command "$_target_plugin" "$_target_cmd"; then
+      die "Unknown command '$_target_cmd' for plugin '$_target_plugin' (run 'rnex plugin info $_target_plugin' to see available commands)"
+    fi
+    run_plugin_command "$_target_plugin" "$_target_cmd" "$@"
+    return $?
+  fi
+
+  # 2. Shorthand fallback: search enabled plugins for matching command
+  _found_plugin=""
+  for _p in $(yaml_list_plugins 2>/dev/null || true); do
+    [ -n "$_p" ] || continue
+    if yaml_plugin_enabled "$_p" 2>/dev/null; then
+      if plugin_has_command "$_p" "$_action"; then
+        _found_plugin="$_p"
+        break
+      fi
+    fi
+  done
+
+  if [ -n "$_found_plugin" ]; then
+    _shorthand_cmd="$1"
+    shift
+    run_plugin_command "$_found_plugin" "$_shorthand_cmd" "$@"
+    return $?
+  fi
+
+  # 3. Check if command belongs to an available but disabled plugin
+  for _pdir in $(list_all_available_plugin_dirs 2>/dev/null || true); do
+    _p="$(basename "$_pdir")"
+    if plugin_has_command "$_p" "$_action"; then
+      die "Command '$_action' belongs to plugin '$_p', which is currently disabled. Run: rnex plugin enable $_p"
+    fi
+  done
+
+  die "Unknown plugin subcommand or plugin: $_action (try 'rnex plugin list')"
 }

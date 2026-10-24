@@ -19,7 +19,7 @@ fi
 run_test "Plugin list command"
 # Re-add test-app for plugin tests if missing
 if ! grep -q "test-app:" "$TEST_WORKSPACE/rnex.yaml" 2>/dev/null; then
-  "$TEST_WORKSPACE/rnex" add test-app "$TEST_REPO" >/dev/null
+  "$TEST_WORKSPACE/rnex" repo add "$TEST_REPO" --name test-app >/dev/null
 fi
 _plist_out="$("$TEST_WORKSPACE/rnex" plugin list 2>&1)"
 echo "$_plist_out" | grep -q "karpathy-llm" || { fail "karpathy-llm not found in plugin list"; exit 1; }
@@ -45,8 +45,8 @@ grep -q "karpathy-llm" "$TEST_WORKSPACE/rnex.yaml" || { fail "karpathy-llm not i
 [ -f "$TEST_WORKSPACE/.rnex/plugins/karpathy-llm/skills/wiki-lint.md" ] || { fail "wiki-lint.md missing in scoped plugin dir"; exit 1; }
 [ -f "$TEST_WORKSPACE/.rnex/plugins/karpathy-llm/instructions/rnex-wiki-architecture.md" ] || { fail "rnex-wiki-architecture.md missing in scoped plugin dir"; exit 1; }
 [ ! -d "$TEST_WORKSPACE/repos/test-app/.rnex" ] || { fail "Member repo should remain clean"; exit 1; }
-[ -f "$TEST_WORKSPACE/.rnex/wiki/index.md" ] || { fail ".rnex/wiki/index.md not initialized in workspace"; exit 1; }
-grep -q "title: Wiki Index" "$TEST_WORKSPACE/.rnex/wiki/index.md" || { fail ".rnex/wiki/index.md missing title: Wiki Index"; exit 1; }
+[ -f "$TEST_WORKSPACE/wiki/index.md" ] || { fail "wiki/index.md not initialized in workspace"; exit 1; }
+grep -q "title: Wiki Index" "$TEST_WORKSPACE/wiki/index.md" || { fail "wiki/index.md missing title: Wiki Index"; exit 1; }
 pass
 
 # --------------------------------------------------------------------------
@@ -55,7 +55,7 @@ run_test "Plugin disable command cleans up scoped plugin assets while preserving
 grep -q "karpathy-llm" "$TEST_WORKSPACE/rnex.yaml" && { fail "karpathy-llm still in rnex.yaml"; exit 1; }
 [ ! -d "$TEST_WORKSPACE/.rnex/plugins/karpathy-llm" ] || { fail "Scoped plugin dir still present in workspace"; exit 1; }
 [ ! -d "$TEST_WORKSPACE/repos/test-app/.rnex" ] || { fail "Member repo .rnex should not exist"; exit 1; }
-[ -f "$TEST_WORKSPACE/.rnex/wiki/index.md" ] || { fail "User wiki data was incorrectly deleted"; exit 1; }
+[ -f "$TEST_WORKSPACE/wiki/index.md" ] || { fail "User wiki data was incorrectly deleted"; exit 1; }
 pass
 
 # --------------------------------------------------------------------------
@@ -72,6 +72,71 @@ echo "$_ai_content" | grep -q "Routing Protocol for AI Assistants" || { fail ".r
 ! echo "$_ai_content" | grep -qi "symlink" || { fail ".rnex/ai-instructions.md should not contain symlink mentions"; exit 1; }
 ! echo "$_ai_content" | grep -q "Think Before Coding" || { fail ".rnex/ai-instructions.md should not contain inlined plugin rules"; exit 1; }
 ! echo "$_ai_content" | grep -q "MANDATORY GATE: DO NOT INSPECT" || { fail ".rnex/ai-instructions.md should not contain wiki mandatory gate when karpathy-llm is disabled"; exit 1; }
+pass
+
+# --------------------------------------------------------------------------
+run_test "Extensible plugin command engine: discovery, execution, options forwarding, and shorthand fallback"
+_cmd_plugin_dir="$TEST_WORKSPACE/toolkit/plugins/cmd-test"
+mkdir -p "$_cmd_plugin_dir/commands"
+cat <<'EOF_PLUG' > "$_cmd_plugin_dir/plugin.yaml"
+name: cmd-test
+version: 1.0.0
+description: Test plugin with extensible commands.
+commands:
+  hello: "Print greetings with options"
+  dump-env: "Dump workspace environment variables"
+EOF_PLUG
+
+cat <<'EOF_HELLO' > "$_cmd_plugin_dir/commands/hello.sh"
+#!/bin/sh
+printf 'HELLO: %s\n' "$*"
+EOF_HELLO
+
+cat <<'EOF_DUMP' > "$_cmd_plugin_dir/commands/dump-env.sh"
+#!/bin/sh
+printf 'ROOT=%s\n' "$RNEX_ROOT"
+printf 'PLUGIN=%s\n' "$RNEX_PLUGIN_NAME"
+printf 'ARGS=%s\n' "$*"
+EOF_DUMP
+chmod +x "$_cmd_plugin_dir/commands"/*
+
+# 1. Enable plugin
+"$TEST_WORKSPACE/rnex" plugin enable cmd-test >/dev/null
+
+# 2. Check plugin info lists commands
+_info_out="$("$TEST_WORKSPACE/rnex" plugin info cmd-test 2>&1)"
+echo "$_info_out" | grep -q "Commands:" || { fail "Plugin info missing Commands section: $_info_out"; exit 1; }
+echo "$_info_out" | grep -q "rnex plugin cmd-test hello" || { fail "Plugin info missing hello command"; exit 1; }
+echo "$_info_out" | grep -q "Print greetings with options" || { fail "Plugin info missing hello description"; exit 1; }
+
+# 3. Explicit command execution: rnex plugin cmd-test hello --flag value pos1
+_hello_out="$("$TEST_WORKSPACE/rnex" plugin cmd-test hello --flag "foo bar" extra 2>&1)"
+echo "$_hello_out" | grep -q 'HELLO: --flag foo bar extra' || { fail "Arguments not forwarded correctly: $_hello_out"; exit 1; }
+
+# 4. Environment variable validation
+_dump_out="$("$TEST_WORKSPACE/rnex" plugin cmd-test dump-env --opt 123 2>&1)"
+echo "$_dump_out" | grep "ROOT=" | grep -q "nexus-workspace" || { fail "RNEX_ROOT not set in plugin command: $_dump_out"; exit 1; }
+echo "$_dump_out" | grep -q "PLUGIN=cmd-test" || { fail "RNEX_PLUGIN_NAME not set: $_dump_out"; exit 1; }
+echo "$_dump_out" | grep -q "ARGS=--opt 123" || { fail "ARGS not forwarded: $_dump_out"; exit 1; }
+
+# 5. Shorthand fallback: rnex plugin hello [options...]
+_short_out="$("$TEST_WORKSPACE/rnex" plugin hello --shorthand active 2>&1)"
+echo "$_short_out" | grep -q 'HELLO: --shorthand active' || { fail "Shorthand fallback execution failed: $_short_out"; exit 1; }
+
+# 6. Unknown command on enabled plugin errors cleanly
+_err_out="$("$TEST_WORKSPACE/rnex" plugin cmd-test non-existent-command 2>&1 || true)"
+echo "$_err_out" | grep -q "Unknown command 'non-existent-command' for plugin 'cmd-test'" || { fail "Expected unknown command error: $_err_out"; exit 1; }
+
+# 7. Disable plugin and verify invocation rejection
+"$TEST_WORKSPACE/rnex" plugin disable cmd-test >/dev/null
+_dis_out="$("$TEST_WORKSPACE/rnex" plugin cmd-test hello 2>&1 || true)"
+echo "$_dis_out" | grep -q "Plugin 'cmd-test' is not enabled in workspace" || { fail "Expected disabled plugin error: $_dis_out"; exit 1; }
+
+_short_dis_out="$("$TEST_WORKSPACE/rnex" plugin hello 2>&1 || true)"
+echo "$_short_dis_out" | grep -q "currently disabled" || { fail "Expected shorthand disabled message: $_short_dis_out"; exit 1; }
+
+# Clean up temporary test plugin
+rm -rf "$_cmd_plugin_dir" "$TEST_WORKSPACE/.rnex/plugins/cmd-test"
 pass
 
 if [ "${_STANDALONE_RUN:-0}" -eq 1 ]; then

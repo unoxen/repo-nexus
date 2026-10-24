@@ -194,17 +194,19 @@ _create_hook_script() {
     return 0
   fi
 
-  _sub_tmp="$(mktemp)"
+  mkdir -p "$(dirname "$_dst")"
+  _sub_tmp="$(mktemp "${_dst}.tmp.XXXXXX" 2>/dev/null || mktemp)"
   cat > "$_sub_tmp" <<HOOK_EOF
 #!/bin/sh
 # Repo Nexus Git Hook: $_hook_type
 # Managed automatically by rnex. Do not edit manually.
 
-_dir="\$(cd "\$(dirname "\$0")/../.." 2>/dev/null && pwd -P)"
+_dir="\$(git rev-parse --show-toplevel 2>/dev/null)"
+[ -n "\$_dir" ] || _dir="\$(cd "\$(dirname "\$0")/../.." 2>/dev/null && pwd -P)"
 if [ -x "\$_dir/rnex" ]; then
-  "\$_dir/rnex" hooks run $_hook_type "\$@"
+  "\$_dir/rnex" _hook $_hook_type "\$@"
 elif command -v rnex >/dev/null 2>&1; then
-  rnex hooks run $_hook_type "\$@"
+  rnex _hook $_hook_type "\$@"
 fi
 HOOK_EOF
 
@@ -216,8 +218,8 @@ HOOK_EOF
     return 0
   fi
 
-  mkdir -p "$(dirname "$_dst")"
-  mv "$_sub_tmp" "$_dst"
+  cp "$_sub_tmp" "$_dst" 2>/dev/null || mv "$_sub_tmp" "$_dst" 2>/dev/null || true
+  rm -f "$_sub_tmp" 2>/dev/null || true
 }
 
 _install_managed_hook_scripts() {
@@ -228,50 +230,28 @@ _install_managed_hook_scripts() {
   done
 }
 
-cmd_hooks_install_dir() {
-  _ws_dir="$1"
+install_git_hooks() {
+  _ws_dir="${1:-$NEXUS_DIR}"
   if ! git -C "$_ws_dir" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    die "Directory '$_ws_dir' is not a Git repository. Run 'git init' first."
+    return 0
   fi
-  _install_managed_hook_scripts "$_ws_dir/.rnex/hooks"
-  git -C "$_ws_dir" config core.hooksPath .rnex/hooks
-  log_ok "Configured Git hooks in .rnex/hooks (core.hooksPath = .rnex/hooks)"
-}
-
-cmd_hooks_uninstall_dir() {
-  _ws_dir="$1"
-  if git -C "$_ws_dir" config --get core.hooksPath >/dev/null 2>&1; then
+  _git_dir="$(cd "$_ws_dir" 2>/dev/null && git rev-parse --git-dir 2>/dev/null)"
+  case "$_git_dir" in
+    /*) ;;
+    *)  _git_dir="$_ws_dir/$_git_dir" ;;
+  esac
+  [ -d "$_git_dir" ] || return 0
+  _hooks_dir="$_git_dir/hooks"
+  mkdir -p "$_hooks_dir"
+  for _h in $RNEX_MANAGED_GIT_HOOKS; do
+    _create_hook_script "$_hooks_dir/$_h" "$_h"
+  done
+  # Clean up legacy .rnex/hooks if core.hooksPath was previously set to it
+  _hp="$(git -C "$_ws_dir" config --get core.hooksPath 2>/dev/null || true)"
+  if [ "$_hp" = ".rnex/hooks" ] || [ "$_hp" = "$_ws_dir/.rnex/hooks" ]; then
     git -C "$_ws_dir" config --unset core.hooksPath || true
   fi
-  rm -rf "$_ws_dir/.rnex/hooks"
-  log_ok "Uninstalled Repo Nexus Git hooks (core.hooksPath unset)"
-}
-
-# Re-sync workspace if sync_stamp is stale or config files changed in git diff
-_sync_if_hook_config_changed() {
-  _shc_hook="$1"
-  shift || true
-  _cfg_changed=0
-  _stamp_file="$NEXUS_DIR/.rnex/sync_stamp"
-  if [ ! -f "$_stamp_file" ] || [ "$(get_config_sum "$NEXUS_DIR")" != "$(cat "$_stamp_file" 2>/dev/null)" ]; then
-    _cfg_changed=1
-  else
-    case "$_shc_hook" in
-      post-merge)
-        git -C "$NEXUS_DIR" diff-tree -r --name-only ORIG_HEAD HEAD 2>/dev/null | grep -qE "(^rnex\.yaml$|^\.local\.rnex\.yaml$)" && _cfg_changed=1
-        ;;
-      post-checkout)
-        [ -n "${1:-}" ] && [ -n "${2:-}" ] && git -C "$NEXUS_DIR" diff-tree -r --name-only "$1" "$2" 2>/dev/null | grep -qE "(^rnex\.yaml$|^\.local\.rnex\.yaml$)" && _cfg_changed=1
-        ;;
-      pre-commit)
-        git -C "$NEXUS_DIR" diff --cached --name-only 2>/dev/null | grep -qE "(^rnex\.yaml$|^\.local\.rnex\.yaml$)" && _cfg_changed=1
-        ;;
-    esac
-  fi
-
-  if [ "$_cfg_changed" -eq 1 ]; then
-    cmd_sync -y --quiet || true
-  fi
+  rm -rf "$_ws_dir/.rnex/hooks" 2>/dev/null || true
 }
 
 # Delegate to repository-owned hook in scripts/githooks/<hook> or .githooks/<hook>
@@ -302,130 +282,57 @@ _delegate_repo_githook() {
   fi
 }
 
-# Manage automated workspace Git hooks (install, uninstall, or inspect status).
-# Usage:
-#   rnex hooks install [--local]
-#   rnex hooks uninstall [--local]
-#   rnex hooks status
-cmd_hooks() {
-  case "${1:-status}" in
-    install|uninstall)
-      _h_action="$1"
-      require_workspace
-      _local=0
-      shift || true
-      while [ $# -gt 0 ]; do
-        case "$1" in
-          --local) _local=1 ;;
-        esac
-        shift
-      done
-      if [ "$_h_action" = "install" ]; then
-        cmd_hooks_install_dir "$NEXUS_DIR"
-        _gh_val="true"
-      else
-        cmd_hooks_uninstall_dir "$NEXUS_DIR"
-        _gh_val="false"
-      fi
-      if [ "$_local" -eq 1 ]; then
-        yaml_set_top_level_local "git_hooks" "$_gh_val"
-        log_dim "Recorded git_hooks: $_gh_val in $RNEX_LOCAL_CONFIG_FILE"
-      else
-        yaml_set_top_level "git_hooks" "$_gh_val"
-        log_dim "Recorded git_hooks: $_gh_val in $RNEX_CONFIG_FILE"
-      fi
-      _load_git_hooks
-      ;;
-    status)
-      require_workspace
-      printf '\n%bRepo Nexus Git Hooks Status%b\n' "$_B" "$_NC"
-      printf '=%.0s' 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28
-      printf '\n\n'
+# Execute a Git hook by name, reading configured commands from git.hooks.<hook_name>,
+# running active plugin git hooks, and delegating to repo-owned hooks.
+run_git_hook() {
+  _hook_name="$1"
+  shift 2>/dev/null || true
+  export _RNEX_INSIDE_HOOK=1
+  require_workspace
 
-      printf '  %b●%b Configuration:  ' "$_DIM" "$_NC"
-      case "$GIT_HOOKS_CONFIG" in
-        true|yes|1) printf '%bgit_hooks: true%b %b(enabled in config)%b\n' "$_G" "$_NC" "$_DIM" "$_NC" ;;
-        false|no|0) printf '%bgit_hooks: false%b %b(disabled in config)%b\n' "$_Y" "$_NC" "$_DIM" "$_NC" ;;
-        *)          printf '%bnot configured%b %b(defaults to active if git repo)%b\n' "$_DIM" "$_NC" "$_DIM" "$_NC" ;;
-      esac
-
-      _hp="$(git -C "$NEXUS_DIR" config --get core.hooksPath 2>/dev/null || true)"
-      if [ "$_hp" = ".rnex/hooks" ] || [ "$_hp" = "$NEXUS_DIR/.rnex/hooks" ]; then
-        printf '  %b●%b core.hooksPath: %s %b(active)%b\n' "$_G" "$_NC" "$_hp" "$_DIM" "$_NC"
-      elif [ -n "$_hp" ]; then
-        printf '  %b!%b core.hooksPath: %s %b(external/custom)%b\n' "$_Y" "$_NC" "$_hp" "$_DIM" "$_NC"
-      else
-        printf '  %b○%b core.hooksPath: %b(not configured — run "rnex hooks install")%b\n' "$_DIM" "$_NC" "$_DIM" "$_NC"
-      fi
-
-      printf '\n%bInstalled Hooks in .rnex/hooks/:%b\n' "$_BOLD" "$_NC"
-      for _h in $RNEX_MANAGED_GIT_HOOKS; do
-        if [ -f "$NEXUS_DIR/.rnex/hooks/$_h" ]; then
-          printf '  %b✓%b %-15s %b(installed)%b\n' "$_G" "$_NC" "$_h" "$_DIM" "$_NC"
-        else
-          printf '  %b○%b %-15s %b(not installed)%b\n' "$_DIM" "$_NC" "$_h" "$_DIM" "$_NC"
-        fi
-      done
-
-      _has_triggers=0
-      _plugins="$(yaml_list_plugins 2>/dev/null || true)"
-      for _pname in $_plugins; do
-        [ -n "$_pname" ] || continue
-        yaml_plugin_enabled "$_pname" 2>/dev/null || continue
-        _active_trigger="$(yaml_plugin_get "$_pname" "lint_trigger" 2>/dev/null || true)"
-        if [ -n "$_active_trigger" ] || [ -d "$NEXUS_DIR/.rnex/plugins/$_pname/hooks" ]; then
-          if [ "$_has_triggers" -eq 0 ]; then
-            printf '\n%bActive Plugin Triggers:%b\n' "$_BOLD" "$_NC"
-            _has_triggers=1
-          fi
-          if [ -n "$_active_trigger" ]; then
-            printf '  %b●%b %s: %s\n' "$_G" "$_NC" "$_pname" "$_active_trigger"
-          else
-            printf '  %b○%b %s: (manual only / no trigger set in rnex.yaml)\n' "$_DIM" "$_NC" "$_pname"
-          fi
-        fi
-      done
-      [ "$_has_triggers" -eq 1 ] && printf '\n'
-      return 0
-      ;;
-    run)
-      shift
-      _hook_name="$1"
-      shift || true
-      export _RNEX_INSIDE_HOOK=1
-      require_workspace
-      case "$_hook_name" in
-        post-merge|post-checkout)
-          _sync_if_hook_config_changed "$_hook_name" "$@"
-          run_plugin_git_hooks "$_hook_name" "$@"
-          _delegate_repo_githook "$_hook_name" 1 "" "$@"
-          ;;
-        post-commit)
-          run_plugin_git_hooks "post-commit" "$@"
-          _delegate_repo_githook "post-commit" 1 "" "$@"
-          ;;
-        pre-commit)
-          _sync_if_hook_config_changed "pre-commit" "$@"
-          run_plugin_git_hooks "pre-commit" "$@"
-          _delegate_repo_githook "pre-commit" 0 "" "$@" || return $?
-          ;;
-        pre-push)
-          _stdin_data=""
-          if [ ! -t 0 ]; then
-            _stdin_data="$(cat)"
-          fi
-          if [ -n "$_stdin_data" ]; then
-            printf '%s\n' "$_stdin_data" | run_plugin_git_hooks "pre-push" "$@"
-          else
-            run_plugin_git_hooks "pre-push" "$@"
-          fi
-          _delegate_repo_githook "pre-push" 0 "$_stdin_data" "$@" || return $?
-          ;;
-      esac
-      return 0
-      ;;
-    *)
-      die "Unknown hooks command: $1. Usage: rnex hooks <install|uninstall|status>"
-      ;;
+  _is_blocking=0
+  case "$_hook_name" in
+    pre-commit|pre-push) _is_blocking=1 ;;
   esac
+
+  _stdin_data=""
+  if [ ! -t 0 ]; then
+    _stdin_data="$(cat)"
+  fi
+
+  # 1. Execute configured commands from git.hooks.<hook_name>
+  _cmds="$(yaml_get_git_hook_commands "$_hook_name" 2>/dev/null || true)"
+  if [ -n "$_cmds" ]; then
+    _old_ifs="$IFS"
+    IFS='
+'
+    for _c in $_cmds; do
+      IFS="$_old_ifs"
+      [ -n "$_c" ] || continue
+      if [ "$_is_blocking" -eq 1 ]; then
+        (cd "$NEXUS_DIR" && eval "$_c") || return $?
+      else
+        (cd "$NEXUS_DIR" && eval "$_c") || true
+      fi
+    done
+    IFS="$_old_ifs"
+  fi
+
+  # 2. Plugin git hooks
+  if [ -n "$_stdin_data" ]; then
+    printf '%s\n' "$_stdin_data" | run_plugin_git_hooks "$_hook_name" "$@"
+  else
+    run_plugin_git_hooks "$_hook_name" "$@"
+  fi
+
+  # 3. Delegate to repository-owned githook in scripts/githooks or .githooks
+  _drg_blocking=1
+  [ "$_is_blocking" -eq 1 ] && _drg_blocking=0
+  _drg_rc=0
+  _delegate_repo_githook "$_hook_name" "$_drg_blocking" "$_stdin_data" "$@" || _drg_rc=$?
+  if [ "$_is_blocking" -eq 1 ] && [ "$_drg_rc" -ne 0 ]; then
+    return "$_drg_rc"
+  fi
+
+  return 0
 }

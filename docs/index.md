@@ -54,8 +54,8 @@ features:
 npx repo-nexus init
 
 # Add your repositories
-rnex add backend git@github.com:my-org/api.git
-rnex add frontend git@github.com:my-org/web.git
+rnex repo add git@github.com:my-org/api.git --name backend
+rnex repo add git@github.com:my-org/web.git --name frontend
 
 # Clone all repositories
 rnex clone

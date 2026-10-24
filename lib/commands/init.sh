@@ -135,6 +135,20 @@ cmd_init() {
       done
     fi
 
+    if [ "$_init_git_hooks" = "false" ]; then
+      _hooks_block='    post-merge: []
+    post-checkout: []
+    pre-commit: []
+    pre-push: []'
+    else
+      _hooks_block='    post-merge:
+      - "rnex sync --quiet"
+    post-checkout:
+      - "rnex sync --quiet"
+    pre-commit: []
+    pre-push: []'
+    fi
+
     cat > "$_target_yaml" <<YAML_EOF
 # Repo Nexus workspace configuration
 # See templates/rnex.example.yaml for a comprehensive example with all options.
@@ -147,8 +161,14 @@ repos_dir: ./repos
 # VS Code / Cursor multi-root workspace file (default: false; e.g. true or workspace.code-workspace)
 code_workspace: ${_cli_code_workspace:-false}
 
-# Automated workspace Git hooks (default: true; e.g. post-merge auto-sync, plugin triggers)
-git_hooks: $_init_git_hooks
+# Git Integration (Ignore rules & Git hooks)
+git:
+  ignore:
+    - "repos/"
+    - "**/.rnex*/"
+    - "**/rnex*/"
+  hooks:
+$_hooks_block
 
 # Workspace plugins
 plugins:
@@ -167,9 +187,7 @@ YAML_EOF
   WORKSPACE_LOCAL_YAML="$_init_dir/$RNEX_LOCAL_CONFIG_FILE"
 
   # ---- 2. Merge routing instructions into AI instructions files ------------
-  if ! has_active_provider_instructions "$_init_dir"; then
-    merge_rnex_instructions "$_init_dir/AGENTS.md"
-  fi
+  merge_rnex_instructions "$_init_dir/AGENTS.md"
   for _if in CLAUDE.md GEMINI.md CODEX.md .cursorrules .windsurfrules .github/copilot-instructions.md; do
     [ -f "$_init_dir/$_if" ] && merge_rnex_instructions "$_init_dir/$_if"
   done
@@ -203,11 +221,7 @@ YAML_EOF
 
   # ---- 7. Setup automated Git hooks if inside a Git repository ------------
   if [ "$_is_git_ws" -eq 1 ]; then
-    if [ "$_init_git_hooks" = "true" ]; then
-      cmd_hooks_install_dir "$_init_dir"
-    else
-      log_dim "Skipping Git hooks setup (run 'rnex hooks install' later to enable)"
-    fi
+    install_git_hooks "$_init_dir"
   fi
 
   _write_auto_sync_script "$_init_dir"
@@ -221,7 +235,7 @@ YAML_EOF
     log_dim "Created $_created_items"
     printf '\n'
     log_info "Next steps:"
-    log_dim "1. Add repositories with: rnex add [<name>] <git-url>"
+    log_dim "1. Add repositories with: rnex repo add <git-url> [--name <name>]"
     log_dim "2. Clone team repositories: rnex clone"
     log_dim "3. Run commands across all repos: rnex exec <command>"
   fi

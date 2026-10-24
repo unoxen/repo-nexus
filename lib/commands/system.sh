@@ -62,23 +62,6 @@ cmd_version() {
   printf 'rnex %s\n' "$RNEX_VERSION"
 }
 
-# Check workspace configuration version against current CLI and run sync to upgrade if needed.
-cmd_update() {
-  require_workspace
-  _cmp=0
-  version_cmp "$WORKSPACE_CONFIG_VERSION" "$RNEX_VERSION" || _cmp=$?
-  if [ "$_cmp" -eq 0 ]; then
-    log_ok "Workspace configuration and routing instructions are already up to date (v$RNEX_VERSION)"
-  elif [ "$_cmp" -eq 1 ]; then
-    log_info "Workspace configuration version (v$WORKSPACE_CONFIG_VERSION) is newer than current CLI (v$RNEX_VERSION)"
-  fi
-  cmd_sync "$@"
-}
-
-cmd_upgrade() {
-  cmd_update "$@"
-}
-
 # Display complete CLI usage, command catalog, options, and practical examples.
 cmd_help() {
   cat <<EOF
@@ -100,22 +83,19 @@ cmd_help() {
     install [dir]           Install rnex & repo-nexus globally into ~/.local/bin (or custom dir)
     sync [-y] [--quiet]     Reconcile workspace, plugins, skills, member .rnex directories, and compile AI instructions
     status                  Inspect workspace health, active repos, loaded config, git hooks, and plugins (read-only)
-    update [-y]             Check version, upgrade schema, and reconcile workspace (alias: upgrade)
-    upgrade [-y]            Alias for update
-    hooks <install|uninstall|status> [--local]
-                            Manage automated Git hooks (--local writes to .local.rnex.yaml)
     completion <shell>      Generate shell completion script (bash, zsh, fish)
 
-  REPO MANAGEMENT
-    add [--local] [--disabled] [--readonly] [<name>] <git-url>
-                            Register and clone repo (--local writes to .local.rnex.yaml)
+  REPO MANAGEMENT (Single & Workspace-Wide)
+    repo <subcommand>       Single-repository operations (add, remove, set, clone, status, exec, list)
+      repo add <url> [--name <name>] [--branch <branch>] [--local] [--disabled] [--readonly]
+      repo remove <name> [--purge] [-y|--yes]
+      repo set <name> [--enable|--disable] [--readonly|--readwrite] [--global|--local]
+      repo clone <name>
+      repo status <name>
+      repo exec <name> <command...>
+      repo list
     clone                   Clone all missing enabled repositories declared in rnex.yaml
     exec <command...>       Execute a shell command across all active member repositories
-    remove <name>           Unregister and delete member repository
-    enable [--local] <name> Enable a member repository in active workspace
-    disable [--local] <name> Disable a member repository in workspace
-    readonly [--local] <enable|disable> <name>
-                            Toggle read-only (information-only) status for a member repo
     list                    List all member repositories with clone state & active branch
 
   PLUGIN MANAGEMENT
@@ -128,17 +108,19 @@ cmd_help() {
 
   EXAMPLES
     rnex init                                   # Initialize workspace in current folder
-    rnex add backend git@github.com:org/api.git # Register and clone backend repo
+    rnex repo add git@github.com:org/api.git    # Register and clone backend repo
+    rnex repo set api --disable                 # Disable api repo on local machine (.local.rnex.yaml)
+    rnex repo set api --enable --readwrite      # Re-enable and grant readwrite locally
+    rnex repo clone api                         # Clone single member repo
+    rnex repo status api                        # Show details and git status for api repo
+    rnex repo exec api git log -1               # Run command in repos/api
+    rnex repo remove api --purge                # Remove api and purge repos/api directory
     rnex clone                                  # Clone all team repositories defined in rnex.yaml
     rnex exec git status -s                     # Check Git status across all repos
     rnex exec npm test                          # Run tests in all repos
-    rnex disable analytics --local              # Disable analytics repo on local machine only
-    rnex enable analytics                       # Re-enable analytics repo
     rnex list                                   # List all member repos and active branches
     rnex status                                 # Inspect workspace configuration and health
     rnex sync                                   # Reconcile all repos, plugins, skills, and .rnex directories
-    rnex update                                 # Upgrade workspace configuration to newest version
-    rnex hooks install                          # Enable automated workspace Git hooks
     rnex completion zsh                         # Generate Zsh completion script
 
 EOF

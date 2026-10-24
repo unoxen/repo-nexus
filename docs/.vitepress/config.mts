@@ -65,7 +65,21 @@ export default defineConfig({
     nav: [
       { text: 'Guide', link: '/guide/getting-started', activeMatch: '^/guide/' },
       { text: 'CLI Reference', link: '/cli/', activeMatch: '^/cli/' },
-      { text: 'Plugins', link: '/plugins/', activeMatch: '^/plugins/' },
+      {
+        text: 'Plugins',
+        activeMatch: '^/plugins/',
+        items: [
+          { text: 'Runtime & Architecture', link: '/plugins/' },
+          { text: 'karpathy-llm (Wiki & Rules)', link: '/plugins/karpathy-llm' },
+          { text: 'Claude Code', link: '/plugins/claude' },
+          { text: 'Cursor', link: '/plugins/cursor' },
+          { text: 'GitHub Copilot', link: '/plugins/copilot' },
+          { text: 'Google Gemini & Antigravity', link: '/plugins/gemini' },
+          { text: 'OpenAI Codex', link: '/plugins/codex' },
+          { text: 'Windsurf', link: '/plugins/windsurf' },
+          { text: 'Authoring Custom Plugins', link: '/plugins/authoring' }
+        ]
+      },
       { text: 'Examples', link: '/examples/multi-repo-workspace', activeMatch: '^/examples/' },
       { text: 'FAQ', link: '/faq/', activeMatch: '^/faq/' }
     ],
@@ -116,6 +130,7 @@ export default defineConfig({
             { text: 'Cursor (.cursorrules)', link: '/plugins/cursor' },
             { text: 'GitHub Copilot (.github)', link: '/plugins/copilot' },
             { text: 'Google Gemini & Antigravity', link: '/plugins/gemini' },
+            { text: 'OpenAI Codex (CODEX.md)', link: '/plugins/codex' },
             { text: 'Windsurf (.windsurfrules)', link: '/plugins/windsurf' }
           ]
         }
@@ -159,7 +174,7 @@ export default defineConfig({
     ],
 
     footer: {
-      copyright: 'Copyright © 2026 Repo Nexus · MIT License'
+      copyright: 'Copyright © 2026 Repo Nexus · Apache 2.0 License'
     }
   }
 })

@@ -63,7 +63,7 @@ When you initialize a workspace (`rnex init`), `rnex` creates:
 3. Routing-only `AGENTS.md` (directing AI assistants to configuration and plugins).
 4. `.rnex/` (strictly encapsulating all internal rnex assets and scoped plugins).
 
-When you run `rnex add <name> <git-url>` or `rnex clone`, member repositories are cloned directly into `./repos/<name>`.
+When you run `rnex repo add <git-url> [--name <name>]` or `rnex clone`, member repositories are cloned directly into `./repos/<name>`.
 
 ---
 
@@ -123,8 +123,8 @@ Repositories support an `enabled: true|false` setting:
 
 CLI commands:
 ```bash
-rnex disable analytics --local    # disable locally
-rnex enable analytics             # re-enable
+rnex repo set analytics --disable --local    # disable locally
+rnex repo set analytics --enable             # re-enable
 ```
 
 ---
@@ -140,17 +140,16 @@ Top-level AI instructions (`AGENTS.md`, `CLAUDE.md`, etc.) do not include sprawl
 
 ### What is the member repository `.rnex/` directory?
 
-Repo Nexus initializes an isolated `.rnex/` folder inside each member repository (`repos/<name>/.rnex/`):
-- Encapsulates Repo Nexus metadata and scoped plugin rules for that repository.
-- Keeps member repository roots clean and untouched.
-- Can be disabled at any time with `rnex rnex-dir disable <name>`.
+Repo Nexus uses a lazy, on-demand `.rnex/` model for member repositories:
+- Member repositories remain completely clean and untouched by default.
+- Scoped plugin assets are only mirrored when an active plugin requires repository-level state.
 
 ---
 
 ### How are plugins structured and scoped?
 
 Plugins are strictly scoped under `.rnex/plugins/<plugin-name>/`.
-For example, the built-in `karpathy-llm` plugin places its rules, workflows, and instructions in `.rnex/plugins/karpathy-llm/`, while instantiating domain directories (`./docs` for intake documents and `.rnex/wiki` for curated knowledge) as specified by its architecture.
+For example, the built-in `karpathy-llm` plugin places its rules, workflows, and instructions in `.rnex/plugins/karpathy-llm/`, while instantiating domain directories (`./docs` for intake documents and `wiki` for curated knowledge) as specified by its architecture.
 
 ---
 

@@ -68,8 +68,6 @@ plugins:
   karpathy-llm:
     wiki_dir: docs/wiki
     raw_dir: intake/raw
-    lint_trigger: git-post-commit
-    notify_on_changes: true
 EOF_CFG
 
 # Reconcile via rnex sync to initialize plugin templates with custom paths
@@ -108,16 +106,19 @@ echo "$_kw_info" | grep -q "current: intake/raw" || { fail "plugin info did not 
 echo "$_kw_info" | grep -q "docs/wiki/index.md" || { fail "plugin info did not report template mapped to docs/wiki/index.md"; exit 1; }
 echo "$_kw_info" | grep -q "docs/wiki/hot.md" || { fail "plugin info did not report template mapped to docs/wiki/hot.md"; exit 1; }
 
-# Verify Git hooks trigger detects custom paths
+# Verify CLI ingest and lint work on the custom paths
 git -C "$TEST_KWIKI_WS" config user.email "test@example.com"
 git -C "$TEST_KWIKI_WS" config user.name "Test User"
 git -C "$TEST_KWIKI_WS" add .
 git -C "$TEST_KWIKI_WS" commit -qm "Initial commit"
 echo "sample research" > "$TEST_KWIKI_WS/intake/raw/paper.md"
-git -C "$TEST_KWIKI_WS" add intake/raw/paper.md
-git -C "$TEST_KWIKI_WS" commit -qm "Add intake document"
-_hook_output="$(cd "$TEST_KWIKI_WS" && ./rnex hooks run post-commit 2>&1)"
-echo "$_hook_output" | grep -q "intake/raw/ or docs/wiki/" || { fail "Git hook post-commit did not detect commit to intake/raw/: $_hook_output"; exit 1; }
+(
+  cd "$TEST_KWIKI_WS"
+  ./rnex plugin karpathy-llm ingest --source intake/raw/paper.md >/dev/null
+  [ -f "docs/wiki/paper.md" ] || { fail "paper.md was not ingested into custom docs/wiki/"; exit 1; }
+  _lint_out="$(./rnex plugin karpathy-llm lint 2>&1)"
+  echo "$_lint_out" | grep -q "Wiki lint passed" || { fail "Wiki lint failed on custom wiki_dir: $_lint_out"; exit 1; }
+)
 pass
 
 # --------------------------------------------------------------------------
@@ -161,7 +162,8 @@ _kw_disabled_ai="$(cat "$TEST_KWIKI_WS/.rnex/ai-instructions.md")"
 ! echo "$_kw_disabled_ai" | grep -q "Karpathy LLM Wiki Knowledge Architecture" || { fail "ai-instructions.md still contains wiki instructions after disabling plugin"; exit 1; }
 echo "$_kw_disabled_ai" | grep -q "Read Configuration First" || { fail "ai-instructions.md missing Read Configuration First"; exit 1; }
 
-[ ! -f "$TEST_KWIKI_WS/AGENTS.md" ] || { fail "Redundant AGENTS.md still exists when claude plugin is enabled"; exit 1; }
+[ -f "$TEST_KWIKI_WS/AGENTS.md" ] || { fail "Permanent AGENTS.md missing when claude plugin is enabled"; exit 1; }
+grep -q "REPO-NEXUS:START" "$TEST_KWIKI_WS/AGENTS.md" || { fail "AGENTS.md missing REPO-NEXUS instructions"; exit 1; }
 _kw_disabled_claude="$(cat "$TEST_KWIKI_WS/CLAUDE.md")"
 echo "$_kw_disabled_claude" | grep -q "CRITICAL: You MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\`" || { fail "CLAUDE.md missing strict directive"; exit 1; }
 
@@ -187,7 +189,7 @@ echo "$_list_out" | grep "karpathy-llm" | grep -q "disabled" || { fail "plugin l
 pass
 
 # --------------------------------------------------------------------------
-run_test "Karpathy LLM plugin config default lint_trigger: manual and after_sync hook syncing raw_dir and member repository READMEs"
+run_test "Karpathy LLM plugin config default wiki_dir: wiki and after_sync hook syncing raw_dir and member repository READMEs"
 TEST_HOOK_WS="$TEST_TMP/karpathy-hook-sync-ws"
 mkdir -p "$TEST_HOOK_WS"
 cp "$CLI" "$TEST_HOOK_WS/rnex"
@@ -198,11 +200,14 @@ git -C "$TEST_HOOK_WS" init -q
 
 "$TEST_HOOK_WS/rnex" init -y "$TEST_HOOK_WS" >/dev/null
 
-# 1. Enable karpathy-llm and assert lint_trigger defaults to manual
+# 1. Enable karpathy-llm and assert wiki_dir defaults to wiki while lint_trigger is absent
 (cd "$TEST_HOOK_WS" && ./rnex plugin enable karpathy-llm >/dev/null)
 _pinfo="$(cd "$TEST_HOOK_WS" && ./rnex plugin info karpathy-llm 2>&1)"
-echo "$_pinfo" | grep "lint_trigger:" | grep -q "current: manual" || { fail "Plugin info did not report default lint_trigger as manual: $_pinfo"; exit 1; }
-grep -q 'lint_trigger: "manual"' "$TEST_HOOK_WS/rnex.yaml" || grep -q 'lint_trigger: manual' "$TEST_HOOK_WS/rnex.yaml" || { fail "rnex.yaml does not contain lint_trigger: manual"; exit 1; }
+echo "$_pinfo" | grep "wiki_dir:" | grep -q "current: wiki" || { fail "Plugin info did not report default wiki_dir as wiki: $_pinfo"; exit 1; }
+! echo "$_pinfo" | grep -q "lint_trigger:" || { fail "Plugin info still reports removed lint_trigger: $_pinfo"; exit 1; }
+! echo "$_pinfo" | grep -q "notify_on_changes:" || { fail "Plugin info still reports removed notify_on_changes: $_pinfo"; exit 1; }
+! grep -q "lint_trigger" "$TEST_HOOK_WS/rnex.yaml" || { fail "rnex.yaml contains removed lint_trigger"; exit 1; }
+! grep -q "notify_on_changes" "$TEST_HOOK_WS/rnex.yaml" || { fail "rnex.yaml contains removed notify_on_changes"; exit 1; }
 
 # 2. Mock a member repository initialization (./repos/mock-member-repo/README.md)
 mkdir -p "$TEST_HOOK_WS/repos/mock-member-repo"
@@ -216,46 +221,46 @@ printf '# Intake Note\nImportant context notes.\n' > "$TEST_HOOK_WS/docs/intake-
 # 3. Invoke rnex sync to trigger after_sync hook
 (cd "$TEST_HOOK_WS" && ./rnex sync -y >/dev/null)
 
-# 4. Confirm .rnex/wiki/raw staging directory is NOT created and docs/intake-note.md remains in-place
-[ ! -d "$TEST_HOOK_WS/.rnex/wiki/raw" ] || { fail ".rnex/wiki/raw staging directory was created; should not exist"; exit 1; }
+# 4. Confirm wiki/raw staging directory is NOT created and docs/intake-note.md remains in-place
+[ ! -d "$TEST_HOOK_WS/wiki/raw" ] || { fail "wiki/raw staging directory was created; should not exist"; exit 1; }
 [ -f "$TEST_HOOK_WS/docs/intake-note.md" ] || { fail "docs/intake-note.md missing"; exit 1; }
 grep -q "Intake Note" "$TEST_HOOK_WS/docs/intake-note.md" || { fail "Content mismatch in docs/intake-note.md"; exit 1; }
 
-# 5a. Verify user-created files in .rnex/wiki/raw are strictly preserved, while duplicate staging is removed
-mkdir -p "$TEST_HOOK_WS/.rnex/wiki/raw"
-printf '# Custom User Draft\nDo not delete this uncommitted content!\n' > "$TEST_HOOK_WS/.rnex/wiki/raw/user-draft.md"
+# 5a. Verify user-created files in wiki/raw are strictly preserved, while duplicate staging is removed
+mkdir -p "$TEST_HOOK_WS/wiki/raw"
+printf '# Custom User Draft\nDo not delete this uncommitted content!\n' > "$TEST_HOOK_WS/wiki/raw/user-draft.md"
 _sync_preserve_out="$(cd "$TEST_HOOK_WS" && ./rnex sync -y 2>&1)"
-[ -f "$TEST_HOOK_WS/.rnex/wiki/raw/user-draft.md" ] || { fail "Custom user file in .rnex/wiki/raw was deleted by rnex sync"; exit 1; }
-echo "$_sync_preserve_out" | grep -q "Warning: .rnex/wiki/raw contains custom or uncommitted files" || { fail "Missing preservation warning for .rnex/wiki/raw: $_sync_preserve_out"; exit 1; }
+[ -f "$TEST_HOOK_WS/wiki/raw/user-draft.md" ] || { fail "Custom user file in wiki/raw was deleted by rnex sync"; exit 1; }
+echo "$_sync_preserve_out" | grep -q "Warning: wiki/raw contains custom or uncommitted files" || { fail "Missing preservation warning for wiki/raw: $_sync_preserve_out"; exit 1; }
 
 # Replace custom file with duplicate staging file matching docs/intake-note.md
-rm -f "$TEST_HOOK_WS/.rnex/wiki/raw/user-draft.md"
-cp "$TEST_HOOK_WS/docs/intake-note.md" "$TEST_HOOK_WS/.rnex/wiki/raw/intake-note.md"
+rm -f "$TEST_HOOK_WS/wiki/raw/user-draft.md"
+cp "$TEST_HOOK_WS/docs/intake-note.md" "$TEST_HOOK_WS/wiki/raw/intake-note.md"
 (cd "$TEST_HOOK_WS" && ./rnex sync -y >/dev/null)
-[ ! -d "$TEST_HOOK_WS/.rnex/wiki/raw" ] || { fail "Managed duplicate staging .rnex/wiki/raw was not cleaned up"; exit 1; }
+[ ! -d "$TEST_HOOK_WS/wiki/raw" ] || { fail "Managed duplicate staging wiki/raw was not cleaned up"; exit 1; }
 
 # 5b. Confirm member repository README ingested into atomic wiki page
-[ -f "$TEST_HOOK_WS/.rnex/wiki/repo-mock-member-repo.md" ] || { fail "repo-mock-member-repo.md missing after wiki ingest"; exit 1; }
-grep -q 'title: "Member Repo: mock-member-repo"' "$TEST_HOOK_WS/.rnex/wiki/repo-mock-member-repo.md" || { fail "Frontmatter title missing in repo-mock-member-repo.md"; exit 1; }
-grep -q 'tags: \[member-repo, mock-member-repo\]' "$TEST_HOOK_WS/.rnex/wiki/repo-mock-member-repo.md" || { fail "Frontmatter tags missing in repo-mock-member-repo.md"; exit 1; }
-grep -q 'sources: \["repos/mock-member-repo/README.md"\]' "$TEST_HOOK_WS/.rnex/wiki/repo-mock-member-repo.md" || { fail "Frontmatter sources missing in repo-mock-member-repo.md"; exit 1; }
-grep -q "This is a mock repository README." "$TEST_HOOK_WS/.rnex/wiki/repo-mock-member-repo.md" || { fail "Summary missing in repo-mock-member-repo.md"; exit 1; }
-! grep -q "member-repositories.md" "$TEST_HOOK_WS/.rnex/wiki/repo-mock-member-repo.md" || { fail "Missing navigation page member-repositories.md was referenced"; exit 1; }
-grep -q "See \[Wiki Index\](\./index.md)" "$TEST_HOOK_WS/.rnex/wiki/repo-mock-member-repo.md" || { fail "Did not reference real navigation index.md"; exit 1; }
+[ -f "$TEST_HOOK_WS/wiki/repo-mock-member-repo.md" ] || { fail "repo-mock-member-repo.md missing after wiki ingest"; exit 1; }
+grep -q 'title: "Member Repo: mock-member-repo"' "$TEST_HOOK_WS/wiki/repo-mock-member-repo.md" || { fail "Frontmatter title missing in repo-mock-member-repo.md"; exit 1; }
+grep -q 'tags: \[member-repo, mock-member-repo\]' "$TEST_HOOK_WS/wiki/repo-mock-member-repo.md" || { fail "Frontmatter tags missing in repo-mock-member-repo.md"; exit 1; }
+grep -q 'sources: \["repos/mock-member-repo/README.md"\]' "$TEST_HOOK_WS/wiki/repo-mock-member-repo.md" || { fail "Frontmatter sources missing in repo-mock-member-repo.md"; exit 1; }
+grep -q "This is a mock repository README." "$TEST_HOOK_WS/wiki/repo-mock-member-repo.md" || { fail "Summary missing in repo-mock-member-repo.md"; exit 1; }
+! grep -q "member-repositories.md" "$TEST_HOOK_WS/wiki/repo-mock-member-repo.md" || { fail "Missing navigation page member-repositories.md was referenced"; exit 1; }
+grep -q "See \[Wiki Index\](\./index.md)" "$TEST_HOOK_WS/wiki/repo-mock-member-repo.md" || { fail "Did not reference real navigation index.md"; exit 1; }
 
 # 5c. Confirm registration in navigation index (index.md)
-[ -f "$TEST_HOOK_WS/.rnex/wiki/index.md" ] || { fail ".rnex/wiki/index.md missing"; exit 1; }
-grep -q "repo-mock-member-repo\.md" "$TEST_HOOK_WS/.rnex/wiki/index.md" || { fail "repo-mock-member-repo.md not indexed in index.md"; exit 1; }
-grep -q "Member Repo: mock-member-repo" "$TEST_HOOK_WS/.rnex/wiki/index.md" || { fail "Member repo title not in index.md"; exit 1; }
+[ -f "$TEST_HOOK_WS/wiki/index.md" ] || { fail "wiki/index.md missing"; exit 1; }
+grep -q "repo-mock-member-repo\.md" "$TEST_HOOK_WS/wiki/index.md" || { fail "repo-mock-member-repo.md not indexed in index.md"; exit 1; }
+grep -q "Member Repo: mock-member-repo" "$TEST_HOOK_WS/wiki/index.md" || { fail "Member repo title not in index.md"; exit 1; }
 
 # 5d. Confirm registration in hot cache (hot.md)
-[ -f "$TEST_HOOK_WS/.rnex/wiki/hot.md" ] || { fail ".rnex/wiki/hot.md missing"; exit 1; }
-grep -q "mock-member-repo" "$TEST_HOOK_WS/.rnex/wiki/hot.md" || { fail "mock-member-repo missing from hot.md"; exit 1; }
-grep -q "repos/mock-member-repo/" "$TEST_HOOK_WS/.rnex/wiki/hot.md" || { fail "repos/mock-member-repo/ missing from hot.md"; exit 1; }
+[ -f "$TEST_HOOK_WS/wiki/hot.md" ] || { fail "wiki/hot.md missing"; exit 1; }
+grep -q "mock-member-repo" "$TEST_HOOK_WS/wiki/hot.md" || { fail "mock-member-repo missing from hot.md"; exit 1; }
+grep -q "repos/mock-member-repo/" "$TEST_HOOK_WS/wiki/hot.md" || { fail "repos/mock-member-repo/ missing from hot.md"; exit 1; }
 
 # 5e. Confirm operation log entry (_log.md)
-[ -f "$TEST_HOOK_WS/.rnex/wiki/_log.md" ] || { fail ".rnex/wiki/_log.md missing"; exit 1; }
-grep -q "Member Repo Ingest: mock-member-repo" "$TEST_HOOK_WS/.rnex/wiki/_log.md" || { fail "Ingest log missing from _log.md"; exit 1; }
+[ -f "$TEST_HOOK_WS/wiki/_log.md" ] || { fail "wiki/_log.md missing"; exit 1; }
+grep -q "Member Repo Ingest: mock-member-repo" "$TEST_HOOK_WS/wiki/_log.md" || { fail "Ingest log missing from _log.md"; exit 1; }
 
 # 6. Verify disabled member repo READMEs are not synced
 mkdir -p "$TEST_HOOK_WS/repos/disabled-member-repo"
@@ -266,8 +271,8 @@ repos:
     enabled: false
 EOF_DIS
 (cd "$TEST_HOOK_WS" && ./rnex sync -y >/dev/null)
-[ ! -d "$TEST_HOOK_WS/.rnex/wiki/raw" ] || { fail ".rnex/wiki/raw staging directory exists"; exit 1; }
-[ ! -f "$TEST_HOOK_WS/.rnex/wiki/repo-disabled-member-repo.md" ] || { fail "Disabled repository should not be ingested into wiki"; exit 1; }
+[ ! -d "$TEST_HOOK_WS/wiki/raw" ] || { fail "wiki/raw staging directory exists"; exit 1; }
+[ ! -f "$TEST_HOOK_WS/wiki/repo-disabled-member-repo.md" ] || { fail "Disabled repository should not be ingested into wiki"; exit 1; }
 
 # 7. Verify an adjacent enabled repository is NOT affected by the disabled repository entry
 mkdir -p "$TEST_HOOK_WS/repos/adjacent-enabled-repo"
@@ -277,9 +282,9 @@ cat <<'EOF_ADJ' >> "$TEST_HOOK_WS/rnex.yaml"
     url: ./repos/adjacent-enabled-repo
 EOF_ADJ
 (cd "$TEST_HOOK_WS" && ./rnex sync -y >/dev/null)
-[ -f "$TEST_HOOK_WS/.rnex/wiki/repo-adjacent-enabled-repo.md" ] || { fail "Adjacent enabled repository was not ingested into wiki"; exit 1; }
-grep -q "Adjacent Enabled Repo" "$TEST_HOOK_WS/.rnex/wiki/repo-adjacent-enabled-repo.md" || { fail "Content mismatch in adjacent enabled repo wiki page"; exit 1; }
-[ ! -d "$TEST_HOOK_WS/.rnex/wiki/raw" ] || { fail ".rnex/wiki/raw staging directory was created during sync"; exit 1; }
+[ -f "$TEST_HOOK_WS/wiki/repo-adjacent-enabled-repo.md" ] || { fail "Adjacent enabled repository was not ingested into wiki"; exit 1; }
+grep -q "Adjacent Enabled Repo" "$TEST_HOOK_WS/wiki/repo-adjacent-enabled-repo.md" || { fail "Content mismatch in adjacent enabled repo wiki page"; exit 1; }
+[ ! -d "$TEST_HOOK_WS/wiki/raw" ] || { fail "wiki/raw staging directory was created during sync"; exit 1; }
 
 # 8. Verify before_sync plugin lifecycle hook execution
 mkdir -p "$TEST_HOOK_WS/.rnex/plugins/karpathy-llm/hooks"
@@ -303,12 +308,12 @@ cp "$DIR/package.json" "$TEST_INIT_KW_WS/package.json"
 git -C "$TEST_INIT_KW_WS" init -q
 
 "$TEST_INIT_KW_WS/rnex" init -y --karpathy "$TEST_INIT_KW_WS" >/dev/null
-[ -f "$TEST_INIT_KW_WS/.rnex/wiki/repo-seed-repo.md" ] || { fail "seed-repo was not ingested during rnex init with karpathy plugin"; exit 1; }
-grep -q "Seed Repo" "$TEST_INIT_KW_WS/.rnex/wiki/repo-seed-repo.md" || { fail "seed-repo content mismatch after init ingest"; exit 1; }
-grep -q "repo-seed-repo\.md" "$TEST_INIT_KW_WS/.rnex/wiki/index.md" || { fail "seed-repo not registered in index.md after init"; exit 1; }
-grep -q "seed-repo" "$TEST_INIT_KW_WS/.rnex/wiki/hot.md" || { fail "seed-repo not registered in hot.md after init"; exit 1; }
+[ -f "$TEST_INIT_KW_WS/wiki/repo-seed-repo.md" ] || { fail "seed-repo was not ingested during rnex init with karpathy plugin"; exit 1; }
+grep -q "Seed Repo" "$TEST_INIT_KW_WS/wiki/repo-seed-repo.md" || { fail "seed-repo content mismatch after init ingest"; exit 1; }
+grep -q "repo-seed-repo\.md" "$TEST_INIT_KW_WS/wiki/index.md" || { fail "seed-repo not registered in index.md after init"; exit 1; }
+grep -q "seed-repo" "$TEST_INIT_KW_WS/wiki/hot.md" || { fail "seed-repo not registered in hot.md after init"; exit 1; }
 
-# 10. Verify rnex add with karpathy plugin performs wiki ingest for newly added member repo
+# 10. Verify rnex repo add with karpathy plugin performs wiki ingest for newly added member repo
 mkdir -p "$TEST_HOOK_WS/external/added-repo"
 git -C "$TEST_HOOK_WS/external/added-repo" init -q
 printf '# Added Member Repo\nNewly added member repository via rnex add.\n' > "$TEST_HOOK_WS/external/added-repo/README.md"
@@ -317,12 +322,12 @@ git -C "$TEST_HOOK_WS/external/added-repo" config user.name "Test User"
 git -C "$TEST_HOOK_WS/external/added-repo" add README.md
 git -C "$TEST_HOOK_WS/external/added-repo" commit -qm "Initial commit"
 
-(cd "$TEST_HOOK_WS" && ./rnex add added-repo "$TEST_HOOK_WS/external/added-repo" >/dev/null)
-[ -f "$TEST_HOOK_WS/.rnex/wiki/repo-added-repo.md" ] || { fail "added-repo was not ingested during rnex add with karpathy plugin"; exit 1; }
-grep -q "Added Member Repo" "$TEST_HOOK_WS/.rnex/wiki/repo-added-repo.md" || { fail "added-repo content mismatch in wiki page"; exit 1; }
-grep -q "repo-added-repo\.md" "$TEST_HOOK_WS/.rnex/wiki/index.md" || { fail "added-repo not registered in index.md"; exit 1; }
-grep -q "added-repo" "$TEST_HOOK_WS/.rnex/wiki/hot.md" || { fail "added-repo not registered in hot.md"; exit 1; }
-grep -q "Member Repo Ingest: added-repo" "$TEST_HOOK_WS/.rnex/wiki/_log.md" || { fail "added-repo not logged in _log.md"; exit 1; }
+(cd "$TEST_HOOK_WS" && ./rnex repo add "$TEST_HOOK_WS/external/added-repo" --name added-repo >/dev/null)
+[ -f "$TEST_HOOK_WS/wiki/repo-added-repo.md" ] || { fail "added-repo was not ingested during rnex add with karpathy plugin"; exit 1; }
+grep -q "Added Member Repo" "$TEST_HOOK_WS/wiki/repo-added-repo.md" || { fail "added-repo content mismatch in wiki page"; exit 1; }
+grep -q "repo-added-repo\.md" "$TEST_HOOK_WS/wiki/index.md" || { fail "added-repo not registered in index.md"; exit 1; }
+grep -q "added-repo" "$TEST_HOOK_WS/wiki/hot.md" || { fail "added-repo not registered in hot.md"; exit 1; }
+grep -q "Member Repo Ingest: added-repo" "$TEST_HOOK_WS/wiki/_log.md" || { fail "added-repo not logged in _log.md"; exit 1; }
 
 # 11. Verify scaling across 15 member repositories strictly preserves the ~500-word ceiling on hot.md
 for _i in $(seq 1 14); do
@@ -331,7 +336,7 @@ for _i in $(seq 1 14); do
   printf '  repo-%s:\n' "$_i" >> "$TEST_HOOK_WS/rnex.yaml"
 done
 (cd "$TEST_HOOK_WS" && ./rnex sync -y >/dev/null)
-_hot_wc="$(wc -w < "$TEST_HOOK_WS/.rnex/wiki/hot.md")"
+_hot_wc="$(wc -w < "$TEST_HOOK_WS/wiki/hot.md")"
 [ "$_hot_wc" -le 500 ] || { fail "hot.md word count ($_hot_wc) exceeded 500-word ceiling with 15 repositories"; exit 1; }
 
 # 12. Verify rnex-wiki-page.template.md contains clean placeholders without /.rnex/.rnex
@@ -343,16 +348,26 @@ grep -q "<wiki_dir>/" "$TEST_HOOK_WS/.rnex/plugins/karpathy-llm/templates/rnex-w
 grep -q "Mandatory Wiki-First Access Gate" "$TEST_HOOK_WS/.rnex/ai-instructions.md" || { fail "Mandatory Wiki-First Access Gate missing from compiled ai-instructions.md"; exit 1; }
 ! grep -q "Mandatory Wiki-First Access Gate" "$TEST_HOOK_WS/AGENTS.md" || { fail "AGENTS.md contains wiki instructions; should remain a single pointer"; exit 1; }
 
-# 14. Verify git_pre-push.sh emits explicit reminder and performs deterministic checks
+# 14. Verify rnex plugin karpathy-llm ingest and lint commands execute with options
 (
   cd "$TEST_HOOK_WS"
-  cat <<'EOF_PREPUSH' >> .local.rnex.yaml
-plugins:
-  karpathy-llm:
-    lint_trigger: git-pre-push
-EOF_PREPUSH
-  _pre_push_out="$("$TEST_HOOK_WS/toolkit/plugins/karpathy-llm/hooks/git_pre-push.sh" 2>&1)"
-  echo "$_pre_push_out" | grep -q "Reminder: Wiki files changed. Run the rnex-karpathy-llm-wiki-lint skill to verify." || { fail "git_pre-push.sh missing explicit reminder: $_pre_push_out"; exit 1; }
+  # Ingest with --repo option
+  _ingest_repo_out="$(./rnex plugin karpathy-llm ingest --repo added-repo 2>&1)" || { fail "rnex plugin karpathy-llm ingest failed: $_ingest_repo_out"; exit 1; }
+  echo "$_ingest_repo_out" | grep -q "Ingested member repository: added-repo" || { fail "Ingest output mismatch: $_ingest_repo_out"; exit 1; }
+
+  # Ingest with --source option
+  printf '# Architecture Overview\nImportant overview documentation.\n' > docs/arch-overview.md
+  _ingest_src_out="$(./rnex plugin karpathy-llm ingest --source docs/arch-overview.md 2>&1)" || { fail "rnex plugin karpathy-llm ingest --source failed: $_ingest_src_out"; exit 1; }
+  [ -f "wiki/arch-overview.md" ] || { fail "wiki/arch-overview.md not created by ingest --source"; exit 1; }
+
+  # Lint command execution with --strict
+  _lint_out="$(./rnex plugin karpathy-llm lint --strict 2>&1)" || { fail "rnex plugin karpathy-llm lint --strict failed: $_lint_out"; exit 1; }
+  echo "$_lint_out" | grep -q "Wiki lint passed" || { fail "Lint output mismatch: $_lint_out"; exit 1; }
+  grep -q "Wiki Lint Run" "wiki/_log.md" || { fail "Lint run not logged in wiki/_log.md"; exit 1; }
+
+  # Verify lint_trigger and notify_on_changes are absent from plugin.yaml
+  ! grep -q "lint_trigger" "$TEST_HOOK_WS/toolkit/plugins/karpathy-llm/plugin.yaml" || { fail "lint_trigger still present in plugin.yaml"; exit 1; }
+  ! grep -q "notify_on_changes" "$TEST_HOOK_WS/toolkit/plugins/karpathy-llm/plugin.yaml" || { fail "notify_on_changes still present in plugin.yaml"; exit 1; }
 )
 
 # 15. Verify copilot integration documentation specifies .github/skills/rnex-*/SKILL.md

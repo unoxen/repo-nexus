@@ -12,23 +12,21 @@ description: Fast reference cheatsheet for rnex commands, global options, enviro
 | Command | Category | Description |
 |:---|:---|:---|
 | [`rnex init`](workspace.md#rnex-init) | Workspace | Initialize a new Repo Nexus workspace. |
-| [`rnex sync`](workspace.md#rnex-sync) | Workspace | Single reconciliation command: sync skills, .rnex/ harness, and compile AI instructions. |
+| [`rnex sync`](workspace.md#rnex-sync) | Workspace | Single reconciliation command: sync skills, git hooks & ignore, and compile AI instructions. |
 | [`rnex status`](workspace.md#rnex-status) | Workspace | Strictly read-only: inspect workspace health, active repos, loaded config, and plugins. |
-| [`rnex update` / `upgrade`](workspace.md#rnex-update-alias-upgrade) | Workspace | Check configuration version and upgrade schema (delegates to `rnex sync`). |
 | [`rnex install`](workspace.md#rnex-install) | Workspace | Symlink `rnex` to `~/.local/bin`. |
 | [`rnex completion`](workspace.md#rnex-completion) | Workspace | Generate shell auto-completion for Zsh, Bash, or Fish. |
 | [`rnex version`](workspace.md#rnex-version) | Workspace | Display current installed CLI version. |
-| [`rnex add`](repos.md#rnex-add) | Repositories | Register a git repository and clone it into `./repos/`. |
+| [`rnex repo add`](repos.md#rnex-repo-add) | Repositories | Register a git repository and clone it into `./repos/`. |
+| [`rnex repo remove`](repos.md#rnex-repo-remove) | Repositories | Unregister repository from configuration and delete clone from disk. |
+| [`rnex repo set`](repos.md#rnex-repo-set) | Repositories | Set repository state (`--enable`/`--disable`, `--readonly`/`--readwrite`). |
+| [`rnex repo clone`](repos.md#rnex-repo-clone) | Repositories | Clone a specific registered member repository. |
+| [`rnex repo status`](repos.md#rnex-repo-status) | Repositories | Inspect status and branch for a specific repository. |
+| [`rnex repo exec`](repos.md#rnex-repo-exec) | Repositories | Run arbitrary shell command in a specific member repository. |
 | [`rnex clone`](repos.md#rnex-clone) | Repositories | Clone all declared repositories missing from disk. |
 | [`rnex list`](repos.md#rnex-list) | Repositories | Print table of registered member repositories. |
-| [`rnex enable`](repos.md#rnex-enable-rnex-disable) | Repositories | Enable a repository (include in sync and exec). |
-| [`rnex disable`](repos.md#rnex-enable-rnex-disable) | Repositories | Disable a repository (exclude from sync and exec). |
-| [`rnex readonly`](repos.md#rnex-readonly) | Repositories | Toggle read-only (information-only) status for a member repository. |
-| [`rnex remove`](repos.md#rnex-remove) | Repositories | Unregister repository and delete clone from disk. |
-| [`rnex rnex-dir`](repos.md#rnex-rnex-dir) | Repositories | Toggle `.rnex/` context inside member repository. |
 | [`rnex exec`](execution.md) | Execution | Run arbitrary shell commands across all active repos. |
-| [`rnex hooks`](tooling.md#git-hooks-automation) | Tooling | Manage automated Git hooks (`post-merge`, etc.). |
-| [`rnex plugin`](tooling.md#plugin-management) | Tooling | List, inspect, enable, and disable workspace plugins. |
+| [`rnex plugin`](tooling.md#plugin-management) | Tooling | List, inspect, enable, disable plugins, and run plugin subcommands. |
 
 ---
 

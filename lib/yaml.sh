@@ -257,6 +257,225 @@ _yaml_section_remove() {
   ' "$_ysr_file" > "$_tmp" && mv "$_tmp" "$_ysr_file"
 }
 
+# ---- Git Configuration Operations (git.ignore & git.hooks) -----------------
+
+# Extract list items under git.ignore from a YAML file.
+_yaml_git_ignore_from_file() {
+  _ygif_f="$1"
+  [ -f "$_ygif_f" ] || return 0
+  awk '
+    function unquote(v) {
+      sub(/^[ \t]+/, "", v)
+      if (v ~ /^"/) {
+        v = substr(v, 2); sub(/".*$/, "", v)
+      } else if (v ~ /^\047/) {
+        v = substr(v, 2); sub(/\047.*$/, "", v)
+      } else {
+        sub(/[ \t]+#.*$/, "", v)
+        sub(/[ \t]+$/, "", v)
+      }
+      return v
+    }
+    /^[ \t]*git:[ \t]*(#.*)?$/ { in_git=1; in_ignore=0; next }
+    in_git && /^[^ \t#]/ { exit }
+    !in_git { next }
+    {
+      match($0, /^[ \t]*/)
+      indent = RLENGTH
+      trimmed = substr($0, indent + 1)
+    }
+    trimmed ~ /^([#]|$)/ { next }
+
+    in_ignore {
+      if (indent > ignore_indent || (indent == ignore_indent && trimmed ~ /^-([ \t]|$)/)) {
+        if (trimmed ~ /^-([ \t]|$)/) {
+          item = unquote(substr(trimmed, 2))
+          if (length(item) > 0) print item
+        }
+        next
+      }
+      in_ignore = 0
+    }
+
+    !in_ignore {
+      if (trimmed ~ /^ignore:[ \t]*/) {
+        ignore_indent = indent
+        val = trimmed
+        sub(/^ignore:[ \t]*/, "", val)
+        if (val ~ /^(#.*)?$/) {
+          in_ignore = 1
+          next
+        }
+        if (val ~ /^\[/) {
+          sub(/^\[/, "", val)
+          sub(/\][ \t]*(#.*)?$/, "", val)
+          n = split(val, parts, ",")
+          for (i = 1; i <= n; i++) {
+            item = unquote(parts[i])
+            if (length(item) > 0) print item
+          }
+          exit
+        }
+        item = unquote(val)
+        if (length(item) > 0) print item
+        exit
+      }
+    }
+  ' "$_ygif_f"
+}
+
+# Read list items under git.ignore merged from rnex.yaml and .local.rnex.yaml.
+yaml_get_git_ignore() {
+  _yaml_resolve_files
+  {
+    _yaml_git_ignore_from_file "$_wy"
+    _yaml_git_ignore_from_file "$_wly"
+  } | awk '!seen[$0]++'
+}
+
+# Extract list of hook names defined under git.hooks from a YAML file.
+_yaml_git_hooks_list_from_file() {
+  _yghl_f="$1"
+  [ -f "$_yghl_f" ] || return 0
+  awk '
+    /^[ \t]*git:[ \t]*(#.*)?$/ { in_git=1; next }
+    in_git && /^[^ \t#]/ { exit }
+    !in_git { next }
+    {
+      match($0, /^[ \t]*/)
+      indent = RLENGTH
+      trimmed = substr($0, indent + 1)
+    }
+    trimmed ~ /^([#]|$)/ { next }
+
+    in_hooks && (indent <= hooks_indent) { in_hooks=0 }
+
+    !in_hooks {
+      if (trimmed ~ /^hooks:[ \t]*(#.*)?$/) {
+        in_hooks = 1
+        hooks_indent = indent
+        hook_item_indent = -1
+      }
+      next
+    }
+
+    in_hooks {
+      if (hook_item_indent == -1) {
+        hook_item_indent = indent
+      }
+      if (indent == hook_item_indent) {
+        k = trimmed
+        sub(/:.*/, "", k)
+        gsub(/^["\047]|["\047]$/, "", k)
+        gsub(/[[:space:]]/, "", k)
+        if (length(k) > 0) print k
+      }
+    }
+  ' "$_yghl_f"
+}
+
+# Enumerate configured hook names under git.hooks merged from rnex.yaml and .local.rnex.yaml.
+yaml_list_git_hooks() {
+  _yaml_resolve_files
+  {
+    _yaml_git_hooks_list_from_file "$_wy"
+    _yaml_git_hooks_list_from_file "$_wly"
+  } | awk '!seen[$0]++'
+}
+
+# Extract command list for a specific hook under git.hooks.<hook_name> from a YAML file.
+_yaml_git_hook_commands_from_file() {
+  _yghc_f="$1"; _yghc_hook="$2"
+  [ -f "$_yghc_f" ] || return 0
+  awk -v target_hook="$_yghc_hook" '
+    function unquote(v) {
+      sub(/^[ \t]+/, "", v)
+      if (v ~ /^"/) {
+        v = substr(v, 2); sub(/".*$/, "", v)
+      } else if (v ~ /^\047/) {
+        v = substr(v, 2); sub(/\047.*$/, "", v)
+      } else {
+        sub(/[ \t]+#.*$/, "", v)
+        sub(/[ \t]+$/, "", v)
+      }
+      return v
+    }
+    /^[ \t]*git:[ \t]*(#.*)?$/ { in_git=1; next }
+    in_git && /^[^ \t#]/ { exit }
+    !in_git { next }
+    {
+      match($0, /^[ \t]*/)
+      indent = RLENGTH
+      trimmed = substr($0, indent + 1)
+    }
+    trimmed ~ /^([#]|$)/ { next }
+
+    in_hook_cmds {
+      if (indent > target_indent || (indent == target_indent && trimmed ~ /^-([ \t]|$)/)) {
+        if (trimmed ~ /^-([ \t]|$)/) {
+          item = unquote(substr(trimmed, 2))
+          if (length(item) > 0) print item
+        }
+        next
+      }
+      exit
+    }
+
+    in_hooks && (indent <= hooks_indent) { in_hooks=0 }
+
+    !in_hooks {
+      if (trimmed ~ /^hooks:[ \t]*(#.*)?$/) {
+        in_hooks = 1
+        hooks_indent = indent
+      }
+      next
+    }
+
+    in_hooks {
+      k = trimmed
+      sub(/:.*/, "", k)
+      gsub(/^["\047]|["\047]$/, "", k)
+      gsub(/[[:space:]]/, "", k)
+      if (k == target_hook && trimmed ~ /:[ \t]*/) {
+        target_indent = indent
+        val = trimmed
+        sub(/^[^:]*:[ \t]*/, "", val)
+        if (val ~ /^(#.*)?$/) {
+          in_hook_cmds = 1
+          next
+        }
+        if (val ~ /^\[/) {
+          sub(/^\[/, "", val)
+          sub(/\][ \t]*(#.*)?$/, "", val)
+          n = split(val, parts, ",")
+          for (i = 1; i <= n; i++) {
+            item = unquote(parts[i])
+            if (length(item) > 0) print item
+          }
+          exit
+        }
+        item = unquote(val)
+        if (length(item) > 0) print item
+        exit
+      }
+    }
+  ' "$_yghc_f"
+}
+
+# Read command list for a specific hook under git.hooks.<hook_name>
+# with .local.rnex.yaml override priority.
+yaml_get_git_hook_commands() {
+  _hook_name="$1"
+  _yaml_resolve_files
+  if [ -f "$_wly" ] && _yaml_git_hooks_list_from_file "$_wly" | grep -qx "$_hook_name"; then
+    _yaml_git_hook_commands_from_file "$_wly" "$_hook_name"
+    return 0
+  fi
+  if [ -f "$_wy" ]; then
+    _yaml_git_hook_commands_from_file "$_wy" "$_hook_name"
+  fi
+}
+
 # ---- Plugin Configuration Operations ---------------------------------------
 
 _yaml_list_plugins_from_file() {
@@ -645,19 +864,25 @@ yaml_repo_readonly() {
   is_truthy "$(yaml_get "$1" "readonly")"
 }
 
+# Get configured target branch for a repo (from .local.rnex.yaml or rnex.yaml)
+yaml_get_repo_branch() {
+  yaml_get "$1" "branch"
+}
+
 # Add a new repository entry under 'repos:' in the main workspace configuration (rnex.yaml).
 yaml_add_repo() {
-  _name="$1"; _url="$2"; _enabled="${3:-true}"; _readonly="${4:-false}"
+  _name="$1"; _url="$2"; _enabled="${3:-true}"; _readonly="${4:-false}"; _branch="${5:-}"
   if ! grep -q '^repos:' "$WORKSPACE_YAML" 2>/dev/null; then
     printf '\nrepos:\n' >> "$WORKSPACE_YAML"
   fi
   _tmp="$(mktemp)"
-  awk -v name="$_name" -v url="$_url" -v en="$_enabled" -v ro="$_readonly" '
+  awk -v name="$_name" -v url="$_url" -v en="$_enabled" -v ro="$_readonly" -v br="$_branch" '
     /^repos:/ {
       print
       printf "  %s:\n    url: %s\n", name, url
       if (en == "false") printf "    enabled: false\n"
       if (ro == "true") printf "    readonly: true\n"
+      if (br != "") printf "    branch: %s\n", br
       added=1
       next
     }

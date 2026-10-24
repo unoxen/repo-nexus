@@ -41,6 +41,7 @@ A plugin can contain any of the following standard directories:
 
 | Subdirectory | Purpose | Behavior |
 |:---|:---|:---|
+| `commands/` | Native CLI subcommands (`<command>.sh`). | Scoped to `.rnex/plugins/<plugin>/commands/`. Executed via `rnex plugin <plugin> <command> [options]`. |
 | `skills/` | Plugin-owned agentic skills (`<skill-name>.md`). | Scoped to `.rnex/plugins/<plugin>/skills/`. Registered as User Skills via `rnex_register_user_skill`. |
 | `rules/` | Coding rules and architectural constraints. | Scoped to `.rnex/plugins/<plugin>/rules/`. |
 | `agents/` | Autonomous subagent declarations (`*.agent.md`). | Scoped to `.rnex/plugins/<plugin>/agents/`. Ingested by agents via `AGENTS.md` subagent routing. |

@@ -86,54 +86,38 @@ cmd_status() {
     grep -q '^repos' "$_gi" 2>/dev/null && _gi_repos=1
     grep -qF "$RNEX_LOCAL_CONFIG_FILE" "$_gi" 2>/dev/null && _gi_local=1
     grep -q "lint_trigger_counter" "$_gi" 2>/dev/null && _gi_has_counter=1
-    (grep -q '^\.rnex/' "$_gi" 2>/dev/null || grep -q '^\.rnex$' "$_gi" 2>/dev/null) && _gi_has_rnex=1
+    grep -q '\*\*/\.rnex\*/' "$_gi" 2>/dev/null && _gi_has_rnex=1
   fi
 
-  if [ "$_gi_repos" -eq 1 ] && [ "$_gi_local" -eq 1 ] && [ "$_gi_has_counter" -eq 0 ] && [ "$_gi_has_rnex" -eq 0 ]; then
-    printf '  %b✓%b Git Ignore:    repos/ and %s ignored in .gitignore\n' "$_G" "$_NC" "$RNEX_LOCAL_CONFIG_FILE"
+  if [ "$_gi_repos" -eq 1 ] && [ "$_gi_local" -eq 1 ] && [ "$_gi_has_counter" -eq 0 ] && [ "$_gi_has_rnex" -eq 1 ]; then
+    printf '  %b✓%b Git Ignore:    repos/, %s, and **/.rnex*/ ignored in .gitignore\n' "$_G" "$_NC" "$RNEX_LOCAL_CONFIG_FILE"
   else
     printf '  %b!%b Git Ignore:    recommend running "rnex sync" to update .gitignore (repos/, local configs)\n' "$_Y" "$_NC"
   fi
 
-  _hooks_path="$(git -C "$NEXUS_DIR" config --get core.hooksPath 2>/dev/null || true)"
-  _gh_active=0
-  if [ "$_hooks_path" = ".rnex/hooks" ] || [ "$_hooks_path" = "$NEXUS_DIR/.rnex/hooks" ]; then
-    _gh_active=1
+  _git_dir=""
+  if git -C "$NEXUS_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    _git_dir="$(git -C "$NEXUS_DIR" rev-parse --git-dir 2>/dev/null || echo "$NEXUS_DIR/.git")"
+  fi
+  _configured_hooks="$(yaml_list_git_hooks 2>/dev/null || true)"
+  _hooks_active=0
+  if [ -n "$_git_dir" ] && [ -x "$_git_dir/hooks/post-merge" ]; then
+    _hooks_active=1
   fi
 
-  case "$GIT_HOOKS_CONFIG" in
-    false|no|0)
-      if [ "$_gh_active" -eq 1 ]; then
-        printf '  %b!%b Git Hooks:     active in Git, but disabled in config (git_hooks: false; run "rnex sync" to reconcile)\n' "$_Y" "$_NC"
-      else
-        printf '  %b○%b Git Hooks:     disabled in configuration (git_hooks: false)\n' "$_DIM" "$_NC"
-      fi
-      ;;
-    true|yes|1)
-      if [ "$_gh_active" -eq 1 ]; then
-        _active_trigger="$(_status_active_plugin_trigger)"
-        if [ -n "$_active_trigger" ]; then
-          printf '  %b✓%b Git Hooks:     active (git_hooks: true, .rnex/hooks — %s)\n' "$_G" "$_NC" "$_active_trigger"
-        else
-          printf '  %b✓%b Git Hooks:     active (git_hooks: true, .rnex/hooks — post-merge auto-sync)\n' "$_G" "$_NC"
-        fi
-      else
-        printf '  %b!%b Git Hooks:     enabled in config (git_hooks: true), but not active in Git (run "rnex sync")\n' "$_Y" "$_NC"
-      fi
-      ;;
-    *)
-      if [ "$_gh_active" -eq 1 ]; then
-        _active_trigger="$(_status_active_plugin_trigger)"
-        if [ -n "$_active_trigger" ]; then
-          printf '  %b✓%b Git Hooks:     active (.rnex/hooks — post-merge auto-sync, %s)\n' "$_G" "$_NC" "$_active_trigger"
-        else
-          printf '  %b✓%b Git Hooks:     active (.rnex/hooks — post-merge auto-sync)\n' "$_G" "$_NC"
-        fi
-      else
-        printf '  %b○%b Git Hooks:     not configured (run "rnex hooks install" to enable)\n' "$_DIM" "$_NC"
-      fi
-      ;;
-  esac
+  if [ -n "$_configured_hooks" ]; then
+    if [ "$_hooks_active" -eq 1 ]; then
+      printf '  %b✓%b Git Hooks:     active (wrappers in %s/hooks)\n' "$_G" "$_NC" "$(basename "$_git_dir")"
+    else
+      printf '  %b!%b Git Hooks:     configured in git.hooks, but wrappers missing in %s/hooks (run "rnex sync")\n' "$_Y" "$_NC" "$(basename "$_git_dir")"
+    fi
+  else
+    if [ "$_hooks_active" -eq 1 ]; then
+      printf '  %b●%b Git Hooks:     wrappers active in %s/hooks\n' "$_DIM" "$_NC" "$(basename "$_git_dir")"
+    else
+      printf '  %b○%b Git Hooks:     none configured in git.hooks (run "rnex sync" to install wrappers)\n' "$_DIM" "$_NC"
+    fi
+  fi
 
   printf '\n'
 
@@ -145,7 +129,7 @@ cmd_status() {
   fi
   if [ -f "$NEXUS_DIR/AGENTS.md" ]; then
     printf '  %b✓%b %s %b(standard instructions directive)%b\n' "$_G" "$_NC" "AGENTS.md" "$_DIM" "$_NC"
-  elif ! has_active_provider_instructions "$NEXUS_DIR"; then
+  else
     printf '  %b✗%b %s %b(standard instructions directive — MISSING; run "rnex sync" to create)%b\n' "$_R" "$_NC" "AGENTS.md" "$_R" "$_NC"
   fi
   for _pair in \
@@ -242,7 +226,7 @@ cmd_status() {
   printf '%b%s%b\n' "$_BOLD" "Member Repositories:" "$_NC"
   _all_repos="$(yaml_list_repos)"
   if [ -z "$_all_repos" ]; then
-    printf '  %b%s%b\n' "$_DIM" "(No repositories registered yet. Use 'rnex add [<name>] <git-url>')" "$_NC"
+    printf '  %b%s%b\n' "$_DIM" "(No repositories registered yet. Use 'rnex repo add <git-url> [--name <name>]')" "$_NC"
   else
     echo "$_all_repos" | while read -r _name; do
       [ -n "$_name" ] || continue

@@ -61,7 +61,7 @@ You can also set local overrides directly from the CLI using the `--local` flag:
 
 ```bash
 # Disable a repository locally
-rnex disable --local analytics-pipeline
+rnex repo set analytics-pipeline --disable --local
 
 # Enable a personal plugin locally
 rnex plugin enable --local gemini

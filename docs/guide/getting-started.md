@@ -62,7 +62,7 @@ rnex init -y
 
 ```text
 [rnex] Initializing Repo Nexus workspace in /Users/dev/my-workspace...
-[rnex] Created rnex.yaml (version 0.5.13)
+[rnex] Created rnex.yaml (version 0.5.14)
 [rnex] Created ./repos/ directory
 [rnex] Created .rnex/ and standardized skills
 [rnex] Reconciled .gitignore
@@ -74,8 +74,8 @@ rnex init -y
 Add your git repositories to the workspace manifest:
 
 ```bash
-rnex add backend git@github.com:my-org/backend-service.git
-rnex add frontend git@github.com:my-org/web-app.git
+rnex repo add git@github.com:my-org/backend-service.git --name backend
+rnex repo add git@github.com:my-org/web-app.git --name frontend
 ```
 
 ### 3. Clone All Repositories

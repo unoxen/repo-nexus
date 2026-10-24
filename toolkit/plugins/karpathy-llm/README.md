@@ -21,10 +21,10 @@ Reference specification: [setup-karpathy-wiki.md](https://github.com/unoxen/ai-t
 
 ### 3. Complete Karpathy LLM Wiki Architecture (`instructions/rnex-wiki-architecture.md`)
 * **Intake Sources (`sources`, default: `["docs", "repos/**/README.md"]`):** Multi-value array of directory paths and glob patterns for unmodified source material (articles, transcripts, docs, meeting notes, repo READMEs). Legacy `raw_dir` (default: `./docs`) remains supported as a backward-compatible fallback.
-* **Curated Knowledge Base (`wiki_dir`, default: `.rnex/wiki`):** Interlinked atomic markdown pages, each with typed frontmatter relations (`sources`, `related`, `extends`, `contradicts`, `mentioned_in`).
-* **Navigation Index (`<wiki_dir>/index.md`, default: `.rnex/wiki/index.md`):** Master categorized catalog organizing atomic concepts, architecture decisions, and cross-project knowledge.
-* **Rolling Context Cache (`<wiki_dir>/hot.md`, default: `.rnex/wiki/hot.md`):** High-density ~500-word orientation summary for rapid agent onboarding without full wiki scans (especially for codebase knowledge and second-brain wikis).
-* **Audit Trail (`<wiki_dir>/_log.md`, default: `.rnex/wiki/_log.md`):** Append-only log recording every ingest and lint operation with timestamped details.
+* **Curated Knowledge Base (`wiki_dir`, default: `wiki`):** Interlinked atomic markdown pages, each with typed frontmatter relations (`sources`, `related`, `extends`, `contradicts`, `mentioned_in`).
+* **Navigation Index (`<wiki_dir>/index.md`, default: `wiki/index.md`):** Master categorized catalog organizing atomic concepts, architecture decisions, and cross-project knowledge.
+* **Rolling Context Cache (`<wiki_dir>/hot.md`, default: `wiki/hot.md`):** High-density ~500-word orientation summary for rapid agent onboarding without full wiki scans (especially for codebase knowledge and second-brain wikis).
+* **Audit Trail (`<wiki_dir>/_log.md`, default: `wiki/_log.md`):** Append-only log recording every ingest and lint operation with timestamped details.
 
 ### 4. Standardized Agent Skills (`skills/`)
 * **`wiki-ingest.md` (User Skill: `rnex-karpathy-llm-wiki-ingest`):** Decomposes raw source documents into 5–25 atomic wiki pages with frontmatter relations.
@@ -38,7 +38,7 @@ To ensure workspaces remain 100% predictable, understandable, and consistent acr
 
 ### Phase 1: 100% Deterministic Initialization
 Enabling the plugin (`rnex plugin enable karpathy-llm`) performs an exact, zero-interview scaffolding step:
-* **Predictable Baseline**: Fixed standard files are created (`docs/.gitkeep`, `.rnex/wiki/index.md`, `.rnex/wiki/hot.md`, `.rnex/wiki/_log.md`).
+* **Predictable Baseline**: Fixed standard files are created (`docs/.gitkeep`, `wiki/index.md`, `wiki/hot.md`, `wiki/_log.md`).
 * **Scoped Assets**: Behavioral rules, wiki architecture guides, workflows, and templates are cleanly isolated under `.rnex/plugins/karpathy-llm/`.
 * **Zero Guesswork**: No interactive interviews, no AI-generated folder variances, and no "agent decides" ambiguities at init time.
 * **Idempotent**: Safe to run repeatedly; existing user files are never overwritten.
@@ -59,11 +59,10 @@ When enabled, the plugin scaffolds:
 my-workspace/
 ├── docs/
 │   └── .gitkeep                     # Intake for unmodified source documents
-├── .rnex/
-│   ├── wiki/
-│   │   ├── index.md                 # Master catalog
-│   │   ├── hot.md                   # Rolling ~500-word quick-orient context
-│   │   └── _log.md                  # Ingestion & lint audit history
+├── wiki/
+│   ├── index.md                     # Master catalog
+│   ├── hot.md                       # Rolling ~500-word quick-orient context
+│   └── _log.md                      # Ingestion & lint audit history
 ├── .rnex/
 │   └── plugins/
 │       └── karpathy-llm/
@@ -92,7 +91,7 @@ rnex plugin enable karpathy-llm
 
 This command:
 1. Adds `karpathy-llm` to `plugins:` in `rnex.yaml`.
-2. Copies initial templates (`wiki/index.md`, `wiki/_log.md`, `wiki/hot.md`, `raw/.gitkeep`, `.rnex/templates/wiki-page.template.md`, `.rnex/templates/LLM_WIKI.sample.md`).
+2. Copies initial templates (`wiki/index.md`, `wiki/_log.md`, `wiki/hot.md`, `docs/.gitkeep`, `.rnex/templates/wiki-page.template.md`, `.rnex/templates/LLM_WIKI.sample.md`).
 3. Scopes `rules/`, `instructions/`, and `workflows/` into `.rnex/plugins/karpathy-llm/`.
 4. Reconciles workspace state, member repositories, and plugin assets via `rnex sync`.
 
@@ -117,7 +116,7 @@ rnex sync
 
 The plugin supports two levels of configuration:
 1. **Repo Config (`rnex.yaml`)**: Shared across your team and version-controlled. Configures repository-level structure, file paths, and indexing rules.
-2. **Local Config (`.local.rnex.yaml`)**: Machine-specific and gitignored. Configures git hook triggers and terminal notifications.
+2. **Local Config (`.local.rnex.yaml`)**: Machine-specific and gitignored.
 
 ### 1. Shared Repo Configuration (`rnex.yaml`)
 
@@ -130,62 +129,57 @@ plugins:
       - "repos/**/README.md"
 
     # Directory paths relative to workspace root (defaults shown)
-    wiki_dir: .rnex/wiki        # Directory for curated atomic markdown pages
+    wiki_dir: wiki              # Directory for curated atomic markdown pages
 ```
 
 ### 2. Local Machine Configuration (`.local.rnex.yaml`)
 
-Use this file to customize how your local workstation executes wiki maintenance (e.g., via git hooks and notifications):
+Use this file to customize how your local workstation resolves wiki paths or sources:
 
 ```yaml
 plugins:
   karpathy-llm:
-    # Optional automated git hook trigger (default: unset / manual only):
-    #   "git-post-commit"  - Runs immediately after a successful commit (Recommended: non-blocking)
-    #   "git-pre-push"     - Runs before pushing changes to remote
-    #   "git-post-merge"   - Runs after pulling upstream updates from teammates
-    # Omit or leave unset for purely manual maintenance (default).
-    lint_trigger: git-post-commit
-
-    # Terminal notifications on commit (default: true)
-    # Displays non-blocking alerts in your terminal right after git commit completes.
-    notify_on_changes: true
+    # Directory for curated atomic markdown pages (default: wiki)
+    wiki_dir: wiki
+    # Intake directories and/or glob patterns
+    sources:
+      - docs
+      - "repos/**/README.md"
 ```
 
-### Detailed Option Descriptions
+### CLI Subcommands
 
-#### `lint_trigger` (Local Config)
-* **What it does:** Optional git hook trigger to automate wiki graph audits and maintenance workflows (`wiki-lint` and `wiki-ingest`).
-* **Default:** Unset / omitted. Automated triggers are **disabled by default**; wiki maintenance is purely manual unless you explicitly opt into a Git hook here.
-* **Supported opt-in values:**
-  * `git-post-commit` *(Recommended)*: Fires immediately after a `git commit` succeeds. It is completely non-blocking and checks `git diff-tree` to see if files in `./docs/` or `.rnex/wiki/` were added or modified.
-  * `git-pre-push`: Fires before pushing changes upstream, catching dead links or unparsed notes before publishing to the team.
-  * `git-post-merge`: Fires after `git pull` when teammates have added new wiki notes or intake documents.
-* **Why you need it:** Lets you optionally bind wiki maintenance to a specific Git lifecycle event without nagging prompts or timer counters. If you prefer running workflows manually on demand, leave this field omitted.
+The `karpathy-llm` plugin provides parameterized commands via the `rnex plugin` engine:
 
-#### `notify_on_changes` (Local Config)
-* **What it does:** Controls whether helpful status messages and action reminders are printed to your terminal stdout.
-* **When is it triggered?** Triggered **immediately after a git operation completes** (e.g., right after `git commit` finishes writing the commit object, or during `git push`).
-  * If new documents were committed into `./docs/`: prints an alert (e.g. `[WIKI] Changes committed to ./docs/ or .rnex/wiki/. Run wiki-lint or wiki-ingest as needed.`).
-  * If broken links or orphans were detected: prints a summary notice highlighting the pages that need attention.
-* **Why you need it:** Provides immediate visibility into pending wiki operations without blocking or slowing down your Git workflow. Set to `false` for silent background execution.
+```sh
+# Ingest all configured sources and enabled member repos
+rnex plugin karpathy-llm ingest
+
+# Ingest a specific markdown source or member repository README
+rnex plugin karpathy-llm ingest --source docs/architecture.md
+rnex plugin karpathy-llm ingest --repo backend-api --quiet
+
+# Lint wiki integrity, relations, and ~500-word hot cache boundary
+rnex plugin karpathy-llm lint
+
+# Strict linting (exits non-zero on warnings or errors)
+rnex plugin karpathy-llm lint --strict
+```
 
 ### Summary Reference Table
 
 | Field | Scope / File | Type | Default | Values / Behavior |
 |:---|:---|:---|:---|:---|
 | `sources` | Repo (`rnex.yaml`) | `list` | `[docs, "repos/**/README.md"]` | Directory paths and/or glob patterns for intake documents. |
-| `wiki_dir` | Repo (`rnex.yaml`) | `string` | `.rnex/wiki` | Directory containing atomic domain pages. |
-| `lint_trigger` | Local (`.local.rnex.yaml`) | `string` | *(unset)* | Optional opt-in Git hook: `git-post-commit`, `git-pre-push`, `git-post-merge`. Unset = purely manual. |
-| `notify_on_changes` | Local (`.local.rnex.yaml`) | `boolean` | `true` | Terminal alerts printed right after git commit/push when `./docs/` or `.rnex/wiki/` needs attention. |
+| `wiki_dir` | Repo (`rnex.yaml`) | `string` | `wiki` | Directory containing atomic domain pages. |
 
 ---
 
 ## Everyday Operation & Cadence
 
 1. **Intake:** Drop raw research papers, meeting notes, PRDs, or architecture specs into `./docs/` unmodified.
-2. **Ingest:** Instruct your AI assistant: *"Run wiki-ingest on docs/source-document.md"*.
-3. **Maintenance:** Run the `wiki-lint` workflow to validate relations, prune orphans, and update `mentioned_in` links.
+2. **Ingest:** Instruct your AI assistant: *"Run wiki-ingest on docs/source-document.md"*, or run `rnex plugin karpathy-llm ingest`.
+3. **Maintenance:** Run `rnex plugin karpathy-llm lint` (or the `wiki-lint` workflow) to validate relations, prune orphans, and update `mentioned_in` links.
 
 ---
 
@@ -195,4 +189,4 @@ plugins:
 rnex plugin disable karpathy-llm
 ```
 
-Safely unlinks plugin assets from member repositories and removes the entry from `rnex.yaml`. Your curated `.rnex/wiki/` and `./docs/` data remain completely untouched on disk.
+Safely unlinks plugin assets from member repositories and removes the entry from `rnex.yaml`. Your curated `wiki/` and `./docs/` data remain completely untouched on disk.

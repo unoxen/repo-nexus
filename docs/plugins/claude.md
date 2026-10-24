@@ -7,7 +7,7 @@ description: Integrate Anthropic Claude Code with Repo Nexus, generating zero-lo
 
 The **`claude`** plugin integrates Anthropic Claude Code CLI (`claude`) and Claude Desktop into a Repo Nexus Virtual Meta-Repo.
 
-All AI assistants in Repo Nexus share [`AGENTS.md`](file:///Users/admin/Projects/ai/repo-nexus/AGENTS.md) at the workspace root as the single universal source of truth for routing. When enabled, the `claude` plugin generates zero-logic User Skill pointers into `.claude/skills/` (e.g. `rnex-clone-sync.md`, `rnex-batch-exec.md`, `rnex-karpathy-llm-wiki-ingest`).
+All AI assistants in Repo Nexus share [`AGENTS.md`](file:///Users/admin/Projects/ai/repo-nexus/AGENTS.md) at the workspace root as the single universal source of truth for routing. When enabled, the `claude` plugin generates zero-logic User Skill pointers into `.claude/skills/` (e.g. `rnex-clone-sync/SKILL.md`, `rnex-batch-exec/SKILL.md`, `rnex-karpathy-llm-wiki-ingest/SKILL.md`).
 
 Operational skills, rules, and subagents remain cleanly encapsulated within `.rnex/skills/` and active plugin directories (`.rnex/plugins/<plugin-name>/`).
 
@@ -21,8 +21,8 @@ Operational skills, rules, and subagents remain cleanly encapsulated within `.rn
 
 2. **Native Instruction Support via `CLAUDE.md` & `AGENTS.md`**:
    - Claude Code natively reads `CLAUDE.md` as its primary instructions file; it only falls back to `AGENTS.md` when no `CLAUDE.md` exists in the project.
-   - When enabled, the Claude plugin automatically synchronizes Repo Nexus routing instructions to `CLAUDE.md` (or merges them cleanly if you already have custom instructions).
-   - If the plugin is disabled, the routing block is removed, allowing Claude Code to read `AGENTS.md` directly.
+   - Repo Nexus maintains permanent routing instructions in `CLAUDE.md` and `AGENTS.md` (merging them cleanly inside `<!-- REPO-NEXUS:START -->` and `<!-- REPO-NEXUS:END -->` if you already have custom instructions).
+   - If the plugin is disabled, the routing block in `CLAUDE.md` is preserved while generated User Skill pointers under `.claude/skills/rnex-*` are removed.
 
 3. **Subagent & Skill Execution**:
    - Core skills reside under `.rnex/skills/`.
@@ -65,7 +65,7 @@ plugins:
 
 | Option | Type | Default | Description |
 |:---|:---|:---|:---|
-| `skills` | boolean | `true` | Generate user skill pointers in `.claude/skills/rnex-*.md`. |
+| `skills` | boolean | `true` | Generate user skill pointers in `.claude/skills/rnex-*/SKILL.md`. |
 | `auto_sync_on` | string/boolean | `SessionStart` | Lifecycle event triggering auto-sync in `.claude/settings.json` (or `false` to disable). |
 | `enabled` | boolean | `true` | Enable or disable the plugin. Overridable in `.local.rnex.yaml`. |
 
@@ -81,11 +81,16 @@ my-workspace/
 ├── CLAUDE.md                          # Claude-specific instructions
 ├── .claude/
 │   └── skills/                        # Zero-logic User Skill pointers
-│       ├── rnex-clone-sync.md
-│       ├── rnex-batch-exec.md
-│       ├── rnex-workspace-status.md
+│       ├── rnex-clone-sync/
+│       │   └── SKILL.md
+│       ├── rnex-batch-exec/
+│       │   └── SKILL.md
+│       ├── rnex-workspace-status/
+│       │   └── SKILL.md
 │       ├── rnex-karpathy-llm-wiki-ingest/
+│       │   └── SKILL.md
 │       └── rnex-karpathy-llm-wiki-lint/
+│           └── SKILL.md
 ├── .rnex/
 │   ├── skills/                        # Core workspace agentic skills
 │   └── plugins/
@@ -104,6 +109,6 @@ rnex plugin disable claude
 ```
 
 Repo Nexus automatically performs surgical cleanup:
-- Removes auto-generated user skills under `.claude/skills/rnex-*.md`.
-- Cleans up managed routing instructions in `CLAUDE.md`.
+- Removes auto-generated user skills under `.claude/skills/rnex-*`.
+- Preserves routing instructions in `CLAUDE.md` and `AGENTS.md`.
 - Developer-created custom skills under `.claude/` are preserved.

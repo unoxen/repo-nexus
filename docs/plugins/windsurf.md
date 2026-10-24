@@ -102,5 +102,5 @@ rnex plugin disable windsurf
 
 Repo Nexus automatically performs surgical cleanup:
 - Removes auto-generated user skills under `.windsurf/rules/rnex-*.md`.
-- Cleans up managed routing instructions in `.windsurfrules`.
+- Preserves routing instructions in `.windsurfrules` and `AGENTS.md`.
 - Developer-created custom files under `.windsurf/` are preserved.

@@ -86,7 +86,7 @@ pass
 
 # --------------------------------------------------------------------------
 run_test "Fix 3: Swallowed exit codes in cmd_exec properly propagated"
-(cd "$TEST_GOAL_WS" && ./rnex add repo-exec "$TEST_REPO" >/dev/null)
+(cd "$TEST_GOAL_WS" && ./rnex repo add "$TEST_REPO" --name repo-exec >/dev/null)
 set +e
 (cd "$TEST_GOAL_WS" && ./rnex exec "false" >/dev/null 2>&1)
 _exec_rc=$?
@@ -98,6 +98,12 @@ set +e
 _exec_rc42=$?
 set -e
 [ "$_exec_rc42" -eq 42 ] || { fail "rnex exec exit 42 returned $_exec_rc42 (expected 42)"; exit 1; }
+
+set +e
+(cd "$TEST_GOAL_WS" && ./rnex repo exec repo-exec "exit 42" >/dev/null 2>&1)
+_repo_exec_rc42=$?
+set -e
+[ "$_repo_exec_rc42" -eq 42 ] || { fail "rnex repo exec exit 42 returned $_repo_exec_rc42 (expected 42)"; exit 1; }
 
 # Successful exec returns 0
 (cd "$TEST_GOAL_WS" && ./rnex exec "true" >/dev/null)
@@ -143,13 +149,13 @@ pass
 
 # --------------------------------------------------------------------------
 run_test "Fix 6: Commented repo keys removed by _yaml_remove_repo_from_file"
-(cd "$TEST_GOAL_WS" && ./rnex add commented-repo "$TEST_REPO" >/dev/null)
+(cd "$TEST_GOAL_WS" && ./rnex repo add "$TEST_REPO" --name commented-repo >/dev/null)
 # Add inline comment to repo header line in rnex.yaml
 sed -e 's/^  commented-repo:[ ]*$/  commented-repo: # inline comment for test/' "$TEST_GOAL_WS/rnex.yaml" > "$TEST_GOAL_WS/rnex.yaml.tmp"
 mv "$TEST_GOAL_WS/rnex.yaml.tmp" "$TEST_GOAL_WS/rnex.yaml"
 grep -q "commented-repo: # inline comment" "$TEST_GOAL_WS/rnex.yaml" || { fail "Failed to prepare inline comment in rnex.yaml"; exit 1; }
 
-(cd "$TEST_GOAL_WS" && ./rnex remove commented-repo -y >/dev/null)
+(cd "$TEST_GOAL_WS" && ./rnex repo remove commented-repo --purge -y >/dev/null)
 ! grep -q "commented-repo" "$TEST_GOAL_WS/rnex.yaml" || { fail "commented-repo was not removed from rnex.yaml when having inline comment"; exit 1; }
 [ ! -d "$TEST_GOAL_WS/repos/commented-repo" ] || { fail "repos/commented-repo directory was not deleted"; exit 1; }
 pass
@@ -165,16 +171,16 @@ pass
 
 # --------------------------------------------------------------------------
 run_test "Fix 8: Path resolution & flag inconsistencies in repo commands"
-# 8a: cmd_remove parses flags properly (-y before or after name)
-(cd "$TEST_GOAL_WS" && ./rnex add remove-flag-repo "$TEST_REPO" >/dev/null)
-(cd "$TEST_GOAL_WS" && ./rnex remove -y remove-flag-repo >/dev/null)
+# 8a: cmd_repo_remove parses flags properly (-y and --purge before or after name)
+(cd "$TEST_GOAL_WS" && ./rnex repo add "$TEST_REPO" --name remove-flag-repo >/dev/null)
+(cd "$TEST_GOAL_WS" && ./rnex repo remove -y --purge remove-flag-repo >/dev/null)
 [ ! -d "$TEST_GOAL_WS/repos/remove-flag-repo" ] || { fail "remove -y <name> failed to delete repo directory"; exit 1; }
 ! grep -q "remove-flag-repo" "$TEST_GOAL_WS/rnex.yaml" || { fail "remove -y <name> failed to unregister repo from rnex.yaml"; exit 1; }
 
-# 8b: cmd_readonly supports --local
-(cd "$TEST_GOAL_WS" && ./rnex add readonly-test "$TEST_REPO" >/dev/null)
-(cd "$TEST_GOAL_WS" && ./rnex readonly enable readonly-test --local >/dev/null)
-[ -f "$TEST_GOAL_WS/.local.rnex.yaml" ] || { fail ".local.rnex.yaml not created by readonly --local"; exit 1; }
+# 8b: cmd_repo_set supports --local
+(cd "$TEST_GOAL_WS" && ./rnex repo add "$TEST_REPO" --name readonly-test >/dev/null)
+(cd "$TEST_GOAL_WS" && ./rnex repo set readonly-test --readonly --local >/dev/null)
+[ -f "$TEST_GOAL_WS/.local.rnex.yaml" ] || { fail ".local.rnex.yaml not created by repo set --readonly --local"; exit 1; }
 grep -q "readonly: true" "$TEST_GOAL_WS/.local.rnex.yaml" || { fail "readonly: true not set in .local.rnex.yaml"; exit 1; }
 
 # 8c: cmd_clone uses resolve_repo_path (custom path resolution)
@@ -317,7 +323,7 @@ EOF_COND
 (cd "$TEST_CONDENSE_WS" && ./rnex sync -y >/dev/null)
 
 # Append realistic domain context notes (~290 words) so initial + 15 repos (~110 + 290 + 120 = 520) exceeds 480 words, triggering condensation while keeping final condensed count <= 500 words.
-cat <<'EOF_HOT_INIT' >> "$TEST_CONDENSE_WS/.rnex/wiki/hot.md"
+cat <<'EOF_HOT_INIT' >> "$TEST_CONDENSE_WS/wiki/hot.md"
 
 ## Core System Directives
 The unified workspace integrates distributed autonomous services collaborating across strictly verified contracts. Each member repository encapsulates domain microservices, isolating storage, ingestion pipelines, messaging buses, and analytics telemetry. When routing cross-repository requests, AI assistants must prioritize atomic markdown pages and typed relationships defined in the primary catalog. Distributed consensus protocols require state machine replication across regional clusters with bounded clock skew. Network partitions must be handled with eventual consistency for non-critical audit records while retaining strict serializability for financial ledger entries. Background reconcilers execute periodic health audits to detect stale cache entries, orphan pointers, and dangling foreign keys across schemas. Every service implements idempotent processing semantics to prevent duplicate transaction execution during retry storms. High availability clusters maintain warm standby nodes across redundant failure zones. Audit trails record every administrative event with cryptographic integrity verification.
@@ -333,23 +339,23 @@ done
 
 # Sync 1: Triggers Step 3 condensation (>480 words)
 (cd "$TEST_CONDENSE_WS" && ./rnex sync -y >/dev/null)
-_wc1="$(wc -w < "$TEST_CONDENSE_WS/.rnex/wiki/hot.md")"
+_wc1="$(wc -w < "$TEST_CONDENSE_WS/wiki/hot.md")"
 [ "$_wc1" -le 500 ] || { fail "hot.md word count ($_wc1) exceeded 500 words on sync 1"; exit 1; }
-_sum_cnt1="$(grep -c "Member Repositories" "$TEST_CONDENSE_WS/.rnex/wiki/hot.md" || true)"
+_sum_cnt1="$(grep -c "Member Repositories" "$TEST_CONDENSE_WS/wiki/hot.md" || true)"
 [ "$_sum_cnt1" -eq 1 ] || { fail "Expected 1 summary line on sync 1, found $_sum_cnt1"; exit 1; }
-grep -q "Member Repositories (15 repos):" "$TEST_CONDENSE_WS/.rnex/wiki/hot.md" || { fail "Missing condensed summary line on sync 1"; exit 1; }
-! grep -q "\* \*\*repo-1 (" "$TEST_CONDENSE_WS/.rnex/wiki/hot.md" || { fail "Individual repo entry not condensed on sync 1"; exit 1; }
+grep -q "Member Repositories (15 repos):" "$TEST_CONDENSE_WS/wiki/hot.md" || { fail "Missing condensed summary line on sync 1"; exit 1; }
+! grep -q "\* \*\*repo-1 (" "$TEST_CONDENSE_WS/wiki/hot.md" || { fail "Individual repo entry not condensed on sync 1"; exit 1; }
 
 # Sync 2: Verify idempotency - no re-insertion of individual lines or duplicate summary lines
 (cd "$TEST_CONDENSE_WS" && ./rnex sync -y >/dev/null)
-_wc2="$(wc -w < "$TEST_CONDENSE_WS/.rnex/wiki/hot.md")"
+_wc2="$(wc -w < "$TEST_CONDENSE_WS/wiki/hot.md")"
 [ "$_wc2" -le 500 ] || { fail "hot.md word count ($_wc2) exceeded 500 words on sync 2"; exit 1; }
-_sum_cnt2="$(grep -c "Member Repositories" "$TEST_CONDENSE_WS/.rnex/wiki/hot.md" || true)"
+_sum_cnt2="$(grep -c "Member Repositories" "$TEST_CONDENSE_WS/wiki/hot.md" || true)"
 [ "$_sum_cnt2" -eq 1 ] || { fail "Duplicate summary lines generated on sync 2: count $_sum_cnt2"; exit 1; }
 
 # Sync 3: Additional sync check
 (cd "$TEST_CONDENSE_WS" && ./rnex sync -y >/dev/null)
-_sum_cnt3="$(grep -c "Member Repositories" "$TEST_CONDENSE_WS/.rnex/wiki/hot.md" || true)"
+_sum_cnt3="$(grep -c "Member Repositories" "$TEST_CONDENSE_WS/wiki/hot.md" || true)"
 [ "$_sum_cnt3" -eq 1 ] || { fail "Duplicate summary lines generated on sync 3: count $_sum_cnt3"; exit 1; }
 pass
 
@@ -380,10 +386,10 @@ EOF_CUR
 
 (cd "$TEST_CURATED_WS" && ./rnex sync -y >/dev/null)
 
-[ -f "$TEST_CURATED_WS/.rnex/wiki/repo-auth-svc.md" ] || { fail "repo-auth-svc.md not generated"; exit 1; }
+[ -f "$TEST_CURATED_WS/wiki/repo-auth-svc.md" ] || { fail "repo-auth-svc.md not generated"; exit 1; }
 
 # User / Agent curates repo-auth-svc.md
-cat <<'EOF_PAGE' > "$TEST_CURATED_WS/.rnex/wiki/repo-auth-svc.md"
+cat <<'EOF_PAGE' > "$TEST_CURATED_WS/wiki/repo-auth-svc.md"
 ---
 title: "Member Repo: auth-svc (Curated)"
 tags: [member-repo, auth-svc, security]
@@ -410,14 +416,14 @@ printf '# Auth Service (Upgraded)\nUpdated authentication logic.\n' > "$TEST_CUR
 (cd "$TEST_CURATED_WS" && ./rnex sync -y >/dev/null)
 
 # Verify curated fields and custom notes are strictly preserved
-grep -q 'title: "Member Repo: auth-svc (Curated)"' "$TEST_CURATED_WS/.rnex/wiki/repo-auth-svc.md" || { fail "Curated title was overwritten"; exit 1; }
-grep -q 'related: \["repo-billing\.md"\]' "$TEST_CURATED_WS/.rnex/wiki/repo-auth-svc.md" || { fail "Curated related links were overwritten"; exit 1; }
-grep -q 'extends: \["specs/oauth2\.md"\]' "$TEST_CURATED_WS/.rnex/wiki/repo-auth-svc.md" || { fail "Curated extends links were overwritten"; exit 1; }
-grep -q 'mentioned_in: \["architecture-overview\.md"\]' "$TEST_CURATED_WS/.rnex/wiki/repo-auth-svc.md" || { fail "Curated mentioned_in links were overwritten"; exit 1; }
-grep -q "Curated Invariant" "$TEST_CURATED_WS/.rnex/wiki/repo-auth-svc.md" || { fail "Curated notes body was overwritten"; exit 1; }
+grep -q 'title: "Member Repo: auth-svc (Curated)"' "$TEST_CURATED_WS/wiki/repo-auth-svc.md" || { fail "Curated title was overwritten"; exit 1; }
+grep -q 'related: \["repo-billing\.md"\]' "$TEST_CURATED_WS/wiki/repo-auth-svc.md" || { fail "Curated related links were overwritten"; exit 1; }
+grep -q 'extends: \["specs/oauth2\.md"\]' "$TEST_CURATED_WS/wiki/repo-auth-svc.md" || { fail "Curated extends links were overwritten"; exit 1; }
+grep -q 'mentioned_in: \["architecture-overview\.md"\]' "$TEST_CURATED_WS/wiki/repo-auth-svc.md" || { fail "Curated mentioned_in links were overwritten"; exit 1; }
+grep -q "Curated Invariant" "$TEST_CURATED_WS/wiki/repo-auth-svc.md" || { fail "Curated notes body was overwritten"; exit 1; }
 
 # Verify _log.md has only 1 entry for auth-svc ingest (no duplicate audit entries)
-_log_cnt="$(grep -c "Member Repo Ingest: auth-svc" "$TEST_CURATED_WS/.rnex/wiki/_log.md" || true)"
+_log_cnt="$(grep -c "Member Repo Ingest: auth-svc" "$TEST_CURATED_WS/wiki/_log.md" || true)"
 [ "$_log_cnt" -eq 1 ] || { fail "Expected 1 log entry for auth-svc, got $_log_cnt"; exit 1; }
 pass
 
@@ -463,39 +469,27 @@ printf '# Custom Path Repo\nCustom path repo\n' > "$TEST_CFG_ISOLATION_WS/nested
 
 (cd "$TEST_CFG_ISOLATION_WS" && ./rnex sync -y >/dev/null)
 
-# Verify default wiki_dir .rnex/wiki used, NOT leaked/claude/wiki
-[ -d "$TEST_CFG_ISOLATION_WS/.rnex/wiki" ] || { fail "Default .rnex/wiki not created"; exit 1; }
+# Verify default wiki_dir wiki used, NOT leaked/claude/wiki
+[ -d "$TEST_CFG_ISOLATION_WS/wiki" ] || { fail "Default wiki not created"; exit 1; }
 [ ! -d "$TEST_CFG_ISOLATION_WS/leaked" ] || { fail "Sibling plugin claude keys leaked into karpathy-llm"; exit 1; }
 
 # Verify declared repo ingested
-[ -f "$TEST_CFG_ISOLATION_WS/.rnex/wiki/repo-declared-repo.md" ] || { fail "repo-declared-repo.md not ingested"; exit 1; }
+[ -f "$TEST_CFG_ISOLATION_WS/wiki/repo-declared-repo.md" ] || { fail "repo-declared-repo.md not ingested"; exit 1; }
 
 # Verify custom path repo ingested with correct sources path
-[ -f "$TEST_CFG_ISOLATION_WS/.rnex/wiki/repo-custom-path-repo.md" ] || { fail "repo-custom-path-repo.md not ingested"; exit 1; }
-grep -q 'sources: \["nested/custom-repo-dir/README.md"\]' "$TEST_CFG_ISOLATION_WS/.rnex/wiki/repo-custom-path-repo.md" || { fail "sources path incorrect for custom path repo"; exit 1; }
+[ -f "$TEST_CFG_ISOLATION_WS/wiki/repo-custom-path-repo.md" ] || { fail "repo-custom-path-repo.md not ingested"; exit 1; }
+grep -q 'sources: \["nested/custom-repo-dir/README.md"\]' "$TEST_CFG_ISOLATION_WS/wiki/repo-custom-path-repo.md" || { fail "sources path incorrect for custom path repo"; exit 1; }
 
 # Verify untracked stray directory ignored
-[ ! -f "$TEST_CFG_ISOLATION_WS/.rnex/wiki/repo-untracked-stray.md" ] || { fail "Untracked stray folder was ingested into wiki"; exit 1; }
+[ ! -f "$TEST_CFG_ISOLATION_WS/wiki/repo-untracked-stray.md" ] || { fail "Untracked stray folder was ingested into wiki"; exit 1; }
 
-# 14c: git_post-commit.sh initial root commit detection with --root
-TEST_GIT_ROOT_WS="$TEST_TMP/git-root-ws"
-mkdir -p "$TEST_GIT_ROOT_WS/docs"
-git -C "$TEST_GIT_ROOT_WS" init -q
-git -C "$TEST_GIT_ROOT_WS" config user.email "test@example.com"
-git -C "$TEST_GIT_ROOT_WS" config user.name "Test Runner"
-printf '# Initial Intake\nNotes for test.\n' > "$TEST_GIT_ROOT_WS/docs/initial.md"
-git -C "$TEST_GIT_ROOT_WS" add docs/initial.md
-git -C "$TEST_GIT_ROOT_WS" commit -qm "Root initial commit"
-
-cat <<'EOF_LCL' > "$TEST_GIT_ROOT_WS/.local.rnex.yaml"
-plugins:
-  karpathy-llm:
-    lint_trigger: git-post-commit
-    notify_on_changes: true
-EOF_LCL
-
-_hook_root_out="$(RNEX_ROOT="$TEST_GIT_ROOT_WS" "$DIR/toolkit/plugins/karpathy-llm/hooks/git_post-commit.sh" 2>&1)"
-echo "$_hook_root_out" | grep -q "\[WIKI\] Changes committed to docs/ or \.rnex/wiki/\." || { fail "git_post-commit.sh failed to detect changes in root commit: $_hook_root_out"; exit 1; }
+# 14c: Karpathy-llm plugin manifest config cleanup (removal of lint_trigger and notify_on_changes)
+_k_yaml="$DIR/toolkit/plugins/karpathy-llm/plugin.yaml"
+! grep -q "lint_trigger" "$_k_yaml" || { fail "lint_trigger still present in plugin.yaml"; exit 1; }
+! grep -q "notify_on_changes" "$_k_yaml" || { fail "notify_on_changes still present in plugin.yaml"; exit 1; }
+grep -q 'wiki_dir:[ ]*"wiki"' "$_k_yaml" || grep -q 'wiki_dir:[ ]*wiki' "$_k_yaml" || { fail "default wiki_dir in plugin.yaml is not wiki"; exit 1; }
+grep -q "ingest:" "$_k_yaml" || { fail "ingest command missing in plugin.yaml"; exit 1; }
+grep -q "lint:" "$_k_yaml" || { fail "lint command missing in plugin.yaml"; exit 1; }
 pass
 
 # --------------------------------------------------------------------------
@@ -541,6 +535,7 @@ EOF_TOG
 ! grep -q "ingest_member_readmes" "$TEST_TOGGLE_WS/rnex.yaml" || { fail "ingest_member_readmes was not stripped from rnex.yaml"; exit 1; }
 grep -q "^    sources:$" "$TEST_TOGGLE_WS/rnex.yaml" || { fail "sources key missing in rnex.yaml after migration"; exit 1; }
 grep -q "^      - docs$" "$TEST_TOGGLE_WS/rnex.yaml" || { fail "'- docs' item missing in rnex.yaml after migration"; exit 1; }
+[ ! -f "$TEST_TOGGLE_WS/wiki/repo-skipped-repo.md" ] || { fail "repo-skipped-repo.md was generated despite sources only containing docs"; exit 1; }
 [ ! -f "$TEST_TOGGLE_WS/.rnex/wiki/repo-skipped-repo.md" ] || { fail "repo-skipped-repo.md was generated despite sources only containing docs"; exit 1; }
 pass
 
@@ -605,7 +600,7 @@ cp -r "$DIR/templates" "$TEST_QUOTE_WS/templates"
 git -C "$TEST_QUOTE_WS" init -q
 
 "$TEST_QUOTE_WS/rnex" init -y --karpathy "$TEST_QUOTE_WS" >/dev/null
-[ -f "$TEST_QUOTE_WS/.rnex/wiki/index.md" ] || { fail "index.md not created at resolved path"; exit 1; }
+[ -f "$TEST_QUOTE_WS/wiki/index.md" ] || { fail "index.md not created at resolved path"; exit 1; }
 [ ! -d "$TEST_QUOTE_WS/\"" ] || { fail "Literal quotes leaked into directory names"; exit 1; }
 pass
 
@@ -645,59 +640,68 @@ git -C "$TEST_STANDALONE_DIS_WS" init -q
 
 # Run copilot before_plugin_disable.sh in a clean subshell with NO preloaded core functions
 _dis_out="$(env -i PATH="$PATH" HOME="$HOME" RNEX_ROOT="$TEST_STANDALONE_DIS_WS" sh "$TEST_STANDALONE_DIS_WS/toolkit/plugins/copilot/hooks/before_plugin_disable.sh" 2>&1)" || { fail "before_plugin_disable.sh failed in unpreloaded subshell: $_dis_out"; exit 1; }
-[ ! -f "$TEST_STANDALONE_DIS_WS/.github/copilot-instructions.md" ] || { fail "copilot-instructions.md not cleaned by standalone before_plugin_disable hook"; exit 1; }
+[ -f "$TEST_STANDALONE_DIS_WS/.github/copilot-instructions.md" ] || { fail "copilot-instructions.md missing after standalone before_plugin_disable hook"; exit 1; }
+grep -q "REPO-NEXUS:START" "$TEST_STANDALONE_DIS_WS/.github/copilot-instructions.md" || { fail "copilot-instructions.md lost REPO-NEXUS block after standalone before_plugin_disable hook"; exit 1; }
 pass
 
 # --------------------------------------------------------------------------
-run_test "Fix 20: Karpathy-llm git_pre-push hook inspects pushed revisions and suppresses false reminders for unrelated pushes"
+run_test "Fix 20: Karpathy-llm plugin commands ingest and lint execute with options and strict validation"
 TEST_PUSH_WS="$TEST_TMP/git-prepush-ws"
-mkdir -p "$TEST_PUSH_WS/src" "$TEST_PUSH_WS/docs" "$TEST_PUSH_WS/.rnex/wiki"
+mkdir -p "$TEST_PUSH_WS"
+cp "$CLI" "$TEST_PUSH_WS/rnex"
+chmod +x "$TEST_PUSH_WS/rnex"
+cp -r "$DIR/toolkit" "$TEST_PUSH_WS/toolkit"
+cp "$DIR/package.json" "$TEST_PUSH_WS/package.json"
 git -C "$TEST_PUSH_WS" init -q
-git -C "$TEST_PUSH_WS" config user.email "test@example.com"
-git -C "$TEST_PUSH_WS" config user.name "Test Runner"
 
-printf 'initial\n' > "$TEST_PUSH_WS/README.md"
-printf '# Index\n' > "$TEST_PUSH_WS/.rnex/wiki/index.md"
-printf '# Hot\n' > "$TEST_PUSH_WS/.rnex/wiki/hot.md"
-git -C "$TEST_PUSH_WS" add README.md .rnex/wiki/index.md .rnex/wiki/hot.md
-git -C "$TEST_PUSH_WS" commit -qm "Initial commit"
-_base_sha="$(git -C "$TEST_PUSH_WS" rev-parse HEAD)"
+"$TEST_PUSH_WS/rnex" init -y --karpathy "$TEST_PUSH_WS" >/dev/null
 
-cat <<'EOF_CFG' > "$TEST_PUSH_WS/.local.rnex.yaml"
-plugins:
-  karpathy-llm:
-    lint_trigger: git-pre-push
-    notify_on_changes: true
-EOF_CFG
+# Verify default wiki directory is ./wiki at workspace root
+[ -d "$TEST_PUSH_WS/wiki" ] || { fail "Default wiki directory not created at workspace root ./wiki"; exit 1; }
+[ -f "$TEST_PUSH_WS/wiki/index.md" ] || { fail "Default wiki/index.md missing"; exit 1; }
+[ -f "$TEST_PUSH_WS/wiki/hot.md" ] || { fail "Default wiki/hot.md missing"; exit 1; }
+[ -f "$TEST_PUSH_WS/wiki/_log.md" ] || { fail "Default wiki/_log.md missing"; exit 1; }
 
-# Scenario A: Push commit with unrelated changes (src/main.py)
-printf 'print("hello")\n' > "$TEST_PUSH_WS/src/main.py"
-git -C "$TEST_PUSH_WS" add src/main.py
-git -C "$TEST_PUSH_WS" commit -qm "Unrelated feature commit"
-_unrelated_sha="$(git -C "$TEST_PUSH_WS" rev-parse HEAD)"
+# Test ingest --source
+mkdir -p "$TEST_PUSH_WS/docs"
+printf '# Project Roadmap\nFuture roadmap notes.\n' > "$TEST_PUSH_WS/docs/roadmap.md"
+(cd "$TEST_PUSH_WS" && ./rnex plugin karpathy-llm ingest --source docs/roadmap.md >/dev/null)
+[ -f "$TEST_PUSH_WS/wiki/roadmap.md" ] || { fail "wiki/roadmap.md not created by ingest --source"; exit 1; }
 
-# Feed pushed range to git_pre-push.sh via stdin
-_push_unrelated_out="$(printf 'refs/heads/main %s refs/heads/main %s\n' "$_unrelated_sha" "$_base_sha" | RNEX_ROOT="$TEST_PUSH_WS" "$DIR/toolkit/plugins/karpathy-llm/hooks/git_pre-push.sh" 2>&1)"
-! echo "$_push_unrelated_out" | grep -q "Reminder: Wiki files changed" || { fail "git_pre-push emitted false reminder on unrelated push: $_push_unrelated_out"; exit 1; }
+# Test lint passing
+_lint_ok="$(cd "$TEST_PUSH_WS" && ./rnex plugin karpathy-llm lint 2>&1)" || { fail "lint failed: $_lint_ok"; exit 1; }
+echo "$_lint_ok" | grep -q "Wiki lint passed" || { fail "Lint output mismatch: $_lint_ok"; exit 1; }
 
-# Scenario B: Push commit modifying wiki/raw files (docs/intake.md)
-printf '# Intake\nNew data\n' > "$TEST_PUSH_WS/docs/intake.md"
-git -C "$TEST_PUSH_WS" add docs/intake.md
-git -C "$TEST_PUSH_WS" commit -qm "Wiki intake document commit"
-_wiki_sha="$(git -C "$TEST_PUSH_WS" rev-parse HEAD)"
+# Test lint --strict failing on broken source link
+cat > "$TEST_PUSH_WS/wiki/broken-doc.md" <<'EOF_BROKEN'
+---
+title: Broken Doc
+last_updated: 2026-10-24
+sources: ["nonexistent/missing-source.md"]
+related: []
+extends: []
+---
 
-_push_wiki_out="$(printf 'refs/heads/main %s refs/heads/main %s\n' "$_wiki_sha" "$_unrelated_sha" | RNEX_ROOT="$TEST_PUSH_WS" "$DIR/toolkit/plugins/karpathy-llm/hooks/git_pre-push.sh" 2>&1)"
-echo "$_push_wiki_out" | grep -q "Reminder: Wiki files changed\. Run the rnex-karpathy-llm-wiki-lint skill to verify\." || { fail "git_pre-push failed to emit reminder on wiki push: $_push_wiki_out"; exit 1; }
+# Broken Doc
+Summary.
+EOF_BROKEN
+
+_lint_strict_err=0
+(cd "$TEST_PUSH_WS" && ./rnex plugin karpathy-llm lint --strict >/dev/null 2>&1) || _lint_strict_err=1
+[ "$_lint_strict_err" -eq 1 ] || { fail "lint --strict did not exit non-zero on broken source link"; exit 1; }
+
+# Clean up broken doc
+rm -f "$TEST_PUSH_WS/wiki/broken-doc.md"
 pass
 
 # --------------------------------------------------------------------------
-run_test "Fix 21: Karpathy-llm rnex-scaffolding-meta-prompt.md relation and source examples match configured .rnex/wiki/ and ./docs/ paths"
+run_test "Fix 21: Karpathy-llm rnex-scaffolding-meta-prompt.md relation and source examples match configured wiki/ and ./docs/ paths"
 _prompt_file="$DIR/toolkit/plugins/karpathy-llm/instructions/rnex-scaffolding-meta-prompt.md"
 [ -f "$_prompt_file" ] || { fail "rnex-scaffolding-meta-prompt.md missing"; exit 1; }
 
 grep -q "sources: \[\][ ]*#[ ]*\./docs/ files this page was derived from" "$_prompt_file" || { fail "sources example does not reference ./docs/: $(grep -n 'sources:' "$_prompt_file")"; exit 1; }
-grep -q "# Typed relation fields — paths relative to \.rnex/wiki/" "$_prompt_file" || { fail "relations example does not reference .rnex/wiki/: $(grep -n 'Typed relation fields' "$_prompt_file")"; exit 1; }
-grep -q "\`\.rnex/wiki/index\.md\` uses its own frontmatter schema" "$_prompt_file" || { fail "index file example does not reference .rnex/wiki/index.md"; exit 1; }
+grep -q "# Typed relation fields — paths relative to wiki/" "$_prompt_file" || { fail "relations example does not reference wiki/: $(grep -n 'Typed relation fields' "$_prompt_file")"; exit 1; }
+grep -q "\`wiki/index\.md\` uses its own frontmatter schema" "$_prompt_file" || { fail "index file example does not reference wiki/index.md"; exit 1; }
 ! grep -q "# /raw/ files this page was derived from" "$_prompt_file" || { fail "Still references legacy /raw/ in sources comment"; exit 1; }
 ! grep -q "# Typed relation fields — paths relative to /wiki/" "$_prompt_file" || { fail "Still references legacy /wiki/ in relations comment"; exit 1; }
 pass
@@ -739,7 +743,7 @@ _sync_out="$(cd "$TEST_SYNC_PLACEHOLDER_WS" && ./rnex sync 2>&1)" || { fail "rne
 [ ! -d "$TEST_SYNC_PLACEHOLDER_WS/\"" ] || { fail "Literal quote directory leaked into workspace root"; exit 1; }
 
 # Verify templates were correctly initialized in resolved paths
-[ -f "$TEST_SYNC_PLACEHOLDER_WS/.rnex/wiki/index.md" ] || { fail ".rnex/wiki/index.md missing after sync"; exit 1; }
+[ -f "$TEST_SYNC_PLACEHOLDER_WS/wiki/index.md" ] || { fail "wiki/index.md missing after sync"; exit 1; }
 [ -f "$TEST_SYNC_PLACEHOLDER_WS/docs/.gitkeep" ] || { fail "docs/.gitkeep missing after sync"; exit 1; }
 
 pass
@@ -847,19 +851,21 @@ echo "legacy" > "$TEST_GEMINI_WS/.gemini/skills/rnex-legacy.md"
 [ -f "$TEST_GEMINI_WS/GEMINI.md" ] || { fail "GEMINI.md missing after init --gemini"; exit 1; }
 grep -q "CRITICAL: You MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\`" "$TEST_GEMINI_WS/GEMINI.md" || { fail "GEMINI.md missing directive"; exit 1; }
 
-# Verify AGENTS.md is not created (no redundancy)
-[ ! -f "$TEST_GEMINI_WS/AGENTS.md" ] || { fail "Redundant AGENTS.md created when gemini enabled"; exit 1; }
+# Verify AGENTS.md is also created (permanent main context file)
+[ -f "$TEST_GEMINI_WS/AGENTS.md" ] || { fail "Permanent AGENTS.md missing when gemini enabled"; exit 1; }
+grep -q "REPO-NEXUS:START" "$TEST_GEMINI_WS/AGENTS.md" || { fail "AGENTS.md missing REPO-NEXUS instructions"; exit 1; }
 
-# Status reports .agents/skills/ and GEMINI.md
+# Status reports .agents/skills/, GEMINI.md, and AGENTS.md
 _gem_status="$(cd "$TEST_GEMINI_WS" && ./rnex status 2>&1)"
 echo "$_gem_status" | grep -q "GEMINI.md" || { fail "status did not report GEMINI.md: $_gem_status"; exit 1; }
+echo "$_gem_status" | grep -q "AGENTS.md" || { fail "status did not report AGENTS.md: $_gem_status"; exit 1; }
 echo "$_gem_status" | grep -q "\.agents/skills/" || { fail "status did not report .agents/skills/: $_gem_status"; exit 1; }
 ! echo "$_gem_status" | grep -q "\.gemini/skills/" || { fail "status reported obsolete .gemini/skills/: $_gem_status"; exit 1; }
 
 pass
 
 # --------------------------------------------------------------------------
-run_test "Fix 25: rnex sync (with copilot enabled) builds .github/copilot-instructions.md without redundant AGENTS.md, and restores AGENTS.md when disabled"
+run_test "Fix 25: rnex sync (with copilot enabled) maintains permanent AGENTS.md and copilot-instructions.md across init, sync, and disable"
 TEST_COPILOT_WS="$TEST_TMP/copilot-redundancy-ws"
 mkdir -p "$TEST_COPILOT_WS"
 cp "$CLI" "$TEST_COPILOT_WS/rnex"
@@ -876,20 +882,21 @@ cp -r "$DIR/templates" "$TEST_COPILOT_WS/templates"
 [ -f "$TEST_COPILOT_WS/.github/copilot-instructions.md" ] || { fail ".github/copilot-instructions.md missing after init --copilot"; exit 1; }
 grep -q "CRITICAL: You MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\`" "$TEST_COPILOT_WS/.github/copilot-instructions.md" || { fail ".github/copilot-instructions.md missing directive"; exit 1; }
 
-# Verify AGENTS.md was NOT created (no redundant file)
-[ ! -f "$TEST_COPILOT_WS/AGENTS.md" ] || { fail "Redundant AGENTS.md was created alongside copilot-instructions.md"; exit 1; }
+# Verify AGENTS.md was created (permanent file)
+[ -f "$TEST_COPILOT_WS/AGENTS.md" ] || { fail "Permanent AGENTS.md missing after init --copilot"; exit 1; }
+grep -q "REPO-NEXUS:START" "$TEST_COPILOT_WS/AGENTS.md" || { fail "AGENTS.md missing REPO-NEXUS directive after init --copilot"; exit 1; }
 
-# Status reports copilot instructions and does NOT complain about missing AGENTS.md
+# Status reports copilot instructions and AGENTS.md
 _copilot_status="$(cd "$TEST_COPILOT_WS" && ./rnex status 2>&1)"
 echo "$_copilot_status" | grep -q "\.github/copilot-instructions.md" || { fail "status did not report .github/copilot-instructions.md: $_copilot_status"; exit 1; }
-! echo "$_copilot_status" | grep -q "AGENTS.md.*MISSING" || { fail "status reported AGENTS.md MISSING when copilot active: $_copilot_status"; exit 1; }
+echo "$_copilot_status" | grep -q "AGENTS.md" || { fail "status did not report AGENTS.md: $_copilot_status"; exit 1; }
 
-# 2. Test existing AGENTS.md cleanup on sync when copilot is enabled
-# If AGENTS.md is created with only the default rnex routing block, rnex sync should clean it up
+# 2. Test AGENTS.md preserved on sync when copilot is enabled
 (cd "$TEST_COPILOT_WS" && ./rnex sync -y >/dev/null)
-[ ! -f "$TEST_COPILOT_WS/AGENTS.md" ] || { fail "Redundant AGENTS.md created after rnex sync with copilot enabled"; exit 1; }
+[ -f "$TEST_COPILOT_WS/AGENTS.md" ] || { fail "Permanent AGENTS.md missing after rnex sync with copilot enabled"; exit 1; }
+grep -q "REPO-NEXUS:START" "$TEST_COPILOT_WS/AGENTS.md" || { fail "AGENTS.md missing REPO-NEXUS instructions after sync"; exit 1; }
 
-# 3. Test existing custom AGENTS.md preserves user content but strips rnex block
+# 3. Test existing custom AGENTS.md preserves user content alongside rnex block
 cat <<'EOF_CUSTOM_AGENTS' > "$TEST_COPILOT_WS/AGENTS.md"
 # Custom Workspace Guidelines
 These are custom developer instructions.
@@ -901,14 +908,15 @@ EOF_CUSTOM_AGENTS
 (cd "$TEST_COPILOT_WS" && ./rnex sync -y >/dev/null)
 [ -f "$TEST_COPILOT_WS/AGENTS.md" ] || { fail "Custom AGENTS.md was incorrectly deleted"; exit 1; }
 grep -q "These are custom developer instructions" "$TEST_COPILOT_WS/AGENTS.md" || { fail "Custom developer instructions were deleted from AGENTS.md"; exit 1; }
-! grep -q "REPO-NEXUS:START" "$TEST_COPILOT_WS/AGENTS.md" || { fail "Redundant REPO-NEXUS block was not stripped from custom AGENTS.md when copilot enabled"; exit 1; }
+grep -q "REPO-NEXUS:START" "$TEST_COPILOT_WS/AGENTS.md" || { fail "REPO-NEXUS block missing from custom AGENTS.md"; exit 1; }
 
-# 4. Disable copilot plugin and verify AGENTS.md restores REPO-NEXUS routing block
+# 4. Disable copilot plugin and verify both copilot-instructions.md and AGENTS.md retain routing blocks
 (cd "$TEST_COPILOT_WS" && ./rnex plugin disable copilot >/dev/null)
-[ ! -f "$TEST_COPILOT_WS/.github/copilot-instructions.md" ] || { fail ".github/copilot-instructions.md was not removed after disabling copilot"; exit 1; }
+[ -f "$TEST_COPILOT_WS/.github/copilot-instructions.md" ] || { fail ".github/copilot-instructions.md was removed after disabling copilot"; exit 1; }
+grep -q "REPO-NEXUS:START" "$TEST_COPILOT_WS/.github/copilot-instructions.md" || { fail "REPO-NEXUS instructions missing in copilot-instructions.md after disabling copilot"; exit 1; }
 [ -f "$TEST_COPILOT_WS/AGENTS.md" ] || { fail "AGENTS.md missing after disabling copilot"; exit 1; }
-grep -q "REPO-NEXUS:START" "$TEST_COPILOT_WS/AGENTS.md" || { fail "REPO-NEXUS instructions not restored in AGENTS.md after disabling copilot"; exit 1; }
-grep -q "These are custom developer instructions" "$TEST_COPILOT_WS/AGENTS.md" || { fail "Custom developer instructions lost when restoring REPO-NEXUS in AGENTS.md"; exit 1; }
+grep -q "REPO-NEXUS:START" "$TEST_COPILOT_WS/AGENTS.md" || { fail "REPO-NEXUS instructions not found in AGENTS.md after disabling copilot"; exit 1; }
+grep -q "These are custom developer instructions" "$TEST_COPILOT_WS/AGENTS.md" || { fail "Custom developer instructions lost in AGENTS.md"; exit 1; }
 
 pass
 
@@ -1004,9 +1012,12 @@ EOF_CFG_CAMEL
 
 [ ! -f "$TEST_HOOKS_WS/.claude/settings.json" ] || { fail ".claude/settings.json not cleaned after disabling claude"; exit 1; }
 [ ! -f "$TEST_HOOKS_WS/.agents/hooks.json" ] || { fail ".agents/hooks.json not cleaned after disabling gemini"; exit 1; }
-[ ! -f "$TEST_HOOKS_WS/CLAUDE.md" ] || { fail "CLAUDE.md not cleaned after disabling claude"; exit 1; }
-[ ! -f "$TEST_HOOKS_WS/GEMINI.md" ] || { fail "GEMINI.md not cleaned after disabling gemini"; exit 1; }
+[ -f "$TEST_HOOKS_WS/CLAUDE.md" ] || { fail "CLAUDE.md missing after disabling claude"; exit 1; }
+grep -q "REPO-NEXUS:START" "$TEST_HOOKS_WS/CLAUDE.md" || { fail "REPO-NEXUS block missing from CLAUDE.md"; exit 1; }
+[ -f "$TEST_HOOKS_WS/GEMINI.md" ] || { fail "GEMINI.md missing after disabling gemini"; exit 1; }
+grep -q "REPO-NEXUS:START" "$TEST_HOOKS_WS/GEMINI.md" || { fail "REPO-NEXUS block missing from GEMINI.md"; exit 1; }
 [ -f "$TEST_HOOKS_WS/AGENTS.md" ] || { fail "AGENTS.md not restored after disabling provider plugins"; exit 1; }
+grep -q "REPO-NEXUS:START" "$TEST_HOOKS_WS/AGENTS.md" || { fail "REPO-NEXUS block missing from AGENTS.md"; exit 1; }
 
 pass
 
@@ -1052,31 +1063,31 @@ RNEX_REPO_URL="$DIR" RNEX_INSTALL_DIR="$TEST_SCRIPT_INST_SHARE" RNEX_BIN_DIR="$T
 pass
 
 # --------------------------------------------------------------------------
-run_test "Fix 28: rnex add infers repository name from URL or path when name argument is omitted"
+run_test "Fix 28: rnex repo add infers repository name from URL or path when name argument is omitted"
 TEST_INFER_WS="$TEST_TMP/infer-name-workspace"
 mkdir -p "$TEST_INFER_WS"
 "$DIR/rnex" init -y "$TEST_INFER_WS" >/dev/null
 
-# 1. rnex add with local repo path clones and infers name from directory
-(cd "$TEST_INFER_WS" && "$CLI" add "$TEST_REPO" >/dev/null)
+# 1. rnex repo add with local repo path clones and infers name from directory
+(cd "$TEST_INFER_WS" && "$CLI" repo add "$TEST_REPO" >/dev/null)
 [ -d "$TEST_INFER_WS/repos/dummy-repo/.git" ] || { fail "dummy-repo not cloned when name omitted"; exit 1; }
 grep -q "dummy-repo:" "$TEST_INFER_WS/rnex.yaml" || { fail "dummy-repo not registered in rnex.yaml"; exit 1; }
 
-# 2. rnex add with HTTPS URL ending in .git infers name
-(cd "$TEST_INFER_WS" && "$CLI" add https://github.com/example-org/inferred-service.git --disabled >/dev/null)
+# 2. rnex repo add with HTTPS URL ending in .git infers name
+(cd "$TEST_INFER_WS" && "$CLI" repo add https://github.com/example-org/inferred-service.git --disabled >/dev/null)
 grep -q "inferred-service:" "$TEST_INFER_WS/rnex.yaml" || { fail "inferred-service not registered from .git URL"; exit 1; }
 
-# 3. rnex add with URL with trailing slash and --local infers name
-(cd "$TEST_INFER_WS" && "$CLI" add --local https://github.com/example-org/inferred-local/ --disabled >/dev/null)
+# 3. rnex repo add with URL with trailing slash and --local infers name
+(cd "$TEST_INFER_WS" && "$CLI" repo add --local https://github.com/example-org/inferred-local/ --disabled >/dev/null)
 grep -q "inferred-local:" "$TEST_INFER_WS/.local.rnex.yaml" || { fail "inferred-local not registered in local config"; exit 1; }
 
-# 4. rnex add with SSH scp-like URL infers name
-(cd "$TEST_INFER_WS" && "$CLI" add git@github.com:example-org/ssh-service.git --disabled >/dev/null)
+# 4. rnex repo add with SSH scp-like URL infers name
+(cd "$TEST_INFER_WS" && "$CLI" repo add git@github.com:example-org/ssh-service.git --disabled >/dev/null)
 grep -q "ssh-service:" "$TEST_INFER_WS/rnex.yaml" || { fail "ssh-service not registered from SSH URL"; exit 1; }
 
-# 5. Explicit 2-argument form still works as expected
-(cd "$TEST_INFER_WS" && "$CLI" add custom-alias https://github.com/example-org/other.git --disabled >/dev/null)
-grep -q "custom-alias:" "$TEST_INFER_WS/rnex.yaml" || { fail "custom-alias not registered from 2-arg form"; exit 1; }
+# 5. Explicit --name form works as expected
+(cd "$TEST_INFER_WS" && "$CLI" repo add https://github.com/example-org/other.git --name custom-alias --disabled >/dev/null)
+grep -q "custom-alias:" "$TEST_INFER_WS/rnex.yaml" || { fail "custom-alias not registered from --name form"; exit 1; }
 
 pass
 
@@ -1092,7 +1103,8 @@ git -C "$TEST_CODEX_WS" init -q
 
 # 1. Initialize workspace with --codex
 "$TEST_CODEX_WS/rnex" init -y --codex "$TEST_CODEX_WS" >/dev/null
-[ ! -f "$TEST_CODEX_WS/AGENTS.md" ] || { fail "Redundant AGENTS.md created after init --codex"; exit 1; }
+[ -f "$TEST_CODEX_WS/AGENTS.md" ] || { fail "Permanent AGENTS.md missing after init --codex"; exit 1; }
+grep -q "REPO-NEXUS:START" "$TEST_CODEX_WS/AGENTS.md" || { fail "AGENTS.md missing REPO-NEXUS routing block after init --codex"; exit 1; }
 [ -f "$TEST_CODEX_WS/CODEX.md" ] || { fail "CODEX.md missing after init --codex"; exit 1; }
 grep -q "REPO-NEXUS:START" "$TEST_CODEX_WS/CODEX.md" || { fail "REPO-NEXUS routing block missing in CODEX.md"; exit 1; }
 
@@ -1132,8 +1144,9 @@ grep -q "REPO-NEXUS:START" "$TEST_CODEX_WS/CODEX.md" || { fail "REPO-NEXUS block
 (cd "$TEST_CODEX_WS" && ./rnex plugin disable codex >/dev/null)
 (cd "$TEST_CODEX_WS" && ./rnex sync -y --quiet >/dev/null)
 [ -f "$TEST_CODEX_WS/AGENTS.md" ] || { fail "AGENTS.md not restored when codex disabled"; exit 1; }
-[ -f "$TEST_CODEX_WS/CODEX.md" ] || { fail "CODEX.md with custom content was deleted"; exit 1; }
-! grep -q "REPO-NEXUS:START" "$TEST_CODEX_WS/CODEX.md" || { fail "REPO-NEXUS block not stripped from CODEX.md after disable"; exit 1; }
+grep -q "REPO-NEXUS:START" "$TEST_CODEX_WS/AGENTS.md" || { fail "AGENTS.md missing REPO-NEXUS block when codex disabled"; exit 1; }
+[ -f "$TEST_CODEX_WS/CODEX.md" ] || { fail "CODEX.md was deleted when codex disabled"; exit 1; }
+grep -q "REPO-NEXUS:START" "$TEST_CODEX_WS/CODEX.md" || { fail "REPO-NEXUS block missing from CODEX.md after disable"; exit 1; }
 grep -q "# Custom Codex Rules" "$TEST_CODEX_WS/CODEX.md" || { fail "Custom rules lost from CODEX.md after disable"; exit 1; }
 [ ! -d "$TEST_CODEX_WS/.codex/skills/rnex-clone-sync" ] || { fail "rnex User Skills not cleaned from .codex/skills"; exit 1; }
 [ -f "$TEST_CODEX_WS/.codex/skills/custom-skill/SKILL.md" ] || { fail "Custom skill deleted when codex disabled"; exit 1; }
@@ -1153,8 +1166,8 @@ git -C "$TEST_RO_WS" init -q
 
 "$TEST_RO_WS/rnex" init -y "$TEST_RO_WS" >/dev/null
 
-# 1. rnex add clones repo cleanly without creating member .rnex/
-(cd "$TEST_RO_WS" && ./rnex add standard-repo "$TEST_REPO" >/dev/null)
+# 1. rnex repo add clones repo cleanly without creating member .rnex/
+(cd "$TEST_RO_WS" && ./rnex repo add "$TEST_REPO" --name standard-repo >/dev/null)
 [ -d "$TEST_RO_WS/repos/standard-repo/.git" ] || { fail "standard-repo not cloned"; exit 1; }
 [ ! -d "$TEST_RO_WS/repos/standard-repo/.rnex" ] || { fail "standard-repo has unexpected .rnex/ folder"; exit 1; }
 ! grep -q "rnex_dir" "$TEST_RO_WS/rnex.yaml" || { fail "rnex_dir setting unexpectedly written to rnex.yaml"; exit 1; }
@@ -1164,8 +1177,8 @@ _list_out="$(cd "$TEST_RO_WS" && ./rnex list 2>&1)"
 echo "$_list_out" | grep -q "READONLY" || { fail "rnex list missing READONLY column: $_list_out"; exit 1; }
 echo "$_list_out" | grep "standard-repo" | grep -q "false" || { fail "standard-repo readonly not false in list: $_list_out"; exit 1; }
 
-# 3. rnex add --readonly marks repository readonly
-(cd "$TEST_RO_WS" && ./rnex add --readonly reference-repo "$TEST_REPO" >/dev/null)
+# 3. rnex repo add --readonly marks repository readonly
+(cd "$TEST_RO_WS" && ./rnex repo add "$TEST_REPO" --name reference-repo --readonly >/dev/null)
 grep -q "readonly: true" "$TEST_RO_WS/rnex.yaml" || { fail "readonly: true not found in rnex.yaml"; exit 1; }
 [ ! -d "$TEST_RO_WS/repos/reference-repo/.rnex" ] || { fail "reference-repo has unexpected .rnex/"; exit 1; }
 
@@ -1175,11 +1188,11 @@ echo "$_list_out" | grep "reference-repo" | grep -q "true" || { fail "reference-
 _status_out="$(cd "$TEST_RO_WS" && ./rnex status 2>&1)"
 echo "$_status_out" | grep "reference-repo" | grep -q "\[readonly\]" || { fail "reference-repo missing [readonly] in status: $_status_out"; exit 1; }
 
-# 5. rnex readonly toggle commands (global and local)
-(cd "$TEST_RO_WS" && ./rnex readonly disable reference-repo >/dev/null)
+# 5. rnex repo set readonly toggle commands (global and local)
+(cd "$TEST_RO_WS" && ./rnex repo set reference-repo --readwrite --global >/dev/null)
 grep -q "readonly: false" "$TEST_RO_WS/rnex.yaml" || { fail "readonly: false not updated in rnex.yaml"; exit 1; }
 
-(cd "$TEST_RO_WS" && ./rnex readonly enable --local standard-repo >/dev/null)
+(cd "$TEST_RO_WS" && ./rnex repo set standard-repo --readonly --local >/dev/null)
 [ -f "$TEST_RO_WS/.local.rnex.yaml" ] || { fail ".local.rnex.yaml missing"; exit 1; }
 grep -q "readonly: true" "$TEST_RO_WS/.local.rnex.yaml" || { fail "readonly: true not in .local.rnex.yaml"; exit 1; }
 
