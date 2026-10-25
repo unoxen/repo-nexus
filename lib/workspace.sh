@@ -339,12 +339,12 @@ upgrade_workspace_config() {
     ' "$_f" > "$_tmp" && mv "$_tmp" "$_f"
   fi
 
-  # 4. Remove legacy git_hooks: setting and add structured git: section if missing
-  if grep -qE '^[ ]*(git_hooks|hooks):' "$_f" 2>/dev/null; then
+  # 4. Remove legacy top-level git_hooks: or hooks: setting and add structured git: section if missing
+  if grep -qE '^(git_hooks|hooks):' "$_f" 2>/dev/null; then
     _tmp="$(mktemp)"
     awk '
       /^[ ]*#.*[aA]utomated workspace Git hooks/ { next }
-      /^[ ]*(git_hooks|hooks):/ { next }
+      /^(git_hooks|hooks):/ { next }
       { print }
     ' "$_f" > "$_tmp" && mv "$_tmp" "$_f"
   fi
@@ -368,6 +368,13 @@ upgrade_workspace_config() {
         print "    pre-commit: []"
         print "    pre-push: []"
         print ""
+        print "# RNEX Lifecycle Hooks"
+        print "rnex_hooks:"
+        print "  before_sync: []"
+        print "  after_sync: []"
+        print "  before_clone: []"
+        print "  after_clone: []"
+        print ""
         inserted=1
       }
       { print }
@@ -387,6 +394,13 @@ upgrade_workspace_config() {
           print "      - \"rnex sync --quiet\""
           print "    pre-commit: []"
           print "    pre-push: []"
+          print ""
+          print "# RNEX Lifecycle Hooks"
+          print "rnex_hooks:"
+          print "  before_sync: []"
+          print "  after_sync: []"
+          print "  before_clone: []"
+          print "  after_clone: []"
         }
       }
     ' "$_f" > "$_tmp" && mv "$_tmp" "$_f"

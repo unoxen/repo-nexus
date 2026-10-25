@@ -8,6 +8,14 @@ Universal agentic skill protocol for maintaining Karpathy LLM Wiki graph integri
 
 Use this skill to perform health checks and maintenance on the curated wiki knowledge graph, resolve broken links, recompute bidirectional relations, and preserve the ~500-word hot cache boundary.
 
+## CLI Helper
+
+You can also invoke the built-in deterministic lint helper directly from the terminal:
+
+```sh
+rnex plugin karpathy-llm lint [--strict] [--quiet]
+```
+
 ## Maintenance Protocol
 
 1. **Resolve Configuration & Verify Paths:**

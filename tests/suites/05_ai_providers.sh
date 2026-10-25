@@ -237,6 +237,92 @@ grep -q "Google Gemini & Antigravity Integration for Repo Nexus" "$TEST_INSTR_WS
 grep -q "Google Gemini & Antigravity Integration for Repo Nexus" "$TEST_INSTR_WS/.rnex/ai-instructions.md" || { fail "Gemini instructions lost after disabling claude"; exit 1; }
 pass
 
+# --------------------------------------------------------------------------
+run_test "Permanent main context instructions: all 7 files preserved across sync, disable, and clean"
+TEST_PERM_WS="$TEST_TMP/perm-context-ws"
+mkdir -p "$TEST_PERM_WS"
+cp "$CLI" "$TEST_PERM_WS/rnex"
+chmod +x "$TEST_PERM_WS/rnex"
+cp -r "$DIR/toolkit" "$TEST_PERM_WS/toolkit"
+cp -r "$DIR/lib" "$TEST_PERM_WS/lib"
+cp "$DIR/package.json" "$TEST_PERM_WS/package.json"
+git -C "$TEST_PERM_WS" init -q
+
+"$TEST_PERM_WS/rnex" init -y "$TEST_PERM_WS" >/dev/null
+
+# 1. Populate all 7 permanent context files with custom developer text
+mkdir -p "$TEST_PERM_WS/.github"
+cat <<'EOF_AGENTS' > "$TEST_PERM_WS/AGENTS.md"
+# Universal Agents
+Custom universal rules.
+EOF_AGENTS
+
+cat <<'EOF_CLAUDE' > "$TEST_PERM_WS/CLAUDE.md"
+# Claude Guidelines
+Custom claude instructions.
+EOF_CLAUDE
+
+cat <<'EOF_GEMINI' > "$TEST_PERM_WS/GEMINI.md"
+# Gemini Guidelines
+Custom gemini instructions.
+EOF_GEMINI
+
+cat <<'EOF_CODEX' > "$TEST_PERM_WS/CODEX.md"
+# Codex Guidelines
+Custom codex instructions.
+EOF_CODEX
+
+cat <<'EOF_CURSOR' > "$TEST_PERM_WS/.cursorrules"
+# Cursor Guidelines
+Custom cursor instructions.
+EOF_CURSOR
+
+cat <<'EOF_WINDSURF' > "$TEST_PERM_WS/.windsurfrules"
+# Windsurf Guidelines
+Custom windsurf instructions.
+EOF_WINDSURF
+
+cat <<'EOF_COPILOT' > "$TEST_PERM_WS/.github/copilot-instructions.md"
+# Copilot Guidelines
+Custom copilot instructions.
+EOF_COPILOT
+
+# 2. Run rnex sync — all 7 should have REPO-NEXUS:START routing instructions merged
+(cd "$TEST_PERM_WS" && ./rnex sync -y >/dev/null)
+
+_context_files="AGENTS.md CLAUDE.md GEMINI.md CODEX.md .cursorrules .windsurfrules .github/copilot-instructions.md"
+for _cf in $_context_files; do
+  [ -f "$TEST_PERM_WS/$_cf" ] || { fail "Permanent file $_cf missing after rnex sync"; exit 1; }
+  grep -q "REPO-NEXUS:START" "$TEST_PERM_WS/$_cf" || { fail "REPO-NEXUS:START block missing in $_cf after sync"; exit 1; }
+  grep -q "Custom " "$TEST_PERM_WS/$_cf" || { fail "Custom developer instructions deleted from $_cf"; exit 1; }
+done
+
+# 3. Explicitly invoke clean_rnex_instructions on all 7 — should be protected NO-OP
+for _cf in $_context_files; do
+  (
+    . "$TEST_PERM_WS/lib/sdk.sh"
+    clean_rnex_instructions "$TEST_PERM_WS/$_cf"
+  )
+  [ -f "$TEST_PERM_WS/$_cf" ] || { fail "Permanent file $_cf was deleted by clean_rnex_instructions"; exit 1; }
+  grep -q "REPO-NEXUS:START" "$TEST_PERM_WS/$_cf" || { fail "REPO-NEXUS:START stripped from $_cf by clean_rnex_instructions"; exit 1; }
+done
+
+# 4. Enable and then disable all provider plugins
+for _p in claude gemini codex cursor windsurf copilot; do
+  (cd "$TEST_PERM_WS" && ./rnex plugin enable "$_p" >/dev/null)
+  (cd "$TEST_PERM_WS" && ./rnex plugin disable "$_p" >/dev/null)
+done
+
+# 5. Run sync again with plugins disabled
+(cd "$TEST_PERM_WS" && ./rnex sync -y >/dev/null)
+
+for _cf in $_context_files; do
+  [ -f "$TEST_PERM_WS/$_cf" ] || { fail "Permanent file $_cf missing after plugin disable and sync"; exit 1; }
+  grep -q "REPO-NEXUS:START" "$TEST_PERM_WS/$_cf" || { fail "REPO-NEXUS:START block missing in $_cf after plugin disable"; exit 1; }
+  grep -q "Custom " "$TEST_PERM_WS/$_cf" || { fail "Custom developer content lost in $_cf after plugin disable"; exit 1; }
+done
+pass
+
 if [ "${_STANDALONE_RUN:-0}" -eq 1 ]; then
   report_results
 fi

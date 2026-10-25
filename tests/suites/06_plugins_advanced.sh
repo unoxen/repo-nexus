@@ -316,14 +316,14 @@ grep -q "seed-repo" "$TEST_INIT_KW_WS/wiki/hot.md" || { fail "seed-repo not regi
 # 10. Verify rnex repo add with karpathy plugin performs wiki ingest for newly added member repo
 mkdir -p "$TEST_HOOK_WS/external/added-repo"
 git -C "$TEST_HOOK_WS/external/added-repo" init -q
-printf '# Added Member Repo\nNewly added member repository via rnex add.\n' > "$TEST_HOOK_WS/external/added-repo/README.md"
+printf '# Added Member Repo\nNewly added member repository via rnex repo add.\n' > "$TEST_HOOK_WS/external/added-repo/README.md"
 git -C "$TEST_HOOK_WS/external/added-repo" config user.email "test@example.com"
 git -C "$TEST_HOOK_WS/external/added-repo" config user.name "Test User"
 git -C "$TEST_HOOK_WS/external/added-repo" add README.md
 git -C "$TEST_HOOK_WS/external/added-repo" commit -qm "Initial commit"
 
 (cd "$TEST_HOOK_WS" && ./rnex repo add "$TEST_HOOK_WS/external/added-repo" --name added-repo >/dev/null)
-[ -f "$TEST_HOOK_WS/wiki/repo-added-repo.md" ] || { fail "added-repo was not ingested during rnex add with karpathy plugin"; exit 1; }
+[ -f "$TEST_HOOK_WS/wiki/repo-added-repo.md" ] || { fail "added-repo was not ingested during rnex repo add with karpathy plugin"; exit 1; }
 grep -q "Added Member Repo" "$TEST_HOOK_WS/wiki/repo-added-repo.md" || { fail "added-repo content mismatch in wiki page"; exit 1; }
 grep -q "repo-added-repo\.md" "$TEST_HOOK_WS/wiki/index.md" || { fail "added-repo not registered in index.md"; exit 1; }
 grep -q "added-repo" "$TEST_HOOK_WS/wiki/hot.md" || { fail "added-repo not registered in hot.md"; exit 1; }

@@ -28,6 +28,19 @@ cmd_plugin_list() {
       printf '  %b[available]%b %b%-15s%b %b(v%s)%b - %s\n' \
         "$_DIM" "$_NC" "$_BOLD" "$_name" "$_NC" "$_DIM" "${_version:-0.1.0}" "$_NC" "$_desc"
     fi
+
+    _pcmds="$(plugin_list_commands "$_name" 2>/dev/null || true)"
+    if [ -n "$_pcmds" ]; then
+      echo "$_pcmds" | while read -r _c; do
+        [ -n "$_c" ] || continue
+        _cdesc="$(plugin_get_command_desc "$_name" "$_c" 2>/dev/null || true)"
+        if [ -n "$_cdesc" ]; then
+          printf '                 %b↳ rnex plugin %s %-10s%b %s\n' "$_DIM" "$_name" "$_c" "$_NC" "$_cdesc"
+        else
+          printf '                 %b↳ rnex plugin %s %s%b\n' "$_DIM" "$_name" "$_c" "$_NC"
+        fi
+      done
+    fi
   done
   printf '\n'
   log_dim "To enable a plugin:  rnex plugin enable <name>"
@@ -284,13 +297,31 @@ cmd_plugin() {
       ;;
     enable|install)
       shift
+      _h_pname=""
+      for _arg in "$@"; do
+        case "$_arg" in --*) ;; *) _h_pname="$_arg" ;; esac
+      done
+      RNEX_PLUGIN_NAME="$_h_pname"
+      export RNEX_PLUGIN_NAME
+      run_hook "before_plugin_enable" "$@"
       cmd_plugin_enable "$@"
-      return $?
+      _rc=$?
+      [ "$_rc" -eq 0 ] && run_hook "after_plugin_enable" "$@"
+      return "$_rc"
       ;;
     disable|uninstall|remove)
       shift
+      _h_pname=""
+      for _arg in "$@"; do
+        case "$_arg" in --*) ;; *) _h_pname="$_arg" ;; esac
+      done
+      RNEX_PLUGIN_NAME="$_h_pname"
+      export RNEX_PLUGIN_NAME
+      run_hook "before_plugin_disable" "$@"
       cmd_plugin_disable "$@"
-      return $?
+      _rc=$?
+      [ "$_rc" -eq 0 ] && run_hook "after_plugin_disable" "$@"
+      return "$_rc"
       ;;
     update|upgrade)
       shift

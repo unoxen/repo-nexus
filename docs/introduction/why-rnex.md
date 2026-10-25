@@ -30,7 +30,7 @@ Repo Nexus acts as a lightweight coordinator around your repositories without al
 * **Zero Submodule Tracking**: Member repositories clone into `./repos/<name>/` as standard, autonomous Git repositories. The umbrella meta-repo never tracks submodule pointers.
 * **Complete Git Autonomy**: Branch, commit, rebase, and push directly inside each member repository (`cd repos/backend && git commit`).
 * **Unified Workspace View**: Work in a single editor instance with multi-root workspace support (`.code-workspace`) and run batch operations across all repositories via `rnex exec`.
-* **Universal AI Context Routing**: AI rules, skills, and instructions are scoped and mirrored across Claude, Cursor, Copilot, Gemini, and Windsurf formats automatically.
+* **Universal AI Context Routing**: AI rules, skills, and instructions are scoped and mirrored across Claude, Cursor, Codex, Gemini, Copilot, and Windsurf formats automatically.
 
 ## Architectural Comparison
 

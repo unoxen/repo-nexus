@@ -23,12 +23,12 @@ A **Virtual Meta-Repo** companion for multi-repo workspaces and shared AI contex
 >
 > Explore the comprehensive documentation, architecture guides, and interactive references on the **[Documentation Site](https://unoxen.github.io/repo-nexus/)**:
 >
-> - 🚀 **[Getting Started](https://unoxen.github.io/repo-nexus/guide/getting-started)** — Step-by-step onboarding walkthrough and workspace setup
-> - 📐 **[Architecture](https://unoxen.github.io/repo-nexus/guide/architecture)** & **[Why Repo Nexus?](https://unoxen.github.io/repo-nexus/guide/why-repo-nexus)** — Virtual Meta-Repo model, directory layout, and design rationale
-> - 💻 **[CLI Reference](https://unoxen.github.io/repo-nexus/cli/)** — Complete command syntax, global flags, batch execution (`rnex exec`), and Git hooks
-> - 🧩 **[Plugins Guide](https://unoxen.github.io/repo-nexus/plugins/)** — AI provider integrations (Claude, Codex, Copilot, Cursor, Gemini, Windsurf) and Karpathy LLM Wiki
-> - ⚙️ **[Configuration Schema](https://unoxen.github.io/repo-nexus/guide/configuration)** — Two-level `rnex.yaml` and `.local.rnex.yaml` specification
-> - ❓ **[Frequently Asked Questions (FAQ)](https://unoxen.github.io/repo-nexus/faq/)** — Common questions, Git submodule differences, and context strategies
+> - 🚀 **[Getting Started](https://unoxen.github.io/repo-nexus/introduction/quick-start)** — Step-by-step onboarding walkthrough and workspace setup
+> - 📐 **[Architecture](https://unoxen.github.io/repo-nexus/documentation/architecture)** & **[Why Repo Nexus?](https://unoxen.github.io/repo-nexus/introduction/why-rnex)** — Virtual Meta-Repo model, directory layout, and design rationale
+> - 💻 **[CLI Reference](https://unoxen.github.io/repo-nexus/reference/cli)** — Complete command syntax, global flags, batch execution (`rnex exec`), and Git hooks
+> - 🧩 **[Plugins Guide](https://unoxen.github.io/repo-nexus/documentation/plugin-ecosystem)** — AI provider integrations (Claude, Codex, Copilot, Cursor, Gemini, Windsurf) and Karpathy LLM Wiki
+> - ⚙️ **[Configuration Schema](https://unoxen.github.io/repo-nexus/documentation/configuration)** — Two-level `rnex.yaml` and `.local.rnex.yaml` specification
+> - ❓ **[Frequently Asked Questions (FAQ)](https://unoxen.github.io/repo-nexus/faq/general)** — Common questions, Git submodule differences, and context strategies
 
 ---
 
@@ -145,11 +145,11 @@ repo-nexus/
 │   ├── ai-instructions.sample.md   # Base template for .rnex/ai-instructions.md
 │   └── rnex.example.yaml           # Full config reference with examples
 ├── docs/
-│   ├── guide/                      # Architecture, workflows, and getting started
-│   ├── cli/                        # Comprehensive CLI reference manual
+│   ├── introduction/               # Welcome, Why rnex?, Quick Start, and Pure Examples
+│   ├── documentation/              # Architecture, Configuration, Workflows, Lifecycle, Plugins
+│   ├── reference/                  # CLI Reference, RNEX Hooks, Git Hooks, and Environment
 │   ├── plugins/                    # Scoped plugin guides and specifications
-│   ├── examples/                   # Multi-repo patterns and case studies
-│   └── faq/                        # Frequently Asked Questions
+│   └── faq/                        # Frequently Asked Questions & Troubleshooting
 ├── .github/
 │   └── workflows/ci.yml            # GitHub Actions CI workflow
 ├── scripts/

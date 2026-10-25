@@ -43,6 +43,44 @@ git -C "$TEST_WORKSPACE" check-ignore -q "$TEST_WORKSPACE/.claude/skills/rnex-co
 pass
 
 # --------------------------------------------------------------------------
+run_test "git.ignore configuration in rnex.yaml and .local.rnex.yaml reconciled into .gitignore"
+TEST_GI_WS="$TEST_TMP/git-ignore-ws"
+mkdir -p "$TEST_GI_WS"
+cp "$CLI" "$TEST_GI_WS/rnex"
+chmod +x "$TEST_GI_WS/rnex"
+cp -r "$DIR/toolkit" "$TEST_GI_WS/toolkit"
+cp "$DIR/package.json" "$TEST_GI_WS/package.json"
+git -C "$TEST_GI_WS" init -q
+
+"$TEST_GI_WS/rnex" init -y "$TEST_GI_WS" >/dev/null
+
+cat <<'GITIGNORE_YAML' > "$TEST_GI_WS/rnex.yaml"
+version: 1.0.0
+git:
+  ignore:
+    - "*.log"
+    - "build-output/"
+  hooks:
+    post-merge: []
+repos:
+plugins:
+GITIGNORE_YAML
+
+cat <<'GITIGNORE_LOCAL' > "$TEST_GI_WS/.local.rnex.yaml"
+git:
+  ignore:
+    - ".env.local"
+GITIGNORE_LOCAL
+
+(cd "$TEST_GI_WS" && ./rnex sync --quiet)
+grep -q "^\*\.log$" "$TEST_GI_WS/.gitignore" || { fail "*.log missing from .gitignore after sync"; exit 1; }
+grep -q "^build-output/$" "$TEST_GI_WS/.gitignore" || { fail "build-output/ missing from .gitignore after sync"; exit 1; }
+grep -q "^\.env\.local$" "$TEST_GI_WS/.gitignore" || { fail ".env.local missing from .gitignore after sync"; exit 1; }
+! git -C "$TEST_GI_WS" check-ignore -q rnex || { fail "rnex binary is ignored by git"; exit 1; }
+! git -C "$TEST_GI_WS" check-ignore -q rnex.yaml || { fail "rnex.yaml is ignored by git"; exit 1; }
+pass
+
+# --------------------------------------------------------------------------
 run_test "Legacy un-delimited AGENTS.md with symlinks upgraded cleanly to routing protocol"
 cat <<'LEGACY_EOF' > "$TEST_WORKSPACE/AGENTS.md"
 # Multi-Repo AI Workspace Context

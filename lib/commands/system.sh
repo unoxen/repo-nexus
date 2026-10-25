@@ -105,6 +105,7 @@ cmd_help() {
     plugin install [--local] <name>  Alias for plugin enable
     plugin update [name]    Update enabled plugin(s) from source
     plugin disable [--local] <name>  Disable plugin from workspace
+    plugin <name> <cmd> [options]    Execute a command exposed by an enabled plugin
 
   EXAMPLES
     rnex init                                   # Initialize workspace in current folder
@@ -121,6 +122,8 @@ cmd_help() {
     rnex list                                   # List all member repos and active branches
     rnex status                                 # Inspect workspace configuration and health
     rnex sync                                   # Reconcile all repos, plugins, skills, and .rnex directories
+    rnex plugin karpathy-llm ingest             # Ingest sources into the Karpathy LLM Wiki
+    rnex plugin karpathy-llm lint --strict      # Validate Karpathy LLM Wiki links and limits
     rnex completion zsh                         # Generate Zsh completion script
 
 EOF

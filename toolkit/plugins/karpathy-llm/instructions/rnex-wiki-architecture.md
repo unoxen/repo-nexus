@@ -34,8 +34,8 @@ When working in a workspace with an active Karpathy LLM Wiki:
 - **Bounded Hot Cache**: `<wiki_dir>/hot.md` enforces a strict ~500-word ceiling with 3 structured sections: 1. Architecture & Repo Map, 2. Current Focus & Recent Ingests, 3. Key Contracts. Ingest and lint workflows must condense older context to prevent bloat.
 - **Behavioral Principles**: Strictly adhere to the coding agent principles defined at `.rnex/plugins/karpathy-llm/rules/behavioral.md`.
 - **Annotated Indexing**: `<wiki_dir>/index.md` entries must maintain a single 1-line summary next to each atomic page link (e.g. `- [Auth Flow](auth.md): JWT validation and token rotation`) so agents pinpoint target pages in a single read without trial-and-error scanning.
-- **Ingestion**: When files appear in configured `sources` or member repositories are added, execute the `wiki-ingest` agentic skill protocol (`.rnex/plugins/karpathy-llm/skills/wiki-ingest.md`). One source document produces 5–25 atomic pages — never collapse a source into a single file.
-- **Maintenance**: Execute the `wiki-lint` agentic skill protocol (`.rnex/plugins/karpathy-llm/skills/wiki-lint.md`) to validate paths, update `mentioned_in`, and preserve graph integrity.
+- **Ingestion**: When files appear in configured `sources` or member repositories are added, execute `rnex plugin karpathy-llm ingest` or the `wiki-ingest` agentic skill protocol (`.rnex/plugins/karpathy-llm/skills/wiki-ingest.md`). One source document produces 5–25 atomic pages — never collapse a source into a single file.
+- **Maintenance**: Execute `rnex plugin karpathy-llm lint` or the `wiki-lint` agentic skill protocol (`.rnex/plugins/karpathy-llm/skills/wiki-lint.md`) to validate paths, update `mentioned_in`, and preserve graph integrity.
 
 ---
 

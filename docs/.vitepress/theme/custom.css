@@ -1,0 +1,53 @@
+/**
+ * Repo Nexus Adaptive Full-Width Layout & Sidebar Collapse Styles
+ */
+
+:root {
+  --vp-layout-max-width: 100%;
+}
+
+/* Ensure wide document containers stretch adaptively across high-res displays */
+.VPDoc.has-aside .content-container {
+  max-width: 100% !important;
+}
+
+.VPDoc:not(.has-sidebar) .container {
+  max-width: 100% !important;
+}
+
+.VPDoc .container {
+  max-width: 100% !important;
+}
+
+/* Desktop viewport transitions and sidebar collapse states */
+@media (min-width: 960px) {
+  .VPSidebar {
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  }
+
+  body.rnex-sidebar-collapsed .VPSidebar {
+    transform: translateX(-100%) !important;
+  }
+
+  .VPContent.has-sidebar {
+    transition: padding-left 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  }
+
+  body.rnex-sidebar-collapsed .VPContent.has-sidebar {
+    padding-left: 0 !important;
+    width: 100% !important;
+  }
+
+  body.rnex-sidebar-collapsed .VPNavBar.has-sidebar {
+    padding-left: 0 !important;
+    width: 100% !important;
+  }
+
+  body.rnex-sidebar-collapsed .VPNavBar.has-sidebar .wrapper {
+    padding-left: 0 !important;
+  }
+
+  body.rnex-sidebar-collapsed .VPNavBar.has-sidebar .container {
+    max-width: 100% !important;
+  }
+}

@@ -117,6 +117,70 @@ _run_hook_internal() {
       ) || true
     fi
   done
+
+  # 2. Execute configured commands from rnex_hooks.<event_name>
+  if [ -z "$_hook_target_plugin" ]; then
+    _hook_norm="$(printf '%s' "$_hook_phase_cmd" | tr '-' '_')"
+    case ":${RNEX_HOOK_ACTIVE:-}:" in
+      *":${_hook_norm}:"*)
+        # Re-entrant loop guard: skip re-entrant execution of this hook event
+        ;;
+      *)
+        _rnex_cmds="$(yaml_get_rnex_hook_commands "$_hook_norm" 2>/dev/null || true)"
+        if [ -n "$_rnex_cmds" ]; then
+          _prev_active="${RNEX_HOOK_ACTIVE:-}"
+          export RNEX_HOOK_ACTIVE="${RNEX_HOOK_ACTIVE:+${RNEX_HOOK_ACTIVE}:}${_hook_norm}"
+          _is_blocking=0
+          case "$_hook_norm" in
+            before_*) _is_blocking=1 ;;
+          esac
+          _old_ifs="$IFS"
+          IFS='
+'
+          for _rcmd in $_rnex_cmds; do
+            IFS="$_old_ifs"
+            [ -n "$_rcmd" ] || continue
+            if [ "$_is_blocking" -eq 1 ]; then
+              (
+                RNEX_ROOT="$_hook_root"
+                RNEX_CONFIG_MERGED="$_hook_config_merged"
+                RNEX_CMD="$_hook_cmd"
+                RNEX_ARGS="$_hook_args"
+                RNEX_HOOK_EVENT="$_hook_phase_cmd"
+                RNEX_HOOK_ARGS="$_hook_args"
+                RNEX_QUIET="$_hook_quiet"
+                RNEX_PROVIDER_SKILL_DIRS="$_skill_dirs"
+                export RNEX_ROOT RNEX_CONFIG_MERGED RNEX_CMD RNEX_ARGS RNEX_HOOK_EVENT RNEX_HOOK_ARGS RNEX_QUIET RNEX_PROVIDER_SKILL_DIRS RNEX_LIB_DIR NEXUS_DIR WORKSPACE_YAML WORKSPACE_LOCAL_YAML
+                cd "$_hook_root" && eval "$_rcmd"
+              ) || {
+                _cmd_rc=$?
+                export RNEX_HOOK_ACTIVE="$_prev_active"
+                WORKSPACE_LOCAL_YAML="$_old_local_yaml"
+                WORKSPACE_YAML="$_old_yaml"
+                NEXUS_DIR="$_old_nexus"
+                return "$_cmd_rc"
+              }
+            else
+              (
+                RNEX_ROOT="$_hook_root"
+                RNEX_CONFIG_MERGED="$_hook_config_merged"
+                RNEX_CMD="$_hook_cmd"
+                RNEX_ARGS="$_hook_args"
+                RNEX_HOOK_EVENT="$_hook_phase_cmd"
+                RNEX_HOOK_ARGS="$_hook_args"
+                RNEX_QUIET="$_hook_quiet"
+                RNEX_PROVIDER_SKILL_DIRS="$_skill_dirs"
+                export RNEX_ROOT RNEX_CONFIG_MERGED RNEX_CMD RNEX_ARGS RNEX_HOOK_EVENT RNEX_HOOK_ARGS RNEX_QUIET RNEX_PROVIDER_SKILL_DIRS RNEX_LIB_DIR NEXUS_DIR WORKSPACE_YAML WORKSPACE_LOCAL_YAML
+                cd "$_hook_root" && eval "$_rcmd"
+              ) || true
+            fi
+          done
+          IFS="$_old_ifs"
+          export RNEX_HOOK_ACTIVE="$_prev_active"
+        fi
+        ;;
+    esac
+  fi
   WORKSPACE_LOCAL_YAML="$_old_local_yaml"
   WORKSPACE_YAML="$_old_yaml"
   NEXUS_DIR="$_old_nexus"

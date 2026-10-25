@@ -751,7 +751,16 @@ run_plugin_command() {
   _rpc_yaml="${WORKSPACE_YAML:-$_rpc_root/${RNEX_CONFIG_FILE:-rnex.yaml}}"
   _rpc_local_yaml="${WORKSPACE_LOCAL_YAML:-${LOCAL_WORKSPACE_YAML:-$_rpc_root/${RNEX_LOCAL_CONFIG_FILE:-.local.rnex.yaml}}}"
   _rpc_lib_dir="${RNEX_LIB_DIR:-$_rpc_root/lib}"
+  _rpc_args="$*"
 
+  RNEX_PLUGIN_NAME="$_rpc_plugin"
+  RNEX_PLUGIN_COMMAND="$_rpc_cmd"
+  RNEX_PLUGIN_ARGS="$_rpc_args"
+  export RNEX_PLUGIN_NAME RNEX_PLUGIN_COMMAND RNEX_PLUGIN_ARGS
+
+  if command -v run_hook >/dev/null 2>&1; then
+    run_hook "before_plugin_command" "$_rpc_plugin" "$_rpc_cmd" "$@"
+  fi
   (
     RNEX_ROOT="$_rpc_root"
     NEXUS_DIR="$_rpc_root"
@@ -760,12 +769,19 @@ run_plugin_command() {
     LOCAL_WORKSPACE_YAML="$_rpc_local_yaml"
     RNEX_LIB_DIR="$_rpc_lib_dir"
     RNEX_PLUGIN_NAME="$_rpc_plugin"
+    RNEX_PLUGIN_COMMAND="$_rpc_cmd"
+    RNEX_PLUGIN_ARGS="$_rpc_args"
     RNEX_PLUGIN_DIR="$_rpc_root/.rnex/plugins/$_rpc_plugin"
-    export RNEX_ROOT NEXUS_DIR WORKSPACE_YAML WORKSPACE_LOCAL_YAML LOCAL_WORKSPACE_YAML RNEX_LIB_DIR RNEX_PLUGIN_NAME RNEX_PLUGIN_DIR
+    export RNEX_ROOT NEXUS_DIR WORKSPACE_YAML WORKSPACE_LOCAL_YAML LOCAL_WORKSPACE_YAML RNEX_LIB_DIR RNEX_PLUGIN_NAME RNEX_PLUGIN_COMMAND RNEX_PLUGIN_ARGS RNEX_PLUGIN_DIR
     if [ -x "$_rpc_script" ]; then
       "$_rpc_script" "$@"
     else
       sh "$_rpc_script" "$@"
     fi
   )
+  _rc=$?
+  if [ "$_rc" -eq 0 ] && command -v run_hook >/dev/null 2>&1; then
+    run_hook "after_plugin_command" "$_rpc_plugin" "$_rpc_cmd" "$@"
+  fi
+  return "$_rc"
 }

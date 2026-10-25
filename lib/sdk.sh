@@ -272,6 +272,13 @@ rnex_block_merge() {
 clean_rnex_instructions() {
   _dst="$1"
   [ -f "$_dst" ] || return 0
+
+  # Permanent main context files must NEVER be stripped or deleted
+  case "$(basename "$_dst")" in
+    AGENTS.md|CLAUDE.md|GEMINI.md|CODEX.md|.cursorrules|.windsurfrules|copilot-instructions.md)
+      return 0
+      ;;
+  esac
   if grep -qF "$AI_MARKER_START" "$_dst" 2>/dev/null; then
     _non_rnex="$(awk -v s="$AI_MARKER_START" -v e="$AI_MARKER_END" '
       $0 == s { skip=1; next }

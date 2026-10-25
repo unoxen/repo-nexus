@@ -103,15 +103,31 @@ chmod +x "$_cmd_plugin_dir/commands"/*
 # 1. Enable plugin
 "$TEST_WORKSPACE/rnex" plugin enable cmd-test >/dev/null
 
-# 2. Check plugin info lists commands
+# Configure rnex_hooks for before_plugin_command and after_plugin_command via .local.rnex.yaml
+cat <<'EOF_HOOKS' > "$TEST_WORKSPACE/.local.rnex.yaml"
+rnex_hooks:
+  before_plugin_command:
+    - "echo BEFORE_CMD: $RNEX_ARGS >> hook_cmd.log"
+  after_plugin_command:
+    - "echo AFTER_CMD: $RNEX_ARGS >> hook_cmd.log"
+EOF_HOOKS
+
+# 2. Check plugin list and info list commands
+_list_out="$("$TEST_WORKSPACE/rnex" plugin list 2>&1)"
+echo "$_list_out" | grep -q "rnex plugin cmd-test hello" || { fail "Plugin list missing hello command: $_list_out"; exit 1; }
+
 _info_out="$("$TEST_WORKSPACE/rnex" plugin info cmd-test 2>&1)"
 echo "$_info_out" | grep -q "Commands:" || { fail "Plugin info missing Commands section: $_info_out"; exit 1; }
 echo "$_info_out" | grep -q "rnex plugin cmd-test hello" || { fail "Plugin info missing hello command"; exit 1; }
 echo "$_info_out" | grep -q "Print greetings with options" || { fail "Plugin info missing hello description"; exit 1; }
 
 # 3. Explicit command execution: rnex plugin cmd-test hello --flag value pos1
+rm -f "$TEST_WORKSPACE/hook_cmd.log"
 _hello_out="$("$TEST_WORKSPACE/rnex" plugin cmd-test hello --flag "foo bar" extra 2>&1)"
 echo "$_hello_out" | grep -q 'HELLO: --flag foo bar extra' || { fail "Arguments not forwarded correctly: $_hello_out"; exit 1; }
+[ -f "$TEST_WORKSPACE/hook_cmd.log" ] || { fail "hook_cmd.log missing; lifecycle hooks did not fire"; exit 1; }
+grep -q "BEFORE_CMD: cmd-test hello --flag foo bar extra" "$TEST_WORKSPACE/hook_cmd.log" || { fail "before_plugin_command hook did not record args: $(cat "$TEST_WORKSPACE/hook_cmd.log")"; exit 1; }
+grep -q "AFTER_CMD: cmd-test hello --flag foo bar extra" "$TEST_WORKSPACE/hook_cmd.log" || { fail "after_plugin_command hook did not record args: $(cat "$TEST_WORKSPACE/hook_cmd.log")"; exit 1; }
 
 # 4. Environment variable validation
 _dump_out="$("$TEST_WORKSPACE/rnex" plugin cmd-test dump-env --opt 123 2>&1)"
@@ -136,7 +152,7 @@ _short_dis_out="$("$TEST_WORKSPACE/rnex" plugin hello 2>&1 || true)"
 echo "$_short_dis_out" | grep -q "currently disabled" || { fail "Expected shorthand disabled message: $_short_dis_out"; exit 1; }
 
 # Clean up temporary test plugin
-rm -rf "$_cmd_plugin_dir" "$TEST_WORKSPACE/.rnex/plugins/cmd-test"
+rm -rf "$_cmd_plugin_dir" "$TEST_WORKSPACE/.rnex/plugins/cmd-test" "$TEST_WORKSPACE/.local.rnex.yaml" "$TEST_WORKSPACE/hook_cmd.log"
 pass
 
 if [ "${_STANDALONE_RUN:-0}" -eq 1 ]; then

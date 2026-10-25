@@ -18,8 +18,8 @@ body:
       label: Steps to Reproduce
       description: Steps to reproduce the behavior.
       placeholder: |
-        1. rnex add my-repo /path/to/repo
-        2. rnex hide my-repo
+        1. rnex repo add /path/to/repo --name my-repo
+        2. rnex repo set my-repo --disable
         3. See error
     validations:
       required: true

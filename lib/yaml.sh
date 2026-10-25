@@ -267,9 +267,11 @@ _yaml_git_ignore_from_file() {
     function unquote(v) {
       sub(/^[ \t]+/, "", v)
       if (v ~ /^"/) {
-        v = substr(v, 2); sub(/".*$/, "", v)
+        sub(/^"/, "", v)
+        sub(/"[ \t]*(#.*)?$/, "", v)
       } else if (v ~ /^\047/) {
-        v = substr(v, 2); sub(/\047.*$/, "", v)
+        sub(/^\047/, "", v)
+        sub(/\047[ \t]*(#.*)?$/, "", v)
       } else {
         sub(/[ \t]+#.*$/, "", v)
         sub(/[ \t]+$/, "", v)
@@ -391,9 +393,11 @@ _yaml_git_hook_commands_from_file() {
     function unquote(v) {
       sub(/^[ \t]+/, "", v)
       if (v ~ /^"/) {
-        v = substr(v, 2); sub(/".*$/, "", v)
+        sub(/^"/, "", v)
+        sub(/"[ \t]*(#.*)?$/, "", v)
       } else if (v ~ /^\047/) {
-        v = substr(v, 2); sub(/\047.*$/, "", v)
+        sub(/^\047/, "", v)
+        sub(/\047[ \t]*(#.*)?$/, "", v)
       } else {
         sub(/[ \t]+#.*$/, "", v)
         sub(/[ \t]+$/, "", v)
@@ -476,6 +480,157 @@ yaml_get_git_hook_commands() {
   fi
 }
 
+# ---- RNEX Lifecycle Hooks Configuration Operations (rnex_hooks) -------------
+
+# Extract list of hook/event names defined under rnex_hooks from a YAML file.
+_yaml_rnex_hooks_list_from_file() {
+  _yrhl_f="$1"
+  [ -f "$_yrhl_f" ] || return 0
+  awk '
+    /^[ \t]*(rnex_hooks|rnex-hooks):[ \t]*(#.*)?$/ {
+      in_hooks = 1
+      match($0, /^[ \t]*/)
+      hooks_indent = RLENGTH
+      hook_item_indent = -1
+      next
+    }
+    in_hooks && /^[^ \t#]/ { exit }
+    !in_hooks { next }
+    {
+      match($0, /^[ \t]*/)
+      indent = RLENGTH
+      trimmed = substr($0, indent + 1)
+    }
+    trimmed ~ /^([#]|$)/ { next }
+
+    in_hooks && (indent <= hooks_indent) { exit }
+
+    in_hooks {
+      if (hook_item_indent == -1) {
+        hook_item_indent = indent
+      }
+      if (indent == hook_item_indent) {
+        k = trimmed
+        sub(/:.*/, "", k)
+        gsub(/^["\047]|["\047]$/, "", k)
+        gsub(/[[:space:]]/, "", k)
+        gsub(/-/, "_", k)
+        if (length(k) > 0) print k
+      }
+    }
+  ' "$_yrhl_f"
+}
+
+# Enumerate configured hook names under rnex_hooks merged from rnex.yaml and .local.rnex.yaml.
+yaml_list_rnex_hooks() {
+  _yaml_resolve_files
+  {
+    _yaml_rnex_hooks_list_from_file "$_wy"
+    _yaml_rnex_hooks_list_from_file "$_wly"
+  } | awk '!seen[$0]++'
+}
+
+# Extract command list for a specific hook under rnex_hooks.<event_name> from a YAML file.
+# Supports both underscore and hyphenated keys (e.g. after_sync or after-sync).
+_yaml_rnex_hook_commands_from_file() {
+  _yrhc_f="$1"; _yrhc_hook="$2"
+  [ -f "$_yrhc_f" ] || return 0
+  awk -v target_hook="$_yrhc_hook" '
+    function unquote(v) {
+      sub(/^[ \t]+/, "", v)
+      if (v ~ /^"/) {
+        sub(/^"/, "", v)
+        sub(/"[ \t]*(#.*)?$/, "", v)
+      } else if (v ~ /^\047/) {
+        sub(/^\047/, "", v)
+        sub(/\047[ \t]*(#.*)?$/, "", v)
+      } else {
+        sub(/[ \t]+#.*$/, "", v)
+        sub(/[ \t]+$/, "", v)
+      }
+      return v
+    }
+    BEGIN {
+      target_norm = target_hook
+      gsub(/-/, "_", target_norm)
+    }
+    /^[ \t]*(rnex_hooks|rnex-hooks):[ \t]*(#.*)?$/ {
+      in_hooks = 1
+      match($0, /^[ \t]*/)
+      hooks_indent = RLENGTH
+      next
+    }
+    in_hooks && /^[^ \t#]/ { exit }
+    !in_hooks { next }
+    {
+      match($0, /^[ \t]*/)
+      indent = RLENGTH
+      trimmed = substr($0, indent + 1)
+    }
+    trimmed ~ /^([#]|$)/ { next }
+
+    in_hook_cmds {
+      if (indent > target_indent || (indent == target_indent && trimmed ~ /^-([ \t]|$)/)) {
+        if (trimmed ~ /^-([ \t]|$)/) {
+          item = unquote(substr(trimmed, 2))
+          if (length(item) > 0) print item
+        }
+        next
+      }
+      exit
+    }
+
+    in_hooks && (indent <= hooks_indent) { exit }
+
+    in_hooks {
+      k = trimmed
+      sub(/:.*/, "", k)
+      gsub(/^["\047]|["\047]$/, "", k)
+      gsub(/[[:space:]]/, "", k)
+      k_norm = k
+      gsub(/-/, "_", k_norm)
+      if (k_norm == target_norm && trimmed ~ /:[ \t]*/) {
+        target_indent = indent
+        val = trimmed
+        sub(/^[^:]*:[ \t]*/, "", val)
+        if (val ~ /^(#.*)?$/) {
+          in_hook_cmds = 1
+          next
+        }
+        if (val ~ /^\[/) {
+          sub(/^\[/, "", val)
+          sub(/\][ \t]*(#.*)?$/, "", val)
+          n = split(val, parts, ",")
+          for (i = 1; i <= n; i++) {
+            item = unquote(parts[i])
+            if (length(item) > 0) print item
+          }
+          exit
+        }
+        item = unquote(val)
+        if (length(item) > 0) print item
+        exit
+      }
+    }
+  ' "$_yrhc_f"
+}
+
+# Read command list for a specific hook under rnex_hooks.<event_name>
+# supporting both underscore and hyphenated event keys (e.g. after_sync and after-sync),
+# with .local.rnex.yaml override priority.
+yaml_get_rnex_hook_commands() {
+  _event_name="$1"
+  _event_norm="$(printf '%s' "$_event_name" | tr '-' '_')"
+  _yaml_resolve_files
+  if [ -f "$_wly" ] && _yaml_rnex_hooks_list_from_file "$_wly" | grep -qx "$_event_norm"; then
+    _yaml_rnex_hook_commands_from_file "$_wly" "$_event_norm"
+    return 0
+  fi
+  if [ -f "$_wy" ]; then
+    _yaml_rnex_hook_commands_from_file "$_wy" "$_event_norm"
+  fi
+}
+
 # ---- Plugin Configuration Operations ---------------------------------------
 
 _yaml_list_plugins_from_file() {
@@ -516,9 +671,11 @@ _yaml_plugin_list_from_file() {
     function unquote(v) {
       sub(/^[ \t]+/, "", v)
       if (v ~ /^"/) {
-        v = substr(v, 2); sub(/".*$/, "", v)
+        sub(/^"/, "", v)
+        sub(/"[ \t]*(#.*)?$/, "", v)
       } else if (v ~ /^\047/) {
-        v = substr(v, 2); sub(/\047.*$/, "", v)
+        sub(/^\047/, "", v)
+        sub(/\047[ \t]*(#.*)?$/, "", v)
       } else {
         sub(/[ \t]+#.*$/, "", v)
         sub(/[ \t]+$/, "", v)

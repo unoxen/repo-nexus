@@ -170,6 +170,13 @@ git:
   hooks:
 $_hooks_block
 
+# RNEX Lifecycle Hooks
+rnex_hooks:
+  before_sync: []
+  after_sync: []
+  before_clone: []
+  after_clone: []
+
 # Workspace plugins
 plugins:
 $(printf '%b' "$_init_plugins")

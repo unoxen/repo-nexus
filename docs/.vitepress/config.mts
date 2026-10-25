@@ -1,180 +1,216 @@
 import { defineConfig } from 'vitepress'
+import { withMermaid } from 'vitepress-plugin-mermaid'
 
 const base = (process.env.BASE_URL as `/${string}/`) || '/repo-nexus/'
 
-export default defineConfig({
-  title: 'Repo Nexus (rnex)',
-  titleTemplate: ':title | rnex',
-  description: 'Virtual Meta-Repo companion for multi-repo workspaces and shared AI context',
+export default withMermaid(
+  defineConfig({
+    title: 'Repo Nexus (rnex)',
+    titleTemplate: ':title | rnex',
+    description: 'Virtual Meta-Repo companion for multi-repo workspaces and shared AI context',
 
-  // Dynamic base URL: defaults to '/repo-nexus/' for GitHub Pages, '/' for root/custom domain
-  base,
+    // Dynamic base URL: defaults to '/repo-nexus/' for GitHub Pages, '/' for root/custom domain
+    base,
 
-  cleanUrls: true,
-  lastUpdated: true,
+    cleanUrls: true,
+    lastUpdated: true,
 
-  sitemap: {
-    hostname: 'https://unoxen.github.io/repo-nexus/'
-  },
+    sitemap: {
+      hostname: 'https://unoxen.github.io/repo-nexus/'
+    },
 
-  head: [
-    ['meta', { name: 'google-site-verification', content: '<YOUR_VERIFICATION_TOKEN>' }],
-    ['link', { rel: 'canonical', href: 'https://unoxen.github.io/repo-nexus/' }],
-    ['meta', { property: 'og:type', content: 'website' }],
-    ['meta', { property: 'og:title', content: 'Repo Nexus (rnex) - Virtual Meta-Repo Companion' }],
-    ['meta', { property: 'og:description', content: 'Lightweight multi-repo workspace manager with auto-synced AI context via symlinks' }],
-    ['meta', { property: 'og:url', content: 'https://unoxen.github.io/repo-nexus/' }],
-    [
-      'script',
-      { type: 'application/ld+json' },
-      JSON.stringify({
-        '@context': 'https://schema.org',
-        '@type': 'SoftwareApplication',
-        'name': 'Repo Nexus',
-        'alternateName': 'rnex',
-        'applicationCategory': 'DeveloperApplication',
-        'operatingSystem': 'POSIX (macOS, Linux, WSL)',
-        'url': 'https://unoxen.github.io/repo-nexus/',
-        'codeRepository': 'https://github.com/unoxen/repo-nexus'
-      })
+    head: [
+      ['meta', { name: 'google-site-verification', content: '<YOUR_VERIFICATION_TOKEN>' }],
+      ['link', { rel: 'canonical', href: 'https://unoxen.github.io/repo-nexus/' }],
+      ['meta', { property: 'og:type', content: 'website' }],
+      ['meta', { property: 'og:title', content: 'Repo Nexus (rnex) - Virtual Meta-Repo Companion' }],
+      ['meta', { property: 'og:description', content: 'Lightweight multi-repo workspace manager with auto-synced AI context (no git submodules)' }],
+      ['meta', { property: 'og:url', content: 'https://unoxen.github.io/repo-nexus/' }],
+      [
+        'script',
+        { type: 'application/ld+json' },
+        JSON.stringify({
+          '@context': 'https://schema.org',
+          '@type': 'SoftwareApplication',
+          'name': 'Repo Nexus',
+          'alternateName': 'rnex',
+          'applicationCategory': 'DeveloperApplication',
+          'operatingSystem': 'POSIX (macOS, Linux, WSL)',
+          'url': 'https://unoxen.github.io/repo-nexus/',
+          'codeRepository': 'https://github.com/unoxen/repo-nexus'
+        })
+      ],
+      ['meta', { name: 'theme-color', content: '#10b981' }],
+      ['meta', { name: 'og:site_name', content: 'Repo Nexus (rnex)' }],
+      ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
+      ['link', { rel: 'icon', type: 'image/svg+xml', href: `${base}dark_logo.svg`, media: '(prefers-color-scheme: light)' }],
+      ['link', { rel: 'icon', type: 'image/svg+xml', href: `${base}light_logo.svg`, media: '(prefers-color-scheme: dark)' }]
     ],
-    ['meta', { name: 'theme-color', content: '#10b981' }],
-    ['meta', { name: 'og:site_name', content: 'Repo Nexus (rnex)' }],
-    ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
-    ['link', { rel: 'icon', type: 'image/svg+xml', href: `${base}dark_logo.svg`, media: '(prefers-color-scheme: light)' }],
-    ['link', { rel: 'icon', type: 'image/svg+xml', href: `${base}light_logo.svg`, media: '(prefers-color-scheme: dark)' }]
-  ],
 
-  markdown: {
-    lineNumbers: true
-  },
-
-  themeConfig: {
-    siteTitle: 'Repo Nexus (rnex)',
-    logo: {
-      light: '/dark_logo.svg',
-      dark: '/light_logo.svg',
-      alt: 'Repo Nexus Logo'
+    markdown: {
+      lineNumbers: true
     },
 
-    editLink: {
-      pattern: 'https://github.com/unoxen/repo-nexus/edit/main/docs/:path',
-      text: 'Edit this page on GitHub'
-    },
-
-    nav: [
-      { text: 'Guide', link: '/guide/getting-started', activeMatch: '^/guide/' },
-      { text: 'CLI Reference', link: '/cli/', activeMatch: '^/cli/' },
-      {
-        text: 'Plugins',
-        activeMatch: '^/plugins/',
-        items: [
-          { text: 'Runtime & Architecture', link: '/plugins/' },
-          { text: 'karpathy-llm (Wiki & Rules)', link: '/plugins/karpathy-llm' },
-          { text: 'Claude Code', link: '/plugins/claude' },
-          { text: 'Cursor', link: '/plugins/cursor' },
-          { text: 'GitHub Copilot', link: '/plugins/copilot' },
-          { text: 'Google Gemini & Antigravity', link: '/plugins/gemini' },
-          { text: 'OpenAI Codex', link: '/plugins/codex' },
-          { text: 'Windsurf', link: '/plugins/windsurf' },
-          { text: 'Authoring Custom Plugins', link: '/plugins/authoring' }
-        ]
+    themeConfig: {
+      siteTitle: 'Repo Nexus (rnex)',
+      logo: {
+        light: '/dark_logo.svg',
+        dark: '/light_logo.svg',
+        alt: 'Repo Nexus Logo'
       },
-      { text: 'Examples', link: '/examples/multi-repo-workspace', activeMatch: '^/examples/' },
-      { text: 'FAQ', link: '/faq/', activeMatch: '^/faq/' }
-    ],
 
-    sidebar: {
-      '/guide/': [
+      editLink: {
+        pattern: 'https://github.com/unoxen/repo-nexus/edit/main/docs/:path',
+        text: 'Edit this page on GitHub'
+      },
+
+      nav: [
         {
           text: 'Introduction',
+          activeMatch: '^/(introduction/|$)',
           items: [
-            { text: 'Getting Started', link: '/guide/getting-started' },
-            { text: 'Why Repo Nexus?', link: '/guide/why-repo-nexus' },
-            { text: 'Virtual Meta-Repo Model', link: '/guide/architecture' },
-            { text: 'Two-Level Configuration', link: '/guide/configuration' },
-            { text: 'Workflows & Automation', link: '/guide/workflows' }
-          ]
-        }
-      ],
-      '/cli/': [
-        {
-          text: 'CLI Reference',
-          items: [
-            { text: 'Overview & Global Options', link: '/cli/' },
-            { text: 'Workspace Lifecycle', link: '/cli/workspace' },
-            { text: 'Member Repositories', link: '/cli/repos' },
-            { text: 'Execution (rnex exec)', link: '/cli/execution' },
-            { text: 'Tooling & Git Hooks', link: '/cli/tooling' }
-          ]
-        }
-      ],
-      '/plugins/': [
-        {
-          text: 'Plugin Ecosystem',
-          items: [
-            { text: 'Runtime & Architecture', link: '/plugins/' },
-            { text: 'Authoring Custom Plugins', link: '/plugins/authoring' }
+            { text: 'Welcome', link: '/' },
+            { text: 'Why rnex?', link: '/introduction/why-rnex' },
+            { text: 'Quick Start', link: '/introduction/quick-start' },
+            {
+              text: 'Examples',
+              items: [
+                { text: 'Multi-Repo Microservices', link: '/introduction/examples/microservices' },
+                { text: 'Full-Stack AI Context', link: '/introduction/examples/fullstack-ai' },
+                { text: 'Karpathy LLM Wiki', link: '/introduction/examples/llm-wiki' },
+                { text: 'Selective Checkout', link: '/introduction/examples/selective-checkout' }
+              ]
+            }
           ]
         },
         {
-          text: 'Functional Plugins',
+          text: 'Documentation',
+          activeMatch: '^/documentation/',
           items: [
-            { text: 'karpathy-llm (Wiki & Rules)', link: '/plugins/karpathy-llm' }
+            { text: 'Architecture', link: '/documentation/architecture' },
+            { text: 'Configuration', link: '/documentation/configuration' },
+            { text: 'Workflows & Automation', link: '/documentation/workflows' },
+            { text: 'Workspace Lifecycle', link: '/documentation/workspace-lifecycle' },
+            { text: 'Plugin Ecosystem', link: '/documentation/plugin-ecosystem' }
           ]
         },
         {
-          text: 'AI Provider Plugins',
+          text: 'Reference',
+          activeMatch: '^/reference/',
           items: [
-            { text: 'Claude Code (CLAUDE.md)', link: '/plugins/claude' },
-            { text: 'Cursor (.cursorrules)', link: '/plugins/cursor' },
-            { text: 'GitHub Copilot (.github)', link: '/plugins/copilot' },
+            { text: 'CLI Reference', link: '/reference/cli' },
+            { text: 'RNEX Lifecycle Hooks', link: '/reference/rnex-hooks' },
+            { text: 'Git Hooks', link: '/reference/git-hooks' },
+            { text: 'Environment & Layout', link: '/reference/environment' }
+          ]
+        },
+        {
+          text: 'Plugins',
+          activeMatch: '^/plugins/',
+          items: [
+            { text: 'Karpathy LLM Wiki', link: '/plugins/karpathy-llm' },
+            { text: 'Claude Code', link: '/plugins/claude' },
+            { text: 'OpenAI Codex', link: '/plugins/codex' },
+            { text: 'Cursor', link: '/plugins/cursor' },
             { text: 'Google Gemini & Antigravity', link: '/plugins/gemini' },
+            { text: 'GitHub Copilot', link: '/plugins/copilot' },
+            { text: 'Windsurf', link: '/plugins/windsurf' }
+          ]
+        },
+        {
+          text: 'FAQ',
+          activeMatch: '^/faq/',
+          items: [
+            { text: 'General & Comparisons', link: '/faq/general' },
+            { text: 'Troubleshooting & Git Submodules', link: '/faq/troubleshooting' }
+          ]
+        }
+      ],
+
+      sidebar: [
+        {
+          text: 'Introduction',
+          collapsed: false,
+          items: [
+            { text: 'Welcome', link: '/' },
+            { text: 'Why rnex?', link: '/introduction/why-rnex' },
+            { text: 'Quick Start', link: '/introduction/quick-start' },
+            {
+              text: 'Examples',
+              collapsed: false,
+              items: [
+                { text: 'Multi-Repo Microservices', link: '/introduction/examples/microservices' },
+                { text: 'Full-Stack AI Context', link: '/introduction/examples/fullstack-ai' },
+                { text: 'Karpathy LLM Wiki', link: '/introduction/examples/llm-wiki' },
+                { text: 'Selective Checkout', link: '/introduction/examples/selective-checkout' }
+              ]
+            }
+          ]
+        },
+        {
+          text: 'Documentation',
+          collapsed: false,
+          items: [
+            { text: 'Architecture', link: '/documentation/architecture' },
+            { text: 'Configuration', link: '/documentation/configuration' },
+            { text: 'Workflows & Automation', link: '/documentation/workflows' },
+            { text: 'Workspace Lifecycle', link: '/documentation/workspace-lifecycle' },
+            { text: 'Plugin Ecosystem', link: '/documentation/plugin-ecosystem' }
+          ]
+        },
+        {
+          text: 'Reference',
+          collapsed: false,
+          items: [
+            { text: 'CLI Reference', link: '/reference/cli' },
+            { text: 'RNEX Lifecycle Hooks', link: '/reference/rnex-hooks' },
+            { text: 'Git Hooks', link: '/reference/git-hooks' },
+            { text: 'Environment & Layout', link: '/reference/environment' }
+          ]
+        },
+        {
+          text: 'Plugins',
+          collapsed: false,
+          items: [
+            { text: 'Karpathy LLM Wiki', link: '/plugins/karpathy-llm' },
+            { text: 'Claude Code (CLAUDE.md)', link: '/plugins/claude' },
             { text: 'OpenAI Codex (CODEX.md)', link: '/plugins/codex' },
+            { text: 'Cursor (.cursorrules)', link: '/plugins/cursor' },
+            { text: 'Google Gemini (GEMINI.md)', link: '/plugins/gemini' },
+            { text: 'GitHub Copilot (.github)', link: '/plugins/copilot' },
             { text: 'Windsurf (.windsurfrules)', link: '/plugins/windsurf' }
           ]
-        }
-      ],
-      '/examples/': [
+        },
         {
-          text: 'Patterns & Use Cases',
+          text: 'FAQ',
+          collapsed: false,
           items: [
-            { text: 'Fullstack Multi-Repo', link: '/examples/multi-repo-workspace' },
-            { text: 'Monorepo Coexistence', link: '/examples/monorepo-coexistence' },
-            { text: 'Local Overrides & Offline', link: '/examples/local-overrides' },
-            { text: 'Cross-Repo AI Workflows', link: '/examples/ai-workflows' }
+            { text: 'General & Comparisons', link: '/faq/general' },
+            { text: 'Troubleshooting & Git Submodules', link: '/faq/troubleshooting' }
           ]
         }
       ],
-      '/faq/': [
-        {
-          text: 'Resources',
-          items: [
-            { text: 'Frequently Asked Questions', link: '/faq/' }
-          ]
+
+      outline: {
+        level: [2, 3],
+        label: 'On this page'
+      },
+
+      search: {
+        provider: 'local',
+        options: {
+          detailedView: true
         }
-      ]
-    },
+      },
 
-    outline: {
-      level: [2, 3],
-      label: 'On this page'
-    },
+      socialLinks: [
+        { icon: 'github', link: 'https://github.com/unoxen/repo-nexus' },
+        { icon: 'npm', link: 'https://www.npmjs.com/package/repo-nexus' }
+      ],
 
-    search: {
-      provider: 'local',
-      options: {
-        detailedView: true
+      footer: {
+        copyright: 'Copyright © 2026 Repo Nexus · Apache 2.0 License'
       }
-    },
-
-    socialLinks: [
-      { icon: 'github', link: 'https://github.com/unoxen/repo-nexus' },
-      { icon: 'npm', link: 'https://www.npmjs.com/package/repo-nexus' }
-    ],
-
-    footer: {
-      copyright: 'Copyright © 2026 Repo Nexus · Apache 2.0 License'
     }
-  }
-})
+  })
+)

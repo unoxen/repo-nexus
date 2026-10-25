@@ -8,6 +8,14 @@ Universal agentic skill protocol for decomposing and ingesting raw source materi
 
 Use this skill when ingesting new reference materials, architecture documentation, transcripts, articles, or member repository READMEs into the workspace curated wiki knowledge graph.
 
+## CLI Helper
+
+You can also invoke the built-in deterministic ingest helper directly from the terminal:
+
+```sh
+rnex plugin karpathy-llm ingest [--source <path>] [--repo <name>] [--quiet]
+```
+
 ## Ingestion Protocol
 
 1. **Resolve Configuration & Direct Source Paths:**

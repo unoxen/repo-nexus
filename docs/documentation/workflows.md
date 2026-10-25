@@ -35,11 +35,11 @@ rnex exec git status -s
 ```
 
 ```text
-=== [backend] ===
+==> [backend] (./repos/backend)
  M src/api/auth.ts
 ?? tests/auth_test.ts
 
-=== [frontend] ===
+==> [frontend] (./repos/frontend)
 On branch main (working tree clean)
 ```
 
@@ -76,7 +76,8 @@ git:
       - "rnex sync --quiet"
     pre-commit:
       - "rnex plugin karpathy-llm lint"
-    pre-push: []
+    pre-push:
+      - "rnex plugin karpathy-llm lint --strict"
 ```
 
 ### Automated Lifecycle Events
@@ -86,37 +87,24 @@ git:
 
 ---
 
-## CI/CD Integration
+## Single-Repository Operations (`rnex repo`)
 
-Repo Nexus integrates cleanly into GitHub Actions, GitLab CI, or CircleCI pipelines.
+Manage individual member repositories without affecting the rest of the workspace:
 
-### Example: Running Cross-Repo Lints in GitHub Actions
+```bash
+# Add a new repository
+rnex repo add git@github.com:my-org/analytics.git --name analytics --branch v1
 
-```yaml
-name: Workspace Lint
+# Toggle state locally or globally
+rnex repo set analytics --disable --local
+rnex repo set analytics --readonly --global
 
-on:
-  pull_request:
-    branches: [ main ]
+# Inspect status of a single repository
+rnex repo status analytics
 
-jobs:
-  lint-all:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Meta-Repo
-        uses: actions/checkout@v4
+# Execute a command in a single repository
+rnex repo exec analytics npm run build
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: Install Repo Nexus
-        run: npm install -g repo-nexus
-
-      - name: Clone Shallow Repositories
-        run: rnex clone
-
-      - name: Run Linters Across All Repos
-        run: rnex exec npm run lint
+# Remove a repository
+rnex repo remove analytics --purge
 ```

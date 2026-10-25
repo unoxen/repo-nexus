@@ -189,3 +189,105 @@
 .custom-block {
   border-radius: 10px;
 }
+
+
+/* Doc Layout Hero & Features Grid */
+.rnex-hero-lead {
+  font-size: 1.25rem;
+  line-height: 1.6;
+  color: var(--vp-c-text-2);
+  margin-top: 1rem;
+  margin-bottom: 2rem;
+}
+
+.rnex-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 2.5rem;
+}
+
+.rnex-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.6rem 1.4rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  border-radius: 8px;
+  text-decoration: none !important;
+  transition: all 0.2s ease;
+}
+
+.rnex-action-btn.primary {
+  background-color: var(--vp-c-brand-1);
+  color: #ffffff !important;
+  border: 1px solid var(--vp-c-brand-2);
+}
+
+.rnex-action-btn.primary:hover {
+  background-color: var(--vp-c-brand-2);
+  transform: translateY(-1px);
+}
+
+.rnex-action-btn.secondary {
+  background-color: var(--vp-c-bg-soft);
+  color: var(--vp-c-text-1) !important;
+  border: 1px solid var(--vp-c-divider);
+}
+
+.rnex-action-btn.secondary:hover {
+  border-color: var(--vp-c-brand-1);
+  color: var(--vp-c-brand-1) !important;
+  transform: translateY(-1px);
+}
+
+.rnex-action-btn.tertiary {
+  background-color: transparent;
+  color: var(--vp-c-text-2) !important;
+  border: 1px solid transparent;
+}
+
+.rnex-action-btn.tertiary:hover {
+  color: var(--vp-c-text-1) !important;
+}
+
+.rnex-features-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1.25rem;
+  margin: 1.5rem 0 2.5rem;
+}
+
+.rnex-feature-card {
+  padding: 1.5rem;
+  border-radius: 12px;
+  background-color: var(--vp-c-bg-soft);
+  border: 1px solid var(--vp-c-divider);
+  transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+}
+
+.rnex-feature-card:hover {
+  border-color: var(--vp-c-brand-1);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px -8px var(--vp-c-brand-soft);
+}
+
+.rnex-feature-icon {
+  font-size: 2rem;
+  margin-bottom: 0.75rem;
+}
+
+.rnex-feature-card h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--vp-c-text-1);
+}
+
+.rnex-feature-card p {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--vp-c-text-2);
+}

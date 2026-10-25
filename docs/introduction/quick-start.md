@@ -1,9 +1,9 @@
 ---
-title: Getting Started with Repo Nexus
+title: Quick Start with Repo Nexus
 description: Learn prerequisites, installation options, and how to initialize your first Repo Nexus virtual meta-repo workspace in minutes.
 ---
 
-# Getting Started
+# Quick Start
 
 Repo Nexus (`rnex`) orchestrates multi-repository projects into a unified workspace without requiring monorepo migrations or Git submodules. This walkthrough guides you through installing `rnex`, initializing your first workspace, and connecting member repositories.
 
@@ -62,7 +62,7 @@ rnex init -y
 
 ```text
 [rnex] Initializing Repo Nexus workspace in /Users/dev/my-workspace...
-[rnex] Created rnex.yaml (version 0.8.0)
+[rnex] Created rnex.yaml (version 0.8.1)
 [rnex] Created ./repos/ directory
 [rnex] Created .rnex/ and standardized skills
 [rnex] Reconciled .gitignore
@@ -80,7 +80,7 @@ rnex repo add git@github.com:my-org/web-app.git --name frontend
 
 ### 3. Clone All Repositories
 
-Fetch and clone all declared repositories in parallel or batch:
+Fetch and clone all declared repositories in batch:
 
 ```bash
 rnex clone
@@ -103,15 +103,35 @@ rnex status
 ```
 
 ```text
-[rnex] Workspace root: /Users/dev/my-workspace
-[rnex] Config: rnex.yaml
-[rnex] Repositories (2):
-  ✓ backend  (main) -> ./repos/backend
-  ✓ frontend (main) -> ./repos/frontend
+Workspace Health:
+  ✓ .gitignore (reconciled)
+  ✓ rnex.yaml (manifest)
+  ✓ AGENTS.md (standard instructions directive)
+  ✓ .rnex/ai-instructions.md (compiled AI instructions)
+
+Member Repositories:
+  ● backend            [main] git@github.com:my-org/backend-service.git
+  ● frontend           [main] git@github.com:my-org/web-app.git
+```
+
+### 5. Execute Batch Commands
+
+Run commands across all active repositories simultaneously:
+
+```bash
+rnex exec git status -s
+```
+
+```text
+==> [backend] (./repos/backend)
+ M src/api/router.go
+
+==> [frontend] (./repos/frontend)
+?? package-lock.json
 ```
 
 ## Next Steps
 
-* Understand the [Virtual Meta-Repo Architecture](./architecture.md).
-* Learn about [Two-Level Configuration](./configuration.md) (`rnex.yaml` vs `.local.rnex.yaml`).
-* Explore [Plugins and AI Context Mirroring](../plugins/index.md).
+* Learn about the [Virtual Meta-Repo Architecture](../documentation/architecture).
+* Explore the [Two-Level Configuration](../documentation/configuration) model.
+* Review all available commands in the [CLI Reference](../reference/cli).

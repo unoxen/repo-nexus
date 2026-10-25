@@ -83,7 +83,11 @@ cmd_sync() {
   reconcile_gitignore "$NEXUS_DIR"
 
   # 1.2. Reconcile universal workspace instructions in AGENTS.md (permanent main context file)
+  # and all existing permanent provider instructions files
   merge_rnex_instructions "$NEXUS_DIR/AGENTS.md"
+  for _if in CLAUDE.md GEMINI.md CODEX.md .cursorrules .windsurfrules .github/copilot-instructions.md; do
+    [ -f "$NEXUS_DIR/$_if" ] && merge_rnex_instructions "$NEXUS_DIR/$_if"
+  done
 
   # 1.3. Generate auto-sync script (hardcoded harness)
   _write_auto_sync_script "$NEXUS_DIR"

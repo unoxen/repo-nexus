@@ -1,51 +1,64 @@
 ---
-layout: home
-
-hero:
-  name: "Repo Nexus (rnex)"
-  text: "Virtual Meta-Repo Companion"
-  tagline: "Unite independent repositories into a cohesive AI-enabled workspace, without dependencies, Git submodules or monorepo migrations."
-  image:
-    src: /home.png
-    alt: Repo Nexus
-  actions:
-    - theme: brand
-      text: Get Started
-      link: /guide/getting-started
-    - theme: alt
-      text: CLI Reference
-      link: /cli/
-    - theme: alt
-      text: GitHub
-      link: https://github.com/unoxen/repo-nexus
-
-features:
-  - icon: ⚡
-    title: Pure POSIX Shell & Zero Dependencies
-    details: Written in pure /bin/sh. Installs instantly via npm/npx or a single curl binary on macOS, Linux, and WSL2.
-  - icon: 🗂️
-    title: No Git Submodules
-    details: Autonomous member repositories clone directly into ./repos/ while remaining independent Git repositories. No detached HEAD hell.
-  - icon: 🤖
-    title: Scoped AI Context Mirroring
-    details: Automatically projects shared routing rules, instructions, and skills into Claude Code, Cursor, Copilot, Gemini, and Windsurf formats.
-  - icon: 🧠
-    title: Karpathy LLM Wiki Architecture
-    details: Built-in support for Andrej Karpathy's 4 cardinal principles for coding agents, context engineering, and autonomous LLM wikis.
-  - icon: ⚙️
-    title: Two-Level Configuration
-    details: Commit team-wide defaults in rnex.yaml while allowing developers to maintain local overrides in .local.rnex.yaml.
-  - icon: 🔄
-    title: Multi-Repo Batch Execution
-    details: Run tests, linters, or git commands across all active repositories in sequence with rnex exec.
+layout: doc
+title: Welcome to Repo Nexus (rnex)
+description: Lightweight, zero-dependency Virtual Meta-Repo companion for multi-repo workspaces and shared AI context (no git submodules).
 ---
 
-<div class="home-quickstart-container">
-  <div class="home-quickstart-box">
-    <div class="home-quickstart-header">
-      <span class="home-quickstart-badge">QUICKSTART</span>
-      <p class="home-quickstart-sub">Initialize a unified meta-repo workspace and connect member repositories in three commands.</p>
-    </div>
+# Welcome to Repo Nexus (rnex)
+
+<p class="rnex-hero-lead">
+  The zero-dependency <strong>Virtual Meta-Repo</strong> companion for engineering teams and AI coding assistants. Unite independent Git repositories into a cohesive, high-velocity workspace without Git submodules or monorepo migrations.
+</p>
+
+<div class="rnex-hero-actions">
+  <a class="rnex-action-btn primary" href="./introduction/quick-start">Get Started</a>
+  <a class="rnex-action-btn secondary" href="./introduction/why-rnex">Why rnex?</a>
+  <a class="rnex-action-btn secondary" href="./reference/cli">CLI Reference</a>
+  <a class="rnex-action-btn tertiary" href="https://github.com/unoxen/repo-nexus" target="_blank" rel="noreferrer">GitHub</a>
+</div>
+
+---
+
+## Key Highlights
+
+<div class="rnex-features-grid">
+  <div class="rnex-feature-card">
+    <div class="rnex-feature-icon">⚡</div>
+    <h3>Pure POSIX Shell & Zero Runtime Dependencies</h3>
+    <p>Written entirely in pure, standard <code>/bin/sh</code>. Installs instantly via npm, npx, or a single curl executable on macOS, Linux, and WSL2.</p>
+  </div>
+  <div class="rnex-feature-card">
+    <div class="rnex-feature-icon">🗂️</div>
+    <h3>No Git Submodules</h3>
+    <p>Autonomous member repositories clone directly into <code>./repos/</code> as independent Git repositories with their own branches, tags, and remotes. No detached HEAD traps.</p>
+  </div>
+  <div class="rnex-feature-card">
+    <div class="rnex-feature-icon">🤖</div>
+    <h3>Universal AI Context Mirroring</h3>
+    <p>Scoped routing instructions are projected across Claude Code, Cursor, Codex, Gemini, Copilot, and Windsurf without cross-repository context leakage.</p>
+  </div>
+  <div class="rnex-feature-card">
+    <div class="rnex-feature-icon">🧠</div>
+    <h3>Karpathy LLM Wiki Architecture</h3>
+    <p>Built-in knowledge graph with automated ingest, linting, and a bounded ~500-word hot cache (<code>hot.md</code>) designed for autonomous AI agents.</p>
+  </div>
+  <div class="rnex-feature-card">
+    <div class="rnex-feature-icon">⚙️</div>
+    <h3>Two-Level Configuration</h3>
+    <p>Commit team-wide standards in <code>rnex.yaml</code> while developers maintain personal machine overrides and private tokens in <code>.local.rnex.yaml</code>.</p>
+  </div>
+  <div class="rnex-feature-card">
+    <div class="rnex-feature-icon">🔄</div>
+    <h3>Multi-Repo Batch Execution</h3>
+    <p>Run tests, linters, or git commands across all enabled member repositories sequentially with <code>rnex exec</code>, capturing exact exit codes.</p>
+  </div>
+</div>
+
+---
+
+## Install rnex
+
+Initialize a unified meta-repo workspace and connect member repositories in three simple commands:
 
 ::: code-group
 
@@ -57,12 +70,12 @@ npx repo-nexus init
 rnex repo add git@github.com:my-org/api.git --name backend
 rnex repo add git@github.com:my-org/web.git --name frontend
 
-# Clone all repositories
+# Clone all declared repositories
 rnex clone
 ```
 
-```sh [npm]
-# Install globally
+```sh [npm (Global)]
+# Install globally via npm registry
 npm install -g repo-nexus
 
 # Initialize and clone
@@ -70,8 +83,8 @@ rnex init
 rnex clone
 ```
 
-```sh [curl]
-# Download single executable binary directly
+```sh [curl (Standalone)]
+# Download single executable binary directly (zero Node.js required)
 curl -fsSL https://raw.githubusercontent.com/unoxen/repo-nexus/main/rnex -o /usr/local/bin/rnex
 chmod +x /usr/local/bin/rnex
 rnex --version
@@ -79,5 +92,12 @@ rnex --version
 
 :::
 
-  </div>
-</div>
+---
+
+## Navigation & Sections
+
+* **[Introduction](./introduction/why-rnex)**: Understand why the Virtual Meta-Repo model succeeds where monorepos and Git submodules fall short, follow the quick start tutorial, and inspect practical examples.
+* **[Documentation](./documentation/architecture)**: Deep dive into the architecture, configuration schema, workflows, workspace lifecycle, and plugin ecosystem.
+* **[Reference](./reference/cli)**: Complete syntax and options for `rnex` CLI commands, lifecycle hooks (`rnex_hooks`), Git hooks (`git.hooks`), and environment variables.
+* **[Plugins](./plugins/karpathy-llm)**: Explore first-class plugins for the Karpathy LLM Wiki, Claude Code, OpenAI Codex, Cursor, Gemini, Copilot, and Windsurf.
+* **[FAQ](./faq/general)**: Review frequently asked questions, comparisons with Git submodules/monorepos, and troubleshooting tips.

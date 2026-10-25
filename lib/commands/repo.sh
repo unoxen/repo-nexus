@@ -10,12 +10,57 @@ cmd_repo() {
   _subcmd="$1"
   shift
   case "$_subcmd" in
-    add)            cmd_repo_add "$@" ;;
-    remove|rm)      cmd_repo_remove "$@" ;;
-    set)            cmd_repo_set "$@" ;;
-    clone)          cmd_repo_clone "$@" ;;
-    status)         cmd_repo_status "$@" ;;
-    exec)           cmd_repo_exec "$@" ;;
+    add)
+      run_hook "before_repo_add" "$@"
+      cmd_repo_add "$@"
+      _rc=$?
+      [ "$_rc" -eq 0 ] && run_hook "after_repo_add" "$@"
+      return "$_rc"
+      ;;
+    remove|rm)
+      for _arg in "$@"; do
+        case "$_arg" in
+          -*) ;;
+          *) export RNEX_REPO_NAME="$_arg"; break ;;
+        esac
+      done
+      run_hook "before_repo_remove" "$@"
+      cmd_repo_remove "$@"
+      _rc=$?
+      [ "$_rc" -eq 0 ] && run_hook "after_repo_remove" "$@"
+      return "$_rc"
+      ;;
+    set)
+      for _arg in "$@"; do
+        case "$_arg" in
+          -*) ;;
+          *) export RNEX_REPO_NAME="$_arg"; break ;;
+        esac
+      done
+      run_hook "before_repo_set" "$@"
+      cmd_repo_set "$@"
+      _rc=$?
+      [ "$_rc" -eq 0 ] && run_hook "after_repo_set" "$@"
+      return "$_rc"
+      ;;
+    clone)
+      [ $# -gt 0 ] && export RNEX_REPO_NAME="$1"
+      run_hook "before_clone" "$@"
+      cmd_repo_clone "$@"
+      _rc=$?
+      [ "$_rc" -eq 0 ] && run_hook "after_clone" "$@"
+      return "$_rc"
+      ;;
+    status)
+      cmd_repo_status "$@"
+      ;;
+    exec)
+      run_hook "before_exec" "$@"
+      cmd_repo_exec "$@"
+      _rc=$?
+      run_hook "after_exec" "$@"
+      return "$_rc"
+      ;;
     list|ls)        cmd_list "$@" ;;
     help|-h|--help) cmd_repo_help ;;
     *)              die "Unknown repo subcommand: $_subcmd (try 'rnex repo help')" ;;
@@ -115,6 +160,7 @@ cmd_repo_add() {
 
   [ -n "$_name" ] || die "Could not determine repository name from '$_url'"
   [ -n "$_url" ] || die "Usage: rnex repo add <url> [--name <name>] [--branch <branch>] [--local] [--disabled] [--readonly]"
+  export RNEX_REPO_NAME="$_name"
 
   ensure_repos_dir
   _target_dir="$(resolve_repo_path "$_name")"
@@ -392,10 +438,17 @@ cmd_repo_exec() {
   _repo_dir="$(resolve_repo_path "$_name")"
   [ -d "$_repo_dir" ] || die "Repo '$_name' is not cloned yet at $_repo_dir"
 
+  _b="$(git -C "$_repo_dir" symbolic-ref --short HEAD 2>/dev/null || git -C "$_repo_dir" rev-parse --short HEAD 2>/dev/null || true)"
   _cmd="$*"
   printf '%b[%s]%b %s\n' "$_B" "$_name" "$_NC" "$_cmd"
   printf '%s\n' "----------------------------------------"
-  (cd "$_repo_dir" && eval "$_cmd")
+  (
+    RNEX_REPO_NAME="$_name"
+    RNEX_REPO_PATH="$_repo_dir"
+    RNEX_REPO_BRANCH="$_b"
+    export RNEX_REPO_NAME RNEX_REPO_PATH RNEX_REPO_BRANCH
+    cd "$_repo_dir" && eval "$_cmd"
+  )
 }
 
 # Clone all enabled repositories declared in configuration that are not yet cloned.
@@ -481,7 +534,14 @@ cmd_exec() {
 
     printf '\n%b[%s]%b %s\n' "$_B" "$_name" "$_NC" "$_cmd"
     printf '%s\n' "----------------------------------------"
-    if (cd "$_repo_dir" && eval "$_cmd"); then
+    _b="$(git -C "$_repo_dir" symbolic-ref --short HEAD 2>/dev/null || git -C "$_repo_dir" rev-parse --short HEAD 2>/dev/null || true)"
+    if (
+      RNEX_REPO_NAME="$_name"
+      RNEX_REPO_PATH="$_repo_dir"
+      RNEX_REPO_BRANCH="$_b"
+      export RNEX_REPO_NAME RNEX_REPO_PATH RNEX_REPO_BRANCH
+      cd "$_repo_dir" && eval "$_cmd"
+    ); then
       printf '%b[✓] %s succeeded%b\n' "$_G" "$_name" "$_NC"
     else
       _rc=$?

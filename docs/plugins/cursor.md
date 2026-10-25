@@ -7,7 +7,7 @@ description: Integrate Cursor IDE with Repo Nexus, generating zero-logic user sk
 
 The **`cursor`** plugin integrates Cursor IDE and Cursor Agent Mode into a Repo Nexus Virtual Meta-Repo.
 
-All AI assistants in Repo Nexus share [`AGENTS.md`](file:///Users/admin/Projects/ai/repo-nexus/AGENTS.md) at the workspace root as the single universal source of truth for routing. When enabled, the `cursor` plugin generates zero-logic User Skill pointers into `.cursor/rules/` (e.g. `rnex-clone-sync.md`, `rnex-batch-exec.md`, `rnex-wiki-ingest.md`).
+All AI assistants in Repo Nexus share `AGENTS.md` at the workspace root as the single universal source of truth for routing. When enabled, the `cursor` plugin generates zero-logic User Skill pointers into `.cursor/rules/` (e.g. `rnex-clone-sync.md`, `rnex-batch-exec.md`, `rnex-wiki-ingest.md`).
 
 Operational skills, rules, and subagents remain cleanly encapsulated within `.rnex/skills/` and active plugin directories (`.rnex/plugins/<plugin-name>/`).
 

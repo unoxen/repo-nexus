@@ -72,6 +72,12 @@ rm -rf "$TEST_WORKSPACE/repos/test-app"
 
 "$TEST_WORKSPACE/rnex" clone >/dev/null
 [ -d "$TEST_WORKSPACE/repos/test-app/.git" ] || { fail "rnex clone did not restore test-app"; exit 1; }
+
+# Test single-repo clone (rnex repo clone <name>) restores targeted repository
+rm -rf "$TEST_WORKSPACE/repos/test-app"
+[ ! -d "$TEST_WORKSPACE/repos/test-app" ] || { fail "Failed to remove test-app dir"; exit 1; }
+"$TEST_WORKSPACE/rnex" repo clone test-app >/dev/null
+[ -d "$TEST_WORKSPACE/repos/test-app/.git" ] || { fail "rnex repo clone did not restore test-app"; exit 1; }
 pass
 
 # --------------------------------------------------------------------------
