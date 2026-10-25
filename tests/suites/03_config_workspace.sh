@@ -368,6 +368,112 @@ _status_prompts="$("$TEST_WORKSPACE/rnex" status 2>&1)"
 echo "$_status_prompts" | grep -q "workspace skills" || { fail "Status does not highlight workspace skills"; exit 1; }
 pass
 
+# --------------------------------------------------------------------------
+run_test "Configurable repos_dir lifecycle: init, gitignore, add, clone, status, exec, set, and purge"
+TEST_RDIR_WS="$TEST_TMP/custom-repos-dir-ws"
+mkdir -p "$TEST_RDIR_WS"
+cp "$CLI" "$TEST_RDIR_WS/rnex"
+chmod +x "$TEST_RDIR_WS/rnex"
+cp -r "$DIR/toolkit" "$TEST_RDIR_WS/toolkit"
+cp "$DIR/package.json" "$TEST_RDIR_WS/package.json"
+git -C "$TEST_RDIR_WS" init -q
+
+# 1. Initialize workspace with custom --repos-dir services
+(cd "$TEST_RDIR_WS" && ./rnex init -y --repos-dir services "$TEST_RDIR_WS" >/dev/null)
+
+[ -d "$TEST_RDIR_WS/services" ] || { fail "Custom services/ directory not created during init"; exit 1; }
+[ ! -d "$TEST_RDIR_WS/repos" ] || { fail "Default repos/ directory should not exist"; exit 1; }
+grep -q 'repos_dir:[ ]*"services"' "$TEST_RDIR_WS/rnex.yaml" || { fail "repos_dir: \"services\" not written to rnex.yaml"; exit 1; }
+git -C "$TEST_RDIR_WS" check-ignore -q services/ || { fail "services/ is not ignored by git"; exit 1; }
+grep -q '!services/\*' "$TEST_RDIR_WS/.ignore" || { fail "!services/* not found in .ignore"; exit 1; }
+
+# Prepare remote repo
+_svc_remote="$TEST_TMP/svc-remote-auth"
+mkdir -p "$_svc_remote"
+git -C "$_svc_remote" init -q
+echo "# Auth Service" > "$_svc_remote/README.md"
+git -C "$_svc_remote" add .
+git -C "$_svc_remote" commit -q -m "initial commit"
+
+# 2. Add repo and verify it clones into services/auth
+(cd "$TEST_RDIR_WS" && ./rnex repo add "$_svc_remote" --name auth >/dev/null)
+[ -d "$TEST_RDIR_WS/services/auth/.git" ] || { fail "Repository not cloned into services/auth"; exit 1; }
+[ ! -d "$TEST_RDIR_WS/repos" ] || { fail "repos/ was created when adding repo"; exit 1; }
+
+# 3. Verify .rnex/ai-instructions.md references services/<name> and not repos/<name>
+grep -q "services/<name>" "$TEST_RDIR_WS/.rnex/ai-instructions.md" || { fail "ai-instructions.md does not reference services/<name>"; exit 1; }
+! grep -q "repos/<name>" "$TEST_RDIR_WS/.rnex/ai-instructions.md" || { fail "ai-instructions.md still references repos/<name>"; exit 1; }
+
+# 4. Verify rnex status checks services/ in gitignore
+_status_out="$(cd "$TEST_RDIR_WS" && ./rnex status 2>&1)"
+echo "$_status_out" | grep -q "services/" || { fail "rnex status does not report services/ ignore"; exit 1; }
+
+# 5. Verify rnex exec runs inside services/auth
+_exec_pwd="$(cd "$TEST_RDIR_WS" && ./rnex exec pwd 2>&1)"
+echo "$_exec_pwd" | grep -q "services/auth" || { fail "rnex exec did not execute inside services/auth: $_exec_pwd"; exit 1; }
+
+# 6. Verify rnex repo set --readonly marks services/auth readonly in status and list
+(cd "$TEST_RDIR_WS" && ./rnex repo set auth --readonly >/dev/null)
+_rlist_out="$(cd "$TEST_RDIR_WS" && ./rnex repo list 2>&1)"
+echo "$_rlist_out" | grep "auth" | grep -q "true" || { fail "auth readonly not true in list: $_rlist_out"; exit 1; }
+_rstatus_out="$(cd "$TEST_RDIR_WS" && ./rnex repo status auth 2>&1)"
+echo "$_rstatus_out" | grep -qi "Readonly:[ ]*true" || { fail "auth missing Readonly: true in repo status: $_rstatus_out"; exit 1; }
+_ws_status="$(cd "$TEST_RDIR_WS" && ./rnex status 2>&1)"
+echo "$_ws_status" | grep "auth" | grep -q "\[readonly\]" || { fail "auth missing [readonly] in workspace status: $_ws_status"; exit 1; }
+
+# 7. Verify rnex repo remove --purge removes services/auth
+(cd "$TEST_RDIR_WS" && ./rnex repo remove auth --purge -y >/dev/null)
+[ ! -d "$TEST_RDIR_WS/services/auth" ] || { fail "services/auth was not purged"; exit 1; }
+pass
+
+# --------------------------------------------------------------------------
+run_test "repos_dir two-level config override (.local.rnex.yaml) and path traversal fallback"
+TEST_RDIR_OVR="$TEST_TMP/repos-dir-ovr-ws"
+mkdir -p "$TEST_RDIR_OVR"
+cp "$CLI" "$TEST_RDIR_OVR/rnex"
+chmod +x "$TEST_RDIR_OVR/rnex"
+cp -r "$DIR/toolkit" "$TEST_RDIR_OVR/toolkit"
+cp "$DIR/package.json" "$TEST_RDIR_OVR/package.json"
+git -C "$TEST_RDIR_OVR" init -q
+
+"$TEST_RDIR_OVR/rnex" init -y "$TEST_RDIR_OVR" >/dev/null
+
+# Set base config repos_dir: "components"
+_sed_cmd='s/^repos_dir:.*/repos_dir: "components"/'
+sed "$_sed_cmd" "$TEST_RDIR_OVR/rnex.yaml" > "$TEST_RDIR_OVR/rnex.yaml.tmp" && mv "$TEST_RDIR_OVR/rnex.yaml.tmp" "$TEST_RDIR_OVR/rnex.yaml"
+
+# Override in .local.rnex.yaml
+cat <<'LOCAL_EOF' > "$TEST_RDIR_OVR/.local.rnex.yaml"
+repos_dir: "local-components"
+LOCAL_EOF
+
+(cd "$TEST_RDIR_OVR" && ./rnex sync >/dev/null)
+[ -d "$TEST_RDIR_OVR/local-components" ] || { fail "local-components/ not created from .local.rnex.yaml override"; exit 1; }
+git -C "$TEST_RDIR_OVR" check-ignore -q local-components/ || { fail "local-components/ not ignored in git"; exit 1; }
+
+# Test path traversal security fallback
+cat <<'TRAVERSAL_EOF' > "$TEST_RDIR_OVR/.local.rnex.yaml"
+repos_dir: "../escaping"
+TRAVERSAL_EOF
+
+_resolved_trav="$(cd "$TEST_RDIR_OVR" && . "$DIR/lib/core.sh" && . "$DIR/lib/workspace.sh" && . "$DIR/lib/yaml.sh" && WORKSPACE_YAML="$TEST_RDIR_OVR/rnex.yaml" WORKSPACE_LOCAL_YAML="$TEST_RDIR_OVR/.local.rnex.yaml" yaml_get_repos_dir)"
+[ "$_resolved_trav" = "repos" ] || { fail "Path traversal ../escaping did not fall back to repos, got '$_resolved_trav'"; exit 1; }
+
+cat <<'ABSOLUTE_EOF' > "$TEST_RDIR_OVR/.local.rnex.yaml"
+repos_dir: "/root/abs"
+ABSOLUTE_EOF
+
+_resolved_abs="$(cd "$TEST_RDIR_OVR" && . "$DIR/lib/core.sh" && . "$DIR/lib/workspace.sh" && . "$DIR/lib/yaml.sh" && WORKSPACE_YAML="$TEST_RDIR_OVR/rnex.yaml" WORKSPACE_LOCAL_YAML="$TEST_RDIR_OVR/.local.rnex.yaml" yaml_get_repos_dir)"
+[ "$_resolved_abs" = "repos" ] || { fail "Absolute path /root/abs did not fall back to repos, got '$_resolved_abs'"; exit 1; }
+
+cat <<'DOT_EOF' > "$TEST_RDIR_OVR/.local.rnex.yaml"
+repos_dir: "."
+DOT_EOF
+
+_resolved_dot="$(cd "$TEST_RDIR_OVR" && . "$DIR/lib/core.sh" && . "$DIR/lib/workspace.sh" && . "$DIR/lib/yaml.sh" && WORKSPACE_YAML="$TEST_RDIR_OVR/rnex.yaml" WORKSPACE_LOCAL_YAML="$TEST_RDIR_OVR/.local.rnex.yaml" yaml_get_repos_dir)"
+[ "$_resolved_dot" = "repos" ] || { fail "Dot path . did not fall back to repos, got '$_resolved_dot'"; exit 1; }
+pass
+
 if [ "${_STANDALONE_RUN:-0}" -eq 1 ]; then
   report_results
 fi

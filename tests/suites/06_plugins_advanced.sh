@@ -637,6 +637,56 @@ echo "$_resolved_flow" | grep -q "^repos/api/README.md$" || { fail "Flow array m
 
 pass
 
+# --------------------------------------------------------------------------
+run_test "Karpathy-llm plugin wiki ingest and lint with custom repos_dir (packages/)"
+TEST_KPKG_WS="$TEST_TMP/karpathy-custom-repos-dir-ws"
+mkdir -p "$TEST_KPKG_WS"
+cp "$CLI" "$TEST_KPKG_WS/rnex"
+chmod +x "$TEST_KPKG_WS/rnex"
+cp -r "$DIR/toolkit" "$TEST_KPKG_WS/toolkit"
+cp "$DIR/package.json" "$TEST_KPKG_WS/package.json"
+git -C "$TEST_KPKG_WS" init -q
+
+# Initialize workspace with --repos-dir packages
+(cd "$TEST_KPKG_WS" && ./rnex init -y --repos-dir packages "$TEST_KPKG_WS" >/dev/null)
+
+# Enable karpathy-llm plugin
+(cd "$TEST_KPKG_WS" && ./rnex plugin enable karpathy-llm >/dev/null)
+
+# Prepare a member repo
+_pkg_remote="$TEST_TMP/pkg-remote-core"
+mkdir -p "$_pkg_remote"
+git -C "$_pkg_remote" init -q
+cat <<'CORE_README' > "$_pkg_remote/README.md"
+# Core Package
+
+Shared utility functions and common domain models.
+CORE_README
+git -C "$_pkg_remote" add .
+git -C "$_pkg_remote" commit -q -m "initial commit"
+
+# Add core repo into packages/
+(cd "$TEST_KPKG_WS" && ./rnex repo add "$_pkg_remote" --name core >/dev/null)
+[ -d "$TEST_KPKG_WS/packages/core" ] || { fail "core repo not in packages/core"; exit 1; }
+
+# Run wiki ingest
+(cd "$TEST_KPKG_WS" && ./rnex plugin karpathy-llm ingest >/dev/null)
+
+# Verify atomic wiki page created and references packages/core/README.md in sources
+[ -f "$TEST_KPKG_WS/wiki/repo-core.md" ] || { fail "repo-core.md missing after ingest"; exit 1; }
+grep -q 'sources:[ ]*\["packages/core/README\.md"\]' "$TEST_KPKG_WS/wiki/repo-core.md" || { fail "repo-core.md does not reference packages/core/README.md in sources"; exit 1; }
+grep -q "Core Package" "$TEST_KPKG_WS/wiki/repo-core.md" || { fail "repo-core.md missing title Core Package"; exit 1; }
+
+# Verify index.md and _log.md
+grep -q "repo-core\.md" "$TEST_KPKG_WS/wiki/index.md" || { fail "repo-core.md missing from wiki/index.md"; exit 1; }
+grep -q "packages/core/README\.md" "$TEST_KPKG_WS/wiki/_log.md" || { fail "_log.md missing packages/core/README.md entry"; exit 1; }
+
+# Run wiki lint and verify clean pass without broken source warnings
+_lint_out="$(cd "$TEST_KPKG_WS" && ./rnex plugin karpathy-llm lint 2>&1)"
+echo "$_lint_out" | grep -q "Wiki lint passed" || { fail "Wiki lint did not pass: $_lint_out"; exit 1; }
+! echo "$_lint_out" | grep -q "references broken source file" || { fail "Wiki lint reported broken source file: $_lint_out"; exit 1; }
+pass
+
 if [ "${_STANDALONE_RUN:-0}" -eq 1 ]; then
   report_results
 fi

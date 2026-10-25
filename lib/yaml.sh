@@ -66,6 +66,78 @@ yaml_get_top_level() {
   fi
 }
 
+# Read the top-level repos_dir setting from .local.rnex.yaml or rnex.yaml.
+# Normalizes relative paths (stripping leading './' and trailing slashes).
+# Enforces safe directory paths (preventing path traversal escaping workspace root).
+# Defaults to "repos" if unset, empty, or invalid.
+yaml_get_repos_dir() {
+  _yaml_resolve_files
+  _ygrd_val="$(_yaml_top_level_from_file "$_wly" "repos_dir")"
+  [ -n "$_ygrd_val" ] || _ygrd_val="$(_yaml_top_level_from_file "$_wy" "repos_dir")"
+
+  # Strip leading whitespace
+  while :; do
+    case "$_ygrd_val" in
+      [[:space:]]*) _ygrd_val="${_ygrd_val#[[:space:]]}" ;;
+      *) break ;;
+    esac
+  done
+  # Strip trailing whitespace
+  while :; do
+    case "$_ygrd_val" in
+      *[[:space:]]) _ygrd_val="${_ygrd_val%[[:space:]]}" ;;
+      *) break ;;
+    esac
+  done
+
+  # Strip leading './'
+  while :; do
+    case "$_ygrd_val" in
+      ./*) _ygrd_val="${_ygrd_val#./}" ;;
+      *) break ;;
+    esac
+  done
+
+  # Strip trailing '/'
+  while [ "$_ygrd_val" != "${_ygrd_val%/}" ] && [ -n "${_ygrd_val%/}" ]; do
+    _ygrd_val="${_ygrd_val%/}"
+  done
+
+  # Check if empty or '.'
+  if [ -z "$_ygrd_val" ] || [ "$_ygrd_val" = "." ]; then
+    _ygrd_val="repos"
+  fi
+
+  # Security / validation: reject absolute paths or path traversal escaping workspace root
+  case "$_ygrd_val" in
+    /*|*..*|../*|*/../*|*/..)
+      _ygrd_val="repos"
+      ;;
+  esac
+
+  printf '%s' "$_ygrd_val"
+}
+
+# Return the absolute path to the member repositories root folder
+get_repos_root() {
+  _grr_dir="${NEXUS_DIR:-${RNEX_ROOT:-.}}"
+  printf '%s/%s' "$_grr_dir" "$(yaml_get_repos_dir)"
+}
+
+# Resolve filesystem path for a specific member repository
+get_repo_path() {
+  _grp_name="$1"
+  _grp_custom="$(yaml_get "$_grp_name" "path" 2>/dev/null || true)"
+  if [ -n "$_grp_custom" ]; then
+    case "$_grp_custom" in
+      /*) printf '%s' "$_grp_custom" ;;
+      *)  printf '%s/%s' "${NEXUS_DIR:-${RNEX_ROOT:-.}}" "$_grp_custom" ;;
+    esac
+  else
+    printf '%s/%s' "$(get_repos_root)" "$_grp_name"
+  fi
+}
+
 # Extract all item keys defined under a given top-level section (e.g., 'repos' or 'plugins').
 # Handles map items ("  name:") and list items ("  - name").
 _yaml_section_keys() {

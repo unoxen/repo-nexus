@@ -63,9 +63,18 @@ fi
 [ -n "$_raw" ] || _raw="docs"
 _raw_path="$_root/$_raw"
 
-REPOS_DIR="$(yaml_get_top_level "repos_dir" "./repos" 2>/dev/null || printf './repos')"
-_clean_repos="$(printf '%s' "$REPOS_DIR" | sed -e 's#^[[:space:]]*##' -e 's#[[:space:]]*$##' -e 's#^\./##' -e 's#^/##' -e 's#/$##')"
+if command -v yaml_get_repos_dir >/dev/null 2>&1; then
+  _clean_repos="$(yaml_get_repos_dir 2>/dev/null)"
+elif [ -n "${RNEX_REPOS_DIR:-}" ]; then
+  _clean_repos="$RNEX_REPOS_DIR"
+elif [ -n "${REPOS_DIR_REL:-}" ]; then
+  _clean_repos="$REPOS_DIR_REL"
+else
+  _clean_repos="$(yaml_get_top_level "repos_dir" "repos" 2>/dev/null || printf 'repos')"
+fi
+_clean_repos="$(printf '%s' "$_clean_repos" | sed -e 's#^[[:space:]]*##' -e 's#[[:space:]]*$##' -e 's#^\./##' -e 's#^/##' -e 's#/$##')"
 [ -n "$_clean_repos" ] || _clean_repos="repos"
+REPOS_DIR="${REPOS_DIR:-$_root/$_clean_repos}"
 
 # Ensure the configured wiki directory and baseline control files (index.md, hot.md, _log.md) exist.
 kl_ensure_wiki_files() {

@@ -30,11 +30,11 @@ Use this skill when inspecting, testing, building, or modifying multiple member 
 
 3. **Handle Repository Boundaries & Dependency Order:**
    - If changes span multiple repositories, determine dependency relationships (e.g., shared packages/libraries first, consumer services second).
-   - Use targeted directory execution (`cd repos/<name> && ...`) when only a subset of repositories is involved.
+   - Use targeted directory execution (`cd <repos_dir>/<name> && ...`, defaulting to `cd repos/<name> && ...`) when only a subset of repositories is involved.
 
 4. **Independent Commits & Git Hygiene:**
    - Commit changes independently within each member repository root:
      ```sh
-     cd repos/<name> && git add -A && git commit -m "feat: <message>"
+     cd <repos_dir>/<name> && git add -A && git commit -m "feat: <message>"
      ```
    - Never stage or commit member repository files directly from the workspace root.

@@ -12,11 +12,11 @@ Use this skill when auditing workspace health, verifying git tracking status acr
 
 1. **Workspace Health Audit:**
    - Run `rnex status` to inspect:
-     - Configuration files (`rnex.yaml` and `.local.rnex.yaml`).
+     - Configuration files (`rnex.yaml` and `.local.rnex.yaml`, including configured `repos_dir`).
      - Universal routing directives in `AGENTS.md`.
      - Compiled AI context at `.rnex/ai-instructions.md`.
      - Multi-root workspace mapping (`.code-workspace`).
-     - Git ignores (`repos/` ignored, local configs ignored, search un-ignore active).
+     - Git ignores (`<repos_dir>/` ignored, local configs ignored, search un-ignore active).
      - Active plugins and member repository registry.
 
 2. **Multi-Repository Git Status Audit:**

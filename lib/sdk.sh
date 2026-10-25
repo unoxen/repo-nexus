@@ -39,6 +39,17 @@ if ! command -v log_ok >/dev/null 2>&1; then
   fi
 fi
 
+# Export workspace repos directory variables for subshells, plugins, and hooks
+if command -v yaml_get_repos_dir >/dev/null 2>&1; then
+  RNEX_REPOS_DIR="$(yaml_get_repos_dir 2>/dev/null || printf 'repos')"
+else
+  RNEX_REPOS_DIR="${REPOS_DIR_REL:-repos}"
+fi
+[ -n "$RNEX_REPOS_DIR" ] || RNEX_REPOS_DIR="repos"
+export RNEX_REPOS_DIR
+REPOS_DIR="${REPOS_DIR:-${RNEX_ROOT:-.}/$RNEX_REPOS_DIR}"
+export REPOS_DIR
+
 # Minimal logging & boolean fallbacks if lib/core.sh is not present on disk
 if ! command -v log_ok >/dev/null 2>&1; then
   log_ok()   { [ "${RNEX_QUIET:-0}" -eq 1 ] || [ "${_sync_quiet:-0}" -eq 1 ] && return 0; printf '[✓] %s\n' "$1"; }
@@ -315,7 +326,9 @@ ensure_provider_ignore() {
   _epi_file="$1"
   _epi_comment="${2:-Repo Nexus file discovery un-ignore for member repos}"
   _epi_created_msg="${3:-Created $(basename "$_epi_file")}"
-  _epi_entry="${4:-!repos/*}"
+  _epi_rd="$(yaml_get_repos_dir 2>/dev/null || printf '%s' "${REPOS_DIR_REL:-repos}")"
+  [ -n "$_epi_rd" ] || _epi_rd="repos"
+  _epi_entry="${4:-!${_epi_rd}/*}"
 
   _sec_tmp="$(mktemp)"
   cat > "$_sec_tmp" <<EPI_EOF
@@ -354,9 +367,9 @@ EPI_EOF
 
   # 2. Upgrade legacy un-delimited ignore file while preserving custom user rules
   _user_tmp="$(mktemp)"
-  awk '
+  awk -v erd="$_epi_rd" '
     /^[ ]*#.*(Cursor|Gemini|Repo Nexus|member repos)/ { next }
-    $0 == "!repos/*" { next }
+    $0 == "!repos/*" || $0 == ("!" erd "/*") { next }
     { lines[++n] = $0 }
     END {
       start = 1
@@ -385,6 +398,8 @@ rnex_ignore_ensure() {
 clean_provider_ignore() {
   _file="$1"
   [ -f "$_file" ] || return 0
+  _cpi_rd="$(yaml_get_repos_dir 2>/dev/null || printf '%s' "${REPOS_DIR_REL:-repos}")"
+  [ -n "$_cpi_rd" ] || _cpi_rd="repos"
 
   if grep -qFx -- "${IGNORE_MARKER_START:-# REPO-NEXUS:START}" "$_file" 2>/dev/null; then
     _non_rnex="$(awk -v s="${IGNORE_MARKER_START:-# REPO-NEXUS:START}" -v e="${IGNORE_MARKER_END:-# REPO-NEXUS:END}" '
@@ -408,15 +423,25 @@ clean_provider_ignore() {
     return 0
   fi
 
-  if grep -q '!repos/\*' "$_file" 2>/dev/null; then
-    _non_rnex="$(grep -vE '(^[ ]*#.*(Cursor|Gemini|Repo Nexus|member repos)|!repos/\*)' "$_file" 2>/dev/null | sed -e '/^[[:space:]]*$/d' -e '/^[[:space:]]*#/d')"
+  if grep -q '!repos/\*' "$_file" 2>/dev/null || grep -q "!${_cpi_rd}/\*" "$_file" 2>/dev/null; then
+    _non_rnex="$(awk -v erd="$_cpi_rd" '
+      /^[ ]*#.*(Cursor|Gemini|Repo Nexus|member repos)/ { next }
+      $0 == "!repos/*" || $0 == ("!" erd "/*") { next }
+      /^[[:space:]]*$/ { next }
+      { print }
+    ' "$_file")"
+
     if [ -z "$_non_rnex" ]; then
       rm -f "$_file"
       [ "${RNEX_QUIET:-0}" -eq 0 ] && [ "${_sync_quiet:-0}" -eq 0 ] && log_ok "Removed $(basename "$_file")"
     else
       _tmp="$(mktemp)"
-      grep -vE '(^[ ]*#.*(Cursor|Gemini|Repo Nexus|member repos)|!repos/\*)' "$_file" > "$_tmp" && mv "$_tmp" "$_file"
-      [ "${RNEX_QUIET:-0}" -eq 0 ] && [ "${_sync_quiet:-0}" -eq 0 ] && log_ok "Removed !repos/* un-ignore from $(basename "$_file")"
+      awk -v erd="$_cpi_rd" '
+        /^[ ]*#.*(Cursor|Gemini|Repo Nexus|member repos)/ { next }
+        $0 == "!repos/*" || $0 == ("!" erd "/*") { next }
+        { print }
+      ' "$_file" > "$_tmp" && mv "$_tmp" "$_file"
+      [ "${RNEX_QUIET:-0}" -eq 0 ] && [ "${_sync_quiet:-0}" -eq 0 ] && log_ok "Removed un-ignore rule from $(basename "$_file")"
     fi
   fi
 }

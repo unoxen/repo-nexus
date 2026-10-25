@@ -155,11 +155,9 @@ _load_workspace_version() {
 }
 
 _load_repos_dir() {
-  _rd="$(yaml_get_top_level "repos_dir" "./repos")"
-  case "$_rd" in
-    /*) REPOS_DIR="$_rd" ;;
-    *)  REPOS_DIR="$NEXUS_DIR/$_rd" ;;
-  esac
+  REPOS_DIR_REL="$(yaml_get_repos_dir)"
+  REPOS_DIR="$(get_repos_root)"
+  export REPOS_DIR_REL REPOS_DIR
 }
 
 _load_code_workspace() {
@@ -354,14 +352,16 @@ upgrade_workspace_config() {
   fi
 
   if ! grep -q '^[ ]*git:[ ]*$' "$_f" 2>/dev/null; then
+    _ard="$(yaml_get_repos_dir 2>/dev/null || printf 'repos')"
+    [ -n "$_ard" ] || _ard="repos"
     _tmp="$(mktemp)"
-    awk '
+    awk -v ard="$_ard" '
       BEGIN { inserted=0 }
       /^[ ]*(plugins|repos):/ && !inserted {
         print "# Git Integration (Ignore rules & Git hooks)"
         print "git:"
         print "  ignore:"
-        print "    - \"repos/\""
+        print "    - \"" ard "/\""
         print "    - \"**/.rnex*/\""
         print "    - \"**/rnex*/\""
         print "  hooks:"
@@ -388,7 +388,7 @@ upgrade_workspace_config() {
           print "# Git Integration (Ignore rules & Git hooks)"
           print "git:"
           print "  ignore:"
-          print "    - \"repos/\""
+          print "    - \"" ard "/\""
           print "    - \"**/.rnex*/\""
           print "    - \"**/rnex*/\""
           print "  hooks:"

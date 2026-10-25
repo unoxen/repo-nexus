@@ -30,6 +30,10 @@ _rnex_completions() {
       COMPREPLY=( $(compgen -W "$repo_subcommands" -- "$cur") )
       return 0
       ;;
+    init)
+      COMPREPLY=( $(compgen -W "-y --yes --repos-dir --code-workspace --hooks --no-hooks --copilot --claude --gemini --codex --cursor --windsurf --karpathy" -- "$cur") )
+      return 0
+      ;;
     sync)
       COMPREPLY=( $(compgen -W "-y --yes -q --quiet --upgrade" -- "$cur") )
       return 0
@@ -122,6 +126,11 @@ _rnex() {
             _describe -t repos 'repository' repos
           fi
           ;;
+        init)
+          local -a init_opts
+          init_opts=('(-y --yes)'{-y,--yes}'[Automatically answer yes to prompts]' '--repos-dir[Directory for member repository clones]:dir:_files -/' '--code-workspace[Configure multi-root workspace file]' '--hooks[Configure automated git hooks]' '--no-hooks[Disable automated git hooks]' '--copilot[Enable Copilot plugin]' '--claude[Enable Claude plugin]' '--gemini[Enable Gemini plugin]' '--codex[Enable Codex plugin]' '--cursor[Enable Cursor plugin]' '--windsurf[Enable Windsurf plugin]' '--karpathy[Enable Karpathy LLM Wiki plugin]')
+          _describe -t init_opts 'init option' init_opts
+          ;;
         sync)
           local -a sync_opts
           sync_opts=('(-y --yes)'{-y,--yes}'[Automatically answer yes to prompts]' '(-q --quiet)'{-q,--quiet}'[Suppress non-error output]' '--upgrade[Upgrade workspace configuration schema]')
@@ -161,6 +170,10 @@ EOF
     fish)
       cat <<'EOF'
 complete -c rnex -n "__fish_use_subcommand" -a init -d "Initialize a new workspace"
+complete -c rnex -n "__fish_seen_subcommand_from init" -l repos-dir -d "Directory for member repository clones"
+complete -c rnex -n "__fish_seen_subcommand_from init" -l code-workspace -d "Configure multi-root workspace file"
+complete -c rnex -n "__fish_seen_subcommand_from init" -l hooks -d "Configure automated git hooks"
+complete -c rnex -n "__fish_seen_subcommand_from init" -l no-hooks -d "Disable automated git hooks"
 complete -c rnex -n "__fish_use_subcommand" -a install -d "Install rnex globally"
 complete -c rnex -n "__fish_use_subcommand" -a repo -d "Member repository management"
 complete -c rnex -n "__fish_seen_subcommand_from repo" -a "add remove set clone status exec list"

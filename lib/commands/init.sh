@@ -16,12 +16,21 @@ cmd_init() {
   _cli_hooks=""
   _cli_no_hooks=0
   _cli_plugins=""
+  _cli_repos_dir=""
 
   while [ $# -gt 0 ]; do
     case "$1" in
       -y|--yes) _non_interactive=1 ;;
       --hooks) _cli_hooks="true" ;;
       --no-hooks) _cli_no_hooks=1; _cli_hooks="false" ;;
+      --repos-dir|--repos_dir)
+        shift
+        [ -n "${1:-}" ] || die "Option $1 requires a directory path"
+        _cli_repos_dir="$1"
+        ;;
+      --repos-dir=*|--repos_dir=*)
+        _cli_repos_dir="${1#*=}"
+        ;;
       --karpathy) _cli_plugins="${_cli_plugins:+$_cli_plugins }karpathy-llm" ;;
       --no-karpathy) _cli_plugins="$(printf '%s' " $_cli_plugins " | sed -e 's/ karpathy-llm / /g' -e 's/^ *//;s/ *$//')" ;;
       --plugin|--enable-plugin)
@@ -123,9 +132,21 @@ cmd_init() {
       fi
     done
 
+    _init_repos_dir="${_cli_repos_dir:-repos}"
+    while :; do
+      case "$_init_repos_dir" in
+        ./*) _init_repos_dir="${_init_repos_dir#./}" ;;
+        *) break ;;
+      esac
+    done
+    while [ "$_init_repos_dir" != "${_init_repos_dir%/}" ] && [ -n "${_init_repos_dir%/}" ]; do
+      _init_repos_dir="${_init_repos_dir%/}"
+    done
+    [ -n "$_init_repos_dir" ] || _init_repos_dir="repos"
+
     _existing_repos=""
-    if [ -d "$_init_dir/repos" ]; then
-      for _d in "$_init_dir/repos"/*; do
+    if [ -d "$_init_dir/$_init_repos_dir" ]; then
+      for _d in "$_init_dir/$_init_repos_dir"/*; do
         [ -d "$_d" ] || continue
         _r="$(basename "$_d")"
         case "$_r" in
@@ -156,7 +177,7 @@ cmd_init() {
 version: $RNEX_VERSION
 
 # Directory for member repository clones
-repos_dir: ./repos
+repos_dir: "$_init_repos_dir"
 
 # VS Code / Cursor multi-root workspace file (default: false; e.g. true or workspace.code-workspace)
 code_workspace: ${_cli_code_workspace:-false}
@@ -164,7 +185,7 @@ code_workspace: ${_cli_code_workspace:-false}
 # Git Integration (Ignore rules & Git hooks)
 git:
   ignore:
-    - "repos/"
+    - "$_init_repos_dir/"
     - "**/.rnex*/"
     - "**/rnex*/"
   hooks:
@@ -197,7 +218,9 @@ YAML_EOF
   reconcile_ai_instructions_files "$_init_dir"
 
   # ---- 3. Create repos directory with .gitkeep -----------------------------
-  _repos_dir="$_init_dir/repos"
+  _active_rd="$(yaml_get_repos_dir 2>/dev/null || printf '%s' "${_init_repos_dir:-repos}")"
+  [ -n "$_active_rd" ] || _active_rd="${_init_repos_dir:-repos}"
+  _repos_dir="$_init_dir/$_active_rd"
   mkdir -p "$_repos_dir"
   [ -f "$_repos_dir/.gitkeep" ] || touch "$_repos_dir/.gitkeep"
 
@@ -217,7 +240,7 @@ YAML_EOF
   _load_code_workspace "$_cli_code_workspace"
   _cw_name="$CODE_WORKSPACE_FILE"
   if [ -n "$_cw_name" ]; then
-    REPOS_DIR="$_init_dir/repos"
+    REPOS_DIR="$_repos_dir"
     sync_code_workspace
   fi
   REPOS_DIR="$_orig_repos"
@@ -234,7 +257,7 @@ YAML_EOF
   if [ "$_config_created" -eq 1 ]; then
     printf '\n'
     log_ok "Initialized Repo Nexus workspace at ${_BOLD}$_init_dir${_NC}"
-    _created_items="$RNEX_CONFIG_FILE, .rnex/, and repos/"
+    _created_items="$RNEX_CONFIG_FILE, .rnex/, and ${_active_rd}/"
     [ -n "$_cw_name" ] && _created_items="$_created_items (and $_cw_name)"
     log_dim "Created $_created_items"
     printf '\n'

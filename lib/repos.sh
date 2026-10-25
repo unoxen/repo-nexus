@@ -32,20 +32,12 @@ repo_name_from_path() {
 # If a custom "path:" is declared in configuration, it is resolved relative to NEXUS_DIR
 # (or kept absolute if it starts with /). Otherwise, defaults to "$REPOS_DIR/<name>".
 resolve_repo_path() {
-  _name="$1"
-  _raw_path="$(yaml_get "$_name" "path")"
-  if [ -n "$_raw_path" ]; then
-    case "$_raw_path" in
-      /*) printf '%s' "$_raw_path" ;;
-      *)  printf '%s/%s' "$NEXUS_DIR" "$_raw_path" ;;
-    esac
-  else
-    printf '%s/%s' "$REPOS_DIR" "$_name"
-  fi
+  get_repo_path "$1"
 }
 
 # Ensure the repositories root folder exists on disk (creates directory if missing).
 ensure_repos_dir() {
+  [ -n "$REPOS_DIR" ] || REPOS_DIR="$(get_repos_root)"
   mkdir -p "$REPOS_DIR"
   [ -f "$REPOS_DIR/.gitkeep" ] || touch "$REPOS_DIR/.gitkeep"
 }

@@ -39,13 +39,13 @@ In a Repo Nexus workspace, independent repositories are organized into `./repos/
    - Member repositories are autonomous projects. Do not introduce cross-repository source imports or shared runtime dependencies unless an explicit monorepo architecture is configured.
 
 2. **Member .rnex Directory Routing:**
-   - Member repositories may contain an `.rnex/` directory (e.g. `repos/<name>/.rnex/`) containing repository-specific documents, instructions, rules, workflows, and scripts. Coding assistants must inspect this directory for member-specific instructions.
-   - Run git operations (commits, branches, pushes) directly within the respective member repository root (`repos/<name>/`).
+   - Member repositories may contain an `.rnex/` directory (e.g. `<repos_dir>/<name>/.rnex/`) containing repository-specific documents, instructions, rules, workflows, and scripts. Coding assistants must inspect this directory for member-specific instructions.
+   - Run git operations (commits, branches, pushes) directly within the respective member repository root (`<repos_dir>/<name>/`).
 
 3. **Context Economy:**
    - Do not redundantly read entire files or directory trees when targeted symbol lookups or line ranges suffice.
    - Rely on active workspace context, indexing, and compiled documentation rather than re-scanning raw files repeatedly.
 
 4. **Read-Only Intake & Source Directories:**
-   - Intake sources (`plugins.karpathy-llm.sources`, default: `docs`, `repos/**/README.md`) and `./repos/` are strictly read-only inputs during wiki operations. Never create, copy, or modify files inside configured sources; write generated output exclusively inside `wiki_dir` (`wiki/`).
+   - Intake sources (`plugins.karpathy-llm.sources`, default: `docs`, `repos/**/README.md`) and member repositories (`./<repos_dir>/`, default: `./repos/`) are strictly read-only inputs during wiki operations. Never create, copy, or modify files inside configured sources; write generated output exclusively inside `wiki_dir` (`wiki/`).
 

@@ -66,9 +66,11 @@ cmd_status() {
   fi
 
   _gi="$NEXUS_DIR/.gitignore"
+  _repos_dir_name="$(yaml_get_repos_dir 2>/dev/null || printf 'repos')"
+  [ -n "$_repos_dir_name" ] || _repos_dir_name="repos"
   _gi_repos=0; _gi_local=0; _gi_has_counter=0; _gi_has_rnex=0; _gi_has_markers=0; _gi_custom_ok=1
   if [ -f "$_gi" ]; then
-    grep -q '^repos' "$_gi" 2>/dev/null && _gi_repos=1
+    (grep -q "^${_repos_dir_name}/" "$_gi" 2>/dev/null || grep -q "^${_repos_dir_name}\*" "$_gi" 2>/dev/null || grep -q '^repos' "$_gi" 2>/dev/null) && _gi_repos=1
     grep -qF "$RNEX_LOCAL_CONFIG_FILE" "$_gi" 2>/dev/null && _gi_local=1
     grep -q "lint_trigger_counter" "$_gi" 2>/dev/null && _gi_has_counter=1
     grep -q '\*\*/\.rnex\*/' "$_gi" 2>/dev/null && _gi_has_rnex=1
@@ -91,9 +93,9 @@ cmd_status() {
   fi
 
   if [ "$_gi_repos" -eq 1 ] && [ "$_gi_local" -eq 1 ] && [ "$_gi_has_counter" -eq 0 ] && [ "$_gi_has_rnex" -eq 1 ] && [ "$_gi_has_markers" -eq 1 ] && [ "$_gi_custom_ok" -eq 1 ]; then
-    printf '  %b✓%b Git Ignore:    repos/, %s, and **/.rnex*/ ignored in .gitignore\n' "$_G" "$_NC" "$RNEX_LOCAL_CONFIG_FILE"
+    printf '  %b✓%b Git Ignore:    %s/, %s, and **/.rnex*/ ignored in .gitignore\n' "$_G" "$_NC" "$_repos_dir_name" "$RNEX_LOCAL_CONFIG_FILE"
   else
-    printf '  %b!%b Git Ignore:    recommend running "rnex sync" to update .gitignore (repos/, local configs)\n' "$_Y" "$_NC"
+    printf '  %b!%b Git Ignore:    recommend running "rnex sync" to update .gitignore (%s/, local configs)\n' "$_Y" "$_NC" "$_repos_dir_name"
   fi
 
   _git_dir=""

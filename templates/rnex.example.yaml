@@ -12,7 +12,9 @@
 version: "1"
 name: "acme-platform"
 description: "Multi-repo platform workspace and shared AI context"
-repos_dir: "./repos"
+# Directory where member repositories are cloned (default: "repos").
+# Automatically added to workspace .gitignore and un-ignored in .ignore.
+repos_dir: "repos"
 code_workspace: "acme.code-workspace"
 
 # Git Integration (Ignore rules & Git hooks)

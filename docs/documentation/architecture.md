@@ -110,8 +110,8 @@ A fully initialized Repo Nexus workspace is structured as follows:
 my-workspace/
 ├── .git/                            # Meta-repo Git tracking (workspace config & docs only)
 ├── .gitignore                       # Managed deterministically via git.ignore
-├── .ignore                          # Un-ignores repos/* for ripgrep, Claude Code, and search tools
-├── rnex.yaml                        # Team-wide workspace declaration
+├── .ignore                          # Un-ignores <repos_dir>/* for ripgrep, Claude Code, and search tools
+├── rnex.yaml                        # Team-wide workspace declaration (includes repos_dir)
 ├── .local.rnex.yaml                 # (Optional) Developer workstation overrides (gitignored)
 │
 ├── .rnex/                           # Workspace orchestration directory (gitignored)
@@ -120,7 +120,7 @@ my-workspace/
 │   ├── plugins/                     # Enabled plugin instructions, skills, and agents
 │   └── skills/                      # Core workspace agentic skills (clone-sync, batch-exec, etc.)
 │
-├── repos/                           # Autonomous member repository clones (gitignored)
+├── repos/                           # Member repository clones in configured repos_dir (default: repos/)
 │   ├── backend/                     # Standard Git repository (remote: api.git)
 │   │   ├── .git/
 │   │   └── src/
@@ -136,20 +136,20 @@ my-workspace/
 
 ## Core Architectural Pillars
 
-### 1. Member Repository Isolation & Autonomous Git Roots (`./repos/`)
-Member repositories reside in `./repos/<name>/`. Each repository retains its own independent `.git` directory, remote tracking branches, tags, and commit history.
+### 1. Member Repository Isolation & Autonomous Git Roots (`./<repos_dir>/`)
+Member repositories reside in `./<repos_dir>/<name>/` (default: `./repos/<name>/`), dynamically configurable via top-level `repos_dir` in `rnex.yaml` or `.local.rnex.yaml` (or via `rnex init --repos-dir <dir>`). Each repository retains its own independent `.git` directory, remote tracking branches, tags, and commit history.
 
-::: warning Never Commit `repos/` to Meta-Repo
+::: warning Never Commit Member Repositories to Meta-Repo
 Repo Nexus automatically configures `.gitignore` in the meta-repo root with:
 ```text
-repos/
+<repos_dir>/
 **/.rnex*/
 **/rnex*/
 ```
 Member repository files are never tracked or committed to the parent meta-repo.
 :::
 
-To ensure code search tools (ripgrep, Claude Code, VS Code search) and AI indexers (Cursor codebase indexing, Gemini CLI) can discover and index member code across repos, Repo Nexus automatically maintains un-ignore files (`.ignore`, `.cursorignore`, `.geminiignore`) with `!repos/*`. This allows AI assistants and search engines to index code while meta-repo Git remains completely clean.
+To ensure code search tools (ripgrep, Claude Code, VS Code search) and AI indexers (Cursor codebase indexing, Gemini CLI) can discover and index member code across repos, Repo Nexus automatically maintains un-ignore files (`.ignore`, `.cursorignore`, `.geminiignore`) with `!<repos_dir>/*`. This allows AI assistants and search engines to index code while meta-repo Git remains completely clean.
 
 ### 2. The `.rnex/` Orchestration Directory
 The `.rnex/` directory encapsulates active plugins, automation hooks, and agentic skills:
@@ -170,4 +170,4 @@ Any custom guidelines, rules, or documentation authored outside the `<!-- REPO-N
 :::
 
 ### 4. Multi-Root IDE Workspaces
-When enabled via `--code-workspace`, Repo Nexus generates a VS Code / Cursor `.code-workspace` file that automatically registers the workspace root and every active member repository in `./repos/`. Opening the workspace file opens all repositories in a single unified editor window.
+When enabled via `--code-workspace`, Repo Nexus generates a VS Code / Cursor `.code-workspace` file that automatically registers the workspace root and every active member repository in `./<repos_dir>/`. Opening the workspace file opens all repositories in a single unified editor window.

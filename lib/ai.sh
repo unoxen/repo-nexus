@@ -11,12 +11,15 @@ GITIGNORE_MARKER_END="# REPO-NEXUS:END"
 
 # Emit the delimited Repo Nexus .gitignore section synced with git.ignore configuration.
 _build_rnex_gitignore_section() {
+  _active_repos_dir="$(yaml_get_repos_dir 2>/dev/null || printf 'repos')"
+  [ -n "$_active_repos_dir" ] || _active_repos_dir="repos"
   cat <<GI_SECTION_EOF
 $GITIGNORE_MARKER_START
 # Managed by Repo Nexus (rnex) — synced with git.ignore in workspace configuration
 # Member repos (managed by rnex, ignored at workspace level)
-repos/*
-!repos/.gitkeep
+${_active_repos_dir}/
+${_active_repos_dir}/*
+!${_active_repos_dir}/.gitkeep
 
 # Recursive Repo Nexus directories (trailing slashes prevent ignoring rnex executable or rnex.yaml)
 **/.rnex*/
@@ -36,7 +39,7 @@ GI_SECTION_EOF
     printf '%s\n' "$_custom_ignores" | while IFS= read -r _ci || [ -n "$_ci" ]; do
       [ -n "$_ci" ] || continue
       case "$_ci" in
-        "repos/"|"repos/*"|"!repos/.gitkeep"|"**/.rnex*/"|"**/rnex*/"|".rnex*/"|"rnex*/"|"$RNEX_LOCAL_CONFIG_FILE"|".rnex.local.yaml")
+        "repos/"|"repos/*"|"!repos/.gitkeep"|"${_active_repos_dir}/"|"${_active_repos_dir}/*"|"!${_active_repos_dir}/.gitkeep"|"**/.rnex*/"|"**/rnex*/"|".rnex*/"|"rnex*/"|"$RNEX_LOCAL_CONFIG_FILE"|".rnex.local.yaml")
           continue
           ;;
       esac
@@ -70,10 +73,12 @@ reconcile_gitignore() {
   _gi="$_dir/.gitignore"
   _sec_tmp="$(mktemp)"
   _build_rnex_gitignore_section > "$_sec_tmp"
+  _active_repos_dir="$(yaml_get_repos_dir 2>/dev/null || printf 'repos')"
+  [ -n "$_active_repos_dir" ] || _active_repos_dir="repos"
 
   if [ ! -f "$_gi" ]; then
     mv "$_sec_tmp" "$_gi"
-    log_ok "Created .gitignore (ignoring repos/, recursive .rnex directories, and $RNEX_LOCAL_CONFIG_FILE)"
+    log_ok "Created .gitignore (ignoring ${_active_repos_dir}/, recursive .rnex directories, and $RNEX_LOCAL_CONFIG_FILE)"
   else
     # 1. Strip any legacy lint_trigger_counter entries if present
     if grep -q "lint_trigger_counter" "$_gi" 2>/dev/null; then
@@ -102,13 +107,14 @@ reconcile_gitignore() {
     else
       # 3. Upgrade legacy un-delimited .gitignore or append managed section to existing user .gitignore
       _user_tmp="$(mktemp)"
-      awk -v local_cfg="$RNEX_LOCAL_CONFIG_FILE" '
+      awk -v local_cfg="$RNEX_LOCAL_CONFIG_FILE" -v ard="$_active_repos_dir" '
         /^[ ]*#[ ]*Member repos \(managed by rnex/ { next }
         /^[ ]*#[ ]*Recursive Repo Nexus directories/ { next }
         /^[ ]*#?[ ]*Repo Nexus internal state/ { next }
         /^[ ]*#[ ]*Local machine-specific configuration/ { next }
         /^[ ]*#[ ]*Custom entries from git\.ignore in workspace configuration/ { next }
-        $0 == "repos/*" || $0 == "!repos/.gitkeep" { next }
+        $0 == "repos/*" || $0 == "!repos/.gitkeep" || $0 == "repos/" { next }
+        $0 == (ard "/*") || $0 == ("!" ard "/.gitkeep") || $0 == (ard "/") { next }
         $0 == "**/.rnex*/" || $0 == "**/rnex*/" || $0 == ".rnex*/" || $0 == "rnex*/" { next }
         $0 == ".rnex" || $0 == "rnex" { next }
         $0 == local_cfg || $0 == ".rnex.local.yaml" { next }
@@ -136,7 +142,8 @@ reconcile_gitignore() {
   # Universal search tool ignore file (ripgrep, Claude Code, VS Code, Zed)
   ensure_provider_ignore "$_dir/.ignore" \
     "Member repos (un-ignored for ripgrep, Claude Code, VS Code, and search tools)" \
-    "Created .ignore (un-ignoring member repos for search tools)"
+    "Created .ignore (un-ignoring member repos for search tools)" \
+    "!${_active_repos_dir}/*"
 }
 
 # Clean managed Repo Nexus ignore block from .gitignore, removing file if empty
@@ -320,6 +327,16 @@ When workspace configuration, routing blocks, plugin assets, or member repositor
 Commit and push changes directly within the respective member repository root (`repos/<name>/`). For read-only repositories (`readonly: true`), never commit, edit, or push changes.
 BASE_AI_EOF
   fi
+
+  _active_rd="$(yaml_get_repos_dir 2>/dev/null || printf 'repos')"
+  [ -n "$_active_rd" ] || _active_rd="repos"
+  sed -e "s#\${REPOS_DIR_REL:-repos}#${_active_rd}#g" \
+      -e "s#\${REPOS_DIR_REL}#${_active_rd}#g" \
+      -e "s#\./repos/#./${_active_rd}/#g" \
+      -e "s#\`repos/#\`${_active_rd}/#g" \
+      -e "s#repos/<name>#${_active_rd}/<name>#g" \
+      -e "s#repos/\`#${_active_rd}/\`#g" \
+      "$_out_tmp" > "${_out_tmp}.subst" && mv "${_out_tmp}.subst" "$_out_tmp"
 
   for _p in $(yaml_list_plugins 2>/dev/null || true); do
     [ -n "$_p" ] || continue

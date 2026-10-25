@@ -11,7 +11,7 @@
 
 A **Virtual Meta-Repo** companion for multi-repo workspaces and shared AI context. It organizes independent repositories into a unified workspace and shares lean routing instructions (`AGENTS.md`) **without Git submodules, monorepo migrations, or symlink fragility**.
 
-- **No Git Submodules or Nested Git Collisions**: Member repositories are physically cloned into `./repos/` and strictly ignored by workspace Git. Each repository maintains its own standalone history, remotes, branches, and commits with zero submodule friction.
+- **No Git Submodules or Nested Git Collisions**: Member repositories are physically cloned into `./<repos_dir>/` (default: `./repos/`, configurable via `repos_dir`) and strictly ignored by workspace Git. Each repository maintains its own standalone history, remotes, branches, and commits with zero submodule friction.
 - **Unified Workspace for AI Coding Assistants**: Open one root folder to give Cursor, Claude Code, GitHub Copilot, Codex, or Antigravity complete cross-service visibility.
 - **Two-Level Configuration as Source of Truth**: Shared team manifest in `rnex.yaml` with machine-specific overrides in `.local.rnex.yaml` (highest priority).
 - **One Command Team Onboarding**: Teammates clone the meta-repo and run `rnex clone` to clone and configure all member repos in seconds.
@@ -50,19 +50,19 @@ A **Virtual Meta-Repo** companion for multi-repo workspaces and shared AI contex
 | What It Is | What It Isn't |
 | :--- | :--- |
 | **A lightweight companion utility** (modular pure POSIX `/bin/sh` CLI). | **NOT a replacement for your workspace or tools.** It doesn't replace VS Code, Cursor, JetBrains, or your terminal. |
-| **A Virtual Meta-Repo orchestrator** managing member clones in `./repos/`. | **NOT a build tool or monorepo orchestrator.** It doesn't replace tools like Nx, Turborepo, Cargo, or Gradle. |
+| **A Virtual Meta-Repo orchestrator** managing member clones in `./<repos_dir>/` (default: `./repos/`). | **NOT a build tool or monorepo orchestrator.** It doesn't replace tools like Nx, Turborepo, Cargo, or Gradle. |
 | **Zero Git friction.** Repositories remain normal, autonomous Git repos. | **NOT Git submodules or subtrees.** No `.gitmodules` files, no detached HEADs, no commit coordination lock-in. |
-| **Strictly encapsulated.** Internal rnex assets live exclusively in `.rnex/`. | **NOT invasive.** Member repositories remain clean; workspace-related context is isolated to `repos/<name>/.rnex/`. |
+| **Strictly encapsulated.** Internal rnex assets live exclusively in `.rnex/`. | **NOT invasive.** Member repositories remain clean; workspace-related context is isolated to `<repos_dir>/<name>/.rnex/`. |
 
 ---
 
 ## AGENTS.md Context Sync & Key Principles
 
 1. **Configuration as Single Source of Truth**:
-   Every agent workflow and command starts by reading the configuration files. `.local.rnex.yaml` takes **highest priority** over `rnex.yaml`.
+   Every agent workflow and command starts by reading the configuration files. `.local.rnex.yaml` takes **highest priority** over `rnex.yaml`. Top-level `repos_dir` configures where member repositories reside (default: `repos`).
 
 2. **No Git Submodules (Complete Repository Autonomy)**:
-   Member repositories are cloned directly into `./repos/<name>`. The root workspace `.gitignore` ignores `repos/`, ensuring the workspace repository never tracks or interferes with member Git histories, remotes, branches, or commits.
+   Member repositories are cloned directly into `./<repos_dir>/<name>` (default: `./repos/<name>`). The root workspace `.gitignore` dynamically ignores the configured `repos_dir/`, ensuring the workspace repository never tracks or interferes with member Git histories, remotes, branches, or commits.
 
 3. **Enabled by Default with Two-Level Merging**:
    Member repositories are enabled by default. Developers can selectively disable specific repositories locally in `.local.rnex.yaml` (`enabled: false`) without mutating the shared `rnex.yaml`. Disabled repositories are skipped by `clone` and `exec`.
@@ -71,7 +71,7 @@ A **Virtual Meta-Repo** companion for multi-repo workspaces and shared AI contex
    `AGENTS.md` (and related top-level instruction files) contains no inlined plugin rules or tool boilerplate. It acts solely as a lean navigation router directing AI agents to configuration files, scoped plugins, and member `.rnex/` contexts.
 
 5. **Strict File Encapsulation**:
-   All `rnex`-managed internal files live exclusively in `.rnex/`. Member repositories isolate Repo Nexus assets in `repos/<name>/.rnex/`.
+   All `rnex`-managed internal files live exclusively in `.rnex/`. Member repositories isolate Repo Nexus assets in `<repos_dir>/<name>/.rnex/`.
 
 ---
 

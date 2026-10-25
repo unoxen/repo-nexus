@@ -412,14 +412,17 @@ _src_has_glob() {
 
 # Workspace-relative member repositories directory (default: repos)
 _plugin_repos_rel_dir() {
-  _prd="${REPOS_DIR:-}"
-  if [ -n "$_prd" ]; then
-    _prd="${_prd#"${NEXUS_DIR:-.}"/}"
+  if command -v yaml_get_repos_dir >/dev/null 2>&1; then
+    yaml_get_repos_dir
+  elif [ -n "${REPOS_DIR_REL:-}" ]; then
+    printf '%s' "$REPOS_DIR_REL"
+  elif [ -n "${REPOS_DIR:-}" ]; then
+    _prd="${REPOS_DIR#"${NEXUS_DIR:-.}"/}"
+    while [ "${_prd#./}" != "$_prd" ]; do _prd="${_prd#./}"; done
+    printf '%s' "${_prd%/}"
   else
-    _prd="repos"
+    printf 'repos'
   fi
-  while [ "${_prd#./}" != "$_prd" ]; do _prd="${_prd#./}"; done
-  printf '%s' "${_prd%/}"
 }
 
 # Normalize a source entry: trim whitespace/CR, strip leading ./ and trailing /

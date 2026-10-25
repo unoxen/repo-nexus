@@ -6,16 +6,16 @@ This workspace operates as a **Repo Nexus Virtual Meta-Repo** uniting independen
 
 ### Mandatory Session Startup
 Execute in sequence before task execution:
-1. **Read Configuration First (Highest Priority)**: Read `.local.rnex.yaml` (if present) and `rnex.yaml` to identify active member repositories (`repos/`) and enabled plugins.
+1. **Read Configuration First (Highest Priority)**: Read `.local.rnex.yaml` (if present) and `rnex.yaml` to identify active member repositories (`${REPOS_DIR_REL:-repos}/`) and enabled plugins.
 2. **Plugin & Skill Routing**: Inspect active plugin instructions under `.rnex/plugins/<plugin-name>/`, and core agentic skills under `.rnex/skills/` when relevant.
-3. **Targeted Member Repository Access Only**: Navigate directly to specific files in `repos/<name>/` relevant to the user request. Avoid blind repository-wide scans or unbounded searches across `repos/`.
+3. **Targeted Member Repository Access Only**: Navigate directly to specific files in `${REPOS_DIR_REL:-repos}/<name>/` relevant to the user request. Avoid blind repository-wide scans or unbounded searches across `${REPOS_DIR_REL:-repos}/`.
 
 ## Subagents
 Autonomous subagents are defined under `.rnex/agents/` and active plugin agents under `.rnex/plugins/<plugin-name>/agents/`.
 
-## Member Repositories (`repos/<name>/`)
+## Member Repositories (`${REPOS_DIR_REL:-repos}/<name>/`)
 Each member repository is an autonomous Git repository. Inspect only targeted files required for the task.
-If repository-specific context exists, it is stored under `repos/<name>/.rnex/`.
+If repository-specific context exists, it is stored under `${REPOS_DIR_REL:-repos}/<name>/.rnex/`.
 Repositories marked `readonly: true` in configuration are reference-only: DO NOT modify, write to, or commit changes in read-only repositories; use them strictly for information, code exploration, and schema references.
 
 ## Workspace Maintenance
@@ -24,4 +24,4 @@ When workspace configuration, routing blocks, plugin assets, or member repositor
 - Use `rnex sync -y` to non-destructively apply configuration version upgrades automatically.
 
 ## Git Operations
-Commit and push changes directly within the respective member repository root (`repos/<name>/`). For read-only repositories (`readonly: true`), never commit, edit, or push changes.
+Commit and push changes directly within the respective member repository root (`${REPOS_DIR_REL:-repos}/<name>/`). For read-only repositories (`readonly: true`), never commit, edit, or push changes.

@@ -31,7 +31,7 @@ Settings in `.local.rnex.yaml` take precedence over `rnex.yaml`:
 version: "1"
 name: "acme-platform"
 description: "Multi-repo platform workspace and shared AI context"
-repos_dir: "./repos"
+repos_dir: "repos"
 code_workspace: "acme.code-workspace"
 
 # Git Integration (Ignore rules & Git hooks)
@@ -138,7 +138,7 @@ plugins:
 |:---|:---|:---|:---|
 | `version` | string | `"1"` | Schema version compatibility check. |
 | `name` | string | basename | Workspace identifier. |
-| `repos_dir` | string | `./repos` | Directory where member repositories are cloned. |
+| `repos_dir` | string | `"repos"` | Directory where member repositories are cloned (automatically managed in `.gitignore` and `.ignore`). |
 | `code_workspace`| string / bool | `false` | Path to generated `.code-workspace` file. |
 
 ### Git Integration (`git`)

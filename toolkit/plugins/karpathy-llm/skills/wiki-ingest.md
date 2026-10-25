@@ -19,12 +19,12 @@ rnex plugin karpathy-llm ingest [--source <path>] [--repo <name>] [--quiet]
 ## Ingestion Protocol
 
 1. **Resolve Configuration & Direct Source Paths:**
-   - Read `rnex.yaml` (and `.local.rnex.yaml` if present) to resolve the active `sources` list (default: `["docs", "repos/**/README.md"]`) and `wiki_dir` (default: `wiki`) under `plugins.karpathy-llm`. For backward compatibility, if `sources` is absent, fall back to legacy `raw_dir` (default: `./docs`).
+   - Read `rnex.yaml` (and `.local.rnex.yaml` if present) to resolve the active `sources` list (default: `["docs", "repos/**/README.md"]`), `repos_dir` (default: `repos`), and `wiki_dir` (default: `wiki`) under `plugins.karpathy-llm`. For backward compatibility, if `sources` is absent, fall back to legacy `raw_dir` (default: `./docs`).
    - Direct input scope resolves all files matching `sources` (read-only):
      1. All files in configured directory sources (e.g. `docs/`) with hidden directories and `node_modules` pruned.
-     2. Files matching recursive or single-level glob patterns (e.g. `repos/**/README.md`), excluding disabled repositories (`enabled: false`).
-     3. `./repos/<name>/README.md` for every enabled member repository in `rnex.yaml` / `.local.rnex.yaml` (read-only).
-   - Intake sources and `./repos/` are strictly read-only inputs during wiki operations. Never create, copy, or modify files inside intake sources; write generated output exclusively inside `wiki_dir` (`wiki/`).
+     2. Files matching recursive or single-level glob patterns (e.g. `repos/**/README.md` or `<repos_dir>/**/README.md`), excluding disabled repositories (`enabled: false`).
+     3. `./<repos_dir>/<name>/README.md` (default: `./repos/<name>/README.md`) for every enabled member repository in `rnex.yaml` / `.local.rnex.yaml` (read-only).
+   - Intake sources and member repositories (`./<repos_dir>/`) are strictly read-only inputs during wiki operations. Never create, copy, or modify files inside intake sources; write generated output exclusively inside `wiki_dir` (`wiki/`).
    - Scan direct source paths for source materials not yet recorded in `<wiki_dir>/_log.md`.
    - All source material is read directly in-place without staging copies. Never write directly to `<wiki_dir>/` without ingesting.
 

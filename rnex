@@ -89,6 +89,26 @@ while [ "$i" -lt "$ORIG_COUNT" ]; do
   esac
 done
 
+# Export workspace root and repos directory variables if inside a workspace
+_ws_cand=""
+if [ -n "$CUSTOM_CONFIG" ]; then
+  _cfg_p="$(resolve_path "$CUSTOM_CONFIG" 2>/dev/null || true)"
+  [ -f "$_cfg_p" ] && _ws_cand="$(cd -P "$(dirname "$_cfg_p")" 2>/dev/null && pwd -P)"
+elif [ -f rnex.yaml ]; then
+  _ws_cand="$PWD"
+else
+  _ws_cand="$(find_workspace_dir 2>/dev/null || true)"
+fi
+if [ -n "$_ws_cand" ]; then
+  NEXUS_DIR="${NEXUS_DIR:-$_ws_cand}"
+  RNEX_ROOT="${RNEX_ROOT:-$_ws_cand}"
+  export NEXUS_DIR RNEX_ROOT
+  _yaml_resolve_files
+  REPOS_DIR_REL="$(yaml_get_repos_dir)"
+  REPOS_DIR="$(get_repos_root)"
+  export REPOS_DIR_REL REPOS_DIR
+fi
+
 # Pre-flight auto-sync: reconcile workspace if configuration changed on disk
 case "${1:-help}" in
   list|exec|clone|repo|plugin)
