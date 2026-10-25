@@ -77,6 +77,17 @@ body {
   min-width: 0 !important;
 }
 
+/* Ensure the copyright footer is displayed across all pages, including layouts with a sidebar */
+.VPFooter.has-sidebar {
+  display: block !important;
+}
+
+/* Delete Edit on GitHub link across all documentation pages */
+.edit-info .edit-link,
+.edit-link-button {
+  display: none !important;
+}
+
 /* Desktop viewport transitions and sidebar collapse states */
 @media (min-width: 960px) {
   .VPSidebar {
@@ -94,6 +105,17 @@ body {
   body.rnex-sidebar-collapsed .VPContent.has-sidebar {
     padding-left: 0 !important;
     width: 100% !important;
+  }
+
+  /* Align copyright footer with content area across sidebar expanded and collapsed states */
+  .VPFooter.has-sidebar {
+    padding-left: calc(var(--vp-sidebar-width) + 32px) !important;
+    padding-right: 32px !important;
+    transition: padding-left 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  }
+
+  body.rnex-sidebar-collapsed .VPFooter.has-sidebar {
+    padding-left: 32px !important;
   }
 
   /* Keep title contents cleanly within the sidebar column when expanded */

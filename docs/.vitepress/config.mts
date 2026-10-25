@@ -59,9 +59,11 @@ export default withMermaid(
         alt: 'Repo Nexus Logo'
       },
 
-      editLink: {
-        pattern: 'https://github.com/unoxen/repo-nexus/edit/main/docs/:path',
-        text: 'Edit this page on GitHub'
+      lastUpdated: {
+        text: 'Last updated',
+        formatOptions: {
+          dateStyle: 'short'
+        }
       },
 
       nav: [

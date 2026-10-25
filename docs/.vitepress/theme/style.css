@@ -263,12 +263,8 @@ div[class*='mermaid'] svg {
   height: auto;
   border-radius: 16px;
   filter: drop-shadow(0 12px 28px rgba(16, 185, 129, 0.22));
-  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), filter 0.3s ease;
-}
-
-.rnex-hero-image img:hover {
-  transform: scale(1.04) rotate(1deg);
-  filter: drop-shadow(0 16px 36px rgba(16, 185, 129, 0.3));
+  pointer-events: none;
+  user-select: none;
 }
 
 .rnex-hero-lead {
