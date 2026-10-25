@@ -96,7 +96,7 @@ rnex plugin <name> <command> [options...]
 Plugins are declared under the `plugins:` block in `rnex.yaml` or `.local.rnex.yaml`:
 
 ```yaml
-version: 0.5.8
+version: 0.8.0
 repos_dir: ./repos
 
 plugins:

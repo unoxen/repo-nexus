@@ -28,7 +28,6 @@ _status_has_rnex_skills() {
 # git hooks status, and member repository status.
 cmd_status() {
   require_workspace
-  ensure_repos_dir
 
   while [ $# -gt 0 ]; do
     case "$1" in

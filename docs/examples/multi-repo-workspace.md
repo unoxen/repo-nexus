@@ -27,7 +27,7 @@ my-fullstack-app/
 ## Configuration (`rnex.yaml`)
 
 ```yaml
-version: 0.5.14
+version: 0.8.0
 repos_dir: ./repos
 code_workspace: fullstack.code-workspace
 

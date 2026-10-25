@@ -110,6 +110,16 @@ rnex plugin disable [--local] <name>
 
 ---
 
+### `rnex plugin update`
+
+Re-syncs and updates an enabled plugin (or all enabled plugins when `<name>` is omitted) from the toolkit sources.
+
+```sh
+rnex plugin update [<name>]
+```
+
+---
+
 ### Extensible Plugin Commands (`rnex plugin <name> <command>`)
 
 Plugins can declare and expose native CLI subcommands. Subcommand scripts are located under `.rnex/plugins/<name>/commands/<command>.sh`.

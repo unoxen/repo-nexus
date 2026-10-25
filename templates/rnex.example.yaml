@@ -18,7 +18,7 @@
 # Used by `rnex sync` to safely detect and reconcile configuration
 # and routing instructions across CLI releases.
 #
-version: 0.7.39
+version: 0.8.0
 
 # ------------------------------------------------------------------------------
 # repos_dir — Directory for member repository clones

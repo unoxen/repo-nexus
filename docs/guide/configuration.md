@@ -30,7 +30,7 @@ Below is a complete annotated example of `rnex.yaml`:
 
 ```yaml
 # Workspace Schema Version
-version: 0.5.14
+version: 0.8.0
 
 # Directory where member repositories are cloned (default: ./repos)
 repos_dir: ./repos

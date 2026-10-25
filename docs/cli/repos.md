@@ -48,20 +48,21 @@ rnex repo add --local git@github.com:myorg/exp.git --name experiment
 
 ### `rnex repo remove`
 
-Unregisters a member repository from configuration and deletes its clone from `./repos/<name>`.
+Unregisters a member repository from configuration, and optionally deletes its clone from `./repos/<name>` when `--purge` is passed.
 
 #### Syntax
 ```sh
-rnex repo remove <name> [options]
+rnex repo remove <name> [--purge] [-y|--yes]
 ```
 
 #### Options
-| Option | Type | Default | Description |
-|:---|:---|:---|:---|
-| `--force` | boolean | `false` | Remove repository even if uncommitted changes or untracked files exist. |
+| Option | Shorthand | Type | Default | Description |
+|:---|:---|:---|:---|:---|
+| `--purge` | `-p` | boolean | `false` | Also delete the cloned repository directory (`./repos/<name>`) from disk. |
+| `--yes` | `-y` | boolean | `false` | Non-interactive confirmation flag. |
 
-::: danger Destructive Operation
-`rnex repo remove` deletes the target repository folder from disk. Always ensure you have pushed any working branches or uncommitted changes to remote before removing.
+::: danger Destructive Operation with `--purge`
+`rnex repo remove --purge` deletes the target repository folder from disk. Always ensure you have pushed any working branches or uncommitted changes to remote before purging.
 :::
 
 ---
@@ -82,7 +83,8 @@ rnex repo set <name> [options]
 | `--disable` | boolean | `false` | Disable the repository (exclude from batch clone, execution, and routing). |
 | `--readonly` | boolean | `false` | Mark repository as read-only (information-only for AI assistants). |
 | `--readwrite` | boolean | `false` | Mark repository as read-write. |
-| `--local` | boolean | `false` | Apply setting as a workstation override in `.local.rnex.yaml`. |
+| `--local` | boolean | `true` | Apply setting as a workstation override in `.local.rnex.yaml` (default). |
+| `--global` | boolean | `false` | Apply setting directly to shared team configuration in `rnex.yaml`. |
 
 #### Examples
 ```bash

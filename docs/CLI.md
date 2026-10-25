@@ -4,23 +4,47 @@ Lightweight zero-dependency Virtual Meta-Repo companion for multi-repo workspace
 
 ## Core Commands
 
+### Workspace Lifecycle & System
+
 | Command | Syntax | Description |
 |:---|:---|:---|
 | `init` | `rnex init [-y] [--claude] [--codex] [--copilot] [--gemini] [--cursor] [--windsurf] [--code-workspace]` | Initialize a new workspace, create `rnex.yaml`, Git ignore rules, and AI routing instructions. |
 | `sync` | `rnex sync [-y] [--quiet]` | **Single reconciliation command**: syncs skills, plugins, Git hooks & ignore rules, and compiles `.rnex/ai-instructions.md`. |
 | `status` | `rnex status` | **Strictly read-only**: inspect workspace health, active repos, loaded config, git hooks, sync stamp, and plugins. |
-| `repo add` | `rnex repo add <git-url> [--name <n>] [--branch <b>] [--local]` | Register a new member repository and clone into `./repos/<name>`. |
-| `repo remove` | `rnex repo remove <name> [--force]` | Unregister repository and remove its clone from disk. |
-| `repo set` | `rnex repo set <name> [--enable\|--disable] [--readonly\|--readwrite] [--local]` | Configure state and flags for an individual member repository. |
+| `install` | `rnex install [bin-dir]` | Install and symlink `rnex` and `repo-nexus` into `~/.local/bin` (or custom directory). |
+| `completion` | `rnex completion <bash\|zsh\|fish>` | Generate shell completions with event-driven auto-sync hooks. |
+| `version` | `rnex version` / `rnex -v` | Display the installed version of `rnex`. |
+
+### Single-Repository Management (`rnex repo`)
+
+| Command | Syntax | Description |
+|:---|:---|:---|
+| `repo add` | `rnex repo add <git-url> [--name <n>] [--branch <b>] [--local] [--disabled] [--readonly]` | Register a new member repository and clone into `./repos/<name>`. |
+| `repo remove` | `rnex repo remove <name> [--purge] [-y\|--yes]` | Unregister repository from configuration (pass `--purge` to delete its clone from disk). |
+| `repo set` | `rnex repo set <name> [--enable\|--disable] [--readonly\|--readwrite] [--global\|--local]` | Configure state and flags for an individual member repository. |
 | `repo clone` | `rnex repo clone <name>` | Clone a specific registered member repository into `./repos/<name>`. |
 | `repo status` | `rnex repo status <name>` | Inspect branch, dirty state, and configuration for a specific repository. |
 | `repo exec` | `rnex repo exec <name> <command...>` | Run an arbitrary shell command inside a specific member repository. |
+| `repo list` | `rnex repo list` | Alias for `rnex list` — list all member repositories and their active status. |
+
+### Workspace-Wide Repository & Batch Operations
+
+| Command | Syntax | Description |
+|:---|:---|:---|
 | `clone` | `rnex clone` | Clone all declared member repositories missing from disk. |
-| `exec` | `rnex exec <command...>` | Run an arbitrary shell command across all active member repositories. |
 | `list` | `rnex list` | List all member repositories and their active status. |
-| `plugin` | `rnex plugin <list\|info\|enable\|disable>` / `rnex plugin <name> <cmd> [options]` | Manage plugins or execute plugin-defined CLI subcommands. |
-| `completion` | `rnex completion <bash\|zsh\|fish>` | Generate shell completions with event-driven auto-sync hooks. |
-| `version` | `rnex version` / `rnex -v` | Display the installed version of `rnex`. |
+| `exec` | `rnex exec <command...>` | Run an arbitrary shell command across all active member repositories. |
+
+### Plugins & Extensible Tooling (`rnex plugin`)
+
+| Command | Syntax | Description |
+|:---|:---|:---|
+| `plugin list` | `rnex plugin [list]` | List available, enabled, and disabled plugins. |
+| `plugin info` | `rnex plugin info <name>` | Show detailed metadata, configurable options, and commands for a plugin. |
+| `plugin enable` | `rnex plugin enable [--local] <name>` | Enable a plugin in workspace configuration and sync its assets. |
+| `plugin disable` | `rnex plugin disable [--local] <name>` | Disable a plugin and prune its scoped assets. |
+| `plugin update` | `rnex plugin update [<name>]` | Re-sync and update enabled plugin(s) from toolkit sources. |
+| `plugin <name> <cmd>` | `rnex plugin <name> <cmd> [options...]` | Execute a plugin-defined CLI subcommand (e.g. `rnex plugin karpathy-llm ingest`). |
 
 ---
 

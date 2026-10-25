@@ -1,6 +1,7 @@
 # Member repos (managed by rnex)
+repos/
 repos/*
-!repos/.gitkeep
+.ignore
 
 # Recursive Repo Nexus directories (trailing slashes prevent ignoring rnex executable or rnex.yaml)
 **/.rnex*/
