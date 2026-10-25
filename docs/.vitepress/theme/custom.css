@@ -6,27 +6,75 @@
   --vp-layout-max-width: 100%;
 }
 
-/* Ensure wide document containers stretch adaptively across high-res displays */
+/* Prevent horizontal page overflow on window resize */
+html,
+body {
+  overflow-x: clip !important;
+  max-width: 100%;
+}
+
+#app,
+.Layout,
+.VPContent {
+  overflow-x: clip;
+  max-width: 100%;
+}
+
+/* Ensure wide document containers stretch adaptively across high-res displays without overflow */
+.VPDoc {
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+.VPDoc .container {
+  max-width: 100% !important;
+  width: 100%;
+}
+
+.VPDoc .content {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  box-sizing: border-box;
+}
+
 .VPDoc.has-aside .content-container {
   max-width: 100% !important;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .VPDoc:not(.has-sidebar) .container {
   max-width: 100% !important;
 }
 
-.VPDoc .container {
-  max-width: 100% !important;
-}
-
-/* Ensure navbar title flex alignment and top-left sidebar toggle placement */
+/* Navbar title and sidebar toggle button placement on the right side of the title section */
 .VPNavBarTitle .title {
   display: flex !important;
   align-items: center !important;
+  white-space: nowrap !important;
 }
 
 .VPNavBarTitle .rnex-sidebar-toggle-btn {
-  order: -1;
+  order: 0 !important;
+  margin-left: 8px !important;
+  margin-right: 0 !important;
+}
+
+/* Responsive navbar compression on medium viewports (960px - 1200px) */
+@media (min-width: 960px) and (max-width: 1200px) {
+  .VPNavBarMenuLink,
+  .VPNavBarMenuGroup button.button {
+    padding: 0 6px !important;
+    font-size: 13px !important;
+  }
+
+  .VPNavBarSearch {
+    padding-left: 8px !important;
+  }
+}
+
+.VPNavBar .content-body {
+  min-width: 0 !important;
 }
 
 /* Desktop viewport transitions and sidebar collapse states */
@@ -59,5 +107,9 @@
 
   body.rnex-sidebar-collapsed .VPNavBar.has-sidebar .container {
     max-width: 100% !important;
+  }
+
+  body.rnex-sidebar-collapsed .VPNavBar.has-sidebar .content {
+    padding-left: 32px !important;
   }
 }

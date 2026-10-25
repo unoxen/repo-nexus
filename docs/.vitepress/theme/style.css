@@ -156,17 +156,29 @@
 
 .vp-doc div[class*='language-'] {
   border-radius: 10px;
+  max-width: 100% !important;
+  box-sizing: border-box;
 }
 
-/* Tables styling */
+.vp-doc pre {
+  max-width: 100% !important;
+  overflow-x: auto !important;
+  box-sizing: border-box;
+}
+
+/* Tables styling with responsive horizontal scrolling */
 .vp-doc table {
+  display: block !important;
+  max-width: 100% !important;
+  width: 100% !important;
+  overflow-x: auto !important;
+  -webkit-overflow-scrolling: touch;
   border-collapse: separate;
   border-spacing: 0;
   border-radius: 8px;
   border: 1px solid var(--vp-c-divider);
-  overflow: hidden;
   margin: 1.5rem 0;
-  width: 100%;
+  box-sizing: border-box;
 }
 
 .vp-doc th {
@@ -185,19 +197,41 @@
   background-color: var(--vp-c-bg-soft);
 }
 
+/* Mermaid Diagrams Adaptive Container */
+.mermaid,
+.vp-doc .mermaid,
+div[class*='mermaid'] {
+  max-width: 100% !important;
+  overflow-x: auto !important;
+  -webkit-overflow-scrolling: touch;
+  margin: 1.5rem 0;
+  box-sizing: border-box;
+}
+
+.mermaid svg,
+.vp-doc .mermaid svg,
+div[class*='mermaid'] svg {
+  max-width: 100% !important;
+  height: auto !important;
+}
+
 /* Admonition polish */
 .custom-block {
   border-radius: 10px;
+  max-width: 100% !important;
+  box-sizing: border-box;
 }
-
 
 /* Doc Layout Hero & Features Grid */
 .rnex-hero-wrapper {
   display: flex;
   flex-direction: column-reverse;
   align-items: center;
-  gap: 2rem;
-  margin: 1.5rem 0 2.5rem;
+  gap: 1.5rem;
+  margin: 1rem 0 2rem;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 @media (min-width: 768px) {
@@ -205,17 +239,18 @@
     flex-direction: row;
     justify-content: space-between;
     align-items: center;
-    gap: 3rem;
+    gap: 2rem;
   }
 
   .rnex-hero-content {
-    flex: 1;
-    max-width: 65%;
+    flex: 1 1 60%;
+    min-width: 0;
   }
 
   .rnex-hero-image {
-    flex-shrink: 0;
+    flex: 0 1 35%;
     max-width: 35%;
+    min-width: 0;
     display: flex;
     justify-content: center;
     align-items: center;
@@ -223,7 +258,7 @@
 }
 
 .rnex-hero-image img {
-  max-width: 300px;
+  max-width: min(300px, 100%);
   width: 100%;
   height: auto;
   border-radius: 16px;
@@ -249,6 +284,9 @@
   flex-wrap: wrap;
   gap: 0.75rem;
   margin-bottom: 2.5rem;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .rnex-action-btn {
@@ -298,9 +336,12 @@
 
 .rnex-features-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr));
   gap: 1.25rem;
   margin: 1.5rem 0 2.5rem;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .rnex-feature-card {

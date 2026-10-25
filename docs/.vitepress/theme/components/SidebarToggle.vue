@@ -84,15 +84,15 @@ function toggleSidebar() {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
   color: var(--vp-c-text-2);
-  background: transparent;
-  border: 1px solid transparent;
+  background: var(--vp-c-bg-soft);
+  border: 1px solid var(--vp-c-divider);
   cursor: pointer;
-  margin-right: 10px;
-  margin-left: 0;
+  margin-left: 8px;
+  margin-right: 0;
   flex-shrink: 0;
   transition: color 0.2s, background-color 0.2s, border-color 0.2s;
 }
@@ -100,12 +100,12 @@ function toggleSidebar() {
 .rnex-sidebar-toggle-btn:hover {
   color: var(--vp-c-brand-1);
   background-color: var(--vp-c-bg-mute);
-  border-color: var(--vp-c-divider);
+  border-color: var(--vp-c-brand-1);
 }
 
 .rnex-toggle-icon {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
 }
 
 /* Hide toggle on small screens where sidebar is a mobile drawer */

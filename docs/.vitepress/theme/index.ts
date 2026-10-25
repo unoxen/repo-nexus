@@ -8,7 +8,7 @@ export default {
   extends: DefaultTheme,
   Layout() {
     return h(DefaultTheme.Layout, null, {
-      'nav-bar-title-before': () => h(SidebarToggle)
+      'nav-bar-title-after': () => h(SidebarToggle)
     })
   }
 }
