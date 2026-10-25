@@ -110,7 +110,7 @@ yaml_get_repos_dir() {
 
   # Security / validation: reject absolute paths or path traversal escaping workspace root
   case "$_ygrd_val" in
-    /*|*..*|../*|*/../*|*/..)
+    ''|.|/*|..|../*|*/..|*/../*)
       _ygrd_val="repos"
       ;;
   esac
