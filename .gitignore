@@ -1,24 +1,9 @@
-# Member repos (managed by rnex)
-repos/
-repos/*
-.ignore
-
-# Recursive Repo Nexus directories (trailing slashes prevent ignoring rnex executable or rnex.yaml)
-**/.rnex*/
-**/rnex*/
-.rnex*/
-rnex*/
-
 # OS
 .DS_Store
 
 # Node (npm packaging)
 node_modules/
 .npmrc
-
-# Local machine-specific configuration
-.local.rnex.yaml
-.rnex.local.yaml
 
 # VitePress build artifacts & cache
 docs/.vitepress/dist/
