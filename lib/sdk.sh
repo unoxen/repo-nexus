@@ -11,11 +11,14 @@
 #   - Standalone fallback configuration readers when invoked outside rnex CLI
 # ============================================================================
 
-export RNEX_ROOT="${RNEX_ROOT:-${NEXUS_DIR:-$(cd "$(dirname "$0")/../.." 2>/dev/null && pwd -P)}}"
-
 # ---- Standalone Bootstrap (when invoked via env -i outside rnex CLI) -------
 
+if [ -n "${NEXUS_DIR:-}" ]; then
+  export RNEX_ROOT="${RNEX_ROOT:-$NEXUS_DIR}"
+fi
+
 if ! command -v log_ok >/dev/null 2>&1; then
+  export RNEX_ROOT="${RNEX_ROOT:-${NEXUS_DIR:-$(cd "$(dirname "$0")/../.." 2>/dev/null && pwd -P)}}"
   if [ -z "${RNEX_LIB_DIR:-}" ]; then
     for _sdk_cand in \
       "$RNEX_ROOT/lib" \
@@ -135,15 +138,6 @@ if ! command -v provider_auto_sync_enabled >/dev/null 2>&1; then
     [ -n "$_val" ] || _val="$(provider_option_get "$_p" "autoSyncOn")"
     [ -n "$_val" ] || _val="SessionStart"
     is_enabled_val "$_val"
-  }
-fi
-
-if ! command -v has_active_provider_instructions >/dev/null 2>&1; then
-  has_active_provider_instructions() {
-    for _hapi_p in copilot claude gemini cursor windsurf codex; do
-      provider_plugin_enabled "$_hapi_p" 2>/dev/null && return 0
-    done
-    return 1
   }
 fi
 
@@ -268,26 +262,20 @@ rnex_block_merge() {
 }
 
 # Strip delimited Repo Nexus routing instructions block from an AI context file,
-# removing the file entirely if it was solely created by Repo Nexus.
+# removing the file entirely if it was solely created by Repo Nexus (empty outside the block).
 clean_rnex_instructions() {
   _dst="$1"
   [ -f "$_dst" ] || return 0
 
-  # Permanent main context files must NEVER be stripped or deleted
-  case "$(basename "$_dst")" in
-    AGENTS.md|CLAUDE.md|GEMINI.md|CODEX.md|.cursorrules|.windsurfrules|copilot-instructions.md)
-      return 0
-      ;;
-  esac
   if grep -qF "$AI_MARKER_START" "$_dst" 2>/dev/null; then
     _non_rnex="$(awk -v s="$AI_MARKER_START" -v e="$AI_MARKER_END" '
       $0 == s { skip=1; next }
       $0 == e { skip=0; next }
       !skip { print }
-    ' "$_dst" | tr -d " \t\r\n")"
+    ' "$_dst" | sed -e '/^[[:space:]]*$/d')"
     if [ -z "$_non_rnex" ]; then
       rm -f "$_dst"
-      log_ok "Removed $(basename "$_dst")"
+      [ "${RNEX_QUIET:-0}" -eq 0 ] && [ "${_sync_quiet:-0}" -eq 0 ] && log_ok "Removed $(basename "$_dst")"
     else
       _tmp="$(mktemp)"
       awk -v s="$AI_MARKER_START" -v e="$AI_MARKER_END" '
@@ -295,7 +283,20 @@ clean_rnex_instructions() {
         $0 == e { skip=0; next }
         !skip { print }
       ' "$_dst" > "$_tmp" && mv "$_tmp" "$_dst"
-      log_ok "Removed Repo Nexus routing instructions from $(basename "$_dst")"
+      [ "${RNEX_QUIET:-0}" -eq 0 ] && [ "${_sync_quiet:-0}" -eq 0 ] && log_ok "Removed Repo Nexus routing instructions from $(basename "$_dst")"
+    fi
+    return 0
+  fi
+
+  if grep -q "CRITICAL: You MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\`" "$_dst" 2>/dev/null; then
+    _non_rnex="$(grep -v "CRITICAL: You MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\`" "$_dst" 2>/dev/null | grep -v "Multi-Repo AI Workspace Context" | sed -e '/^[[:space:]]*$/d')"
+    if [ -z "$_non_rnex" ]; then
+      rm -f "$_dst"
+      [ "${RNEX_QUIET:-0}" -eq 0 ] && [ "${_sync_quiet:-0}" -eq 0 ] && log_ok "Removed $(basename "$_dst")"
+    else
+      _tmp="$(mktemp)"
+      grep -v "CRITICAL: You MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\`" "$_dst" > "$_tmp" && mv "$_tmp" "$_dst"
+      [ "${RNEX_QUIET:-0}" -eq 0 ] && [ "${_sync_quiet:-0}" -eq 0 ] && log_ok "Removed Repo Nexus routing instructions from $(basename "$_dst")"
     fi
   fi
 }
@@ -306,38 +307,116 @@ rnex_block_clean() {
 
 # ---- Ignore File Helpers (!repos/*) ----------------------------------------
 
+IGNORE_MARKER_START="# REPO-NEXUS:START"
+IGNORE_MARKER_END="# REPO-NEXUS:END"
+
+# Reconcile scoped ignore rules inside # REPO-NEXUS:START ... # REPO-NEXUS:END markers
 ensure_provider_ignore() {
   _epi_file="$1"
   _epi_comment="${2:-Repo Nexus file discovery un-ignore for member repos}"
   _epi_created_msg="${3:-Created $(basename "$_epi_file")}"
-  if [ ! -f "$_epi_file" ]; then
-    cat > "$_epi_file" <<EPI_EOF
+  _epi_entry="${4:-!repos/*}"
+
+  _sec_tmp="$(mktemp)"
+  cat > "$_sec_tmp" <<EPI_EOF
+${IGNORE_MARKER_START}
 # $_epi_comment
-!repos/*
+$_epi_entry
+${IGNORE_MARKER_END}
 EPI_EOF
-    [ "${RNEX_QUIET:-0}" -eq 0 ] && log_ok "$_epi_created_msg"
-  elif ! grep -q '!repos/\*' "$_epi_file" 2>/dev/null; then
-    printf '\n# %s\n!repos/*\n' "$_epi_comment" >> "$_epi_file"
-    [ "${RNEX_QUIET:-0}" -eq 0 ] && log_dim "Added !repos/* to $(basename "$_epi_file")"
+
+  if [ ! -f "$_epi_file" ]; then
+    mkdir -p "$(dirname "$_epi_file")"
+    mv "$_sec_tmp" "$_epi_file"
+    [ "${RNEX_QUIET:-0}" -eq 0 ] && [ "${_sync_quiet:-0}" -eq 0 ] && log_ok "$_epi_created_msg"
+    return 0
   fi
+
+  # 1. If delimited section exists, replace it in-place
+  if grep -qFx -- "$IGNORE_MARKER_START" "$_epi_file" 2>/dev/null; then
+    _tmp="$(mktemp)"
+    awk -v s="$IGNORE_MARKER_START" -v e="$IGNORE_MARKER_END" -v src="$_sec_tmp" '
+      $0 == s {
+        in_b = 1
+        while ((getline line < src) > 0) print line
+        close(src)
+        next
+      }
+      $0 == e {
+        in_b = 0
+        next
+      }
+      !in_b { print }
+    ' "$_epi_file" > "$_tmp" && mv "$_tmp" "$_epi_file"
+    rm -f "$_sec_tmp"
+    return 0
+  fi
+
+  # 2. Upgrade legacy un-delimited ignore file while preserving custom user rules
+  _user_tmp="$(mktemp)"
+  awk '
+    /^[ ]*#.*(Cursor|Gemini|Repo Nexus|member repos)/ { next }
+    $0 == "!repos/*" { next }
+    { lines[++n] = $0 }
+    END {
+      start = 1
+      while (start <= n && lines[start] ~ /^[[:space:]]*$/) start++
+      end = n
+      while (end >= start && lines[end] ~ /^[[:space:]]*$/) end--
+      for (i = start; i <= end; i++) print lines[i]
+    }
+  ' "$_epi_file" > "$_user_tmp"
+
+  _tmp="$(mktemp)"
+  if [ -s "$_user_tmp" ]; then
+    cat "$_user_tmp" > "$_tmp"
+    printf '\n' >> "$_tmp"
+  fi
+  cat "$_sec_tmp" >> "$_tmp"
+  mv "$_tmp" "$_epi_file"
+  rm -f "$_user_tmp" "$_sec_tmp"
 }
 
 rnex_ignore_ensure() {
   ensure_provider_ignore "$@"
 }
 
+# Clean scoped ignore rules, removing the file entirely if it contains no other instructions
 clean_provider_ignore() {
   _file="$1"
   [ -f "$_file" ] || return 0
-  if grep -q '!repos/\*' "$_file" 2>/dev/null; then
-    _non_rnex="$(grep -vE '^[ ]*#.*(Cursor|Gemini|Repo Nexus|member repos)' "$_file" 2>/dev/null | grep -v '^!repos/\*' | tr -d " \t\r\n")"
+
+  if grep -qFx -- "${IGNORE_MARKER_START:-# REPO-NEXUS:START}" "$_file" 2>/dev/null; then
+    _non_rnex="$(awk -v s="${IGNORE_MARKER_START:-# REPO-NEXUS:START}" -v e="${IGNORE_MARKER_END:-# REPO-NEXUS:END}" '
+      $0 == s { in_b = 1; next }
+      $0 == e { in_b = 0; next }
+      !in_b { print }
+    ' "$_file" | sed -e '/^[[:space:]]*$/d' -e '/^[[:space:]]*#/d')"
+
     if [ -z "$_non_rnex" ]; then
       rm -f "$_file"
-      log_ok "Removed $(basename "$_file")"
+      [ "${RNEX_QUIET:-0}" -eq 0 ] && [ "${_sync_quiet:-0}" -eq 0 ] && log_ok "Removed $(basename "$_file")"
+    else
+      _tmp="$(mktemp)"
+      awk -v s="${IGNORE_MARKER_START:-# REPO-NEXUS:START}" -v e="${IGNORE_MARKER_END:-# REPO-NEXUS:END}" '
+        $0 == s { in_b = 1; next }
+        $0 == e { in_b = 0; next }
+        !in_b { print }
+      ' "$_file" > "$_tmp" && mv "$_tmp" "$_file"
+      [ "${RNEX_QUIET:-0}" -eq 0 ] && [ "${_sync_quiet:-0}" -eq 0 ] && log_ok "Removed Repo Nexus ignore rules from $(basename "$_file")"
+    fi
+    return 0
+  fi
+
+  if grep -q '!repos/\*' "$_file" 2>/dev/null; then
+    _non_rnex="$(grep -vE '(^[ ]*#.*(Cursor|Gemini|Repo Nexus|member repos)|!repos/\*)' "$_file" 2>/dev/null | sed -e '/^[[:space:]]*$/d' -e '/^[[:space:]]*#/d')"
+    if [ -z "$_non_rnex" ]; then
+      rm -f "$_file"
+      [ "${RNEX_QUIET:-0}" -eq 0 ] && [ "${_sync_quiet:-0}" -eq 0 ] && log_ok "Removed $(basename "$_file")"
     else
       _tmp="$(mktemp)"
       grep -vE '(^[ ]*#.*(Cursor|Gemini|Repo Nexus|member repos)|!repos/\*)' "$_file" > "$_tmp" && mv "$_tmp" "$_file"
-      log_ok "Removed !repos/* un-ignore from $(basename "$_file")"
+      [ "${RNEX_QUIET:-0}" -eq 0 ] && [ "${_sync_quiet:-0}" -eq 0 ] && log_ok "Removed !repos/* un-ignore from $(basename "$_file")"
     fi
   fi
 }

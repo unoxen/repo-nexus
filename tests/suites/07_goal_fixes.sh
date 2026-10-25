@@ -640,8 +640,7 @@ git -C "$TEST_STANDALONE_DIS_WS" init -q
 
 # Run copilot before_plugin_disable.sh in a clean subshell with NO preloaded core functions
 _dis_out="$(env -i PATH="$PATH" HOME="$HOME" RNEX_ROOT="$TEST_STANDALONE_DIS_WS" sh "$TEST_STANDALONE_DIS_WS/toolkit/plugins/copilot/hooks/before_plugin_disable.sh" 2>&1)" || { fail "before_plugin_disable.sh failed in unpreloaded subshell: $_dis_out"; exit 1; }
-[ -f "$TEST_STANDALONE_DIS_WS/.github/copilot-instructions.md" ] || { fail "copilot-instructions.md missing after standalone before_plugin_disable hook"; exit 1; }
-grep -q "REPO-NEXUS:START" "$TEST_STANDALONE_DIS_WS/.github/copilot-instructions.md" || { fail "copilot-instructions.md lost REPO-NEXUS block after standalone before_plugin_disable hook"; exit 1; }
+[ ! -f "$TEST_STANDALONE_DIS_WS/.github/copilot-instructions.md" ] || { fail "copilot-instructions.md without user content should be removed by standalone before_plugin_disable hook"; exit 1; }
 pass
 
 # --------------------------------------------------------------------------
@@ -851,14 +850,13 @@ echo "legacy" > "$TEST_GEMINI_WS/.gemini/skills/rnex-legacy.md"
 [ -f "$TEST_GEMINI_WS/GEMINI.md" ] || { fail "GEMINI.md missing after init --gemini"; exit 1; }
 grep -q "CRITICAL: You MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\`" "$TEST_GEMINI_WS/GEMINI.md" || { fail "GEMINI.md missing directive"; exit 1; }
 
-# Verify AGENTS.md is also created (permanent main context file)
-[ -f "$TEST_GEMINI_WS/AGENTS.md" ] || { fail "Permanent AGENTS.md missing when gemini enabled"; exit 1; }
-grep -q "REPO-NEXUS:START" "$TEST_GEMINI_WS/AGENTS.md" || { fail "AGENTS.md missing REPO-NEXUS instructions"; exit 1; }
+# Verify AGENTS.md is NOT created when gemini provider is active
+[ ! -f "$TEST_GEMINI_WS/AGENTS.md" ] || { fail "AGENTS.md should not be created when gemini provider is active"; exit 1; }
 
-# Status reports .agents/skills/, GEMINI.md, and AGENTS.md
+# Status reports .agents/skills/ and GEMINI.md, and does not report AGENTS.md
 _gem_status="$(cd "$TEST_GEMINI_WS" && ./rnex status 2>&1)"
 echo "$_gem_status" | grep -q "GEMINI.md" || { fail "status did not report GEMINI.md: $_gem_status"; exit 1; }
-echo "$_gem_status" | grep -q "AGENTS.md" || { fail "status did not report AGENTS.md: $_gem_status"; exit 1; }
+! echo "$_gem_status" | grep -q "AGENTS.md" || { fail "status reported AGENTS.md when inactive: $_gem_status"; exit 1; }
 echo "$_gem_status" | grep -q "\.agents/skills/" || { fail "status did not report .agents/skills/: $_gem_status"; exit 1; }
 ! echo "$_gem_status" | grep -q "\.gemini/skills/" || { fail "status reported obsolete .gemini/skills/: $_gem_status"; exit 1; }
 
@@ -882,19 +880,17 @@ cp -r "$DIR/templates" "$TEST_COPILOT_WS/templates"
 [ -f "$TEST_COPILOT_WS/.github/copilot-instructions.md" ] || { fail ".github/copilot-instructions.md missing after init --copilot"; exit 1; }
 grep -q "CRITICAL: You MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\`" "$TEST_COPILOT_WS/.github/copilot-instructions.md" || { fail ".github/copilot-instructions.md missing directive"; exit 1; }
 
-# Verify AGENTS.md was created (permanent file)
-[ -f "$TEST_COPILOT_WS/AGENTS.md" ] || { fail "Permanent AGENTS.md missing after init --copilot"; exit 1; }
-grep -q "REPO-NEXUS:START" "$TEST_COPILOT_WS/AGENTS.md" || { fail "AGENTS.md missing REPO-NEXUS directive after init --copilot"; exit 1; }
+# Verify AGENTS.md was NOT created (active provider copilot owns routing)
+[ ! -f "$TEST_COPILOT_WS/AGENTS.md" ] || { fail "AGENTS.md should not be created after init --copilot"; exit 1; }
 
-# Status reports copilot instructions and AGENTS.md
+# Status reports copilot instructions and not AGENTS.md
 _copilot_status="$(cd "$TEST_COPILOT_WS" && ./rnex status 2>&1)"
 echo "$_copilot_status" | grep -q "\.github/copilot-instructions.md" || { fail "status did not report .github/copilot-instructions.md: $_copilot_status"; exit 1; }
-echo "$_copilot_status" | grep -q "AGENTS.md" || { fail "status did not report AGENTS.md: $_copilot_status"; exit 1; }
+! echo "$_copilot_status" | grep -q "AGENTS.md" || { fail "status reported AGENTS.md when copilot enabled: $_copilot_status"; exit 1; }
 
-# 2. Test AGENTS.md preserved on sync when copilot is enabled
+# 2. Test AGENTS.md remains absent on sync when copilot is enabled
 (cd "$TEST_COPILOT_WS" && ./rnex sync -y >/dev/null)
-[ -f "$TEST_COPILOT_WS/AGENTS.md" ] || { fail "Permanent AGENTS.md missing after rnex sync with copilot enabled"; exit 1; }
-grep -q "REPO-NEXUS:START" "$TEST_COPILOT_WS/AGENTS.md" || { fail "AGENTS.md missing REPO-NEXUS instructions after sync"; exit 1; }
+[ ! -f "$TEST_COPILOT_WS/AGENTS.md" ] || { fail "AGENTS.md should remain absent after rnex sync with copilot enabled"; exit 1; }
 
 # 3. Test existing custom AGENTS.md preserves user content alongside rnex block
 cat <<'EOF_CUSTOM_AGENTS' > "$TEST_COPILOT_WS/AGENTS.md"
@@ -908,13 +904,11 @@ EOF_CUSTOM_AGENTS
 (cd "$TEST_COPILOT_WS" && ./rnex sync -y >/dev/null)
 [ -f "$TEST_COPILOT_WS/AGENTS.md" ] || { fail "Custom AGENTS.md was incorrectly deleted"; exit 1; }
 grep -q "These are custom developer instructions" "$TEST_COPILOT_WS/AGENTS.md" || { fail "Custom developer instructions were deleted from AGENTS.md"; exit 1; }
-grep -q "REPO-NEXUS:START" "$TEST_COPILOT_WS/AGENTS.md" || { fail "REPO-NEXUS block missing from custom AGENTS.md"; exit 1; }
 
-# 4. Disable copilot plugin and verify both copilot-instructions.md and AGENTS.md retain routing blocks
+# 4. Disable copilot plugin: copilot-instructions.md (empty of user content) is removed, while custom AGENTS.md is preserved
 (cd "$TEST_COPILOT_WS" && ./rnex plugin disable copilot >/dev/null)
-[ -f "$TEST_COPILOT_WS/.github/copilot-instructions.md" ] || { fail ".github/copilot-instructions.md was removed after disabling copilot"; exit 1; }
-grep -q "REPO-NEXUS:START" "$TEST_COPILOT_WS/.github/copilot-instructions.md" || { fail "REPO-NEXUS instructions missing in copilot-instructions.md after disabling copilot"; exit 1; }
-[ -f "$TEST_COPILOT_WS/AGENTS.md" ] || { fail "AGENTS.md missing after disabling copilot"; exit 1; }
+[ ! -f "$TEST_COPILOT_WS/.github/copilot-instructions.md" ] || { fail ".github/copilot-instructions.md without user content should be removed after disabling copilot"; exit 1; }
+[ -f "$TEST_COPILOT_WS/AGENTS.md" ] || { fail "Custom AGENTS.md missing after disabling copilot"; exit 1; }
 grep -q "REPO-NEXUS:START" "$TEST_COPILOT_WS/AGENTS.md" || { fail "REPO-NEXUS instructions not found in AGENTS.md after disabling copilot"; exit 1; }
 grep -q "These are custom developer instructions" "$TEST_COPILOT_WS/AGENTS.md" || { fail "Custom developer instructions lost in AGENTS.md"; exit 1; }
 
@@ -1012,10 +1006,8 @@ EOF_CFG_CAMEL
 
 [ ! -f "$TEST_HOOKS_WS/.claude/settings.json" ] || { fail ".claude/settings.json not cleaned after disabling claude"; exit 1; }
 [ ! -f "$TEST_HOOKS_WS/.agents/hooks.json" ] || { fail ".agents/hooks.json not cleaned after disabling gemini"; exit 1; }
-[ -f "$TEST_HOOKS_WS/CLAUDE.md" ] || { fail "CLAUDE.md missing after disabling claude"; exit 1; }
-grep -q "REPO-NEXUS:START" "$TEST_HOOKS_WS/CLAUDE.md" || { fail "REPO-NEXUS block missing from CLAUDE.md"; exit 1; }
-[ -f "$TEST_HOOKS_WS/GEMINI.md" ] || { fail "GEMINI.md missing after disabling gemini"; exit 1; }
-grep -q "REPO-NEXUS:START" "$TEST_HOOKS_WS/GEMINI.md" || { fail "REPO-NEXUS block missing from GEMINI.md"; exit 1; }
+[ ! -f "$TEST_HOOKS_WS/CLAUDE.md" ] || { fail "CLAUDE.md without user content was not removed after disabling claude"; exit 1; }
+[ ! -f "$TEST_HOOKS_WS/GEMINI.md" ] || { fail "GEMINI.md without user content was not removed after disabling gemini"; exit 1; }
 [ -f "$TEST_HOOKS_WS/AGENTS.md" ] || { fail "AGENTS.md not restored after disabling provider plugins"; exit 1; }
 grep -q "REPO-NEXUS:START" "$TEST_HOOKS_WS/AGENTS.md" || { fail "REPO-NEXUS block missing from AGENTS.md"; exit 1; }
 
@@ -1103,8 +1095,7 @@ git -C "$TEST_CODEX_WS" init -q
 
 # 1. Initialize workspace with --codex
 "$TEST_CODEX_WS/rnex" init -y --codex "$TEST_CODEX_WS" >/dev/null
-[ -f "$TEST_CODEX_WS/AGENTS.md" ] || { fail "Permanent AGENTS.md missing after init --codex"; exit 1; }
-grep -q "REPO-NEXUS:START" "$TEST_CODEX_WS/AGENTS.md" || { fail "AGENTS.md missing REPO-NEXUS routing block after init --codex"; exit 1; }
+[ ! -f "$TEST_CODEX_WS/AGENTS.md" ] || { fail "AGENTS.md should not be created after init --codex"; exit 1; }
 [ -f "$TEST_CODEX_WS/CODEX.md" ] || { fail "CODEX.md missing after init --codex"; exit 1; }
 grep -q "REPO-NEXUS:START" "$TEST_CODEX_WS/CODEX.md" || { fail "REPO-NEXUS routing block missing in CODEX.md"; exit 1; }
 
@@ -1146,7 +1137,7 @@ grep -q "REPO-NEXUS:START" "$TEST_CODEX_WS/CODEX.md" || { fail "REPO-NEXUS block
 [ -f "$TEST_CODEX_WS/AGENTS.md" ] || { fail "AGENTS.md not restored when codex disabled"; exit 1; }
 grep -q "REPO-NEXUS:START" "$TEST_CODEX_WS/AGENTS.md" || { fail "AGENTS.md missing REPO-NEXUS block when codex disabled"; exit 1; }
 [ -f "$TEST_CODEX_WS/CODEX.md" ] || { fail "CODEX.md was deleted when codex disabled"; exit 1; }
-grep -q "REPO-NEXUS:START" "$TEST_CODEX_WS/CODEX.md" || { fail "REPO-NEXUS block missing from CODEX.md after disable"; exit 1; }
+! grep -q "REPO-NEXUS:START" "$TEST_CODEX_WS/CODEX.md" || { fail "REPO-NEXUS block not removed from CODEX.md after disable"; exit 1; }
 grep -q "# Custom Codex Rules" "$TEST_CODEX_WS/CODEX.md" || { fail "Custom rules lost from CODEX.md after disable"; exit 1; }
 [ ! -d "$TEST_CODEX_WS/.codex/skills/rnex-clone-sync" ] || { fail "rnex User Skills not cleaned from .codex/skills"; exit 1; }
 [ -f "$TEST_CODEX_WS/.codex/skills/custom-skill/SKILL.md" ] || { fail "Custom skill deleted when codex disabled"; exit 1; }

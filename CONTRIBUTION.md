@@ -31,7 +31,7 @@ All shell scripts must pass [ShellCheck](https://www.shellcheck.net/) with **zer
 - **SC2115 (Guarded deletion)**: Always guard variable expansions in recursive removals (`rm -rf "${var:?}/subdir"`).
 - Run ShellCheck before submitting your pull request:
   ```sh
-  shellcheck -s sh rnex lib/*.sh lib/commands/*.sh scripts/*.sh tests/*.sh
+  shellcheck -s sh rnex lib/*.sh lib/commands/*.sh scripts/*.sh scripts/githooks/* tests/*.sh tests/suites/*.sh toolkit/plugins/*/*/*.sh
   ```
 
 ### Strict Encapsulation & Agnostic Core
@@ -80,10 +80,10 @@ Whenever you add a new command, flag, or hook behavior:
 Plugins provide specialized agent guidelines, workflows, skills, subagents, and scaffolding templates.
 
 ### Directory Structure & Contract
-```
+```text
 toolkit/plugins/<name>/
 ├── plugin.yaml                  # Required: Plugin manifest & configuration schema
-├── instructions.md              # Optional: Markdown context compiled into .rnex/ai-instructions.md
+├── instructions/                # Optional: Markdown context files compiled into .rnex/ai-instructions.md
 ├── README.md                    # Optional: Plugin documentation & recipes
 ├── commands/                    # Optional: CLI subcommand scripts (*.sh)
 ├── hooks/                       # Optional: Lifecycle & Git event hooks
@@ -101,12 +101,19 @@ toolkit/plugins/<name>/
 name: my-plugin
 version: 1.0.0
 description: Organization guidelines, workflows, and automated hooks
-author: Your Name <dev@example.com>
-homepage: https://github.com/my-org/my-plugin
-config:
+skill_dir: .my-provider/skills
+config_defaults:
   custom_option: default_value
+  skills: true
+config_descriptions:
+  custom_option: Description of custom_option
+  skills: Generate zero-logic user skill pointers
+commands:
+  my-cmd: Description of custom plugin command
+instructions:
+  - instructions/my-guide.md
 templates:
-  - templates/config.sample: .config-file
+  - templates/config.sample:.config-file
 ```
 
 ### Lifecycle Hooks Contract
@@ -121,8 +128,8 @@ Plugins can define executable POSIX `/bin/sh` scripts under `hooks/` to intercep
   - `RNEX_ARGS`: Arguments passed to the command.
   - `RNEX_QUIET`: Set to `1` if `--quiet` / `-q` is active, otherwise `0`.
 
-### AI Instructions Fragment (`instructions.md`)
-If provided, `instructions.md` is automatically concatenated into `.rnex/ai-instructions.md` during `rnex sync` whenever the plugin is enabled.
+### AI Instructions Fragments (`instructions/`)
+Instruction files listed under `instructions:` in `plugin.yaml` (or a fallback `instructions.md`) are automatically concatenated into `.rnex/ai-instructions.md` during `rnex sync` whenever the plugin is enabled.
 
 ---
 
@@ -144,8 +151,8 @@ Functional plugins encapsulate their own agentic skills:
 ### 3. User Skill Generator & Plugin Contract API
 - **Zero-Logic User Skills**: Generated on the fly in active AI provider directories (`.cursor/rules/`, `.claude/skills/`, `.agents/skills/`, `.codex/skills/`, `.github/skills/`, `.windsurf/rules/`) with mandatory `rnex-` prefix (`rnex-<skill-name>.md` or `rnex-<skill-name>/SKILL.md`). They contain zero operational instructions—only a direct reference link to the underlying agentic skill inside `.rnex/`.
 - **Plugin Contract Helper Functions**:
-  - `rnex_register_user_skill <skill_name> <target_path_in_rnex>`: Called in `after_sync.sh` to generate the User Skill pointer.
-  - `rnex_unregister_user_skill <skill_name>`: Called in `before_plugin_disable.sh` to remove the User Skill pointer before plugin deactivation.
+  - `rnex_register_user_skill <skill_name> <target_path_in_rnex> [plugin_name]`: Called in `after_sync.sh` to generate the User Skill pointer across active provider skill directories.
+  - `rnex_unregister_user_skill <skill_name> [plugin_name]`: Called in `before_plugin_disable.sh` to remove the User Skill pointer before plugin deactivation.
 
 ---
 
@@ -167,5 +174,5 @@ Commit messages must follow the [Conventional Commits](https://www.conventionalc
 2. When releasing a new version or changing CLI behavior:
    - Increment `version` in `package.json`.
    - Update `CHANGELOG.md` following [Keep a Changelog](https://keepachangelog.com/) standards.
-   - Update `README.md` and `docs/CLI.md` if command syntax, flags, or configuration options changed.
+   - Update `README.md` and `docs/reference/cli.md` if command syntax, flags, or configuration options changed.
    - Committing the bumped `package.json` with the maintainer hooks enabled will automatically create the corresponding Git tag `vX.Y.Z`.

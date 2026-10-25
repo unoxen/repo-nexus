@@ -1,3 +1,5 @@
-# Exclude documentation, VitePress config, cache, and dist from npm package
+# Exclude documentation, VitePress config, cache, dist, and OS artifacts from npm package
 /docs/
 docs/.vitepress/
+.DS_Store
+**/.DS_Store

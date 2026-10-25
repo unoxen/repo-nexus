@@ -114,7 +114,9 @@ my-workspace/
 ├── rnex.yaml                        # Team-wide workspace declaration
 ├── .local.rnex.yaml                 # (Optional) Developer workstation overrides (gitignored)
 │
-├── .rnex/                           # Workspace orchestration directory (tracked)
+├── .rnex/                           # Workspace orchestration directory (gitignored)
+│   ├── ai-instructions.md           # Compiled AI routing & plugin context
+│   ├── sync_stamp                   # Checksum-based drift detection stamp
 │   ├── plugins/                     # Enabled plugin instructions, skills, and agents
 │   └── skills/                      # Core workspace agentic skills (clone-sync, batch-exec, etc.)
 │

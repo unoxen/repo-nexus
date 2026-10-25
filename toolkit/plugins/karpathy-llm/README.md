@@ -39,7 +39,7 @@ To ensure workspaces remain 100% predictable, understandable, and consistent acr
 ### Phase 1: 100% Deterministic Initialization
 Enabling the plugin (`rnex plugin enable karpathy-llm`) performs an exact, zero-interview scaffolding step:
 * **Predictable Baseline**: Fixed standard files are created (`docs/.gitkeep`, `wiki/index.md`, `wiki/hot.md`, `wiki/_log.md`).
-* **Scoped Assets**: Behavioral rules, wiki architecture guides, workflows, and templates are cleanly isolated under `.rnex/plugins/karpathy-llm/`.
+* **Scoped Assets**: Behavioral rules, wiki architecture guides, skills, commands, and templates are cleanly isolated under `.rnex/plugins/karpathy-llm/`.
 * **Zero Guesswork**: No interactive interviews, no AI-generated folder variances, and no "agent decides" ambiguities at init time.
 * **Idempotent**: Safe to run repeatedly; existing user files are never overwritten.
 
@@ -91,8 +91,8 @@ rnex plugin enable karpathy-llm
 
 This command:
 1. Adds `karpathy-llm` to `plugins:` in `rnex.yaml`.
-2. Copies initial templates (`wiki/index.md`, `wiki/_log.md`, `wiki/hot.md`, `docs/.gitkeep`, `.rnex/templates/wiki-page.template.md`, `.rnex/templates/LLM_WIKI.sample.md`).
-3. Scopes `rules/`, `instructions/`, and `workflows/` into `.rnex/plugins/karpathy-llm/`.
+2. Copies initial templates (`wiki/index.md`, `wiki/_log.md`, `wiki/hot.md`).
+3. Scopes `rules/`, `instructions/`, `skills/`, `commands/`, `hooks/`, `agents/`, and `templates/` into `.rnex/plugins/karpathy-llm/`.
 4. Reconciles workspace state, member repositories, and plugin assets via `rnex sync`.
 
 ### Option 2: Declarative in `rnex.yaml`

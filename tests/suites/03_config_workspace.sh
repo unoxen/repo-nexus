@@ -43,7 +43,7 @@ git -C "$TEST_WORKSPACE" check-ignore -q "$TEST_WORKSPACE/.claude/skills/rnex-co
 pass
 
 # --------------------------------------------------------------------------
-run_test "git.ignore configuration in rnex.yaml and .local.rnex.yaml reconciled into .gitignore"
+run_test "git.ignore configuration synced into delimited # REPO-NEXUS:START/END section in .gitignore (add, remove, preserve user rules)"
 TEST_GI_WS="$TEST_TMP/git-ignore-ws"
 mkdir -p "$TEST_GI_WS"
 cp "$CLI" "$TEST_GI_WS/rnex"
@@ -52,7 +52,20 @@ cp -r "$DIR/toolkit" "$TEST_GI_WS/toolkit"
 cp "$DIR/package.json" "$TEST_GI_WS/package.json"
 git -C "$TEST_GI_WS" init -q
 
+# Pre-populate user-owned .gitignore rules and a file matching *.log to test glob-expansion safety
+cat <<'USER_GI' > "$TEST_GI_WS/.gitignore"
+# User custom rules
+.DS_Store
+node_modules/
+USER_GI
+touch "$TEST_GI_WS/app-debug.log"
+
 "$TEST_GI_WS/rnex" init -y "$TEST_GI_WS" >/dev/null
+
+grep -qFx "# REPO-NEXUS:START" "$TEST_GI_WS/.gitignore" || { fail "Missing # REPO-NEXUS:START delimiter after init"; exit 1; }
+grep -qFx "# REPO-NEXUS:END" "$TEST_GI_WS/.gitignore" || { fail "Missing # REPO-NEXUS:END delimiter after init"; exit 1; }
+grep -qFx ".DS_Store" "$TEST_GI_WS/.gitignore" || { fail "User rule .DS_Store lost during init"; exit 1; }
+grep -qFx "node_modules/" "$TEST_GI_WS/.gitignore" || { fail "User rule node_modules/ lost during init"; exit 1; }
 
 cat <<'GITIGNORE_YAML' > "$TEST_GI_WS/rnex.yaml"
 version: 1.0.0
@@ -73,11 +86,34 @@ git:
 GITIGNORE_LOCAL
 
 (cd "$TEST_GI_WS" && ./rnex sync --quiet)
-grep -q "^\*\.log$" "$TEST_GI_WS/.gitignore" || { fail "*.log missing from .gitignore after sync"; exit 1; }
+grep -q "^\*\.log$" "$TEST_GI_WS/.gitignore" || { fail "*.log missing from .gitignore after sync (or glob-expanded)"; exit 1; }
+! grep -q "^app-debug\.log$" "$TEST_GI_WS/.gitignore" || { fail "*.log was expanded by shell to app-debug.log"; exit 1; }
 grep -q "^build-output/$" "$TEST_GI_WS/.gitignore" || { fail "build-output/ missing from .gitignore after sync"; exit 1; }
 grep -q "^\.env\.local$" "$TEST_GI_WS/.gitignore" || { fail ".env.local missing from .gitignore after sync"; exit 1; }
+grep -qFx ".DS_Store" "$TEST_GI_WS/.gitignore" || { fail "User rule .DS_Store lost after sync"; exit 1; }
 ! git -C "$TEST_GI_WS" check-ignore -q rnex || { fail "rnex binary is ignored by git"; exit 1; }
 ! git -C "$TEST_GI_WS" check-ignore -q rnex.yaml || { fail "rnex.yaml is ignored by git"; exit 1; }
+
+# Remove *.log from rnex.yaml and replace build-output/ with dist/, then sync and verify removal
+cat <<'GITIGNORE_YAML_2' > "$TEST_GI_WS/rnex.yaml"
+version: 1.0.0
+git:
+  ignore:
+    - "dist/"
+  hooks:
+    post-merge: []
+repos:
+plugins:
+GITIGNORE_YAML_2
+rm -f "$TEST_GI_WS/.local.rnex.yaml"
+
+(cd "$TEST_GI_WS" && ./rnex sync --quiet)
+! grep -q "^\*\.log$" "$TEST_GI_WS/.gitignore" || { fail "Removed entry *.log still present in .gitignore after sync"; exit 1; }
+! grep -q "^build-output/$" "$TEST_GI_WS/.gitignore" || { fail "Removed entry build-output/ still present in .gitignore after sync"; exit 1; }
+! grep -q "^\.env\.local$" "$TEST_GI_WS/.gitignore" || { fail "Removed local entry .env.local still present in .gitignore after sync"; exit 1; }
+grep -q "^dist/$" "$TEST_GI_WS/.gitignore" || { fail "Updated entry dist/ missing from .gitignore after sync"; exit 1; }
+grep -qFx ".DS_Store" "$TEST_GI_WS/.gitignore" || { fail "User rule .DS_Store lost after removal sync"; exit 1; }
+grep -qFx "node_modules/" "$TEST_GI_WS/.gitignore" || { fail "User rule node_modules/ lost after removal sync"; exit 1; }
 pass
 
 # --------------------------------------------------------------------------
@@ -137,38 +173,39 @@ echo "$_status_out" | grep -q "Workspace AI Context" || { fail "Status did not s
 pass
 
 # --------------------------------------------------------------------------
-run_test "Enabling provider plugin creates instruction file, preserves permanent AGENTS.md, and creates User Skills"
+run_test "Enabling provider plugin creates provider instruction file, cleans inactive AGENTS.md, and creates User Skills"
 # Enable gemini plugin in workspace
 "$TEST_WORKSPACE/rnex" plugin enable gemini >/dev/null
-[ -f "$TEST_WORKSPACE/AGENTS.md" ] || { fail "Permanent AGENTS.md missing when gemini enabled"; exit 1; }
-grep -q "REPO-NEXUS:START" "$TEST_WORKSPACE/AGENTS.md" || { fail "AGENTS.md missing REPO-NEXUS instructions"; exit 1; }
 [ -f "$TEST_WORKSPACE/GEMINI.md" ] || { fail "GEMINI.md missing when gemini enabled"; exit 1; }
+[ -f "$TEST_WORKSPACE/.geminiignore" ] || { fail ".geminiignore missing when gemini enabled"; exit 1; }
+grep -qFx "# REPO-NEXUS:START" "$TEST_WORKSPACE/.geminiignore" || { fail ".geminiignore missing # REPO-NEXUS:START delimiter"; exit 1; }
+grep -qFx "# REPO-NEXUS:END" "$TEST_WORKSPACE/.geminiignore" || { fail ".geminiignore missing # REPO-NEXUS:END delimiter"; exit 1; }
+# AGENTS.md (which only had default rnex instructions and is not gemini's instruction file) is cleaned
+[ ! -f "$TEST_WORKSPACE/AGENTS.md" ] || { fail "AGENTS.md should not be retained when gemini provides GEMINI.md"; exit 1; }
 [ -d "$TEST_WORKSPACE/.agents/skills" ] || { fail ".agents/skills not created"; exit 1; }
 [ ! -d "$TEST_WORKSPACE/.gemini/skills" ] || { fail "incorrect .gemini/skills was created"; exit 1; }
 [ -f "$TEST_WORKSPACE/.agents/skills/rnex-clone-sync/SKILL.md" ] || { fail "rnex-clone-sync missing in .agents/skills"; exit 1; }
 _status_fixed="$("$TEST_WORKSPACE/rnex" status 2>&1)"
-echo "$_status_fixed" | grep -q "AGENTS.md" || { fail "Status did not show permanent AGENTS.md when gemini enabled"; exit 1; }
 echo "$_status_fixed" | grep -q "GEMINI.md" || { fail "Status did not show GEMINI.md"; exit 1; }
 echo "$_status_fixed" | grep -q ".agents/skills/" || { fail "Status did not show .agents/skills/"; exit 1; }
-# Disable gemini plugin; GEMINI.md preserved, AGENTS.md preserved, and User Skills cleaned up
+# Disable gemini plugin; GEMINI.md (empty of user content) is deleted, .geminiignore is deleted, and AGENTS.md restored as fallback
 "$TEST_WORKSPACE/rnex" plugin disable gemini >/dev/null
-[ -f "$TEST_WORKSPACE/GEMINI.md" ] || { fail "GEMINI.md was unexpectedly removed"; exit 1; }
-grep -q "REPO-NEXUS:START" "$TEST_WORKSPACE/GEMINI.md" || { fail "GEMINI.md lost REPO-NEXUS instructions after disabling gemini"; exit 1; }
-[ -f "$TEST_WORKSPACE/AGENTS.md" ] || { fail "AGENTS.md missing after disabling provider plugin"; exit 1; }
+[ ! -f "$TEST_WORKSPACE/GEMINI.md" ] || { fail "GEMINI.md was not removed after disabling gemini (had no user content)"; exit 1; }
+[ ! -f "$TEST_WORKSPACE/.geminiignore" ] || { fail ".geminiignore was not removed after disabling gemini (had no user rules)"; exit 1; }
+[ -f "$TEST_WORKSPACE/AGENTS.md" ] || { fail "AGENTS.md missing after disabling provider plugin (should restore as fallback)"; exit 1; }
 grep -q "REPO-NEXUS:START" "$TEST_WORKSPACE/AGENTS.md" || { fail "AGENTS.md missing REPO-NEXUS instructions after disabling gemini"; exit 1; }
 [ ! -d "$TEST_WORKSPACE/.agents/skills/rnex-clone-sync" ] || { fail "User skills not cleaned up after disabling gemini"; exit 1; }
 pass
 
 # --------------------------------------------------------------------------
-run_test "Init with --claude flag sets up Claude plugin, permanent AGENTS.md, CLAUDE.md, and User Skills"
+run_test "Init with --claude flag sets up Claude plugin, CLAUDE.md, and User Skills without redundant AGENTS.md"
 TEST_AI_WS="$TEST_TMP/ai-workspace"
 mkdir -p "$TEST_AI_WS"
 cp "$CLI" "$TEST_AI_WS/rnex"
 chmod +x "$TEST_AI_WS/rnex"
 cp -r "$DIR/toolkit" "$TEST_AI_WS/toolkit"
 "$TEST_AI_WS/rnex" init -y --claude "$TEST_AI_WS" >/dev/null
-[ -f "$TEST_AI_WS/AGENTS.md" ] || { fail "Permanent AGENTS.md missing after init --claude"; exit 1; }
-grep -q "REPO-NEXUS:START" "$TEST_AI_WS/AGENTS.md" || { fail "AGENTS.md missing REPO-NEXUS directive after init --claude"; exit 1; }
+[ ! -f "$TEST_AI_WS/AGENTS.md" ] || { fail "AGENTS.md should not be created when claude provides CLAUDE.md"; exit 1; }
 [ -f "$TEST_AI_WS/CLAUDE.md" ] || { fail "CLAUDE.md missing after init --claude"; exit 1; }
 [ -d "$TEST_AI_WS/.claude/skills" ] || { fail ".claude/skills missing after init --claude"; exit 1; }
 [ -f "$TEST_AI_WS/.claude/skills/rnex-clone-sync/SKILL.md" ] || { fail "rnex-clone-sync/SKILL.md missing in .claude/skills"; exit 1; }

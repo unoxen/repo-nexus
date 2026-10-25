@@ -33,10 +33,9 @@ npm install -g repo-nexus
 rnex --version
 ```
 
-```sh [Standalone Shell Binary]
-# Direct POSIX download to /usr/local/bin (no Node.js required)
-curl -fsSL https://raw.githubusercontent.com/unoxen/repo-nexus/main/rnex -o /usr/local/bin/rnex
-chmod +x /usr/local/bin/rnex
+```sh [Standalone Shell Installer]
+# Zero-dependency POSIX installer into ~/.local/bin (no Node.js required)
+curl -fsSL https://raw.githubusercontent.com/unoxen/repo-nexus/main/scripts/install.sh | sh
 
 # Verify installation
 rnex --version
@@ -61,12 +60,11 @@ rnex init -y
 ```
 
 ```text
-[rnex] Initializing Repo Nexus workspace in /Users/dev/my-workspace...
-[rnex] Created rnex.yaml (version 0.8.1)
-[rnex] Created ./repos/ directory
-[rnex] Created .rnex/ and standardized skills
-[rnex] Reconciled .gitignore
-[rnex] Workspace initialized successfully.
+[✓] Created rnex.yaml
+[✓] Created .gitignore (ignoring repos/, recursive .rnex directories, and .local.rnex.yaml)
+[✓] Created .ignore (un-ignoring member repos for search tools)
+[✓] Created AGENTS.md (routing to .rnex/ai-instructions.md)
+[✓] Workspace initialized in /Users/dev/my-workspace
 ```
 
 ### 2. Add Member Repositories
@@ -87,11 +85,12 @@ rnex clone
 ```
 
 ```text
-[rnex] Cloning backend into ./repos/backend...
-Cloning into './repos/backend'...
-[rnex] Cloning frontend into ./repos/frontend...
-Cloning into './repos/frontend'...
-[rnex] All 2 member repositories cloned successfully.
+[i] Cloning backend into /Users/dev/my-workspace/repos/backend...
+Cloning into '/Users/dev/my-workspace/repos/backend'...
+[✓] Cloned backend
+[i] Cloning frontend into /Users/dev/my-workspace/repos/frontend...
+Cloning into '/Users/dev/my-workspace/repos/frontend'...
+[✓] Cloned frontend
 ```
 
 ### 4. Check Workspace Status
@@ -123,10 +122,10 @@ rnex exec git status -s
 ```
 
 ```text
-==> [backend] (./repos/backend)
+[backend] (git status -s)
  M src/api/router.go
 
-==> [frontend] (./repos/frontend)
+[frontend] (git status -s)
 ?? package-lock.json
 ```
 

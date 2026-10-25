@@ -93,9 +93,8 @@ rnex clone
 ```
 
 ```sh [curl (Standalone)]
-# Download single executable binary directly (zero Node.js required)
-curl -fsSL https://raw.githubusercontent.com/unoxen/repo-nexus/main/rnex -o /usr/local/bin/rnex
-chmod +x /usr/local/bin/rnex
+# Install via zero-dependency standalone installer (no Node.js required)
+curl -fsSL https://raw.githubusercontent.com/unoxen/repo-nexus/main/scripts/install.sh | sh
 rnex --version
 ```
 

@@ -194,10 +194,7 @@ YAML_EOF
   WORKSPACE_LOCAL_YAML="$_init_dir/$RNEX_LOCAL_CONFIG_FILE"
 
   # ---- 2. Merge routing instructions into AI instructions files ------------
-  merge_rnex_instructions "$_init_dir/AGENTS.md"
-  for _if in CLAUDE.md GEMINI.md CODEX.md .cursorrules .windsurfrules .github/copilot-instructions.md; do
-    [ -f "$_init_dir/$_if" ] && merge_rnex_instructions "$_init_dir/$_if"
-  done
+  reconcile_ai_instructions_files "$_init_dir"
 
   # ---- 3. Create repos directory with .gitkeep -----------------------------
   _repos_dir="$_init_dir/repos"

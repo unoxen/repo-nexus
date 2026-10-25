@@ -33,7 +33,7 @@ rnex_hooks:
     - "echo 'Finished command:' $RNEX_PLUGIN_COMMAND"
 ```
 
-Workstation-specific overrides can be added to `.local.rnex.yaml`. If an event list is specified in `.local.rnex.yaml`, it extends or supplements the commands in `rnex.yaml`.
+Workstation-specific overrides can be added to `.local.rnex.yaml`. If an event list is specified in `.local.rnex.yaml`, its command list takes precedence and overrides that event's commands in `rnex.yaml` (both underscore `after_sync` and hyphenated `after-sync` keys are supported).
 
 ---
 

@@ -49,7 +49,7 @@ A **Virtual Meta-Repo** companion for multi-repo workspaces and shared AI contex
 
 | What It Is | What It Isn't |
 | :--- | :--- |
-| **A lightweight companion utility** (~25 KB POSIX script). | **NOT a replacement for your workspace or tools.** It doesn't replace VS Code, Cursor, JetBrains, or your terminal. |
+| **A lightweight companion utility** (modular pure POSIX `/bin/sh` CLI). | **NOT a replacement for your workspace or tools.** It doesn't replace VS Code, Cursor, JetBrains, or your terminal. |
 | **A Virtual Meta-Repo orchestrator** managing member clones in `./repos/`. | **NOT a build tool or monorepo orchestrator.** It doesn't replace tools like Nx, Turborepo, Cargo, or Gradle. |
 | **Zero Git friction.** Repositories remain normal, autonomous Git repos. | **NOT Git submodules or subtrees.** No `.gitmodules` files, no detached HEADs, no commit coordination lock-in. |
 | **Strictly encapsulated.** Internal rnex assets live exclusively in `.rnex/`. | **NOT invasive.** Member repositories remain clean; workspace-related context is isolated to `repos/<name>/.rnex/`. |
@@ -134,10 +134,21 @@ All declared member repositories are cloned and wired up automatically!
 
 ## Project Structure
 
-```
+```text
 repo-nexus/
 ├── package.json                    # npm package manifest (single version source of truth)
-├── rnex                            # CLI executable (POSIX shell)
+├── rnex                            # CLI entrypoint (pure POSIX /bin/sh)
+├── lib/                            # Modular POSIX shell libraries
+│   ├── core.sh                     # Terminal colors, logging, path & version helpers
+│   ├── yaml.sh                     # Two-level YAML parser & config mutators
+│   ├── workspace.sh                # Workspace root discovery & auto-sync engine
+│   ├── repos.sh                    # Member repo path resolution & on-demand .rnex/
+│   ├── plugins.sh                  # Plugin discovery, template & command engine
+│   ├── sdk.sh                      # Plugin Hook SDK & User Skill generator
+│   ├── ai.sh                       # AI routing instructions, .gitignore & .code-workspace
+│   ├── hooks.sh                    # Declarative Git hooks & lifecycle event dispatcher
+│   ├── commands.sh                 # CLI subcommand module loader
+│   └── commands/                   # Subcommand implementations (init, sync, repo, etc.)
 ├── AGENTS.md                       # Routing-only universal AI instructions
 ├── CHANGELOG.md                    # Release history and migration notes
 ├── CONTRIBUTION.md                 # POSIX standards, testing setup, and plugin contract
@@ -158,9 +169,9 @@ repo-nexus/
 ├── tests/
 │   ├── test_cli.sh                 # Main test runner
 │   ├── test_helper.sh              # Shared test harness and utilities
-│   └── suites/                     # Modular test suites
+│   └── suites/                     # Modular test suites (01–07)
 ├── toolkit/                        # Built-in plugins and core agentic skills
-│   ├── plugins/                    # Scoped workspace plugins
+│   ├── plugins/                    # Scoped workspace & AI provider plugins
 │   └── skills/                     # Core workspace agentic skills
 └── README.md
 ```

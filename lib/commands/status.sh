@@ -4,21 +4,7 @@
 # lib/commands/status.sh — Workspace health and status diagnostics
 # ============================================================================
 
-# Query active plugins for any non-manual lint triggers (e.g. git hook triggers).
-_status_active_plugin_trigger() {
-  for _p in $(yaml_list_plugins 2>/dev/null || true); do
-    yaml_plugin_enabled "$_p" 2>/dev/null || continue
-    _trig="$(yaml_plugin_get "$_p" "lint_trigger" 2>/dev/null || true)"
-    [ -z "$_trig" ] && _trig="$(yaml_plugin_get "$_p" "trigger" 2>/dev/null || true)"
-    if [ -n "$_trig" ] && [ "$_trig" != "manual" ]; then
-      printf '%s' "$_trig"
-      return 0
-    fi
-  done
-  return 0
-}
-
-# Check if a directory contains any rnex-* user skills or skill symlinks.
+# Check if a directory contains any rnex-* user skill pointers or skill bundles.
 _status_has_rnex_skills() {
   [ -d "$1" ] && { ls "$1"/rnex-*.md >/dev/null 2>&1 || ls -d "$1"/rnex-* >/dev/null 2>&1; }
 }
@@ -80,15 +66,31 @@ cmd_status() {
   fi
 
   _gi="$NEXUS_DIR/.gitignore"
-  _gi_repos=0; _gi_local=0; _gi_has_counter=0; _gi_has_rnex=0
+  _gi_repos=0; _gi_local=0; _gi_has_counter=0; _gi_has_rnex=0; _gi_has_markers=0; _gi_custom_ok=1
   if [ -f "$_gi" ]; then
     grep -q '^repos' "$_gi" 2>/dev/null && _gi_repos=1
     grep -qF "$RNEX_LOCAL_CONFIG_FILE" "$_gi" 2>/dev/null && _gi_local=1
     grep -q "lint_trigger_counter" "$_gi" 2>/dev/null && _gi_has_counter=1
     grep -q '\*\*/\.rnex\*/' "$_gi" 2>/dev/null && _gi_has_rnex=1
+    if grep -qFx -- "${GITIGNORE_MARKER_START:-# REPO-NEXUS:START}" "$_gi" 2>/dev/null && \
+       grep -qFx -- "${GITIGNORE_MARKER_END:-# REPO-NEXUS:END}" "$_gi" 2>/dev/null; then
+      _gi_has_markers=1
+      _gi_exp_tmp="$(mktemp)"
+      _gi_act_tmp="$(mktemp)"
+      _build_rnex_gitignore_section > "$_gi_exp_tmp"
+      awk -v s="${GITIGNORE_MARKER_START:-# REPO-NEXUS:START}" -v e="${GITIGNORE_MARKER_END:-# REPO-NEXUS:END}" '
+        $0 == s { in_b = 1 }
+        in_b { print }
+        $0 == e { in_b = 0; exit }
+      ' "$_gi" > "$_gi_act_tmp"
+      if ! cmp -s "$_gi_exp_tmp" "$_gi_act_tmp"; then
+        _gi_custom_ok=0
+      fi
+      rm -f "$_gi_exp_tmp" "$_gi_act_tmp"
+    fi
   fi
 
-  if [ "$_gi_repos" -eq 1 ] && [ "$_gi_local" -eq 1 ] && [ "$_gi_has_counter" -eq 0 ] && [ "$_gi_has_rnex" -eq 1 ]; then
+  if [ "$_gi_repos" -eq 1 ] && [ "$_gi_local" -eq 1 ] && [ "$_gi_has_counter" -eq 0 ] && [ "$_gi_has_rnex" -eq 1 ] && [ "$_gi_has_markers" -eq 1 ] && [ "$_gi_custom_ok" -eq 1 ]; then
     printf '  %b✓%b Git Ignore:    repos/, %s, and **/.rnex*/ ignored in .gitignore\n' "$_G" "$_NC" "$RNEX_LOCAL_CONFIG_FILE"
   else
     printf '  %b!%b Git Ignore:    recommend running "rnex sync" to update .gitignore (repos/, local configs)\n' "$_Y" "$_NC"
@@ -126,10 +128,11 @@ cmd_status() {
   else
     printf '  %b✗%b %s %b(compiled AI instructions — MISSING; run "rnex sync" to create)%b\n' "$_R" "$_NC" ".rnex/ai-instructions.md" "$_R" "$_NC"
   fi
+
+  _has_any_instructions=0
   if [ -f "$NEXUS_DIR/AGENTS.md" ]; then
     printf '  %b✓%b %s %b(standard instructions directive)%b\n' "$_G" "$_NC" "AGENTS.md" "$_DIM" "$_NC"
-  else
-    printf '  %b✗%b %s %b(standard instructions directive — MISSING; run "rnex sync" to create)%b\n' "$_R" "$_NC" "AGENTS.md" "$_R" "$_NC"
+    _has_any_instructions=1
   fi
   for _pair in \
     "CLAUDE.md:Claude" \
@@ -142,8 +145,15 @@ cmd_status() {
     _ilbl="${_pair#*:}"
     if [ -f "$NEXUS_DIR/$_ifile" ]; then
       printf '  %b✓%b %s %b(%s instructions)%b\n' "$_G" "$_NC" "$_ifile" "$_DIM" "$_ilbl" "$_NC"
+      _has_any_instructions=1
     fi
   done
+  if [ "$_has_any_instructions" -eq 0 ]; then
+    _active_ifiles=""
+    command -v get_active_provider_instruction_files >/dev/null 2>&1 && _active_ifiles="$(get_active_provider_instruction_files "$NEXUS_DIR" 2>/dev/null || true)"
+    _target_ifile="${_active_ifiles:-AGENTS.md}"
+    printf '  %b✗%b %s %b(instructions directive — MISSING; run "rnex sync" to create)%b\n' "$_R" "$_NC" "$_target_ifile" "$_R" "$_NC"
+  fi
   if [ -n "$CODE_WORKSPACE_FILE" ]; then
     if [ -f "$NEXUS_DIR/$CODE_WORKSPACE_FILE" ]; then
       printf '  %b✓%b %s %b(VS Code / Cursor workspace)%b\n' "$_G" "$_NC" "$CODE_WORKSPACE_FILE" "$_DIM" "$_NC"

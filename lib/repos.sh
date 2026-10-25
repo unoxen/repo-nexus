@@ -63,11 +63,6 @@ repo_readonly() {
   yaml_repo_readonly "$1"
 }
 
-# Backwards-compatibility alias for checking if member .rnex exists
-repo_rnex_dir_enabled() {
-  repo_has_rnex_dir "$1"
-}
-
 # Cleanly tear down .rnex in a member repository.
 # Removes auto-generated plugins and boilerplate README, pruning empty directories
 # while preserving any user-customized files.

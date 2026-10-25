@@ -1,4 +1,5 @@
 #!/bin/sh
+# shellcheck shell=sh
 # ============================================================================
 # Repo Nexus (rnex) — Standalone Zero-Dependency Installer
 # https://github.com/unoxen/repo-nexus

@@ -65,7 +65,7 @@ A self-healing, agent-maintained knowledge graph structured as:
   - Audits logical inconsistencies and flags outdated information.
   - Updates `wiki/hot.md` and rebuilds `wiki/index.md`.
 
-### 5. Specialized Agent (`agents/wiki-curator.agent.md`)
+### 5. Specialized Agent (`agents/rnex-wiki-curator.agent.md`)
 - A dedicated autonomous curator agent configured to maintain the LLM Wiki graph, execute ingestion protocols, and perform periodic graph integrity audits.
 
 ---
@@ -218,7 +218,7 @@ The `karpathy-llm` plugin encapsulates its agentic skills in `.rnex/plugins/karp
 - `wiki-ingest.md`
 - `wiki-lint.md`
 
-During `rnex sync`, its `after_sync.sh` lifecycle hook automatically registers zero-logic User Skill pointers (`rnex-karpathy-llm-wiki-ingest` and `rnex-karpathy-llm-wiki-lint`) across all enabled AI provider directories (`.cursor/rules/`, `.claude/skills/`, `.agents/skills/`, `.windsurf/rules/`).
+During `rnex sync`, its `after_sync.sh` lifecycle hook automatically registers zero-logic User Skill pointers (`rnex-karpathy-llm-wiki-ingest` and `rnex-karpathy-llm-wiki-lint`) across all enabled AI provider directories (`.cursor/rules/`, `.claude/skills/`, `.agents/skills/`, `.codex/skills/`, `.github/skills/`, `.windsurf/rules/`).
 
 When running `rnex plugin disable karpathy-llm`, its `before_plugin_disable.sh` lifecycle hook automatically unregisters the User Skills from all provider directories, while keeping core workspace skills intact.
 
@@ -231,5 +231,5 @@ rnex plugin disable karpathy-llm
 ```
 
 When disabled:
-- Scoped assets under `.rnex/plugins/karpathy-llm/` and member repository mirrors are cleanly removed.
+- Scoped assets under `.rnex/plugins/karpathy-llm/` and any on-demand member repository plugin directories are cleanly removed.
 - **Your data in `./docs/` and `wiki/` is preserved 100% intact.** Repo Nexus never deletes user-generated knowledge bases upon plugin disablement.

@@ -20,7 +20,6 @@ export default withMermaid(
     },
 
     head: [
-      ['meta', { name: 'google-site-verification', content: '<YOUR_VERIFICATION_TOKEN>' }],
       ['link', { rel: 'canonical', href: 'https://unoxen.github.io/repo-nexus/' }],
       ['meta', { property: 'og:type', content: 'website' }],
       ['meta', { property: 'og:title', content: 'Repo Nexus (rnex) - Virtual Meta-Repo Companion' }],

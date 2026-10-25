@@ -306,10 +306,7 @@ install_git_hooks() {
   esac
   [ -d "$_git_dir" ] || return 0
   _hooks_dir="$_git_dir/hooks"
-  mkdir -p "$_hooks_dir"
-  for _h in $RNEX_MANAGED_GIT_HOOKS; do
-    _create_hook_script "$_hooks_dir/$_h" "$_h"
-  done
+  _install_managed_hook_scripts "$_hooks_dir"
   # Clean up legacy .rnex/hooks if core.hooksPath was previously set to it
   _hp="$(git -C "$_ws_dir" config --get core.hooksPath 2>/dev/null || true)"
   if [ "$_hp" = ".rnex/hooks" ] || [ "$_hp" = "$_ws_dir/.rnex/hooks" ]; then

@@ -1,5 +1,5 @@
 #!/bin/sh
-# shellcheck shell=sh
+# shellcheck shell=sh disable=SC2154
 # ============================================================================
 # toolkit/plugins/karpathy-llm/commands/lint.sh — Karpathy LLM Wiki Linter
 #
@@ -8,29 +8,14 @@
 set -e
 
 _root="${RNEX_ROOT:-${NEXUS_DIR:-$PWD}}"
-RNEX_ROOT="$_root"
-NEXUS_DIR="$_root"
-WORKSPACE_YAML="${WORKSPACE_YAML:-$_root/rnex.yaml}"
-WORKSPACE_LOCAL_YAML="${WORKSPACE_LOCAL_YAML:-$_root/.local.rnex.yaml}"
-export RNEX_ROOT NEXUS_DIR WORKSPACE_YAML WORKSPACE_LOCAL_YAML
-
-# Load core/yaml/plugins libraries if not already loaded
-if ! command -v yaml_plugin_get >/dev/null 2>&1; then
-  _cand_dirs="${RNEX_LIB_DIR:-} $_root/lib $(dirname "$0")/../../../../lib"
-  for _cand in $_cand_dirs; do
-    if [ -n "$_cand" ] && [ -f "$_cand/yaml.sh" ]; then
-      RNEX_LIB_DIR="$(cd "$_cand" 2>/dev/null && pwd -P)"
-      export RNEX_LIB_DIR
-      # shellcheck source=/dev/null
-      . "$RNEX_LIB_DIR/core.sh" 2>/dev/null || true
-      # shellcheck source=/dev/null
-      . "$RNEX_LIB_DIR/yaml.sh" 2>/dev/null || true
-      # shellcheck source=/dev/null
-      . "$RNEX_LIB_DIR/plugins.sh" 2>/dev/null || true
-      break
-    fi
-  done
-fi
+for _kl_common in \
+  "${RNEX_PLUGIN_DIR:-}/hooks/_common.sh" \
+  "$(dirname "$0")/../hooks/_common.sh" \
+  "$_root/.rnex/plugins/karpathy-llm/hooks/_common.sh" \
+  "$_root/toolkit/plugins/karpathy-llm/hooks/_common.sh"; do
+  # shellcheck source=/dev/null
+  [ -f "$_kl_common" ] && { . "$_kl_common"; break; }
+done
 
 _strict=0
 _quiet=0
@@ -63,12 +48,6 @@ HELP_EOF
   esac
   shift
 done
-
-# Resolve configured wiki directory
-_wiki="$(yaml_plugin_get "karpathy-llm" "wiki_dir" 2>/dev/null || true)"
-[ -n "$_wiki" ] || _wiki="wiki"
-_wiki="$(printf '%s' "$_wiki" | sed -e 's#^/##' -e 's#/$##')"
-_wiki_path="$_root/$_wiki"
 
 _errors=0
 _warnings=0

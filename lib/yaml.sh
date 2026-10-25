@@ -642,6 +642,9 @@ yaml_list_plugins() {
   {
     _yaml_list_plugins_from_file "$_wy"
     _yaml_list_plugins_from_file "$_wly"
+    if [ -n "$(_yaml_top_level_from_file "$_wly" "wiki_dir")" ] || [ -n "$(_yaml_top_level_from_file "$_wy" "wiki_dir")" ]; then
+      printf 'karpathy-llm\n'
+    fi
   } | awk '!seen[$0]++'
 }
 
@@ -657,7 +660,14 @@ yaml_plugin_get() {
     printf '%s' "$_val"
     return 0
   fi
-  _yaml_plugin_get_from_file "$_wy" "$_pname" "$_key"
+  _val="$(_yaml_plugin_get_from_file "$_wy" "$_pname" "$_key")"
+  if [ -n "$_val" ]; then
+    printf '%s' "$_val"
+    return 0
+  fi
+  if [ "$_pname" = "karpathy-llm" ] && [ "$_key" = "wiki_dir" ]; then
+    yaml_get_top_level "wiki_dir"
+  fi
 }
 
 # Extract list items under plugins.<plugin>.<key> from a single config file.
@@ -838,55 +848,6 @@ provider_auto_sync_enabled() {
   [ -n "$_val" ] || _val="$(yaml_plugin_get "$_p" "autoSyncOn")"
   [ -n "$_val" ] || _val="SessionStart"
   is_enabled_val "$_val"
-}
-
-copilot_plugin_enabled() { provider_plugin_enabled "copilot"; }
-copilot_instructions_enabled() { provider_plugin_enabled "copilot"; }
-copilot_skills_enabled() { provider_option_enabled "copilot" "skills"; }
-
-claude_plugin_enabled() { provider_plugin_enabled "claude"; }
-claude_instructions_enabled() { provider_plugin_enabled "claude"; }
-claude_skills_enabled() { provider_option_enabled "claude" "skills"; }
-claude_auto_sync_enabled() { provider_auto_sync_enabled "claude"; }
-
-gemini_plugin_enabled() { provider_plugin_enabled "gemini"; }
-gemini_instructions_enabled() { provider_plugin_enabled "gemini"; }
-gemini_skills_enabled() { provider_option_enabled "gemini" "skills"; }
-gemini_auto_sync_enabled() { provider_auto_sync_enabled "gemini"; }
-
-cursor_plugin_enabled() { provider_plugin_enabled "cursor"; }
-cursor_instructions_enabled() { provider_plugin_enabled "cursor"; }
-cursor_skills_enabled() { provider_option_enabled "cursor" "skills"; }
-
-windsurf_plugin_enabled() { provider_plugin_enabled "windsurf"; }
-windsurf_instructions_enabled() { provider_plugin_enabled "windsurf"; }
-windsurf_skills_enabled() { provider_option_enabled "windsurf" "skills"; }
-
-codex_plugin_enabled() { provider_plugin_enabled "codex"; }
-codex_instructions_enabled() { provider_plugin_enabled "codex"; }
-codex_skills_enabled() { provider_option_enabled "codex" "skills"; }
-
-has_active_provider_instructions() {
-  _saved_ws_yaml="${WORKSPACE_YAML:-}"
-  _saved_local_yaml="${WORKSPACE_LOCAL_YAML:-}"
-  if [ -n "$1" ] && [ -d "$1" ]; then
-    WORKSPACE_YAML="$1/rnex.yaml"
-    WORKSPACE_LOCAL_YAML="$1/.local.rnex.yaml"
-  fi
-  _res=1
-  if copilot_instructions_enabled || \
-     claude_instructions_enabled || \
-     gemini_instructions_enabled || \
-     cursor_instructions_enabled || \
-     windsurf_instructions_enabled || \
-     codex_instructions_enabled; then
-    _res=0
-  fi
-  if [ -n "$1" ] && [ -d "$1" ]; then
-    WORKSPACE_YAML="$_saved_ws_yaml"
-    WORKSPACE_LOCAL_YAML="$_saved_local_yaml"
-  fi
-  return $_res
 }
 
 _yaml_plugin_set_in_file() {

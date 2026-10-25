@@ -6,16 +6,14 @@
 
 # ---- Gitignore & Search Tool Ignore Reconciliation -------------------------
 
-# Reconcile workspace root .gitignore and .ignore:
-# - Ensures repos/ is ignored in git to prevent accidental commits of member repos
-# - Ensures .local.rnex.yaml is ignored
-# - Ensures .ignore un-ignores repos/* so ripgrep and AI tools can index member files
-reconcile_gitignore() {
-  _dir="${1:-$NEXUS_DIR}"
-  _gi="$_dir/.gitignore"
+GITIGNORE_MARKER_START="# REPO-NEXUS:START"
+GITIGNORE_MARKER_END="# REPO-NEXUS:END"
 
-  if [ ! -f "$_gi" ]; then
-    cat > "$_gi" <<GI_EOF
+# Emit the delimited Repo Nexus .gitignore section synced with git.ignore configuration.
+_build_rnex_gitignore_section() {
+  cat <<GI_SECTION_EOF
+$GITIGNORE_MARKER_START
+# Managed by Repo Nexus (rnex) — synced with git.ignore in workspace configuration
 # Member repos (managed by rnex, ignored at workspace level)
 repos/*
 !repos/.gitkeep
@@ -29,7 +27,52 @@ rnex*/
 # Local machine-specific configuration
 $RNEX_LOCAL_CONFIG_FILE
 .rnex.local.yaml
-GI_EOF
+GI_SECTION_EOF
+
+  _custom_ignores="$(yaml_get_git_ignore 2>/dev/null || true)"
+  if [ -n "$_custom_ignores" ]; then
+    _added_custom_header=0
+    _seen_custom=""
+    printf '%s\n' "$_custom_ignores" | while IFS= read -r _ci || [ -n "$_ci" ]; do
+      [ -n "$_ci" ] || continue
+      case "$_ci" in
+        "repos/"|"repos/*"|"!repos/.gitkeep"|"**/.rnex*/"|"**/rnex*/"|".rnex*/"|"rnex*/"|"$RNEX_LOCAL_CONFIG_FILE"|".rnex.local.yaml")
+          continue
+          ;;
+      esac
+      case "
+$_seen_custom
+" in
+        *"
+$_ci
+"*) continue ;;
+      esac
+      _seen_custom="${_seen_custom:+$_seen_custom
+}$_ci"
+      if [ "$_added_custom_header" -eq 0 ]; then
+        printf '\n# Custom entries from git.ignore in workspace configuration\n'
+        _added_custom_header=1
+      fi
+      printf '%s\n' "$_ci"
+    done
+  fi
+
+  printf '%s\n' "$GITIGNORE_MARKER_END"
+}
+
+# Reconcile workspace root .gitignore and .ignore:
+# - Maintains a delimited (# REPO-NEXUS:START ... # REPO-NEXUS:END) section in .gitignore
+# - Synchronizes the section with git.ignore from rnex.yaml and .local.rnex.yaml
+# - Preserves user-authored .gitignore rules outside the managed section
+# - Ensures .ignore un-ignores repos/* so ripgrep and AI tools can index member files
+reconcile_gitignore() {
+  _dir="${1:-$NEXUS_DIR}"
+  _gi="$_dir/.gitignore"
+  _sec_tmp="$(mktemp)"
+  _build_rnex_gitignore_section > "$_sec_tmp"
+
+  if [ ! -f "$_gi" ]; then
+    mv "$_sec_tmp" "$_gi"
     log_ok "Created .gitignore (ignoring repos/, recursive .rnex directories, and $RNEX_LOCAL_CONFIG_FILE)"
   else
     # 1. Strip any legacy lint_trigger_counter entries if present
@@ -39,62 +82,55 @@ GI_EOF
       log_ok "Removed legacy lint trigger counter entries from .gitignore"
     fi
 
-    # 2. Strip any legacy un-slashed .rnex or rnex rules that might match files
-    if grep -qE '^[ ]*#?[ ]*Repo Nexus internal state' "$_gi" 2>/dev/null || grep -qE '^(\.rnex|rnex)$' "$_gi" 2>/dev/null; then
+    # 2. If delimited section exists, replace it in-place with the newly synced section
+    if grep -qFx -- "$GITIGNORE_MARKER_START" "$_gi" 2>/dev/null; then
       _tmp="$(mktemp)"
-      grep -vE '(^[ ]*#?[ ]*Repo Nexus internal state|^(\.rnex|rnex)$)' "$_gi" > "$_tmp" && mv "$_tmp" "$_gi"
-    fi
+      awk -v s="$GITIGNORE_MARKER_START" -v e="$GITIGNORE_MARKER_END" -v src="$_sec_tmp" '
+        $0 == s {
+          in_b = 1
+          while ((getline line < src) > 0) print line
+          close(src)
+          next
+        }
+        $0 == e {
+          in_b = 0
+          next
+        }
+        !in_b { print }
+      ' "$_gi" > "$_tmp" && mv "$_tmp" "$_gi"
+      rm -f "$_sec_tmp"
+    else
+      # 3. Upgrade legacy un-delimited .gitignore or append managed section to existing user .gitignore
+      _user_tmp="$(mktemp)"
+      awk -v local_cfg="$RNEX_LOCAL_CONFIG_FILE" '
+        /^[ ]*#[ ]*Member repos \(managed by rnex/ { next }
+        /^[ ]*#[ ]*Recursive Repo Nexus directories/ { next }
+        /^[ ]*#?[ ]*Repo Nexus internal state/ { next }
+        /^[ ]*#[ ]*Local machine-specific configuration/ { next }
+        /^[ ]*#[ ]*Custom entries from git\.ignore in workspace configuration/ { next }
+        $0 == "repos/*" || $0 == "!repos/.gitkeep" { next }
+        $0 == "**/.rnex*/" || $0 == "**/rnex*/" || $0 == ".rnex*/" || $0 == "rnex*/" { next }
+        $0 == ".rnex" || $0 == "rnex" { next }
+        $0 == local_cfg || $0 == ".rnex.local.yaml" { next }
+        { lines[++n] = $0 }
+        END {
+          start = 1
+          while (start <= n && lines[start] ~ /^[[:space:]]*$/) start++
+          end = n
+          while (end >= start && lines[end] ~ /^[[:space:]]*$/) end--
+          for (i = start; i <= end; i++) print lines[i]
+        }
+      ' "$_gi" > "$_user_tmp"
 
-    # 3. Ensure repos/* is ignored
-    if ! grep -q "^repos" "$_gi" 2>/dev/null; then
-      printf '\n# Member repos (managed by rnex)\nrepos/*\n!repos/.gitkeep\n' >> "$_gi"
-      log_dim "Added repos/* to .gitignore"
-    fi
-
-    # 4. Ensure recursive directory-only rnex rules are present
-    _added_rnex_rules=0
-    for _pat in "**/.rnex*/" "**/rnex*/" ".rnex*/" "rnex*/"; do
-      if ! grep -qFx -- "$_pat" "$_gi" 2>/dev/null; then
-        if [ "$_added_rnex_rules" -eq 0 ]; then
-          printf '\n# Recursive Repo Nexus directories (trailing slashes prevent ignoring rnex binary or rnex.yaml)\n' >> "$_gi"
-          _added_rnex_rules=1
-        fi
-        printf '%s\n' "$_pat" >> "$_gi"
+      _tmp="$(mktemp)"
+      if [ -s "$_user_tmp" ]; then
+        cat "$_user_tmp" > "$_tmp"
+        printf '\n' >> "$_tmp"
       fi
-    done
-
-    # 5. Ensure local config files are ignored
-    if ! grep -qF "$RNEX_LOCAL_CONFIG_FILE" "$_gi" 2>/dev/null; then
-      printf '\n# Local machine-specific configuration\n%s\n' "$RNEX_LOCAL_CONFIG_FILE" >> "$_gi"
-      log_dim "Added $RNEX_LOCAL_CONFIG_FILE to .gitignore"
+      cat "$_sec_tmp" >> "$_tmp"
+      mv "$_tmp" "$_gi"
+      rm -f "$_user_tmp" "$_sec_tmp"
     fi
-    if ! grep -qF ".rnex.local.yaml" "$_gi" 2>/dev/null; then
-      printf '.rnex.local.yaml\n' >> "$_gi"
-    fi
-  fi
-
-  # 6. Append any custom file and directory patterns from git.ignore
-  _custom_ignores="$(yaml_get_git_ignore 2>/dev/null || true)"
-  if [ -n "$_custom_ignores" ]; then
-    _added_custom_header=0
-    _old_ifs="$IFS"
-    IFS='
-'
-    for _ci in $_custom_ignores; do
-      IFS="$_old_ifs"
-      [ -n "$_ci" ] || continue
-      if [ "$_ci" = "repos/" ] && grep -qFx -- "repos/*" "$_gi" 2>/dev/null; then
-        continue
-      fi
-      if ! grep -qFx -- "$_ci" "$_gi" 2>/dev/null; then
-        if [ "$_added_custom_header" -eq 0 ]; then
-          printf '\n# Custom entries from git.ignore in workspace configuration\n' >> "$_gi"
-          _added_custom_header=1
-        fi
-        printf '%s\n' "$_ci" >> "$_gi"
-      fi
-    done
-    IFS="$_old_ifs"
   fi
 
   # Universal search tool ignore file (ripgrep, Claude Code, VS Code, Zed)
@@ -103,7 +139,134 @@ GI_EOF
     "Created .ignore (un-ignoring member repos for search tools)"
 }
 
+# Clean managed Repo Nexus ignore block from .gitignore, removing file if empty
+clean_rnex_gitignore() {
+  _dir="${1:-$NEXUS_DIR}"
+  _gi="$_dir/.gitignore"
+  [ -f "$_gi" ] || return 0
+  if grep -qFx -- "${GITIGNORE_MARKER_START:-# REPO-NEXUS:START}" "$_gi" 2>/dev/null; then
+    _user_content="$(awk -v s="${GITIGNORE_MARKER_START:-# REPO-NEXUS:START}" -v e="${GITIGNORE_MARKER_END:-# REPO-NEXUS:END}" '
+      $0 == s { in_b = 1; next }
+      $0 == e { in_b = 0; next }
+      !in_b { print }
+    ' "$_gi" | sed -e '/^[[:space:]]*$/d' -e '/^[[:space:]]*#/d')"
+    if [ -z "$_user_content" ]; then
+      rm -f "$_gi"
+      [ "${RNEX_QUIET:-0}" -eq 0 ] && [ "${_sync_quiet:-0}" -eq 0 ] && log_ok "Removed .gitignore"
+    else
+      _tmp="$(mktemp)"
+      awk -v s="${GITIGNORE_MARKER_START:-# REPO-NEXUS:START}" -v e="${GITIGNORE_MARKER_END:-# REPO-NEXUS:END}" '
+        $0 == s { in_b = 1; next }
+        $0 == e { in_b = 0; next }
+        !in_b { print }
+      ' "$_gi" > "$_tmp" && mv "$_tmp" "$_gi"
+      [ "${RNEX_QUIET:-0}" -eq 0 ] && [ "${_sync_quiet:-0}" -eq 0 ] && log_ok "Removed Repo Nexus rules from .gitignore"
+    fi
+  fi
+}
+
 # ---- AI Instructions Compilation (.rnex/ai-instructions.md) ----------------
+
+# Resolve the primary instruction file for an AI provider plugin
+plugin_get_instruction_file() {
+  _pif_name="$1"
+  _pif_pdir="${2:-}"
+  [ -n "$_pif_pdir" ] || _pif_pdir="$(find_plugin_dir "$_pif_name" 2>/dev/null || true)"
+  _pif_file=""
+  if [ -n "$_pif_pdir" ]; then
+    _pif_file="$(plugin_get_field "$_pif_pdir" "instruction_file" 2>/dev/null || true)"
+  fi
+  if [ -z "$_pif_file" ]; then
+    case "$_pif_name" in
+      claude)   _pif_file="CLAUDE.md" ;;
+      gemini)   _pif_file="GEMINI.md" ;;
+      cursor)   _pif_file=".cursorrules" ;;
+      windsurf) _pif_file=".windsurfrules" ;;
+      codex)    _pif_file="CODEX.md" ;;
+      copilot)  _pif_file=".github/copilot-instructions.md" ;;
+      agents|agent) _pif_file="AGENTS.md" ;;
+    esac
+  fi
+  printf '%s' "$_pif_file"
+}
+
+# Enumerate primary instruction files for currently enabled AI provider plugins
+get_active_provider_instruction_files() {
+  _gap_dir="${1:-$NEXUS_DIR}"
+  _gap_files=""
+  for _p in $(yaml_list_plugins 2>/dev/null || true); do
+    [ -n "$_p" ] || continue
+    yaml_plugin_enabled "$_p" 2>/dev/null || continue
+    _ifile="$(plugin_get_instruction_file "$_p" 2>/dev/null || true)"
+    if [ -n "$_ifile" ]; then
+      case " $_gap_files " in
+        *" $_ifile "*) ;;
+        *) _gap_files="${_gap_files:+$_gap_files }$_ifile" ;;
+      esac
+    fi
+  done
+  printf '%s' "$_gap_files"
+}
+
+# Check if an instruction file contains custom user instructions outside the rnex block
+file_has_user_content() {
+  _fhuc_file="$1"
+  [ -f "$_fhuc_file" ] || return 1
+  _content=""
+  if grep -qF "${AI_MARKER_START:-<!-- REPO-NEXUS:START -->}" "$_fhuc_file" 2>/dev/null; then
+    _content="$(awk -v s="${AI_MARKER_START:-<!-- REPO-NEXUS:START -->}" -v e="${AI_MARKER_END:-<!-- REPO-NEXUS:END -->}" '
+      $0 == s { in_b = 1; next }
+      $0 == e { in_b = 0; next }
+      !in_b { print }
+    ' "$_fhuc_file" | sed -e '/^[[:space:]]*$/d')"
+  else
+    _content="$(grep -v "CRITICAL: You MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\`" "$_fhuc_file" 2>/dev/null | grep -v "Multi-Repo AI Workspace Context" | sed -e '/^[[:space:]]*$/d')"
+  fi
+  [ -n "$_content" ]
+}
+
+# Reconcile AI provider instruction files:
+# - When provider plugins are enabled (e.g. Gemini, Claude), creates/updates their specific instruction files (GEMINI.md, CLAUDE.md)
+# - Only creates AGENTS.md if it is the main instructions file for an enabled AI provider or no provider plugins are enabled
+# - Cleans up instruction files that have no user content when their provider is disabled or inactive
+reconcile_ai_instructions_files() {
+  _raif_dir="${1:-$NEXUS_DIR}"
+  _active_files="$(get_active_provider_instruction_files "$_raif_dir" 2>/dev/null || true)"
+
+  if [ -n "$_active_files" ]; then
+    # Active AI providers are configured with their own instruction files
+    for _af in $_active_files; do
+      merge_rnex_instructions "$_raif_dir/$_af"
+    done
+
+    # If AGENTS.md is not an active provider instruction file, clean rnex instructions from it
+    # (deleting it if solely rnex-managed, or stripping the rnex block if user content exists)
+    case " $_active_files " in
+      *" AGENTS.md "*) ;;
+      *)
+        if [ -f "$_raif_dir/AGENTS.md" ]; then
+          clean_rnex_instructions "$_raif_dir/AGENTS.md"
+        fi
+        ;;
+    esac
+  else
+    # No provider plugins enabled: AGENTS.md serves as the default main instructions file
+    merge_rnex_instructions "$_raif_dir/AGENTS.md"
+  fi
+
+  # For any existing instruction files on disk that are NOT currently active:
+  # Clean rnex instructions (removing file if empty outside block, or stripping rnex block)
+  for _if in CLAUDE.md GEMINI.md CODEX.md .cursorrules .windsurfrules .github/copilot-instructions.md; do
+    case " $_active_files " in
+      *" $_if "*) ;;
+      *)
+        if [ -f "$_raif_dir/$_if" ]; then
+          clean_rnex_instructions "$_raif_dir/$_if"
+        fi
+        ;;
+    esac
+  done
+}
 
 # Compile the unified .rnex/ai-instructions.md file consumed by AI coding agents.
 # Aggregates sample template instructions and active plugin instruction sections.
@@ -299,21 +462,7 @@ get_active_provider_skill_dirs() {
     [ -n "$_p" ] || continue
     yaml_plugin_enabled "$_p" 2>/dev/null || continue
     if provider_option_enabled "$_p" "skills" 2>/dev/null; then
-      _pdir="$(find_plugin_dir "$_p" 2>/dev/null || true)"
-      _sdir=""
-      if [ -n "$_pdir" ]; then
-        _sdir="$(plugin_get_field "$_pdir" "skill_dir" 2>/dev/null || true)"
-      fi
-      if [ -z "$_sdir" ]; then
-        case "$_p" in
-          copilot)  _sdir=".github/skills" ;;
-          cursor)   _sdir=".cursor/rules" ;;
-          claude)   _sdir=".claude/skills" ;;
-          windsurf) _sdir=".windsurf/rules" ;;
-          gemini)   _sdir=".agents/skills" ;;
-          codex)    _sdir=".codex/skills" ;;
-        esac
-      fi
+      _sdir="$(plugin_get_skill_dir "$_p")"
       if [ -n "$_sdir" ]; then
         case " $_dirs " in
           *" $_sdir "*) ;;

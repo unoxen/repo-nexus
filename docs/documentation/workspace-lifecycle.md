@@ -26,11 +26,14 @@ rnex init [options] [directory]
 | `--code-workspace` | | boolean \| string | `false` | Enable VS Code multi-root workspace file. Pass string for custom name. |
 | `--hooks` | | boolean | `true` (if git) | Force-enable automated Git hooks setup during initialization. |
 | `--no-hooks` | | boolean | `false` | Skip Git hooks configuration during initialization. |
+| `--copilot` | | boolean | `false` | Enable GitHub Copilot plugin (`.github/copilot-instructions.md`, `.github/skills/`). |
 | `--claude` | | boolean | `false` | Enable Claude Code plugin (`CLAUDE.md`, `.claude/skills/`). |
 | `--cursor` | | boolean | `false` | Enable Cursor plugin (`.cursorrules`, `.cursor/rules/`). |
 | `--codex` | | boolean | `false` | Enable OpenAI Codex plugin (`CODEX.md`, `.codex/skills/`). |
 | `--gemini` | | boolean | `false` | Enable Google Gemini plugin (`GEMINI.md`, `.agents/skills/`). |
 | `--windsurf` | | boolean | `false` | Enable Windsurf plugin (`.windsurfrules`, `.windsurf/rules/`). |
+| `--karpathy` | | boolean | `false` | Enable Karpathy LLM Wiki plugin (`wiki/`, `docs/`). |
+| `--plugin <name>` | | string | | Enable any specified plugin during initialization (repeatable). |
 
 ---
 
@@ -47,14 +50,15 @@ rnex sync [options]
 | Option | Shorthand | Type | Default | Description |
 |:---|:---|:---|:---|:---|
 | `--yes` | `-y` | boolean | `false` | Automatically confirm non-destructive schema upgrades if prompted. |
+| `--upgrade` | | boolean | `false` | Explicitly trigger non-destructive configuration and schema upgrade checks. |
 | `--quiet` | `-q` | boolean | `false` | Quiet mode; suppresses non-error informational messages (ideal for hooks). |
 
 ### Reconciliation Pipeline
 1. Upgrades configuration schema non-destructively if an older version is detected.
 2. Re-verifies `.gitignore` rules from `git.ignore` (enforcing directory-only patterns `**/.rnex*/`, `**/rnex*/`, `repos/`), and ensures `.ignore` contains `!repos/*`.
-3. Compiles `.rnex/ai-instructions.md` by combining the base template with active configuration and all enabled plugin `instructions.md` fragments. Writes single strict directive to top-level provider files (`AGENTS.md`, `CLAUDE.md`, `CODEX.md`, etc.).
-4. Syncs core agentic skills from `toolkit/skills/` to `.rnex/skills/` and generates zero-logic User Skills (`rnex-*.md`) in active AI provider directories.
-5. Re-syncs enabled plugin assets into `.rnex/plugins/` and member `repos/<name>/.rnex/`.
+3. Compiles `.rnex/ai-instructions.md` by combining the base template with active configuration and all enabled plugin instruction fragments. Writes single strict directive to top-level provider files (`AGENTS.md`, `CLAUDE.md`, `CODEX.md`, etc.).
+4. Syncs core agentic skills from `toolkit/skills/` to `.rnex/skills/` and generates zero-logic User Skills (`rnex-*`) in active AI provider directories.
+5. Re-syncs enabled plugin assets into `.rnex/plugins/` and reconciles on-demand member `repos/<name>/.rnex/` directories.
 6. Dispatches lifecycle hooks (`before_sync`, `after_sync`).
 7. Reconciles Git hook dispatchers in `.git/hooks/` against declarative `git.hooks` commands.
 8. Updates multi-root `.code-workspace` folder mappings if configured.

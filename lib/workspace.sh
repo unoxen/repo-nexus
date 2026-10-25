@@ -99,7 +99,9 @@ require_workspace() {
       die "Specified config file does not exist: $_cfg_path"
     fi
     NEXUS_DIR="$(cd -P "$(dirname "$_cfg_path")" 2>/dev/null && pwd -P)"
+    RNEX_ROOT="$NEXUS_DIR"
     WORKSPACE_YAML="$_cfg_path"
+    export NEXUS_DIR RNEX_ROOT WORKSPACE_YAML
     _init_local_yaml
     _load_workspace_version
     _load_repos_dir
@@ -121,6 +123,7 @@ require_workspace() {
   fi
 
   NEXUS_DIR="$_found_dir"
+  RNEX_ROOT="$NEXUS_DIR"
   if [ -f "$NEXUS_DIR/$RNEX_CONFIG_FILE" ]; then
     WORKSPACE_YAML="$NEXUS_DIR/$RNEX_CONFIG_FILE"
   elif [ -f "$NEXUS_DIR/.rnex.yaml" ]; then
@@ -128,6 +131,7 @@ require_workspace() {
   else
     WORKSPACE_YAML="$NEXUS_DIR/$RNEX_CONFIG_FILE"
   fi
+  export NEXUS_DIR RNEX_ROOT WORKSPACE_YAML
   _init_local_yaml
   _load_workspace_version
   _load_repos_dir

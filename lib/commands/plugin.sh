@@ -82,15 +82,7 @@ cmd_plugin_info() {
   [ -n "$_home" ] && printf '%bHomepage:%b     %s\n' "$_BOLD" "$_NC" "$_home"
   printf '%bLocation:%b     %s\n' "$_BOLD" "$_NC" "$_pdir"
 
-  _skill_target="$(plugin_get_field "$_pdir" "skill_dir" 2>/dev/null || true)"
-  [ -z "$_skill_target" ] && case "$_name" in
-    copilot)  _skill_target=".github/skills/" ;;
-    claude)   _skill_target=".claude/skills/" ;;
-    gemini)   _skill_target=".agents/skills/" ;;
-    cursor)   _skill_target=".cursor/rules/" ;;
-    windsurf) _skill_target=".windsurf/rules/" ;;
-    codex)    _skill_target=".codex/skills/" ;;
-  esac
+  _skill_target="$(plugin_get_skill_dir "$_name" "$_pdir")"
   case "$_skill_target" in
     */|"") ;;
     *) _skill_target="${_skill_target}/" ;;

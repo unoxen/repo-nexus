@@ -118,6 +118,34 @@ echo "sample research" > "$TEST_KWIKI_WS/intake/raw/paper.md"
   [ -f "docs/wiki/paper.md" ] || { fail "paper.md was not ingested into custom docs/wiki/"; exit 1; }
   _lint_out="$(./rnex plugin karpathy-llm lint 2>&1)"
   echo "$_lint_out" | grep -q "Wiki lint passed" || { fail "Wiki lint failed on custom wiki_dir: $_lint_out"; exit 1; }
+
+  # Update wiki_dir to a new path (./custom-wiki) and verify rnex sync creates index.md, hot.md, _log.md
+  cat <<'EOF_UPD1' > "$TEST_KWIKI_WS/rnex.yaml"
+plugins:
+  karpathy-llm:
+    wiki_dir: ./custom-wiki
+    sources:
+      - intake/raw
+EOF_UPD1
+  ./rnex sync >/dev/null
+  [ -d "custom-wiki" ] || { fail "Updated wiki_dir ./custom-wiki was not created by rnex sync"; exit 1; }
+  [ -f "custom-wiki/index.md" ] || { fail "custom-wiki/index.md missing after updating wiki_dir"; exit 1; }
+  [ -f "custom-wiki/hot.md" ] || { fail "custom-wiki/hot.md missing after updating wiki_dir"; exit 1; }
+  [ -f "custom-wiki/_log.md" ] || { fail "custom-wiki/_log.md missing after updating wiki_dir"; exit 1; }
+
+  # Update wiki_dir to ./wiki (with leading ./) and verify rnex sync creates/preserves wiki/index.md, hot.md, _log.md
+  cat <<'EOF_UPD2' > "$TEST_KWIKI_WS/rnex.yaml"
+plugins:
+  karpathy-llm:
+    wiki_dir: ./wiki
+    sources:
+      - intake/raw
+EOF_UPD2
+  ./rnex sync >/dev/null
+  [ -d "wiki" ] || { fail "wiki/ directory missing when wiki_dir is ./wiki"; exit 1; }
+  [ -f "wiki/index.md" ] || { fail "wiki/index.md missing when wiki_dir is ./wiki"; exit 1; }
+  [ -f "wiki/hot.md" ] || { fail "wiki/hot.md missing when wiki_dir is ./wiki"; exit 1; }
+  [ -f "wiki/_log.md" ] || { fail "wiki/_log.md missing when wiki_dir is ./wiki"; exit 1; }
 )
 pass
 
@@ -162,8 +190,7 @@ _kw_disabled_ai="$(cat "$TEST_KWIKI_WS/.rnex/ai-instructions.md")"
 ! echo "$_kw_disabled_ai" | grep -q "Karpathy LLM Wiki Knowledge Architecture" || { fail "ai-instructions.md still contains wiki instructions after disabling plugin"; exit 1; }
 echo "$_kw_disabled_ai" | grep -q "Read Configuration First" || { fail "ai-instructions.md missing Read Configuration First"; exit 1; }
 
-[ -f "$TEST_KWIKI_WS/AGENTS.md" ] || { fail "Permanent AGENTS.md missing when claude plugin is enabled"; exit 1; }
-grep -q "REPO-NEXUS:START" "$TEST_KWIKI_WS/AGENTS.md" || { fail "AGENTS.md missing REPO-NEXUS instructions"; exit 1; }
+[ ! -f "$TEST_KWIKI_WS/AGENTS.md" ] || { fail "AGENTS.md should not be present when claude plugin is enabled"; exit 1; }
 _kw_disabled_claude="$(cat "$TEST_KWIKI_WS/CLAUDE.md")"
 echo "$_kw_disabled_claude" | grep -q "CRITICAL: You MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\`" || { fail "CLAUDE.md missing strict directive"; exit 1; }
 

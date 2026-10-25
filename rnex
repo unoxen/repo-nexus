@@ -1,4 +1,5 @@
 #!/bin/sh
+# shellcheck shell=sh
 # ============================================================================
 # rnex — Repo Nexus CLI
 # Lightweight zero-dependency Virtual Meta-Repo companion for multi-repo

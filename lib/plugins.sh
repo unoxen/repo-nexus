@@ -72,6 +72,28 @@ plugin_get_field() {
   ' "$_pdir/plugin.yaml"
 }
 
+# Resolve target user skill directory for a provider plugin from plugin.yaml (with fallback).
+plugin_get_skill_dir() {
+  _pgs_name="$1"
+  _pgs_pdir="${2:-}"
+  [ -n "$_pgs_pdir" ] || _pgs_pdir="$(find_plugin_dir "$_pgs_name" 2>/dev/null || true)"
+  _pgs_dir=""
+  if [ -n "$_pgs_pdir" ]; then
+    _pgs_dir="$(plugin_get_field "$_pgs_pdir" "skill_dir" 2>/dev/null || true)"
+  fi
+  if [ -z "$_pgs_dir" ]; then
+    case "$_pgs_name" in
+      copilot)  _pgs_dir=".github/skills" ;;
+      cursor)   _pgs_dir=".cursor/rules" ;;
+      claude)   _pgs_dir=".claude/skills" ;;
+      windsurf) _pgs_dir=".windsurf/rules" ;;
+      gemini)   _pgs_dir=".agents/skills" ;;
+      codex)    _pgs_dir=".codex/skills" ;;
+    esac
+  fi
+  printf '%s' "$_pgs_dir"
+}
+
 # Parse declared template source-to-destination mappings from plugin.yaml.
 plugin_list_templates() {
   _pdir="$1"
@@ -108,6 +130,9 @@ plugin_resolve_placeholders() {
   _p="$1"; _pd="$2"; _str="$3"
   _res="$(printf '%s' "$_str" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d "'\"")"
 
+  # Normalize legacy static prefixes into placeholders prior to expansion
+  _res="$(printf '%s' "$_res" | sed -e 's|^\.\{0,1\}\/\{0,1\}wiki/|{wiki_dir}/|' -e 's|^\.\{0,1\}\/\{0,1\}raw/|{raw_dir}/|')"
+
   if [ -f "$_pd/plugin.yaml" ]; then
     _keys="$(awk '
       /^config_defaults:[ ]*$/ || /^config_defaults:[ ]*#/ { in_c=1; next }
@@ -140,22 +165,23 @@ plugin_resolve_placeholders() {
           _v="$(normalize_rel_path "$_v")"
           ;;
       esac
-      _res="$(printf '%s' "$_res" | sed -e "s|{$_k}|$_v|g")"
+      [ -n "$_v" ] && _res="$(printf '%s' "$_res" | sed -e "s|{$_k}|$_v|g")"
     done
   fi
 
-  # Fallback resolution for core wiki/raw placeholders and legacy prefixes
+  # Fallback resolution for core wiki/raw placeholders
   _w_val="$(yaml_plugin_get "$_p" "wiki_dir" 2>/dev/null || true)"
   [ -n "$_w_val" ] || _w_val="wiki"
   _w_val="$(normalize_rel_path "$_w_val")"
+  [ -n "$_w_val" ] || _w_val="wiki"
 
   # {raw_dir} (legacy alias) resolves to the first explicit directory source; when no
   # directory source exists it stays unresolved so callers can skip the destination.
   _r_val="$(plugin_primary_source_dir "$_p" 2>/dev/null || true)"
 
-  _res="$(printf '%s' "$_res" | sed -e "s|{wiki_dir}|${_w_val}|g" -e "s|^\.\{0,1\}\/\{0,1\}wiki/|${_w_val}/|")"
+  _res="$(printf '%s' "$_res" | sed -e "s|{wiki_dir}|${_w_val}|g")"
   if [ -n "$_r_val" ]; then
-    _res="$(printf '%s' "$_res" | sed -e "s|{raw_dir}|${_r_val}|g" -e "s|^\.\{0,1\}\/\{0,1\}raw/|${_r_val}/|")"
+    _res="$(printf '%s' "$_res" | sed -e "s|{raw_dir}|${_r_val}|g")"
   fi
 
   _res="$(printf '%s' "$_res" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d "'\"" | sed -e 's#^\./##')"
@@ -168,7 +194,8 @@ plugin_instantiate_template() {
 
   _w_val="$(yaml_plugin_get "$_p" "wiki_dir" 2>/dev/null || true)"
   [ -z "$_w_val" ] && _w_val="wiki"
-  _w_val="$(printf '%s' "$_w_val" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d "'\"" | sed -e 's#^/##' -e 's#/$##')"
+  _w_val="$(normalize_rel_path "$_w_val")"
+  [ -z "$_w_val" ] && _w_val="wiki"
 
   _r_val="$(plugin_primary_source_dir "$_p" 2>/dev/null || true)"
   [ -z "$_r_val" ] && _r_val="docs"
@@ -214,8 +241,10 @@ sync_plugin_bundle() {
 # Clean up obsolete leaked root ./raw and ./wiki directories if non-default paths are configured
 _clean_leaked_plugin_dirs() {
   _cld_root="${1:-$NEXUS_DIR}"
-  _cld_raw="$2"
-  _cld_wiki="$3"
+  _cld_raw="$(normalize_rel_path "$2")"
+  _cld_wiki="$(normalize_rel_path "$3")"
+  [ -n "$_cld_raw" ] || _cld_raw="docs"
+  [ -n "$_cld_wiki" ] || _cld_wiki="wiki"
 
   if [ "$_cld_raw" != "raw" ] && [ -d "$_cld_root/raw" ] && \
      ! plugin_source_dirs "karpathy-llm" 2>/dev/null | grep -qx 'raw'; then

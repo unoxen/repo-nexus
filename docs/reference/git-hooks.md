@@ -34,7 +34,7 @@ git:
 
 ## Git Ignore Management (`git.ignore`)
 
-During `rnex init` and `rnex sync`, Repo Nexus deterministically reconciles `.gitignore`:
+During `rnex init` and `rnex sync`, Repo Nexus deterministically reconciles a dedicated `# REPO-NEXUS:START` ... `# REPO-NEXUS:END` section inside `.gitignore` while preserving any user-authored rules outside the markers:
 
 1. **Deterministic Recursive Patterns**:
    Generated runtime assets are ignored recursively across all directories using trailing-slash directory patterns:
@@ -42,12 +42,12 @@ During `rnex init` and `rnex sync`, Repo Nexus deterministically reconciles `.gi
    * `**/rnex*/`
    * `repos/`
 
-   ::: tip Trailing Slashes Protect Root Executables
-   Because the patterns explicitly end with `/`, Git matches only directories. The root CLI binary `rnex` and configuration files `rnex.yaml` or `.local.rnex.yaml` are never ignored.
+   ::: tip Trailing Slashes Protect Root Files
+   Because the directory patterns explicitly end with `/`, Git matches only directories. The root CLI binary `rnex` and team configuration file `rnex.yaml` are never ignored by these patterns (while `.local.rnex.yaml` is ignored via its own explicit rule).
    :::
 
-2. **Custom Patterns**:
-   Any patterns defined in `git.ignore` (in either `rnex.yaml` or `.local.rnex.yaml`) are appended to `.gitignore`.
+2. **Synchronized Custom Patterns**:
+   All patterns defined in `git.ignore` (in both `rnex.yaml` and `.local.rnex.yaml`) are synchronized into the `# REPO-NEXUS:START` ... `# REPO-NEXUS:END` block in `.gitignore`. Adding, modifying, or removing entries in `git.ignore` updates the managed block on the next `rnex sync`.
 
 3. **Search Tool Un-Ignore (`.ignore`)**:
    Repo Nexus maintains `.ignore` (and `.cursorignore`, `.geminiignore`) with `!repos/*` so search tools (ripgrep) and AI indexers can navigate member code without Git tracking.

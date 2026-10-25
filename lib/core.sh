@@ -99,7 +99,7 @@ normalize_rel_path() {
 # ---- Version Resolution (package.json is single source of truth) ----------
 
 # Dynamically locate the nearest package.json and extract its "version" field.
-# Falls back to 0.5.1 if package.json cannot be read.
+# Falls back to 0.8.7 if package.json cannot be read.
 resolve_version() {
   _sdir="$(dirname "$SCRIPT_LOCATION")"
   for _cand in "$SCRIPT_LOCATION/package.json" "$_sdir/package.json" "$_sdir/../package.json"; do
@@ -111,7 +111,7 @@ resolve_version() {
       fi
     fi
   done
-  printf '0.5.1'
+  printf '0.8.7'
 }
 
 RNEX_VERSION="$(resolve_version)"

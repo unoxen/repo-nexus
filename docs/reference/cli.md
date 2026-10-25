@@ -36,11 +36,14 @@ rnex init [options] [directory]
 * `--code-workspace`: Enable VS Code multi-root workspace file (pass string for custom file name).
 * `--hooks`: Force-enable automated Git hooks setup during initialization.
 * `--no-hooks`: Skip Git hooks configuration during initialization.
+* `--copilot`: Enable GitHub Copilot plugin (`.github/copilot-instructions.md`, `.github/skills/`).
 * `--claude`: Enable Claude Code plugin (`CLAUDE.md`, `.claude/skills/`).
 * `--cursor`: Enable Cursor plugin (`.cursorrules`, `.cursor/rules/`).
 * `--codex`: Enable OpenAI Codex plugin (`CODEX.md`, `.codex/skills/`).
 * `--gemini`: Enable Google Gemini plugin (`GEMINI.md`, `.agents/skills/`).
 * `--windsurf`: Enable Windsurf plugin (`.windsurfrules`, `.windsurf/rules/`).
+* `--karpathy`: Enable Karpathy LLM Wiki plugin (`wiki/`, `docs/`).
+* `--plugin <name>`: Enable any specified plugin during initialization (repeatable).
 
 ### `rnex sync`
 Single reconciliation command: syncs skills, plugins, Git hooks & ignore rules, and compiles `.rnex/ai-instructions.md`.
@@ -50,6 +53,7 @@ rnex sync [options]
 ```
 
 * `-y`, `--yes`: Automatically confirm non-destructive schema upgrades if prompted.
+* `--upgrade`: Explicitly trigger non-destructive configuration and schema upgrade checks.
 * `-q`, `--quiet`: Quiet mode; suppresses non-error informational messages (ideal for hooks).
 
 ### `rnex status`

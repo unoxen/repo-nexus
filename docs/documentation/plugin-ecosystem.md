@@ -14,10 +14,10 @@ Each plugin is self-contained and managed declaratively via `rnex.yaml` or works
 ## Core Architecture
 
 ### 1. Scoped Isolation (`.rnex/plugins/<plugin-name>/`)
-When a plugin is enabled, its rules, instructions, workflows, and skills are scoped directly under `.rnex/plugins/<plugin-name>/`. This keeps workspace root directories clean, avoids naming collisions between plugins, and ensures version-controlled tracking of active extensions.
+When a plugin is enabled in `rnex.yaml` (or `.local.rnex.yaml`), its rules, instructions, commands, hooks, and skills are scoped directly under `.rnex/plugins/<plugin-name>/`. This keeps workspace root directories clean and avoids naming collisions between plugins while tracking active plugin configuration in `rnex.yaml`.
 
-### 2. Member Repository Isolation
-Active plugins are mirrored into each active member repository under `repos/<name>/.rnex/plugins/<plugin-name>/`. When an AI assistant operates inside a specific member repository, it has full local access to the workspace's shared instructions and rules without breaking repository autonomy.
+### 2. Lazy / On-Demand Member Repository Isolation
+Member repositories in `repos/<name>/` remain completely clean by default. A member repository only receives an isolated `repos/<name>/.rnex/` directory on demand if a plugin or custom integration explicitly requires repository-level state, and any orphaned plugin directories are automatically pruned during `rnex sync`.
 
 ### 3. Decoupled Two-Tier Skills Architecture
 Repo Nexus decouples functional plugins from AI provider plugins:
