@@ -96,20 +96,58 @@ body {
     width: 100% !important;
   }
 
+  /* Keep title contents cleanly within the sidebar column when expanded */
+  .VPNavBar.has-sidebar .container > .title {
+    padding-left: 32px !important;
+    padding-right: 12px !important;
+  }
+
+  /* When sidebar is hidden/collapsed:
+   * Revert navbar title and content from absolute positioning into normal flexbox flow
+   * so the search input block sits to the right of "Repo Nexus (rnex)" and never slides behind it.
+   */
   body.rnex-sidebar-collapsed .VPNavBar.has-sidebar {
     padding-left: 0 !important;
     width: 100% !important;
+    background-color: var(--vp-nav-bg-color) !important;
   }
 
   body.rnex-sidebar-collapsed .VPNavBar.has-sidebar .wrapper {
-    padding-left: 0 !important;
+    padding: 0 32px !important;
   }
 
   body.rnex-sidebar-collapsed .VPNavBar.has-sidebar .container {
     max-width: 100% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
   }
 
-  body.rnex-sidebar-collapsed .VPNavBar.has-sidebar .content {
-    padding-left: 32px !important;
+  body.rnex-sidebar-collapsed .VPNavBar.has-sidebar .container > .title {
+    position: relative !important;
+    top: auto !important;
+    left: auto !important;
+    width: auto !important;
+    max-width: none !important;
+    padding: 0 16px 0 0 !important;
+    flex-shrink: 0 !important;
+    background-color: transparent !important;
+    border-bottom: none !important;
+  }
+
+  body.rnex-sidebar-collapsed .VPNavBar.has-sidebar .container > .content {
+    position: relative !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    flex-grow: 1 !important;
+    min-width: 0 !important;
+  }
+
+  body.rnex-sidebar-collapsed .VPNavBar.has-sidebar .divider {
+    padding-left: 0 !important;
+  }
+
+  body.rnex-sidebar-collapsed .VPNavBarTitle.has-sidebar .title {
+    border-bottom-color: transparent !important;
   }
 }
