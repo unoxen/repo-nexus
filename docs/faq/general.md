@@ -1,9 +1,9 @@
 ---
-title: General FAQ & Comparisons
+title: General & Architectural FAQ
 description: Common architectural questions, comparisons with monorepos and Git submodules, and Virtual Meta-Repo mechanics.
 ---
 
-# General FAQ & Architectural Comparisons
+# General & Architectural FAQ
 
 This document answers common architectural and technical questions about **Repo Nexus (`rnex`)**, why it exists, how it works as a **Virtual Meta-Repo for AI Agents**, and how it compares to alternative approaches.
 

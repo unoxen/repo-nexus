@@ -19,6 +19,16 @@
   max-width: 100% !important;
 }
 
+/* Ensure navbar title flex alignment and top-left sidebar toggle placement */
+.VPNavBarTitle .title {
+  display: flex !important;
+  align-items: center !important;
+}
+
+.VPNavBarTitle .rnex-sidebar-toggle-btn {
+  order: -1;
+}
+
 /* Desktop viewport transitions and sidebar collapse states */
 @media (min-width: 960px) {
   .VPSidebar {

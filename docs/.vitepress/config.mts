@@ -121,8 +121,8 @@ export default withMermaid(
           text: 'FAQ',
           activeMatch: '^/faq/',
           items: [
-            { text: 'General & Comparisons', link: '/faq/general' },
-            { text: 'Troubleshooting & Git Submodules', link: '/faq/troubleshooting' }
+            { text: 'General & Architectural FAQ', link: '/faq/general' },
+            { text: 'Troubleshooting', link: '/faq/troubleshooting' }
           ]
         }
       ],
@@ -185,8 +185,8 @@ export default withMermaid(
           text: 'FAQ',
           collapsed: false,
           items: [
-            { text: 'General & Comparisons', link: '/faq/general' },
-            { text: 'Troubleshooting & Git Submodules', link: '/faq/troubleshooting' }
+            { text: 'General & Architectural FAQ', link: '/faq/general' },
+            { text: 'Troubleshooting', link: '/faq/troubleshooting' }
           ]
         }
       ],

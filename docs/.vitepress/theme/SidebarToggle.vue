@@ -41,7 +41,7 @@ function toggleSidebar() {
     :title="isCollapsed ? 'Show left sidebar' : 'Hide left sidebar'"
     :aria-label="isCollapsed ? 'Show left sidebar' : 'Hide left sidebar'"
     :aria-pressed="isCollapsed"
-    @click="toggleSidebar"
+    @click.prevent.stop="toggleSidebar"
   >
     <!-- Icon when expanded (click to collapse sidebar) -->
     <svg
@@ -84,14 +84,16 @@ function toggleSidebar() {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   border-radius: 8px;
   color: var(--vp-c-text-2);
   background: transparent;
   border: 1px solid transparent;
   cursor: pointer;
-  margin-left: 8px;
+  margin-right: 10px;
+  margin-left: 0;
+  flex-shrink: 0;
   transition: color 0.2s, background-color 0.2s, border-color 0.2s;
 }
 

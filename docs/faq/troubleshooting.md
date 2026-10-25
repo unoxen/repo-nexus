@@ -1,9 +1,9 @@
 ---
-title: Troubleshooting & Submodules FAQ
+title: Troubleshooting
 description: Practical troubleshooting guidance, resolving configuration drift, and migrating away from Git submodules.
 ---
 
-# Troubleshooting & Submodules FAQ
+# Troubleshooting
 
 Practical diagnostic guidance and step-by-step solutions for everyday multi-repository scenarios.
 

@@ -6,15 +6,24 @@ description: Lightweight, zero-dependency Virtual Meta-Repo companion for multi-
 
 # Welcome to Repo Nexus (rnex)
 
+<div class="rnex-hero-wrapper">
+<div class="rnex-hero-content">
+
 <p class="rnex-hero-lead">
-  The zero-dependency <strong>Virtual Meta-Repo</strong> companion for engineering teams and AI coding assistants. Unite independent Git repositories into a cohesive, high-velocity workspace without Git submodules or monorepo migrations.
+The zero-dependency <strong>Virtual Meta-Repo</strong> companion for engineering teams and AI coding assistants. Unite independent Git repositories into a cohesive, high-velocity workspace without Git submodules or monorepo migrations.
 </p>
 
 <div class="rnex-hero-actions">
-  <a class="rnex-action-btn primary" href="./introduction/quick-start">Get Started</a>
-  <a class="rnex-action-btn secondary" href="./introduction/why-rnex">Why rnex?</a>
-  <a class="rnex-action-btn secondary" href="./reference/cli">CLI Reference</a>
-  <a class="rnex-action-btn tertiary" href="https://github.com/unoxen/repo-nexus" target="_blank" rel="noreferrer">GitHub</a>
+<a class="rnex-action-btn primary" href="./introduction/quick-start">Get Started</a>
+<a class="rnex-action-btn secondary" href="./introduction/why-rnex">Why rnex?</a>
+<a class="rnex-action-btn secondary" href="./reference/cli">CLI Reference</a>
+<a class="rnex-action-btn tertiary" href="https://github.com/unoxen/repo-nexus" target="_blank" rel="noreferrer">GitHub</a>
+</div>
+
+</div>
+<div class="rnex-hero-image">
+<img src="/home.png" alt="Repo Nexus Fan" />
+</div>
 </div>
 
 ---
