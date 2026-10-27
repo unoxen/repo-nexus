@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://unoxen.github.io/repo-nexus/">
-    <img src="docs/public/home.png" alt="Repo Nexus (rnex) — Virtual Meta Repository, Nexus Repository, Meta Repo, and Nexus Repo Manager" width="100%" />
+    <img src="docs/public/home.png" alt="Repo Nexus (rnex) — Virtual Meta Repository, Nexus Repository, Meta Repo, and Nexus Repo Manager" width="20%" />
   </a>
 </p>
 
