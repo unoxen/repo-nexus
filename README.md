@@ -15,7 +15,7 @@
 
 📖 **Documentation:** [https://unoxen.github.io/repo-nexus/](https://unoxen.github.io/repo-nexus/)
 
-A lightweight, zero-dependency **Virtual Meta Repository** (**meta repo**) and **Nexus Repository** (**nexus repo**) manager for multi-repo workspaces and shared AI context. Repo Nexus organizes independent Git repositories into a unified **nexus repository** and **meta repository** workspace—sharing lean routing instructions (`AGENTS.md`) **without Git submodules, monorepo migrations, or symlink fragility**.
+A lightweight, zero-dependency and AI-First **Nexus Repository (Virtual Meta Repository Orchestrator)** for multi-repo workspaces. Repo Nexus organizes independent Git repositories into a unified **nexus repository** and **meta repository** workspace—sharing lean routing instructions (`AGENTS.md`) **without Git submodules, monorepo migrations, or symlink fragility**.
 
 - **No Git Submodules or Nested Git Collisions**: Member repositories are physically cloned into `./<repos_dir>/` (default: `./repos/`, configurable via `repos_dir`) and strictly ignored by workspace Git. Each repository maintains its own standalone history, remotes, branches, and commits with zero submodule friction.
 - **Unified Workspace for AI Coding Assistants**: Open one root folder to give Cursor, Claude Code, GitHub Copilot, Codex, or Antigravity complete cross-service visibility.
