@@ -11,8 +11,8 @@ Use this skill when onboarding to a workspace, restoring missing member reposito
 ## Operational Protocol
 
 1. **Inspect Workspace Configuration:**
-   - Read `.local.rnex.yaml` (highest precedence) and `rnex.yaml` to identify configured `repos_dir` (default: `repos`), declared member repositories under `repos:`, and enabled plugins under `plugins:`.
-   - Identify active member repositories where `enabled: true` (or omitted, default `true`).
+   - Use **Section 2 (Merged Workspace Configuration)** of the already-loaded `.rnex/ai-instructions.md` to identify the `repos_dir`, active and disabled member repositories, and enabled plugins. Do NOT read `rnex.yaml` or `.local.rnex.yaml`.
+   - If configuration was just edited, run `rnex sync` first so `.rnex/ai-instructions.md` reflects the merged state.
 
 2. **Clone Missing Repositories:**
    - Run `rnex clone` to clone any missing member repositories declared in the configuration into `<repos_dir>/<name>` (default: `repos/<name>`).

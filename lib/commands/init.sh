@@ -228,8 +228,8 @@ YAML_EOF
   mkdir -p "$_init_dir/.rnex"
   mkdir -p "$_init_dir/.rnex/plugins"
   sync_plugins
-  build_ai_instructions "$_init_dir"
   sync_skills
+  build_ai_instructions "$_init_dir"
 
   # ---- 5. Ensure repos/ and local configs are gitignored ---------
   reconcile_gitignore "$_init_dir"

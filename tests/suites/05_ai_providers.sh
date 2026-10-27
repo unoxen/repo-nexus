@@ -215,7 +215,7 @@ grep -q "My Custom Copilot Developer Rules" "$TEST_PROVIDERS_WS/.github/copilot-
 pass
 
 # --------------------------------------------------------------------------
-run_test "Provider integration instructions compiled into .rnex/ai-instructions.md from plugin.yaml"
+run_test "Provider integration instructions excluded from .rnex/ai-instructions.md from plugin.yaml"
 TEST_INSTR_WS="$TEST_TMP/instr-compile-ws"
 mkdir -p "$TEST_INSTR_WS"
 cp "$CLI" "$TEST_INSTR_WS/rnex"
@@ -226,14 +226,14 @@ git -C "$TEST_INSTR_WS" init -q
 
 "$TEST_INSTR_WS/rnex" init -y --claude "$TEST_INSTR_WS" >/dev/null
 [ -f "$TEST_INSTR_WS/.rnex/ai-instructions.md" ] || { fail ".rnex/ai-instructions.md missing after init --claude"; exit 1; }
-grep -q "Anthropic Claude Code Integration for Repo Nexus" "$TEST_INSTR_WS/.rnex/ai-instructions.md" || { fail "Claude instructions not compiled into .rnex/ai-instructions.md"; exit 1; }
+! grep -q "Anthropic Claude Code Integration for Repo Nexus" "$TEST_INSTR_WS/.rnex/ai-instructions.md" || { fail "Claude instructions must not be compiled into .rnex/ai-instructions.md"; exit 1; }
 
 (cd "$TEST_INSTR_WS" && ./rnex plugin enable gemini >/dev/null)
-grep -q "Google Gemini & Antigravity Integration for Repo Nexus" "$TEST_INSTR_WS/.rnex/ai-instructions.md" || { fail "Gemini instructions not compiled into .rnex/ai-instructions.md after enable"; exit 1; }
+! grep -q "Google Gemini & Antigravity Integration for Repo Nexus" "$TEST_INSTR_WS/.rnex/ai-instructions.md" || { fail "Gemini instructions must not be compiled into .rnex/ai-instructions.md"; exit 1; }
 
 (cd "$TEST_INSTR_WS" && ./rnex plugin disable claude >/dev/null)
 ! grep -q "Anthropic Claude Code Integration for Repo Nexus" "$TEST_INSTR_WS/.rnex/ai-instructions.md" || { fail "Claude instructions not removed after disable"; exit 1; }
-grep -q "Google Gemini & Antigravity Integration for Repo Nexus" "$TEST_INSTR_WS/.rnex/ai-instructions.md" || { fail "Gemini instructions lost after disabling claude"; exit 1; }
+! grep -q "Google Gemini & Antigravity Integration for Repo Nexus" "$TEST_INSTR_WS/.rnex/ai-instructions.md" || { fail "Gemini instructions must not be compiled"; exit 1; }
 pass
 
 # --------------------------------------------------------------------------
@@ -338,6 +338,39 @@ grep -q "REPO-NEXUS:START" "$TEST_PERM_WS/AGENTS.md" || { fail "AGENTS.md missin
 for _cf in $_context_files; do
   grep -q "Custom " "$TEST_PERM_WS/$_cf" || { fail "Custom developer content lost in $_cf after plugin disable"; exit 1; }
 done
+pass
+
+
+# --------------------------------------------------------------------------
+run_test "Karpathy wiki gate is Step 1 with custom wiki_dir; no provider bloat or behavioral.md hop"
+TEST_KGATE_WS="$TEST_TMP/kgate-workspace"
+mkdir -p "$TEST_KGATE_WS"
+cp "$CLI" "$TEST_KGATE_WS/rnex"
+chmod +x "$TEST_KGATE_WS/rnex"
+cp -r "$DIR/toolkit" "$TEST_KGATE_WS/toolkit"
+"$TEST_KGATE_WS/rnex" init -y "$TEST_KGATE_WS" >/dev/null 2>&1
+cat <<'KGATE_EOF' > "$TEST_KGATE_WS/rnex.yaml"
+version: "1"
+name: kgate-ws
+repos:
+  svc:
+    url: "https://example.invalid/svc.git"
+plugins:
+  copilot:
+    enabled: true
+  karpathy-llm:
+    enabled: true
+    wiki_dir: "knowledge"
+KGATE_EOF
+(cd "$TEST_KGATE_WS" && ./rnex sync -y >/dev/null 2>&1) || true
+_kg_ai="$TEST_KGATE_WS/.rnex/ai-instructions.md"
+[ -f "$_kg_ai" ] || { fail "ai-instructions.md missing"; exit 1; }
+grep -qF '1. **Step 1 — Read Wiki Hot Cache**: Read `knowledge/hot.md`' "$_kg_ai" || { fail "Step 1 does not reference knowledge/hot.md"; exit 1; }
+! grep -qF 'rules/behavioral.md' "$_kg_ai" || { fail "ai-instructions.md references external behavioral.md"; exit 1; }
+! grep -qF '# GitHub Copilot Integration' "$_kg_ai" || { fail "Copilot setup docs compiled into ai-instructions.md"; exit 1; }
+! grep -qE '^[[:space:]]*(plugins|enabled):' "$_kg_ai" || { fail "YAML config snippets present in ai-instructions.md"; exit 1; }
+_kg_lines="$(wc -l < "$_kg_ai" | tr -d ' ')"
+[ "$_kg_lines" -lt 60 ] || { fail "ai-instructions.md too long: $_kg_lines lines (expected < 60)"; exit 1; }
 pass
 
 if [ "${_STANDALONE_RUN:-0}" -eq 1 ]; then

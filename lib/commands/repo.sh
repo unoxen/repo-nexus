@@ -186,6 +186,7 @@ cmd_repo_add() {
     [ "$_readonly" = "true" ] && yaml_set_local "$_name" "readonly" "true"
     [ "$_enabled" = "false" ] && yaml_set_local "$_name" "enabled" "false"
     sync_repo_rnex "$_name"
+    build_ai_instructions "$NEXUS_DIR"
     sync_code_workspace
     run_hook "after_sync" "$@"
     printf '\n'
@@ -204,6 +205,7 @@ cmd_repo_add() {
       [ "$_readonly" = "true" ] && yaml_set "$_name" "readonly" "true"
       [ "$_enabled" = "false" ] && yaml_set "$_name" "enabled" "false"
       sync_repo_rnex "$_name"
+      build_ai_instructions "$NEXUS_DIR"
       sync_code_workspace
       run_hook "after_sync" "$@"
       printf '\n'
@@ -214,6 +216,7 @@ cmd_repo_add() {
 
   yaml_add_repo "$_name" "$_url" "$_enabled" "$_readonly" "$_branch"
   sync_repo_rnex "$_name"
+  build_ai_instructions "$NEXUS_DIR"
   sync_code_workspace
   run_hook "after_sync" "$@"
   printf '\n'
@@ -256,6 +259,7 @@ cmd_repo_remove() {
   else
     log_ok "Unregistered repo '$_name'"
   fi
+  build_ai_instructions "$NEXUS_DIR"
   sync_code_workspace
   run_hook "after_sync" "$@"
 }
@@ -338,6 +342,7 @@ cmd_repo_set() {
   if [ "$_enable_val" = "true" ]; then
     sync_repo_rnex "$_name"
   fi
+  build_ai_instructions "$NEXUS_DIR"
   sync_code_workspace
   run_hook "after_sync" "$@"
 }

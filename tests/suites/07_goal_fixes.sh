@@ -1108,7 +1108,7 @@ grep -q "\.rnex/skills/clone-sync\.md" "$TEST_CODEX_WS/.codex/skills/rnex-clone-
 
 # 3. Verify compiled instructions in .rnex/ai-instructions.md
 [ -f "$TEST_CODEX_WS/.rnex/ai-instructions.md" ] || { fail ".rnex/ai-instructions.md missing"; exit 1; }
-grep -q "OpenAI Codex Integration for Repo Nexus" "$TEST_CODEX_WS/.rnex/ai-instructions.md" || { fail "Codex instructions not compiled into .rnex/ai-instructions.md"; exit 1; }
+! grep -q "OpenAI Codex Integration for Repo Nexus" "$TEST_CODEX_WS/.rnex/ai-instructions.md" || { fail "Codex instructions must not be compiled into .rnex/ai-instructions.md"; exit 1; }
 
 # 4. Status inspection
 _codex_status="$(cd "$TEST_CODEX_WS" && ./rnex status 2>&1)"
@@ -1189,7 +1189,7 @@ grep -q "readonly: true" "$TEST_RO_WS/.local.rnex.yaml" || { fail "readonly: tru
 
 # 6. Verify AI instructions mention readonly rules
 [ -f "$TEST_RO_WS/.rnex/ai-instructions.md" ] || { fail ".rnex/ai-instructions.md missing"; exit 1; }
-grep -q "readonly: true" "$TEST_RO_WS/.rnex/ai-instructions.md" || { fail "readonly directive missing from compiled AI instructions"; exit 1; }
+grep -q "READ-ONLY" "$TEST_RO_WS/.rnex/ai-instructions.md" || { fail "readonly directive missing from compiled AI instructions"; exit 1; }
 
 # 7. Lazy on-demand .rnex behavior:
 # - If user or plugin creates a custom file in member .rnex/, it is preserved

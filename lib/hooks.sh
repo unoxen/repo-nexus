@@ -354,6 +354,9 @@ run_git_hook() {
   _is_blocking=0
   case "$_hook_name" in
     pre-commit|pre-push) _is_blocking=1 ;;
+    post-merge|post-checkout)
+      build_ai_instructions "$NEXUS_DIR" 2>/dev/null || true
+      ;;
   esac
 
   _stdin_data=""

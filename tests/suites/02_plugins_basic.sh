@@ -62,13 +62,16 @@ pass
 run_test "Directive in AGENTS.md and compiled instructions in .rnex/ai-instructions.md"
 _agents_content="$(cat "$TEST_WORKSPACE/AGENTS.md")"
 echo "$_agents_content" | grep -q "CRITICAL: You MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\`" || { fail "AGENTS.md missing critical directive"; exit 1; }
+echo "$_agents_content" | grep -q "Mandatory Execution Sequence" || { fail "AGENTS.md missing execution sequence routing"; exit 1; }
+echo "$_agents_content" | grep -q "Read each file at most once per session" || { fail "AGENTS.md missing single-read rule"; exit 1; }
+! echo "$_agents_content" | grep -qE "Read.*\.local\.rnex\.yaml" || { fail "AGENTS.md must not instruct reading .local.rnex.yaml"; exit 1; }
 
 _ai_content="$(cat "$TEST_WORKSPACE/.rnex/ai-instructions.md")"
-echo "$_ai_content" | grep -q "Read Configuration First" || { fail ".rnex/ai-instructions.md missing Read Configuration First"; exit 1; }
+echo "$_ai_content" | grep -q "NO CONFIG READS" || { fail ".rnex/ai-instructions.md missing NO CONFIG READS"; exit 1; }
 echo "$_ai_content" | grep -q ".local.rnex.yaml" || { fail ".rnex/ai-instructions.md missing .local.rnex.yaml"; exit 1; }
-echo "$_ai_content" | grep -q "Highest Priority" || { fail ".rnex/ai-instructions.md missing Highest Priority notice"; exit 1; }
-echo "$_ai_content" | grep -q ".rnex/plugins/<plugin-name>/" || { fail ".rnex/ai-instructions.md missing plugin routing"; exit 1; }
-echo "$_ai_content" | grep -q "Routing Protocol for AI Assistants" || { fail ".rnex/ai-instructions.md missing Routing Protocol heading"; exit 1; }
+echo "$_ai_content" | grep -q "Merged Workspace Configuration" || { fail ".rnex/ai-instructions.md missing Merged Workspace Configuration notice"; exit 1; }
+echo "$_ai_content" | grep -q "Mandatory Execution Sequence" || { fail ".rnex/ai-instructions.md missing plugin routing"; exit 1; }
+echo "$_ai_content" | grep -q "Strict Operating Constraints" || { fail ".rnex/ai-instructions.md missing Routing Protocol heading"; exit 1; }
 ! echo "$_ai_content" | grep -qi "symlink" || { fail ".rnex/ai-instructions.md should not contain symlink mentions"; exit 1; }
 ! echo "$_ai_content" | grep -q "Think Before Coding" || { fail ".rnex/ai-instructions.md should not contain inlined plugin rules"; exit 1; }
 ! echo "$_ai_content" | grep -q "MANDATORY GATE: DO NOT INSPECT" || { fail ".rnex/ai-instructions.md should not contain wiki mandatory gate when karpathy-llm is disabled"; exit 1; }
@@ -98,10 +101,16 @@ printf 'ROOT=%s\n' "$RNEX_ROOT"
 printf 'PLUGIN=%s\n' "$RNEX_PLUGIN_NAME"
 printf 'ARGS=%s\n' "$*"
 EOF_DUMP
+cat <<'EOF_CUSTOM_INSTR' > "$_cmd_plugin_dir/instructions.md"
+# Custom Workflow Plugin Guidelines
+- Follow custom workflow verification before committing.
+EOF_CUSTOM_INSTR
 chmod +x "$_cmd_plugin_dir/commands"/*
 
-# 1. Enable plugin
+# 1. Enable plugin and verify custom workflow plugin instructions are included in .rnex/ai-instructions.md
 "$TEST_WORKSPACE/rnex" plugin enable cmd-test >/dev/null
+grep -qF '### Plugin Directives (`cmd-test`)' "$TEST_WORKSPACE/.rnex/ai-instructions.md" || { fail "Custom workflow plugin header missing from ai-instructions.md"; exit 1; }
+grep -qF 'Follow custom workflow verification before committing.' "$TEST_WORKSPACE/.rnex/ai-instructions.md" || { fail "Custom workflow plugin instructions missing from ai-instructions.md"; exit 1; }
 
 # Configure rnex_hooks for before_plugin_command and after_plugin_command via .local.rnex.yaml
 cat <<'EOF_HOOKS' > "$TEST_WORKSPACE/.local.rnex.yaml"
@@ -143,8 +152,9 @@ echo "$_short_out" | grep -q 'HELLO: --shorthand active' || { fail "Shorthand fa
 _err_out="$("$TEST_WORKSPACE/rnex" plugin cmd-test non-existent-command 2>&1 || true)"
 echo "$_err_out" | grep -q "Unknown command 'non-existent-command' for plugin 'cmd-test'" || { fail "Expected unknown command error: $_err_out"; exit 1; }
 
-# 7. Disable plugin and verify invocation rejection
+# 7. Disable plugin and verify invocation rejection and removal from ai-instructions.md
 "$TEST_WORKSPACE/rnex" plugin disable cmd-test >/dev/null
+! grep -qF 'cmd-test' "$TEST_WORKSPACE/.rnex/ai-instructions.md" || { fail "Custom workflow plugin instructions not removed after disable"; exit 1; }
 _dis_out="$("$TEST_WORKSPACE/rnex" plugin cmd-test hello 2>&1 || true)"
 echo "$_dis_out" | grep -q "Plugin 'cmd-test' is not enabled in workspace" || { fail "Expected disabled plugin error: $_dis_out"; exit 1; }
 

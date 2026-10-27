@@ -1059,6 +1059,101 @@ yaml_get_repo_branch() {
   yaml_get "$1" "branch"
 }
 
+# ---- Deterministic Merged-Config Queries -----------------------------------
+# Precedence: .local.rnex.yaml > rnex.yaml > defaults. Output ordering is
+# byte-wise (LC_ALL=C) so results are identical across BSD/GNU platforms.
+
+# List all repository keys from both config files, deduplicated and sorted.
+yaml_list_all_repos_sorted() {
+  yaml_list_repos | LC_ALL=C sort -u
+}
+
+yaml_list_merged_repos() {
+  yaml_list_all_repos_sorted
+}
+
+# Resolve repos.<repo>.<field> (local > project), falling back to <default>.
+yaml_get_merged_repo_field() {
+  _ygmr_val="$(yaml_get "$1" "$2")"
+  [ -n "$_ygmr_val" ] || _ygmr_val="${3:-}"
+  printf '%s' "$_ygmr_val"
+}
+
+# List plugins whose merged 'enabled' value resolves to true, sorted.
+yaml_list_enabled_plugins_sorted() {
+  for _ylep_p in $(yaml_list_plugins | LC_ALL=C sort -u); do
+    if is_enabled_val "$(yaml_plugin_get "$_ylep_p" "enabled")"; then
+      printf '%s\n' "$_ylep_p"
+    fi
+  done
+}
+
+yaml_list_enabled_plugins() {
+  yaml_list_enabled_plugins_sorted
+}
+
+# Print config_defaults.<key> from a plugin.yaml (scalar or list), one item per line.
+_yaml_plugin_default_from_manifest() {
+  _ypdm_f="$1"; _ypdm_key="$2"
+  [ -f "$_ypdm_f" ] || return 0
+  awk -v key="$_ypdm_key" '
+    function unquote(v) {
+      sub(/^[ \t]+/, "", v)
+      if (v ~ /^"/) { sub(/^"/, "", v); sub(/"[ \t]*(#.*)?$/, "", v) }
+      else if (v ~ /^\047/) { sub(/^\047/, "", v); sub(/\047[ \t]*(#.*)?$/, "", v) }
+      else { sub(/[ \t]+#.*$/, "", v); sub(/[ \t]+$/, "", v) }
+      return v
+    }
+    /^config_defaults:[ \t]*(#.*)?$/ { in_c=1; next }
+    in_c && /^[^ \t#]/ { exit }
+    !in_c { next }
+    in_list {
+      if ($0 ~ /^[ \t]+-([ \t]|$)/) {
+        item = $0; sub(/^[ \t]+-/, "", item); item = unquote(item)
+        if (length(item) > 0) print item
+        next
+      }
+      if ($0 ~ /^[ \t]*(#.*)?$/) next
+      exit
+    }
+    {
+      t = $0; sub(/^[ \t]+/, "", t)
+      k = t; sub(/:.*/, "", k)
+      if (k != key) next
+      v = t; sub(/^[^:]*:[ \t]*/, "", v)
+      if (v ~ /^(#.*)?$/) { in_list=1; next }
+      if (v ~ /^\[/) {
+        sub(/^\[/, "", v); sub(/\][ \t]*(#.*)?$/, "", v)
+        n = split(v, parts, ",")
+        for (i = 1; i <= n; i++) { item = unquote(parts[i]); if (length(item) > 0) print item }
+        exit
+      }
+      item = unquote(v)
+      if (length(item) > 0) print item
+      exit
+    }
+  ' "$_ypdm_f"
+}
+
+# Resolve plugins.<plugin>.<key> as newline-separated items (scalars yield one line).
+# Precedence: .local.rnex.yaml > rnex.yaml > plugin.yaml config_defaults > <default>.
+yaml_get_merged_plugin_config() {
+  _ygmp_p="$1"; _ygmp_k="$2"; _ygmp_def="${3:-}"
+  _yaml_resolve_files
+  _ygmp_val="$(_yaml_plugin_list_from_file "$_wly" "$_ygmp_p" "$_ygmp_k")"
+  [ -n "$_ygmp_val" ] || _ygmp_val="$(_yaml_plugin_list_from_file "$_wy" "$_ygmp_p" "$_ygmp_k")"
+  [ -n "$_ygmp_val" ] || _ygmp_val="$(yaml_plugin_get "$_ygmp_p" "$_ygmp_k")"
+  if [ -z "$_ygmp_val" ] && [ "$_ygmp_p:$_ygmp_k" = "karpathy-llm:sources" ]; then
+    _ygmp_val="$(plugin_legacy_raw_dir "$_ygmp_p")"
+  fi
+  if [ -z "$_ygmp_val" ]; then
+    _ygmp_dir="$(find_plugin_dir "$_ygmp_p" 2>/dev/null || true)"
+    [ -z "$_ygmp_dir" ] || _ygmp_val="$(_yaml_plugin_default_from_manifest "$_ygmp_dir/plugin.yaml" "$_ygmp_k")"
+  fi
+  [ -n "$_ygmp_val" ] || _ygmp_val="$_ygmp_def"
+  [ -z "$_ygmp_val" ] || printf '%s\n' "$_ygmp_val"
+}
+
 # Add a new repository entry under 'repos:' in the main workspace configuration (rnex.yaml).
 yaml_add_repo() {
   _name="$1"; _url="$2"; _enabled="${3:-true}"; _readonly="${4:-false}"; _branch="${5:-}"

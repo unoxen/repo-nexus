@@ -135,7 +135,7 @@ _upgraded_agents="$(cat "$TEST_WORKSPACE/AGENTS.md")"
 echo "$_upgraded_agents" | grep -q "<!-- REPO-NEXUS:START -->" || { fail "Missing start delimiter after upgrade"; exit 1; }
 echo "$_upgraded_agents" | grep -q "<!-- REPO-NEXUS:END -->" || { fail "Missing end delimiter after upgrade"; exit 1; }
 echo "$_upgraded_agents" | grep -q "CRITICAL: You MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\`" || { fail "Missing critical directive after upgrade"; exit 1; }
-grep -q "Routing Protocol for AI Assistants" "$TEST_WORKSPACE/.rnex/ai-instructions.md" || { fail "Missing Routing Protocol in .rnex/ai-instructions.md"; exit 1; }
+grep -q "Strict Operating Constraints" "$TEST_WORKSPACE/.rnex/ai-instructions.md" || { fail "Missing Routing Protocol in .rnex/ai-instructions.md"; exit 1; }
 ! echo "$_upgraded_agents" | grep -qi "symlink" || { fail "Upgraded AGENTS.md still contains symlink mentions"; exit 1; }
 pass
 
@@ -211,7 +211,7 @@ cp -r "$DIR/toolkit" "$TEST_AI_WS/toolkit"
 [ -f "$TEST_AI_WS/.claude/skills/rnex-clone-sync/SKILL.md" ] || { fail "rnex-clone-sync/SKILL.md missing in .claude/skills"; exit 1; }
 grep -q "claude:" "$TEST_AI_WS/rnex.yaml" || { fail "claude plugin not enabled in rnex.yaml"; exit 1; }
 grep -q "CRITICAL: You MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\`" "$TEST_AI_WS/CLAUDE.md" || { fail "CLAUDE.md missing critical directive"; exit 1; }
-grep -q "Multi-Repo AI Workspace Context" "$TEST_AI_WS/.rnex/ai-instructions.md" || { fail ".rnex/ai-instructions.md missing Multi-Repo AI Workspace Context"; exit 1; }
+grep -q "Repo Nexus Workspace Instructions" "$TEST_AI_WS/.rnex/ai-instructions.md" || { fail ".rnex/ai-instructions.md missing Repo Nexus Workspace Instructions"; exit 1; }
 pass
 
 # --------------------------------------------------------------------------
@@ -283,8 +283,8 @@ grep -q "git:" "$TEST_UPGRADE_WS/rnex.yaml" || { fail "rnex sync -y did not popu
 grep -q "post-merge:" "$TEST_UPGRADE_WS/rnex.yaml" || { fail "rnex sync -y did not populate missing git.hooks"; exit 1; }
 ! grep -q "git_hooks:" "$TEST_UPGRADE_WS/rnex.yaml" || { fail "legacy git_hooks still present after upgrade"; exit 1; }
 grep -q "CRITICAL: You MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\`" "$TEST_UPGRADE_WS/AGENTS.md" || { fail "AGENTS.md missing critical directive after upgrade"; exit 1; }
-grep -q "Mandatory Session Startup" "$TEST_UPGRADE_WS/.rnex/ai-instructions.md" || { fail ".rnex/ai-instructions.md not updated with Mandatory Session Startup"; exit 1; }
-grep -q "Subagents" "$TEST_UPGRADE_WS/.rnex/ai-instructions.md" || { fail ".rnex/ai-instructions.md missing subagents reference"; exit 1; }
+grep -q "Mandatory Execution Sequence" "$TEST_UPGRADE_WS/.rnex/ai-instructions.md" || { fail ".rnex/ai-instructions.md not updated with Mandatory Execution Sequence"; exit 1; }
+grep -q "Skills" "$TEST_UPGRADE_WS/.rnex/ai-instructions.md" || { fail ".rnex/ai-instructions.md missing subagents reference"; exit 1; }
 
 # Running sync when already at current version should succeed cleanly
 (cd "$TEST_UPGRADE_WS" && ./rnex sync -y >/dev/null)
@@ -472,6 +472,79 @@ DOT_EOF
 
 _resolved_dot="$(cd "$TEST_RDIR_OVR" && . "$DIR/lib/core.sh" && . "$DIR/lib/workspace.sh" && . "$DIR/lib/yaml.sh" && WORKSPACE_YAML="$TEST_RDIR_OVR/rnex.yaml" WORKSPACE_LOCAL_YAML="$TEST_RDIR_OVR/.local.rnex.yaml" yaml_get_repos_dir)"
 [ "$_resolved_dot" = "repos" ] || { fail "Dot path . did not fall back to repos, got '$_resolved_dot'"; exit 1; }
+pass
+
+
+# --------------------------------------------------------------------------
+run_test "Compiled ai-instructions.md reflects two-level merged config (.local.rnex.yaml wins)"
+TEST_MERGE_WS="$TEST_TMP/merge-ai-workspace"
+mkdir -p "$TEST_MERGE_WS"
+cp "$CLI" "$TEST_MERGE_WS/rnex"
+chmod +x "$TEST_MERGE_WS/rnex"
+cp -r "$DIR/toolkit" "$TEST_MERGE_WS/toolkit"
+"$TEST_MERGE_WS/rnex" init -y "$TEST_MERGE_WS" >/dev/null 2>&1
+cat <<'MERGE_EOF' > "$TEST_MERGE_WS/rnex.yaml"
+version: "1"
+name: merge-ws
+repos:
+  repo-beta:
+    url: "https://example.invalid/beta.git"
+    enabled: true
+  repo-alpha:
+    url: "https://example.invalid/alpha.git"
+    readonly: false
+    branch: main
+MERGE_EOF
+cat <<'MERGE_LOCAL_EOF' > "$TEST_MERGE_WS/.local.rnex.yaml"
+repos:
+  repo-alpha:
+    readonly: true
+    branch: dev
+  repo-beta:
+    enabled: false
+MERGE_LOCAL_EOF
+(cd "$TEST_MERGE_WS" && ./rnex sync -y >/dev/null 2>&1) || true
+_merge_ai="$TEST_MERGE_WS/.rnex/ai-instructions.md"
+[ -f "$_merge_ai" ] || { fail "ai-instructions.md missing after sync"; exit 1; }
+grep -qF '| `repo-alpha` | `repos/repo-alpha/` | `dev` | `READ-ONLY` |' "$_merge_ai" || { fail "repo-alpha not rendered with local overrides (dev, READ-ONLY)"; exit 1; }
+grep -qF '**Disabled Repositories (Do Not Access)**: `repo-beta`' "$_merge_ai" || { fail "repo-beta not listed as disabled"; exit 1; }
+! grep -qF '| `repo-beta` |' "$_merge_ai" || { fail "Disabled repo-beta present in active table"; exit 1; }
+grep -qF 'DO NOT read or search for rnex.yaml or .local.rnex.yaml' "$_merge_ai" || { fail "Missing NO CONFIG READS constraint"; exit 1; }
+! grep -qE "Read .*\.local\.rnex\.yaml" "$_merge_ai" || { fail "ai-instructions.md still instructs reading config files"; exit 1; }
+pass
+
+# --------------------------------------------------------------------------
+run_test "Compiled ai-instructions.md is byte-for-byte deterministic across runs and repo declaration order"
+(cd "$TEST_MERGE_WS" && ./rnex sync -y >/dev/null 2>&1) || true
+_det_1="$(cksum < "$_merge_ai")"
+(cd "$TEST_MERGE_WS" && ./rnex sync -y >/dev/null 2>&1) || true
+_det_2="$(cksum < "$_merge_ai")"
+cat <<'MERGE_REV_EOF' > "$TEST_MERGE_WS/rnex.yaml"
+version: "1"
+name: merge-ws
+repos:
+  repo-alpha:
+    url: "https://example.invalid/alpha.git"
+    readonly: false
+    branch: main
+  repo-beta:
+    url: "https://example.invalid/beta.git"
+    enabled: true
+MERGE_REV_EOF
+(cd "$TEST_MERGE_WS" && ./rnex sync -y >/dev/null 2>&1) || true
+_det_3="$(cksum < "$_merge_ai")"
+[ "$_det_1" = "$_det_2" ] || { fail "ai-instructions.md changed between identical syncs"; exit 1; }
+[ "$_det_1" = "$_det_3" ] || { fail "ai-instructions.md depends on repo declaration order"; exit 1; }
+
+# Verify rnex repo set and rnex plugin enable/disable immediately update .rnex/ai-instructions.md
+(cd "$TEST_MERGE_WS" && ./rnex repo set repo-alpha --readwrite --local >/dev/null 2>&1)
+grep -qF '| `repo-alpha` | `repos/repo-alpha/` | `dev` | `READ-WRITE` |' "$_merge_ai" || { fail "rnex repo set --readwrite did not immediately update ai-instructions.md"; exit 1; }
+(cd "$TEST_MERGE_WS" && ./rnex repo set repo-alpha --readonly --local >/dev/null 2>&1)
+grep -qF '| `repo-alpha` | `repos/repo-alpha/` | `dev` | `READ-ONLY` |' "$_merge_ai" || { fail "rnex repo set --readonly did not immediately update ai-instructions.md"; exit 1; }
+(cd "$TEST_MERGE_WS" && ./rnex plugin enable copilot >/dev/null 2>&1)
+grep -qF '**Enabled Plugins**: `copilot`' "$_merge_ai" || { fail "rnex plugin enable did not immediately update ai-instructions.md"; exit 1; }
+(cd "$TEST_MERGE_WS" && ./rnex plugin disable copilot >/dev/null 2>&1)
+! grep -qF '`copilot`' "$_merge_ai" || { fail "rnex plugin disable did not immediately update ai-instructions.md"; exit 1; }
 pass
 
 if [ "${_STANDALONE_RUN:-0}" -eq 1 ]; then

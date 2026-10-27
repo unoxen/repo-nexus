@@ -1,27 +1,28 @@
-# Multi-Repo AI Workspace Context
+# Repo Nexus Workspace Instructions (rnex v<version>)
 
-This workspace operates as a **Repo Nexus Virtual Meta-Repo** uniting independent repositories.
+> Reference sample only. `rnex sync` / `rnex init` generate `.rnex/ai-instructions.md` from the merged workspace configuration (`.local.rnex.yaml` > `rnex.yaml`); this file is not read at runtime.
 
-## Routing Protocol for AI Assistants
+## 1. Strict Operating Constraints
+- **NO CONFIG READS**: DO NOT read or search for rnex.yaml or .local.rnex.yaml. The complete merged configuration is embedded in Section 2.
+- **READ FILES ONCE**: Read each file at most once per session. Never re-read a file already in context.
+- **NO BLIND SCANS**: Never run broad directory scans or unbounded searches across `repos/`.
 
-### Mandatory Session Startup
-Execute in sequence before task execution:
-1. **Read Configuration First (Highest Priority)**: Read `.local.rnex.yaml` (if present) and `rnex.yaml` to identify active member repositories (`${REPOS_DIR_REL:-repos}/`) and enabled plugins.
-2. **Plugin & Skill Routing**: Inspect active plugin instructions under `.rnex/plugins/<plugin-name>/`, and core agentic skills under `.rnex/skills/` when relevant.
-3. **Targeted Member Repository Access Only**: Navigate directly to specific files in `${REPOS_DIR_REL:-repos}/<name>/` relevant to the user request. Avoid blind repository-wide scans or unbounded searches across `${REPOS_DIR_REL:-repos}/`.
+## 2. Merged Workspace Configuration
+- **Workspace**: `<name>`
+- **Repositories Root**: `repos/`
+- **Enabled Plugins**: `<plugin>`, ...
 
-## Subagents
-Autonomous subagents are defined under `.rnex/agents/` and active plugin agents under `.rnex/plugins/<plugin-name>/agents/`.
+### Active Member Repositories
+| Repository | Path | Branch | Mode | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| `<repo>` | `repos/<repo>/` | `main` | `READ-WRITE` | <description> |
 
-## Member Repositories (`${REPOS_DIR_REL:-repos}/<name>/`)
-Each member repository is an autonomous Git repository. Inspect only targeted files required for the task.
-If repository-specific context exists, it is stored under `${REPOS_DIR_REL:-repos}/<name>/.rnex/`.
-Repositories marked `readonly: true` in configuration are reference-only: DO NOT modify, write to, or commit changes in read-only repositories; use them strictly for information, code exploration, and schema references.
+- **Disabled Repositories (Do Not Access)**: `<repo>`
 
-## Workspace Maintenance
-When workspace configuration, routing blocks, plugin assets, or member repository structures require reconciliation or schema upgrades:
-- Run `rnex sync` (or `rnex status` to check workspace health).
-- Use `rnex sync -y` to non-destructively apply configuration version upgrades automatically.
+## 3. Mandatory Execution Sequence
+Execute these steps in strict order:
+1. **Step 1 — Targeted Repository Access**: Inspect or modify only the specific files in active `repos/<name>/` required for the task. Never modify or commit inside `READ-ONLY` repositories.
+2. **Step 2 — Git & Maintenance**: Commit and push inside `repos/<name>/`. Run `rnex sync` if workspace state changes.
 
-## Git Operations
-Commit and push changes directly within the respective member repository root (`${REPOS_DIR_REL:-repos}/<name>/`). For read-only repositories (`readonly: true`), never commit, edit, or push changes.
+## 4. Coding & Wiki Directives
+- **Skills**: `.rnex/skills/` (load a skill only when its task applies).

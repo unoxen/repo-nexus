@@ -275,106 +275,196 @@ reconcile_ai_instructions_files() {
   done
 }
 
+# Return 0 if a plugin is an IDE/AI provider integration (explicitly declares
+# type: provider or owns a top-level instruction file such as CLAUDE.md).
+# Provider setup docs are never compiled into .rnex/ai-instructions.md.
+plugin_is_provider() {
+  _pip_name="$1"
+  _pip_pdir="${2:-}"
+  [ -n "$_pip_pdir" ] || _pip_pdir="$(find_plugin_dir "$_pip_name" 2>/dev/null || true)"
+  if [ -n "$_pip_pdir" ] && [ -f "$_pip_pdir/plugin.yaml" ]; then
+    _pip_type="$(plugin_get_field "$_pip_pdir" "type" 2>/dev/null || true)"
+    case "$_pip_type" in
+      provider) return 0 ;;
+      workflow) return 1 ;;
+    esac
+  fi
+  [ -n "$(plugin_get_instruction_file "$_pip_name" "$_pip_pdir" 2>/dev/null || true)" ]
+}
+
+# Escape a value for safe use inside a Markdown table cell.
+_ai_md_cell() {
+  printf '%s' "$1" | sed -e 's/|/\\|/g'
+}
+
+# Join newline-separated items into a "`a`, `b`" Markdown list on one line.
+_ai_md_code_list() {
+  awk 'NF { printf "%s`%s`", (n++ ? ", " : ""), $0 } END { if (n) printf "\n" }'
+}
+
+# Emit instruction files of enabled non-provider, non-built-in plugins (custom workflow plugins).
+_ai_emit_workflow_plugin_instructions() {
+  _aewp_dir="$1"; _aewp_p="$2"
+  _aewp_pdir="$(find_plugin_dir "$_aewp_p" 2>/dev/null || true)"
+  _aewp_files=""
+  if [ -n "$_aewp_pdir" ] && [ -f "$_aewp_pdir/plugin.yaml" ]; then
+    for _aewp_item in $(plugin_list_instructions "$_aewp_pdir" 2>/dev/null || true); do
+      _aewp_src="$(printf '%s' "${_aewp_item%%:*}" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+      [ -n "$_aewp_src" ] || continue
+      if [ -f "$_aewp_dir/.rnex/plugins/$_aewp_p/$_aewp_src" ]; then
+        _aewp_files="${_aewp_files:+$_aewp_files }$_aewp_dir/.rnex/plugins/$_aewp_p/$_aewp_src"
+      elif [ -f "$_aewp_pdir/$_aewp_src" ]; then
+        _aewp_files="${_aewp_files:+$_aewp_files }$_aewp_pdir/$_aewp_src"
+      fi
+    done
+  fi
+  if [ -z "$_aewp_files" ]; then
+    if [ -f "$_aewp_dir/.rnex/plugins/$_aewp_p/instructions.md" ]; then
+      _aewp_files="$_aewp_dir/.rnex/plugins/$_aewp_p/instructions.md"
+    elif [ -n "$_aewp_pdir" ] && [ -f "$_aewp_pdir/instructions.md" ]; then
+      _aewp_files="$_aewp_pdir/instructions.md"
+    fi
+  fi
+  for _aewp_f in $_aewp_files; do
+    printf '\n### Plugin Directives (`%s`)\n' "$_aewp_p"
+    # Demote headings so plugin docs nest under Section 4.
+    sed -e 's/^\(#\{1,\}\) /\1## /' "$_aewp_f"
+  done
+}
+
+# Render the full deterministic contents of .rnex/ai-instructions.md to stdout.
+# Output depends only on the merged configuration and RNEX_VERSION.
+render_ai_instructions() {
+  _rai_dir="${1:-$NEXUS_DIR}"
+  (
+    if [ -z "${NEXUS_DIR:-}" ] || [ "$_rai_dir" != "${NEXUS_DIR:-}" ]; then
+      NEXUS_DIR="$_rai_dir"
+      WORKSPACE_YAML="$_rai_dir/${RNEX_CONFIG_FILE:-rnex.yaml}"
+      WORKSPACE_LOCAL_YAML="$_rai_dir/${RNEX_LOCAL_CONFIG_FILE:-.local.rnex.yaml}"
+      export NEXUS_DIR WORKSPACE_YAML WORKSPACE_LOCAL_YAML
+    fi
+    _rai_rd="$(yaml_get_repos_dir 2>/dev/null || true)"
+    [ -n "$_rai_rd" ] || _rai_rd="repos"
+    _rai_ws="$(yaml_get_top_level "name" 2>/dev/null || true)"
+    [ -n "$_rai_ws" ] || _rai_ws="$(basename "$_rai_dir")"
+    _rai_plugins="$(yaml_list_enabled_plugins_sorted 2>/dev/null || true)"
+
+    _rai_kp=0
+    _rai_wiki=""
+    _rai_src_dirs=""
+    if printf '%s\n' "$_rai_plugins" | grep -qx "karpathy-llm"; then
+      _rai_kp=1
+      _rai_wiki="$(yaml_get_merged_plugin_config "karpathy-llm" "wiki_dir" "wiki" 2>/dev/null | sed -n '1p')"
+      _rai_wiki="${_rai_wiki%/}"
+      [ -n "$_rai_wiki" ] || _rai_wiki="wiki"
+      _rai_src_dirs="$(yaml_get_merged_plugin_config "karpathy-llm" "sources" 2>/dev/null | grep -v '[*?]' | sed -e 's#/*$#/#' | _ai_md_code_list)"
+    fi
+
+    # Header & Section 1
+    printf '# Repo Nexus Workspace Instructions (rnex v%s)\n\n' "${RNEX_VERSION:-unknown}"
+    printf '> Pre-compiled from merged workspace configuration (`.local.rnex.yaml` > `rnex.yaml`).\n\n'
+    printf '## 1. Strict Operating Constraints\n'
+    printf -- '- **NO CONFIG READS**: DO NOT read or search for rnex.yaml or .local.rnex.yaml. The complete merged configuration is embedded in Section 2.\n'
+    printf -- '- **READ FILES ONCE**: Read each file at most once per session. Never re-read a file already in context.\n'
+    if [ "$_rai_kp" -eq 1 ]; then
+      printf -- '- **NO BLIND SCANS**: Never run broad directory scans or unbounded searches across `%s/`%s.\n' "$_rai_rd" "${_rai_src_dirs:+ or raw intake directories ($_rai_src_dirs)}"
+    else
+      printf -- '- **NO BLIND SCANS**: Never run broad directory scans or unbounded searches across `%s/`.\n' "$_rai_rd"
+    fi
+
+    # Section 2
+    printf '\n## 2. Merged Workspace Configuration\n'
+    printf -- '- **Workspace**: `%s`\n' "$_rai_ws"
+    printf -- '- **Repositories Root**: `%s/`\n' "$_rai_rd"
+    _rai_pl="$(printf '%s\n' "$_rai_plugins" | _ai_md_code_list)"
+    printf -- '- **Enabled Plugins**: %s\n' "${_rai_pl:-_none_}"
+
+    _rai_rows=""
+    _rai_disabled=""
+    for _rai_r in $(yaml_list_all_repos_sorted 2>/dev/null || true); do
+      if ! is_enabled_val "$(yaml_get_merged_repo_field "$_rai_r" "enabled" "true")"; then
+        _rai_disabled="${_rai_disabled}${_rai_r}
+"
+        continue
+      fi
+      _rai_br="$(yaml_get_merged_repo_field "$_rai_r" "branch" "main")"
+      _rai_mode="READ-WRITE"
+      is_truthy "$(yaml_get_merged_repo_field "$_rai_r" "readonly" "false")" && _rai_mode="READ-ONLY"
+      _rai_desc="$(_ai_md_cell "$(yaml_get_merged_repo_field "$_rai_r" "description" "")")"
+      _rai_rows="${_rai_rows}| \`${_rai_r}\` | \`${_rai_rd}/${_rai_r}/\` | \`${_rai_br}\` | \`${_rai_mode}\` | ${_rai_desc} |
+"
+    done
+
+    printf '\n### Active Member Repositories\n'
+    if [ -n "$_rai_rows" ]; then
+      printf '| Repository | Path | Branch | Mode | Description |\n'
+      printf '| :--- | :--- | :--- | :--- | :--- |\n'
+      printf '%s' "$_rai_rows"
+    else
+      printf '_No active member repositories._\n'
+    fi
+    if [ -n "$_rai_disabled" ]; then
+      printf '\n- **Disabled Repositories (Do Not Access)**: %s\n' "$(printf '%s' "$_rai_disabled" | _ai_md_code_list)"
+    fi
+
+    if [ "$_rai_kp" -eq 1 ]; then
+      _rai_srcs="$(yaml_get_merged_plugin_config "karpathy-llm" "sources" 2>/dev/null | _ai_md_code_list)"
+      printf '\n### Resolved Knowledge Base (`karpathy-llm`)\n'
+      printf -- '- **Curated Wiki Path**: `%s/`\n' "$_rai_wiki"
+      printf -- '- **Raw Intake Sources**: %s *(read-only inputs used strictly during `rnex plugin karpathy-llm ingest`; do not browse during normal tasks)*\n' "${_rai_srcs:-_none_}"
+    fi
+
+    # Section 3
+    printf '\n## 3. Mandatory Execution Sequence\n'
+    printf 'Execute these steps in strict order:\n'
+    _rai_n=1
+    if [ "$_rai_kp" -eq 1 ]; then
+      printf '1. **Step 1 — Read Wiki Hot Cache**: Read `%s/hot.md` first for workspace architecture, repository boundaries, and active contracts.\n' "$_rai_wiki"
+      printf '2. **Step 2 — Lookup Topic in Wiki Index**: If task details are not fully covered in `%s/hot.md`, read `%s/index.md` and read only the relevant atomic page(s) in `%s/`. Do NOT read raw intake sources%s or `%s/` before completing Steps 1–2.\n' "$_rai_wiki" "$_rai_wiki" "$_rai_wiki" "${_rai_src_dirs:+ ($_rai_src_dirs)}" "$_rai_rd"
+      _rai_n=3
+    fi
+    printf '%s. **Step %s — Targeted Repository Access**: Inspect or modify only the specific files in active `%s/<name>/` required for the task. Never modify or commit inside `READ-ONLY` repositories.\n' "$_rai_n" "$_rai_n" "$_rai_rd"
+    _rai_n=$((_rai_n + 1))
+    printf '%s. **Step %s — Git & Maintenance**: Commit and push inside `%s/<name>/`. Run `rnex sync` if workspace state changes.\n' "$_rai_n" "$_rai_n" "$_rai_rd"
+
+    # Section 4
+    printf '\n## 4. Coding & Wiki Directives\n'
+    if [ -d "$_rai_dir/.rnex/skills" ] && [ -n "$(ls -A "$_rai_dir/.rnex/skills" 2>/dev/null)" ]; then
+      printf -- '- **Skills**: `.rnex/skills/` (load a skill only when its task applies).\n'
+    fi
+    if [ -d "$_rai_dir/.rnex/agents" ] && [ -n "$(ls -A "$_rai_dir/.rnex/agents" 2>/dev/null)" ]; then
+      printf -- '- **Subagents**: `.rnex/agents/`.\n'
+    fi
+    if [ "$_rai_kp" -eq 1 ]; then
+      printf -- '- **Behavioral Rules**: (1) State assumptions and surface trade-offs before coding; (2) Prefer minimal, non-speculative code; (3) Make surgical edits touching only required lines; (4) Verify changes against concrete goals.\n'
+      printf -- '- **Wiki Operations**: Never edit `%s/` files ad-hoc. To ingest raw sources or validate wiki frontmatter/links, run `rnex plugin karpathy-llm ingest` or `rnex plugin karpathy-llm lint` (or load `.rnex/plugins/karpathy-llm/skills/` only when executing ingestion/linting).\n' "$_rai_wiki"
+    fi
+
+    for _rai_p in $_rai_plugins; do
+      [ "$_rai_p" = "karpathy-llm" ] && continue
+      plugin_is_provider "$_rai_p" && continue
+      _ai_emit_workflow_plugin_instructions "$_rai_dir" "$_rai_p"
+    done
+  )
+}
+
 # Compile the unified .rnex/ai-instructions.md file consumed by AI coding agents.
-# Aggregates sample template instructions and active plugin instruction sections.
+# Writes atomically and only replaces the file when content changes.
 build_ai_instructions() {
   _dir="${1:-$NEXUS_DIR}"
   _ai_file="$_dir/.rnex/ai-instructions.md"
   mkdir -p "$_dir/.rnex"
-
-  _tmpl_file=""
-  for _cand in \
-    "$_dir/templates/ai-instructions.sample.md" \
-    "$SCRIPT_LOCATION/templates/ai-instructions.sample.md" \
-    "$(dirname "$SCRIPT_LOCATION")/templates/ai-instructions.sample.md"; do
-    if [ -f "$_cand" ]; then
-      _tmpl_file="$_cand"
-      break
-    fi
-  done
-
-  _out_tmp="$(mktemp)"
-  if [ -n "$_tmpl_file" ]; then
-    cat "$_tmpl_file" > "$_out_tmp"
+  _out_tmp="$(mktemp "$_dir/.rnex/.ai-instructions.XXXXXX")"
+  render_ai_instructions "$_dir" > "$_out_tmp"
+  if [ -f "$_ai_file" ] && cmp -s "$_out_tmp" "$_ai_file"; then
+    rm -f "$_out_tmp"
   else
-    cat > "$_out_tmp" <<'BASE_AI_EOF'
-# Multi-Repo AI Workspace Context
-
-This workspace operates as a **Repo Nexus Virtual Meta-Repo** uniting independent repositories.
-
-## Routing Protocol for AI Assistants
-
-### Mandatory Session Startup
-Execute in sequence before task execution:
-1. **Read Configuration First (Highest Priority)**: Read `.local.rnex.yaml` (if present) and `rnex.yaml` to identify active member repositories (`repos/`) and enabled plugins.
-2. **Plugin & Skill Routing**: Inspect active plugin instructions under `.rnex/plugins/<plugin-name>/`, and core agentic skills under `.rnex/skills/` when relevant.
-3. **Targeted Member Repository Access Only**: Navigate directly to specific files in `repos/<name>/` relevant to the user request. Avoid blind repository-wide scans or unbounded searches across `repos/`.
-
-## Subagents
-Autonomous subagents are defined under `.rnex/agents/` and active plugin agents under `.rnex/plugins/<plugin-name>/agents/`.
-
-## Member Repositories (`repos/<name>/`)
-Each member repository is an autonomous Git repository. Inspect only targeted files required for the task.
-If repository-specific context exists, it is stored under `repos/<name>/.rnex/`.
-Repositories marked `readonly: true` in configuration are reference-only: DO NOT modify, write to, or commit changes in read-only repositories; use them strictly for information, code exploration, and schema references.
-
-## Workspace Maintenance
-When workspace configuration, routing blocks, plugin assets, or member repository structures require reconciliation or schema upgrades:
-- Run `rnex sync` (or `rnex status` to check workspace health).
-- Use `rnex sync -y` to non-destructively apply configuration version upgrades automatically.
-
-## Git Operations
-Commit and push changes directly within the respective member repository root (`repos/<name>/`). For read-only repositories (`readonly: true`), never commit, edit, or push changes.
-BASE_AI_EOF
+    mv "$_out_tmp" "$_ai_file"
   fi
+}
 
-  _active_rd="$(yaml_get_repos_dir 2>/dev/null || printf 'repos')"
-  [ -n "$_active_rd" ] || _active_rd="repos"
-  sed -e "s#\${REPOS_DIR_REL:-repos}#${_active_rd}#g" \
-      -e "s#\${REPOS_DIR_REL}#${_active_rd}#g" \
-      -e "s#\./repos/#./${_active_rd}/#g" \
-      -e "s#\`repos/#\`${_active_rd}/#g" \
-      -e "s#repos/<name>#${_active_rd}/<name>#g" \
-      -e "s#repos/\`#${_active_rd}/\`#g" \
-      "$_out_tmp" > "${_out_tmp}.subst" && mv "${_out_tmp}.subst" "$_out_tmp"
-
-  for _p in $(yaml_list_plugins 2>/dev/null || true); do
-    [ -n "$_p" ] || continue
-    yaml_plugin_enabled "$_p" 2>/dev/null || continue
-    _pdir="$(find_plugin_dir "$_p" 2>/dev/null || true)"
-    _p_instr_files=""
-    if [ -n "$_pdir" ] && [ -f "$_pdir/plugin.yaml" ]; then
-      for _item in $(plugin_list_instructions "$_pdir" 2>/dev/null || true); do
-        [ -n "$_item" ] || continue
-        _src="${_item%%:*}"
-        _src="$(printf '%s' "$_src" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
-        _found=""
-        if [ -f "$_dir/.rnex/plugins/$_p/$_src" ]; then
-          _found="$_dir/.rnex/plugins/$_p/$_src"
-        elif [ -f "$_pdir/$_src" ]; then
-          _found="$_pdir/$_src"
-        fi
-        if [ -n "$_found" ]; then
-          _p_instr_files="${_p_instr_files:+$_p_instr_files }$_found"
-        fi
-      done
-    fi
-
-    if [ -z "$_p_instr_files" ]; then
-      if [ -f "$_dir/.rnex/plugins/$_p/instructions.md" ]; then
-        _p_instr_files="$_dir/.rnex/plugins/$_p/instructions.md"
-      elif [ -n "$_pdir" ] && [ -f "$_pdir/instructions.md" ]; then
-        _p_instr_files="$_pdir/instructions.md"
-      fi
-    fi
-
-    for _f in $_p_instr_files; do
-      printf '\n\n' >> "$_out_tmp"
-      cat "$_f" >> "$_out_tmp"
-    done
-  done
-
-  mv "$_out_tmp" "$_ai_file"
+generate_ai_instructions() {
+  build_ai_instructions "$@"
 }
 
 # ---- Multi-Root IDE Workspace (.code-workspace) ----------------------------

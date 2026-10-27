@@ -96,8 +96,8 @@ grep -q "docs/wiki/" "$TEST_KWIKI_WS/docs/wiki/hot.md" || { fail "docs/wiki/hot.
 _kw_agents="$(cat "$TEST_KWIKI_WS/AGENTS.md")"
 echo "$_kw_agents" | grep -q "CRITICAL: You MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\`" || { fail "AGENTS.md missing strict directive"; exit 1; }
 _kw_ai_instructions="$(cat "$TEST_KWIKI_WS/.rnex/ai-instructions.md")"
-echo "$_kw_ai_instructions" | grep -q "Karpathy LLM Wiki Knowledge Architecture" || { fail "ai-instructions.md missing Karpathy instructions"; exit 1; }
-echo "$_kw_ai_instructions" | grep -q "wiki_dir" || { fail "ai-instructions.md missing wiki_dir guidance"; exit 1; }
+echo "$_kw_ai_instructions" | grep -q "Resolved Knowledge Base" || { fail "ai-instructions.md missing Karpathy instructions"; exit 1; }
+echo "$_kw_ai_instructions" | grep -q "wiki/hot.md" || { fail "ai-instructions.md missing wiki_dir guidance"; exit 1; }
 
 # Verify plugin info reports custom options and template mappings
 _kw_info="$(cd "$TEST_KWIKI_WS" && ./rnex plugin info karpathy-llm 2>&1)"
@@ -169,7 +169,7 @@ EOF_CFG2
 [ -f "$TEST_KWIKI_WS/.claude/skills/rnex-clone-sync/SKILL.md" ] || { fail "Core User Skill rnex-clone-sync missing in claude"; exit 1; }
 [ -d "$TEST_KWIKI_WS/.rnex/plugins/karpathy-llm" ] || { fail ".rnex/plugins/karpathy-llm missing while enabled"; exit 1; }
 _kw_active_ai="$(cat "$TEST_KWIKI_WS/.rnex/ai-instructions.md")"
-echo "$_kw_active_ai" | grep -q "Karpathy LLM Wiki Knowledge Architecture" || { fail "Active ai-instructions.md missing Karpathy instructions"; exit 1; }
+echo "$_kw_active_ai" | grep -q "Resolved Knowledge Base" || { fail "Active ai-instructions.md missing Karpathy instructions"; exit 1; }
 
 # 2. Disable karpathy-llm via enabled: false in rnex.yaml
 cat <<'EOF_CFG3' > "$TEST_KWIKI_WS/rnex.yaml"
@@ -187,8 +187,8 @@ EOF_CFG3
 
 # 4. Verify .rnex/ai-instructions.md no longer contains wiki instructions and CLAUDE.md retains single directive
 _kw_disabled_ai="$(cat "$TEST_KWIKI_WS/.rnex/ai-instructions.md")"
-! echo "$_kw_disabled_ai" | grep -q "Karpathy LLM Wiki Knowledge Architecture" || { fail "ai-instructions.md still contains wiki instructions after disabling plugin"; exit 1; }
-echo "$_kw_disabled_ai" | grep -q "Read Configuration First" || { fail "ai-instructions.md missing Read Configuration First"; exit 1; }
+! echo "$_kw_disabled_ai" | grep -q "Resolved Knowledge Base" || { fail "ai-instructions.md still contains wiki instructions after disabling plugin"; exit 1; }
+echo "$_kw_disabled_ai" | grep -q "NO CONFIG READS" || { fail "ai-instructions.md missing NO CONFIG READS"; exit 1; }
 
 [ ! -f "$TEST_KWIKI_WS/AGENTS.md" ] || { fail "AGENTS.md should not be present when claude plugin is enabled"; exit 1; }
 _kw_disabled_claude="$(cat "$TEST_KWIKI_WS/CLAUDE.md")"
@@ -372,7 +372,7 @@ _hot_wc="$(wc -w < "$TEST_HOOK_WS/wiki/hot.md")"
 grep -q "<wiki_dir>/" "$TEST_HOOK_WS/.rnex/plugins/karpathy-llm/templates/rnex-wiki-page.template.md" || { fail "<wiki_dir>/ placeholder missing in rnex-wiki-page.template.md"; exit 1; }
 
 # 13. Verify Mandatory Wiki-First Gate compiled into .rnex/ai-instructions.md and absent from AGENTS.md
-grep -q "Mandatory Wiki-First Access Gate" "$TEST_HOOK_WS/.rnex/ai-instructions.md" || { fail "Mandatory Wiki-First Access Gate missing from compiled ai-instructions.md"; exit 1; }
+grep -q "Read Wiki Hot Cache" "$TEST_HOOK_WS/.rnex/ai-instructions.md" || { fail "Read Wiki Hot Cache missing from compiled ai-instructions.md"; exit 1; }
 ! grep -q "Mandatory Wiki-First Access Gate" "$TEST_HOOK_WS/AGENTS.md" || { fail "AGENTS.md contains wiki instructions; should remain a single pointer"; exit 1; }
 
 # 14. Verify rnex plugin karpathy-llm ingest and lint commands execute with options
@@ -685,6 +685,21 @@ grep -q "packages/core/README\.md" "$TEST_KPKG_WS/wiki/_log.md" || { fail "_log.
 _lint_out="$(cd "$TEST_KPKG_WS" && ./rnex plugin karpathy-llm lint 2>&1)"
 echo "$_lint_out" | grep -q "Wiki lint passed" || { fail "Wiki lint did not pass: $_lint_out"; exit 1; }
 ! echo "$_lint_out" | grep -q "references broken source file" || { fail "Wiki lint reported broken source file: $_lint_out"; exit 1; }
+
+# Verify custom wiki_dir ("knowledge") and copilot co-existence in compiled ai-instructions.md
+(cd "$TEST_KPKG_WS" && ./rnex plugin enable copilot >/dev/null)
+cat <<'KPKG_LOCAL_EOF' > "$TEST_KPKG_WS/.local.rnex.yaml"
+plugins:
+  karpathy-llm:
+    wiki_dir: "knowledge"
+KPKG_LOCAL_EOF
+(cd "$TEST_KPKG_WS" && ./rnex sync -y >/dev/null)
+_kpkg_ai="$TEST_KPKG_WS/.rnex/ai-instructions.md"
+grep -qF '1. **Step 1 — Read Wiki Hot Cache**: Read `knowledge/hot.md`' "$_kpkg_ai" || { fail "Step 1 does not reference knowledge/hot.md"; exit 1; }
+! grep -qF 'rules/behavioral.md' "$_kpkg_ai" || { fail "ai-instructions.md references external behavioral.md"; exit 1; }
+! grep -qF '# GitHub Copilot Integration' "$_kpkg_ai" || { fail "Copilot setup docs compiled into ai-instructions.md"; exit 1; }
+_kpkg_lines="$(wc -l < "$_kpkg_ai" | tr -d ' ')"
+[ "$_kpkg_lines" -lt 60 ] || { fail "ai-instructions.md too long: $_kpkg_lines lines (expected < 60)"; exit 1; }
 pass
 
 if [ "${_STANDALONE_RUN:-0}" -eq 1 ]; then
