@@ -702,6 +702,131 @@ _kpkg_lines="$(wc -l < "$_kpkg_ai" | tr -d ' ')"
 [ "$_kpkg_lines" -lt 60 ] || { fail "ai-instructions.md too long: $_kpkg_lines lines (expected < 60)"; exit 1; }
 pass
 
+# --------------------------------------------------------------------------
+run_test "Karpathy-llm recursive directory intake: bare directory sources, nested subdirectories, spaces/brackets, slug collision prevention, and hidden file exclusion"
+TEST_REC_WS="$TEST_TMP/karpathy-recursive-intake-ws"
+mkdir -p "$TEST_REC_WS"
+cp "$CLI" "$TEST_REC_WS/rnex"
+chmod +x "$TEST_REC_WS/rnex"
+cp -r "$DIR/toolkit" "$TEST_REC_WS/toolkit"
+cp -r "$DIR/lib" "$TEST_REC_WS/lib"
+cp -r "$DIR/templates" "$TEST_REC_WS/templates"
+cp "$DIR/package.json" "$TEST_REC_WS/package.json"
+git -C "$TEST_REC_WS" init -q
+
+# Initialize workspace and enable karpathy-llm
+(cd "$TEST_REC_WS" && ./rnex init -y "$TEST_REC_WS" >/dev/null)
+(cd "$TEST_REC_WS" && ./rnex plugin enable karpathy-llm >/dev/null)
+
+# 1. Multi-line block YAML configuration: bare directory "docs"
+cat <<'EOF_REC_YAML' > "$TEST_REC_WS/rnex.yaml"
+version: 0.7.26
+plugins:
+  karpathy-llm:
+    enabled: true
+    sources:
+      - "docs"
+EOF_REC_YAML
+
+# 2. Populate directory structure with edge cases
+mkdir -p "$TEST_REC_WS/docs/api"
+mkdir -p "$TEST_REC_WS/docs/guide"
+mkdir -p "$TEST_REC_WS/docs/nested/deep"
+mkdir -p "$TEST_REC_WS/docs/.obsidian"
+
+# Top-level document directly under configured directory (should preserve basename overview.md)
+cat <<'EOF_DOC' > "$TEST_REC_WS/docs/overview.md"
+# Workspace Overview
+Core system architecture and operational concepts.
+EOF_DOC
+
+# Two nested README.md files in different subdirectories (slug collision prevention)
+cat <<'EOF_DOC' > "$TEST_REC_WS/docs/api/README.md"
+# API Specification
+REST and WebSocket API endpoints and contracts.
+EOF_DOC
+
+cat <<'EOF_DOC' > "$TEST_REC_WS/docs/guide/README.md"
+# Guide Index
+Step-by-step developer guide and workflows.
+EOF_DOC
+
+# Deeply nested file with spaces and brackets in filename
+cat <<'EOF_DOC' > "$TEST_REC_WS/docs/nested/deep/spec [v1].md"
+# Deep Spec V1
+Detailed protocol specifications and technical parameters.
+EOF_DOC
+
+# Hidden files that must be ignored
+cat <<'EOF_DOC' > "$TEST_REC_WS/docs/.hidden.md"
+# Hidden File
+Should not be ingested.
+EOF_DOC
+
+cat <<'EOF_DOC' > "$TEST_REC_WS/docs/.obsidian/note.md"
+# Obsidian Private Note
+Should not be ingested.
+EOF_DOC
+
+cat <<'EOF_DOC' > "$TEST_REC_WS/docs/api/.secret.env"
+SECRET=value
+EOF_DOC
+
+# 3. Execute rnex plugin karpathy-llm ingest
+(cd "$TEST_REC_WS" && ./rnex plugin karpathy-llm ingest >/dev/null)
+
+# 4. Verify slug generation and file presence
+[ -f "$TEST_REC_WS/wiki/overview.md" ] || { fail "wiki/overview.md missing after ingest"; exit 1; }
+[ -f "$TEST_REC_WS/wiki/doc-docs-api-readme.md" ] || { fail "wiki/doc-docs-api-readme.md missing (API README collision)"; exit 1; }
+[ -f "$TEST_REC_WS/wiki/doc-docs-guide-readme.md" ] || { fail "wiki/doc-docs-guide-readme.md missing (Guide README collision)"; exit 1; }
+[ -f "$TEST_REC_WS/wiki/doc-docs-nested-deep-spec-v1.md" ] || { fail "wiki/doc-docs-nested-deep-spec-v1.md missing (brackets/spaces file)"; exit 1; }
+
+# Verify hidden files were NOT ingested
+[ ! -f "$TEST_REC_WS/wiki/hidden.md" ] || { fail "Hidden file .hidden.md was incorrectly ingested"; exit 1; }
+[ ! -f "$TEST_REC_WS/wiki/doc-docs-hidden.md" ] || { fail "Hidden file .hidden.md was incorrectly ingested as slug"; exit 1; }
+[ ! -f "$TEST_REC_WS/wiki/note.md" ] || { fail "Hidden folder file note.md was incorrectly ingested"; exit 1; }
+[ ! -f "$TEST_REC_WS/wiki/doc-docs-obsidian-note.md" ] || { fail "Hidden folder file .obsidian/note.md was incorrectly ingested"; exit 1; }
+
+# 5. Verify frontmatter source references in generated pages
+grep -q 'sources:[ ]*\["docs/overview\.md"\]' "$TEST_REC_WS/wiki/overview.md" || { fail "overview.md sources frontmatter incorrect: $(grep 'sources:' "$TEST_REC_WS/wiki/overview.md")"; exit 1; }
+grep -q 'sources:[ ]*\["docs/api/README\.md"\]' "$TEST_REC_WS/wiki/doc-docs-api-readme.md" || { fail "doc-docs-api-readme.md sources frontmatter incorrect"; exit 1; }
+grep -q 'sources:[ ]*\["docs/guide/README\.md"\]' "$TEST_REC_WS/wiki/doc-docs-guide-readme.md" || { fail "doc-docs-guide-readme.md sources frontmatter incorrect"; exit 1; }
+grep -q 'sources:[ ]*\["docs/nested/deep/spec \[v1\]\.md"\]' "$TEST_REC_WS/wiki/doc-docs-nested-deep-spec-v1.md" || { fail "doc-docs-nested-deep-spec-v1.md sources frontmatter incorrect: $(grep 'sources:' "$TEST_REC_WS/wiki/doc-docs-nested-deep-spec-v1.md")"; exit 1; }
+
+# 6. Verify wiki/index.md, wiki/hot.md, and wiki/_log.md
+grep -q "overview\.md" "$TEST_REC_WS/wiki/index.md" || { fail "overview.md missing from wiki/index.md"; exit 1; }
+grep -q "doc-docs-api-readme\.md" "$TEST_REC_WS/wiki/index.md" || { fail "doc-docs-api-readme.md missing from wiki/index.md"; exit 1; }
+grep -q "doc-docs-guide-readme\.md" "$TEST_REC_WS/wiki/index.md" || { fail "doc-docs-guide-readme.md missing from wiki/index.md"; exit 1; }
+grep -q "doc-docs-nested-deep-spec-v1\.md" "$TEST_REC_WS/wiki/index.md" || { fail "doc-docs-nested-deep-spec-v1.md missing from wiki/index.md"; exit 1; }
+
+grep -q "spec \[v1\]\.md" "$TEST_REC_WS/wiki/_log.md" || { fail "_log.md missing spec [v1].md entry"; exit 1; }
+
+# 7. Verify rnex plugin karpathy-llm lint --strict passes cleanly
+_lint_rec_out="$(cd "$TEST_REC_WS" && ./rnex plugin karpathy-llm lint --strict 2>&1)" || { fail "rnex plugin karpathy-llm lint --strict failed: $_lint_rec_out"; exit 1; }
+echo "$_lint_rec_out" | grep -q "Wiki lint passed" || { fail "Lint output mismatch: $_lint_rec_out"; exit 1; }
+
+# 8. Test Two-Level Override with inline flow array syntax: .local.rnex.yaml sources: ["custom_docs"]
+cat <<'EOF_LOCAL_FLOW' > "$TEST_REC_WS/.local.rnex.yaml"
+plugins:
+  karpathy-llm:
+    sources: ["custom_docs"]
+EOF_LOCAL_FLOW
+
+mkdir -p "$TEST_REC_WS/custom_docs/nested"
+cat <<'EOF_DOC' > "$TEST_REC_WS/custom_docs/nested/feature.md"
+# Feature Spec
+Specification for custom feature.
+EOF_DOC
+
+(cd "$TEST_REC_WS" && ./rnex plugin karpathy-llm ingest >/dev/null)
+[ -f "$TEST_REC_WS/wiki/doc-custom-docs-nested-feature.md" ] || { fail "wiki/doc-custom-docs-nested-feature.md missing after override ingest"; exit 1; }
+grep -q 'sources:[ ]*\["custom_docs/nested/feature\.md"\]' "$TEST_REC_WS/wiki/doc-custom-docs-nested-feature.md" || { fail "feature.md sources frontmatter incorrect"; exit 1; }
+
+_lint_override_out="$(cd "$TEST_REC_WS" && ./rnex plugin karpathy-llm lint --strict 2>&1)" || { fail "rnex plugin karpathy-llm lint --strict after override failed: $_lint_override_out"; exit 1; }
+echo "$_lint_override_out" | grep -q "Wiki lint passed" || { fail "Lint output mismatch after override: $_lint_override_out"; exit 1; }
+
+pass
+
 if [ "${_STANDALONE_RUN:-0}" -eq 1 ]; then
   report_results
 fi

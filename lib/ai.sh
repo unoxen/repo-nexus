@@ -353,12 +353,16 @@ render_ai_instructions() {
   _rai_kp=0
   _rai_wiki=""
   _rai_src_dirs=""
+  _rai_srcs=""
   if printf '%s\n' "$_rai_plugins" | grep -qx "karpathy-llm"; then
     _rai_kp=1
     _rai_wiki="$(yaml_get_merged_plugin_config "karpathy-llm" "wiki_dir" "wiki" 2>/dev/null | sed -n '1p')"
     _rai_wiki="${_rai_wiki%/}"
     [ -n "$_rai_wiki" ] || _rai_wiki="wiki"
-    _rai_src_dirs="$(yaml_get_merged_plugin_config "karpathy-llm" "sources" 2>/dev/null | grep -v '[*?]' | sed -e 's#/*$#/#' | _ai_md_code_list)"
+    _rai_src_list="$(yaml_get_plugin_list "karpathy-llm" "sources" 2>/dev/null || true)"
+    [ -n "$_rai_src_list" ] || _rai_src_list="$(yaml_get_merged_plugin_config "karpathy-llm" "sources" 2>/dev/null || true)"
+    _rai_src_dirs="$(printf '%s\n' "$_rai_src_list" | grep -v '[*?]' | sed -e 's#/*$#/#' | _ai_md_code_list)"
+    _rai_srcs="$(printf '%s\n' "$_rai_src_list" | _ai_md_code_list)"
   fi
 
   # Header & Section 1
@@ -368,7 +372,7 @@ render_ai_instructions() {
   printf -- '- **NO CONFIG READS**: DO NOT read or search for rnex.yaml or .local.rnex.yaml. The complete merged configuration is embedded in Section 2.\n'
   printf -- '- **READ FILES ONCE**: Read each file at most once per session. Never re-read a file already in context.\n'
   if [ "$_rai_kp" -eq 1 ]; then
-    printf -- "- **NO BLIND SCANS**: Never run broad directory scans or unbounded searches across \`%s/\`%s.\n" "$_rai_rd" "${_rai_src_dirs:+ or raw intake directories ($_rai_src_dirs)}"
+    printf -- "- **NO BLIND SCANS**: Never run broad directory scans or unbounded searches across \`%s/\`%s (exception: targeted file reads and recursive discovery are permitted strictly when executing source ingestion for \`karpathy-llm\`).\n" "$_rai_rd" "${_rai_src_dirs:+ or raw intake directories ($_rai_src_dirs)}"
   else
     printf -- "- **NO BLIND SCANS**: Never run broad directory scans or unbounded searches across \`%s/\`.\n" "$_rai_rd"
   fi

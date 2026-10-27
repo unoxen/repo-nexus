@@ -21,9 +21,10 @@ rnex plugin karpathy-llm ingest [--source <path>] [--repo <name>] [--quiet]
 1. **Resolve Configuration & Direct Source Paths:**
    - Take the resolved `sources` list, `repos_dir`, `wiki_dir`, and active/disabled repositories from **Section 2 (Merged Workspace Configuration)** of the already-loaded `.rnex/ai-instructions.md`. Do NOT read `rnex.yaml` or `.local.rnex.yaml`.
    - Direct input scope resolves all files matching `sources` (read-only):
-     1. All files in configured directory sources (e.g. `docs/`) with hidden directories and `node_modules` pruned.
-     2. Files matching recursive or single-level glob patterns (e.g. `repos/**/README.md` or `<repos_dir>/**/README.md`), excluding disabled repositories (`enabled: false`).
-     3. `./<repos_dir>/<name>/README.md` (default: `./repos/<name>/README.md`) for every active member repository listed in `.rnex/ai-instructions.md` (read-only).
+     1. **Configured Directory Sources (e.g. `docs` or `docs/`):** When a directory path is specified without glob patterns, recursively discover (`find "$NEXUS_DIR/<dir>" -type f`) all markdown, text, and documentation files across all nested subdirectories, ignoring hidden files/folders (`.*`) and `node_modules`.
+     2. **Glob Patterns:** Files matching recursive or single-level glob patterns (e.g. `repos/**/README.md` or `<repos_dir>/**/README.md`), excluding disabled repositories (`enabled: false`).
+     3. **Specific File Paths:** Files explicitly targeted in `sources` or passed via CLI `--source <path>`.
+     4. **Member Repositories:** `./<repos_dir>/<name>/README.md` (default: `./repos/<name>/README.md`) for every active member repository listed in `.rnex/ai-instructions.md` (read-only).
    - Intake sources and member repositories (`./<repos_dir>/`) are strictly read-only inputs during wiki operations. Never create, copy, or modify files inside intake sources; write generated output exclusively inside `wiki_dir` (`wiki/`).
    - Scan direct source paths for source materials not yet recorded in `<wiki_dir>/_log.md`.
    - All source material is read directly in-place without staging copies. Never write directly to `<wiki_dir>/` without ingesting.
@@ -32,9 +33,13 @@ rnex plugin karpathy-llm ingest [--source <path>] [--repo <name>] [--quiet]
    - Read each source document thoroughly in-place.
    - If scope, domain boundaries, or terminology are ambiguous, ask one round of clarifying questions before decomposing.
 
-3. **Atomic Decomposition:**
+3. **Atomic Decomposition & Page Naming:**
    - Decompose each source into atomic wiki pages — **one per distinct concept, architecture contract, subsystem, or pattern**.
    - A single source document commonly produces **5–25 atomic pages**. Never collapse an entire source document into a single page.
+   - Deterministic and collision-free page naming:
+     - **Member Repository READMEs:** Generate `<wiki_dir>/repo-<repo_name>.md`.
+     - **Top-Level Source Files:** Files directly under a configured source directory preserve the file basename `<wiki_dir>/<name>.md` (e.g., `docs/overview.md` becomes `<wiki_dir>/overview.md`).
+     - **Nested Directory Files:** Files in nested subdirectories generate a collision-free slug prefixed with `doc-` and normalized relative path (e.g., `docs/nested/deep/spec [v1].md` becomes `<wiki_dir>/doc-docs-nested-deep-spec-v1.md`).
    - Place pages directly under `<wiki_dir>/` (e.g. `<wiki_dir>/<concept>.md`) or organized by clear domain categories.
 
 4. **Frontmatter Relations:**

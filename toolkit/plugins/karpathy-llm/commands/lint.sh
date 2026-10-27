@@ -129,29 +129,45 @@ for _page in "$_wiki_path"/*.md; do
   _src_links="$(awk '
     NR==1 && /^---$/ {in_fm=1; next}
     in_fm && /^---$/ {exit}
-    in_fm && /^[ ]*sources:[ ]*\[/ {
+    in_fm && /^[ \t]*sources:[ \t]*\[/ {
       line = $0
-      sub(/^[ ]*sources:[ ]*\[/, "", line)
-      sub(/\].*/, "", line)
-      split(line, arr, ",")
-      for (i in arr) {
-        gsub(/[ "\047\r\t]/, "", arr[i])
-        if (length(arr[i]) > 0) print arr[i]
+      sub(/^[ \t]*sources:[ \t]*\[/, "", line)
+      sub(/\][ \t]*(#.*)?$/, "", line)
+      len = length(line)
+      in_dq = 0; in_sq = 0; cur = ""
+      for (i = 1; i <= len; i++) {
+        c = substr(line, i, 1)
+        if (c == "\"" && !in_sq) { in_dq = !in_dq }
+        else if (c == "\047" && !in_dq) { in_sq = !in_sq }
+        else if (c == "," && !in_dq && !in_sq) {
+          sub(/^[ \t]+/, "", cur); sub(/[ \t]+$/, "", cur)
+          sub(/^["\047]/, "", cur); sub(/["\047]$/, "", cur)
+          if (length(cur) > 0) print cur
+          cur = ""
+        } else {
+          cur = cur c
+        }
       }
+      sub(/^[ \t]+/, "", cur); sub(/[ \t]+$/, "", cur)
+      sub(/^["\047]/, "", cur); sub(/["\047]$/, "", cur)
+      if (length(cur) > 0) print cur
+      next
     }
-    in_fm && /^[ ]*sources:[ ]*$/ { in_src=1; next }
-    in_src && /^[ ]*-[ ]*/ {
+    in_fm && /^[ \t]*sources:[ \t]*(#.*)?$/ { in_src=1; next }
+    in_src && /^[ \t]*-([ \t]|$)/ {
       line = $0
-      sub(/^[ ]*-[ ]*/, "", line)
-      gsub(/[ "\047\r\t]/, "", line)
+      sub(/^[ \t]*-+[ \t]*/, "", line)
+      sub(/[ \t]*#.*$/, "", line)
+      sub(/^[ \t]+/, "", line); sub(/[ \t]+$/, "", line)
+      sub(/^["\047]/, "", line); sub(/["\047]$/, "", line)
       if (length(line) > 0) print line
       next
     }
-    in_src && /^[^ ]/ { in_src=0 }
+    in_src && /^[^ \t#]/ { in_src=0 }
   ' "$_page")"
 
   if [ -n "$_src_links" ]; then
-    for _sitem in $_src_links; do
+    while IFS= read -r _sitem || [ -n "$_sitem" ]; do
       [ -n "$_sitem" ] || continue
       case "$_sitem" in
         http://*|https://*) continue ;;
@@ -160,7 +176,9 @@ for _page in "$_wiki_path"/*.md; do
         echo "Warning: '$_wiki/$_pname' references broken source file '$_sitem'." >&2
         _warnings=$((_warnings + 1))
       fi
-    done
+    done <<EOF_SLINKS
+$_src_links
+EOF_SLINKS
   fi
 
   # Check orphaned page (must be referenced in index.md)
@@ -171,6 +189,78 @@ for _page in "$_wiki_path"/*.md; do
     fi
   fi
 done
+
+# Check 4: Un-ingested source files detection
+if command -v karpathy_expand_source_files >/dev/null 2>&1; then
+  _tmp_exp="$(mktemp)"
+  karpathy_expand_source_files 2>/dev/null > "$_tmp_exp" || true
+
+  _tmp_seen="$(mktemp)"
+  for _wpage in "$_wiki_path"/*.md; do
+    [ -f "$_wpage" ] || continue
+    _wpname="$(basename "$_wpage")"
+    [ "$_wpname" = "_log.md" ] && continue
+    [ "$_wpname" = "hot.md" ] && continue
+    [ "$_wpname" = "index.md" ] && continue
+
+    awk '
+      NR==1 && /^---$/ {in_fm=1; next}
+      in_fm && /^---$/ {exit}
+      in_fm && /^[ \t]*sources:[ \t]*\[/ {
+        line = $0
+        sub(/^[ \t]*sources:[ \t]*\[/, "", line)
+        sub(/\][ \t]*(#.*)?$/, "", line)
+        len = length(line)
+        in_dq = 0; in_sq = 0; cur = ""
+        for (i = 1; i <= len; i++) {
+          c = substr(line, i, 1)
+          if (c == "\"" && !in_sq) { in_dq = !in_dq }
+          else if (c == "\047" && !in_dq) { in_sq = !in_sq }
+          else if (c == "," && !in_dq && !in_sq) {
+            sub(/^[ \t]+/, "", cur); sub(/[ \t]+$/, "", cur)
+            sub(/^["\047]/, "", cur); sub(/["\047]$/, "", cur)
+            if (length(cur) > 0) print cur
+            cur = ""
+          } else {
+            cur = cur c
+          }
+        }
+        sub(/^[ \t]+/, "", cur); sub(/[ \t]+$/, "", cur)
+        sub(/^["\047]/, "", cur); sub(/["\047]$/, "", cur)
+        if (length(cur) > 0) print cur
+        next
+      }
+      in_fm && /^[ \t]*sources:[ \t]*(#.*)?$/ { in_src=1; next }
+      in_src && /^[ \t]*-([ \t]|$)/ {
+        line = $0
+        sub(/^[ \t]*-+[ \t]*/, "", line)
+        sub(/[ \t]*#.*$/, "", line)
+        sub(/^[ \t]+/, "", line); sub(/[ \t]+$/, "", line)
+        sub(/^["\047]/, "", line); sub(/["\047]$/, "", line)
+        if (length(line) > 0) print line
+        next
+      }
+      in_src && /^[^ \t#]/ { in_src=0 }
+    ' "$_wpage" >> "$_tmp_seen"
+  done
+
+  while IFS= read -r _src_abs || [ -n "$_src_abs" ]; do
+    [ -n "$_src_abs" ] || continue
+    case "$_src_abs" in
+      "$_root"/*) _src_rel="${_src_abs#"$_root"/}" ;;
+      *) _src_rel="$_src_abs" ;;
+    esac
+    _src_rel="$(printf '%s' "$_src_rel" | sed -e 's#^\./##')"
+
+    if ! grep -F -x -q "$_src_rel" "$_tmp_seen" 2>/dev/null; then
+      if [ "$_quiet" -eq 0 ]; then
+        printf '[WIKI] Notice: Configured source file '\''%s'\'' is not ingested into any wiki page.\n' "$_src_rel"
+      fi
+    fi
+  done < "$_tmp_exp"
+
+  rm -f "$_tmp_exp" "$_tmp_seen"
+fi
 
 # Append lint summary to _log.md
 if [ -f "$_wiki_path/_log.md" ]; then

@@ -742,95 +742,285 @@ yaml_plugin_get() {
   fi
 }
 
-# Extract list items under plugins.<plugin>.<key> from a single config file.
-# Supports block sequences ("- item", nested deeper or at the key's indent),
-# inline flow sequences ("[a, \"b\"]") and a plain scalar (single item).
-# Surrounding quotes and inline comments are stripped. One item per line.
-_yaml_plugin_list_from_file() {
-  _ypl_f="$1"; _ypl_plugin="$2"; _ypl_key="$3"
-  [ -f "$_ypl_f" ] || return 0
-  awk -v plugin="$_ypl_plugin" -v key="$_ypl_key" '
-    function unquote(v) {
+# ==============================================================================
+# _yaml_parse_plugin_list_from_file
+#
+# Parse a list-valued plugin configuration setting (plugins.<plugin>.<key>) from
+# a single YAML file. Supports both inline flow sequences (e.g. `[a, "b"]`) and
+# multi-line YAML block sequences (e.g. `sources:` followed by `- "a"`).
+#
+# Parsing Algorithm:
+# 1. Locate the top-level `plugins:` block.
+# 2. Locate `<plugin_name>:` nested under `plugins:`.
+# 3. Locate `<key_name>:` nested under `<plugin_name>:`.
+# 4. Inline Array Mode:
+#    If the remainder of the `<key_name>:` line (after stripping inline `#`
+#    comments) matches `[...]`, strip `[` and `]`, split on commas outside
+#    quotes, trim leading/trailing whitespace, strip surrounding `"` or `'`,
+#    strip leading `./`, and print one non-empty item per line.
+# 5. Block Sequence Mode:
+#    If the remainder of the `<key_name>:` line is empty, read subsequent lines
+#    while their indentation is greater than `<plugin_name>:`'s indentation
+#    (or equal to `<key_name>:`'s indentation for `- ` items). For each item
+#    starting with `-`, strip `- `, strip inline comments, trim whitespace and
+#    surrounding quotes (`"` or `'`), strip leading `./`, and output one item per line.
+#    Stop at the next sibling key or lower-indented block.
+#
+# @param $1 file_path   Path to the YAML configuration file.
+# @param $2 plugin_name Name of the target plugin under `plugins:`.
+# @param $3 key_name    Name of the property under `<plugin_name>:`.
+# @returns Newline-separated list of parsed string items.
+# @pure Does not mutate filesystem or global environment.
+# ==============================================================================
+_yaml_parse_plugin_list_from_file() {
+  _yppl_file="$1"
+  _yppl_plugin="$2"
+  _yppl_key="$3"
+  [ -f "$_yppl_file" ] || return 0
+  awk -v plugin="$_yppl_plugin" -v key="$_yppl_key" '
+    # Normalize an item: trim spaces, unquote, strip comments, and strip leading ./
+    function clean_item(v) {
+      # Strip leading whitespace
       sub(/^[ \t]+/, "", v)
-      if (v ~ /^"/) {
-        sub(/^"/, "", v)
-        sub(/"[ \t]*(#.*)?$/, "", v)
-      } else if (v ~ /^\047/) {
-        sub(/^\047/, "", v)
-        sub(/\047[ \t]*(#.*)?$/, "", v)
+      # If quoted, extract content between quotes and ignore outside comments
+      if (v ~ /^"[^"]*"/) {
+        match(v, /^"[^"]*"/)
+        v = substr(v, 2, RLENGTH - 2)
+      } else if (v ~ /^\047[^\047]*\047/) {
+        match(v, /^\047[^\047]*\047/)
+        v = substr(v, 2, RLENGTH - 2)
       } else {
-        sub(/[ \t]+#.*$/, "", v)
+        # Unquoted: strip trailing comment and trailing whitespace
+        sub(/[ \t]*#.*$/, "", v)
         sub(/[ \t]+$/, "", v)
+        # Strip any loose quotes if present
+        sub(/^["\047]/, "", v)
+        sub(/["\047]$/, "", v)
       }
+      # Re-trim whitespace after quote stripping
+      sub(/^[ \t]+/, "", v)
+      sub(/[ \t]+$/, "", v)
+      # Strip leading ./ for clean, relative path normalization
+      sub(/^\.\//, "", v)
       return v
     }
-    /^[ \t]*plugins:[ \t]*(#.*)?$/ { in_plugins=1; in_target=0; in_list=0; plugin_indent=-1; next }
-    in_plugins && /^[^ \t#]/ {
-      if (in_list) exit
-      in_plugins=0; in_target=0
+
+    # Parse inline array content between [ and ], splitting on commas outside quotes
+    function parse_inline_array(str) {
+      len = length(str)
+      in_dquote = 0
+      in_squote = 0
+      curr = ""
+      for (i = 1; i <= len; i++) {
+        c = substr(str, i, 1)
+        if (c == "\"" && !in_squote) {
+          in_dquote = !in_dquote
+          curr = curr c
+        } else if (c == "\047" && !in_dquote) {
+          in_squote = !in_squote
+          curr = curr c
+        } else if (c == "," && !in_dquote && !in_squote) {
+          item = clean_item(curr)
+          if (length(item) > 0) print item
+          curr = ""
+        } else {
+          curr = curr c
+        }
+      }
+      if (length(curr) > 0) {
+        item = clean_item(curr)
+        if (length(item) > 0) print item
+      }
+    }
+
+    # Step 1: Detect top-level plugins: block
+    /^[ \t]*plugins:[ \t]*(#.*)?$/ {
+      in_plugins = 1
+      in_target_plugin = 0
+      in_list = 0
+      match($0, /^[ \t]*/)
+      plugins_indent = RLENGTH
       next
     }
+
+    # If leaving plugins section at same or lesser indentation, exit
+    in_plugins && /^[^ \t#]/ {
+      if (in_list) exit
+      in_plugins = 0
+      in_target_plugin = 0
+      next
+    }
+
     !in_plugins { next }
+
     {
       match($0, /^[ \t]*/)
       indent = RLENGTH
       trimmed = substr($0, indent + 1)
     }
-    trimmed ~ /^([#]|$)/ { next }
 
+    # Step 2: In block list mode, process list items or detect termination
     in_list {
-      if (indent > key_indent || (indent == key_indent && trimmed ~ /^-([ \t]|$)/)) {
-        if (trimmed ~ /^-([ \t]|$)/) {
-          item = unquote(substr(trimmed, 2))
-          if (length(item) > 0) print item
-        }
+      # Skip empty lines or pure comment lines
+      if (trimmed ~ /^([#]|$)/) next
+
+      # Check if indentation has dropped to or below plugin level
+      if (indent <= plugin_indent) exit
+
+      # Check if this line is a list item starting with hyphen
+      if (trimmed ~ /^-([ \t]|$)/) {
+        line = trimmed
+        sub(/^-+[ \t]*/, "", line)
+        item = clean_item(line)
+        if (length(item) > 0) print item
         next
       }
+
+      # If indentation is greater than plugin_indent but does not start with "-",
+      # it is a sibling key or non-list line: terminate block list mode
       exit
     }
 
-    in_target && (indent <= plugin_indent) { in_target=0 }
+    # Skip comments and blank lines outside list mode
+    trimmed ~ /^([#]|$)/ { next }
 
-    !in_target {
+    # Step 3: Handle target plugin boundary
+    in_target_plugin && (indent <= plugin_indent) {
+      in_target_plugin = 0
+    }
+
+    # Step 4: Search for target plugin key under plugins:
+    !in_target_plugin {
       k = trimmed
       sub(/:.*/, "", k)
       gsub(/^["\047]|["\047]$/, "", k)
       gsub(/[[:space:]]/, "", k)
       if (k == plugin && trimmed ~ /:[ \t]*(#.*)?$/) {
-        in_target=1
-        plugin_indent=indent
+        in_target_plugin = 1
+        plugin_indent = indent
       }
       next
     }
 
-    in_target && (indent > plugin_indent) {
+    # Step 5: Inside target plugin, look for target key
+    in_target_plugin && (indent > plugin_indent) {
       k = trimmed
       sub(/:.*/, "", k)
       gsub(/^["\047]|["\047]$/, "", k)
       gsub(/[[:space:]]/, "", k)
       if (k != key) next
+
+      # Extract value after key:
       val = trimmed
       sub(/^[^:]*:[ \t]*/, "", val)
-      if (val ~ /^(#.*)?$/) {
-        in_list=1
-        key_indent=indent
-        next
-      }
+
+      # Check for inline flow array: [ ... ]
       if (val ~ /^\[/) {
-        sub(/^\[/, "", val)
-        sub(/\][ \t]*(#.*)?$/, "", val)
-        n = split(val, parts, ",")
-        for (i = 1; i <= n; i++) {
-          item = unquote(parts[i])
-          if (length(item) > 0) print item
+        # Strip trailing comment after the closing bracket if present
+        sub(/\][^\]]*$/, "]", val)
+        if (val ~ /^\[.*\]$/) {
+          inner = substr(val, 2, length(val) - 2)
+          parse_inline_array(inner)
+          exit
         }
+      }
+
+      # Strip inline comment and whitespace to check if empty
+      v_clean = val
+      sub(/[ \t]*#.*$/, "", v_clean)
+      sub(/^[ \t]+/, "", v_clean)
+      sub(/[ \t]+$/, "", v_clean)
+
+      if (v_clean == "") {
+        # Key line has no inline value -> enter block sequence mode
+        in_list = 1
+        key_indent = indent
+        next
+      } else {
+        # Single scalar value on the same line
+        item = clean_item(v_clean)
+        if (length(item) > 0) print item
         exit
       }
-      item = unquote(val)
-      if (length(item) > 0) print item
-      exit
     }
-  ' "$_ypl_f"
+  ' "$_yppl_file"
+}
+
+# Backward-compatible wrapper delegating to _yaml_parse_plugin_list_from_file.
+_yaml_plugin_list_from_file() {
+  _yaml_parse_plugin_list_from_file "$1" "$2" "$3"
+}
+
+# ==============================================================================
+# yaml_get_plugin_list
+#
+# Query a list-valued plugin configuration setting (plugins.<plugin>.<key>) with
+# strict two-level source-of-truth hierarchy and plugin defaults fallback:
+#   1. .local.rnex.yaml ($NEXUS_LOCAL_CONFIG or $WORKSPACE_LOCAL_YAML)
+#   2. rnex.yaml        ($NEXUS_CONFIG or $WORKSPACE_YAML)
+#   3. toolkit/plugins/<plugin_name>/plugin.yaml (config_defaults.<key>)
+#
+# Evaluates sources in priority order and emits the first non-empty list of items.
+#
+# @param $1 plugin_name Target plugin name (e.g. "karpathy-llm").
+# @param $2 key_name    Property key name (e.g. "sources").
+# @returns 0 and newline-delimited items if resolved; 1 if unset/not found.
+# @pure Read-only configuration query.
+# ==============================================================================
+yaml_get_plugin_list() {
+  _ygpl_plugin="$1"
+  _ygpl_key="$2"
+  _yaml_resolve_files
+
+  _ygpl_local="${NEXUS_LOCAL_CONFIG:-$_wly}"
+  _ygpl_main="${NEXUS_CONFIG:-$_wy}"
+
+  # 1. Query $NEXUS_LOCAL_CONFIG (.local.rnex.yaml) first.
+  if [ -f "$_ygpl_local" ]; then
+    _ygpl_out="$(_yaml_parse_plugin_list_from_file "$_ygpl_local" "$_ygpl_plugin" "$_ygpl_key")"
+    if [ -n "$_ygpl_out" ]; then
+      printf '%s\n' "$_ygpl_out"
+      return 0
+    fi
+  fi
+
+  # 2. Otherwise query $NEXUS_CONFIG (rnex.yaml).
+  if [ -f "$_ygpl_main" ]; then
+    _ygpl_out="$(_yaml_parse_plugin_list_from_file "$_ygpl_main" "$_ygpl_plugin" "$_ygpl_key")"
+    if [ -n "$_ygpl_out" ]; then
+      printf '%s\n' "$_ygpl_out"
+      return 0
+    fi
+  fi
+
+  # 3. Otherwise fall back to toolkit/plugins/$plugin_name/plugin.yaml under config_defaults:
+  _ygpl_pdir=""
+  if command -v find_plugin_dir >/dev/null 2>&1; then
+    _ygpl_pdir="$(find_plugin_dir "$_ygpl_plugin" 2>/dev/null || true)"
+  fi
+  if [ -z "$_ygpl_pdir" ]; then
+    for _cand in \
+      "${NEXUS_DIR:-${RNEX_ROOT:-.}}/toolkit/plugins/$_ygpl_plugin" \
+      "${RNEX_ROOT:-}/toolkit/plugins/$_ygpl_plugin" \
+      "toolkit/plugins/$_ygpl_plugin" \
+      "${NEXUS_DIR:-${RNEX_ROOT:-.}}/plugins/$_ygpl_plugin" \
+      "${NEXUS_DIR:-${RNEX_ROOT:-.}}/.rnex/plugins/$_ygpl_plugin"; do
+      if [ -f "$_cand/plugin.yaml" ]; then
+        _ygpl_pdir="$_cand"
+        break
+      fi
+    done
+  fi
+
+  if [ -n "$_ygpl_pdir" ] && [ -f "$_ygpl_pdir/plugin.yaml" ]; then
+    _ygpl_out="$(_yaml_parse_plugin_default_from_manifest "$_ygpl_pdir/plugin.yaml" "$_ygpl_key")"
+    if [ -n "$_ygpl_out" ]; then
+      printf '%s\n' "$_ygpl_out"
+      return 0
+    fi
+  fi
+
+  return 1
 }
 
 # Get a list-valued plugin setting as newline-separated items.
@@ -1092,47 +1282,133 @@ yaml_list_enabled_plugins() {
   yaml_list_enabled_plugins_sorted
 }
 
-# Print config_defaults.<key> from a plugin.yaml (scalar or list), one item per line.
-_yaml_plugin_default_from_manifest() {
-  _ypdm_f="$1"; _ypdm_key="$2"
+# ==============================================================================
+# _yaml_parse_plugin_default_from_manifest
+#
+# Extract a list or scalar default setting under `config_defaults.<key>` from a
+# plugin manifest file (`plugin.yaml`). Supports both inline flow sequences
+# (`[a, "b"]`) and multi-line block sequences (`- "a"`).
+#
+# @param $1 manifest_file Path to plugin.yaml manifest.
+# @param $2 key_name      Target property key under `config_defaults:`.
+# @returns Newline-separated list of items.
+# @pure Does not mutate filesystem or global environment.
+# ==============================================================================
+_yaml_parse_plugin_default_from_manifest() {
+  _ypdm_f="$1"
+  _ypdm_key="$2"
   [ -f "$_ypdm_f" ] || return 0
   awk -v key="$_ypdm_key" '
-    function unquote(v) {
+    function clean_item(v) {
       sub(/^[ \t]+/, "", v)
-      if (v ~ /^"/) { sub(/^"/, "", v); sub(/"[ \t]*(#.*)?$/, "", v) }
-      else if (v ~ /^\047/) { sub(/^\047/, "", v); sub(/\047[ \t]*(#.*)?$/, "", v) }
-      else { sub(/[ \t]+#.*$/, "", v); sub(/[ \t]+$/, "", v) }
+      if (v ~ /^"[^"]*"/) {
+        match(v, /^"[^"]*"/)
+        v = substr(v, 2, RLENGTH - 2)
+      } else if (v ~ /^\047[^\047]*\047/) {
+        match(v, /^\047[^\047]*\047/)
+        v = substr(v, 2, RLENGTH - 2)
+      } else {
+        sub(/[ \t]*#.*$/, "", v)
+        sub(/[ \t]+$/, "", v)
+        sub(/^["\047]/, "", v)
+        sub(/["\047]$/, "", v)
+      }
+      sub(/^[ \t]+/, "", v)
+      sub(/[ \t]+$/, "", v)
+      sub(/^\.\//, "", v)
       return v
     }
-    /^config_defaults:[ \t]*(#.*)?$/ { in_c=1; next }
-    in_c && /^[^ \t#]/ { exit }
-    !in_c { next }
+
+    function parse_inline_array(str) {
+      len = length(str)
+      in_dquote = 0
+      in_squote = 0
+      curr = ""
+      for (i = 1; i <= len; i++) {
+        c = substr(str, i, 1)
+        if (c == "\"" && !in_squote) {
+          in_dquote = !in_dquote
+          curr = curr c
+        } else if (c == "\047" && !in_dquote) {
+          in_squote = !in_squote
+          curr = curr c
+        } else if (c == "," && !in_dquote && !in_squote) {
+          item = clean_item(curr)
+          if (length(item) > 0) print item
+          curr = ""
+        } else {
+          curr = curr c
+        }
+      }
+      if (length(curr) > 0) {
+        item = clean_item(curr)
+        if (length(item) > 0) print item
+      }
+    }
+
+    /^config_defaults:[ \t]*(#.*)?$/ { in_defaults = 1; next }
+    in_defaults && /^[^ \t#]/ { exit }
+    !in_defaults { next }
+
     in_list {
-      if ($0 ~ /^[ \t]+-([ \t]|$)/) {
-        item = $0; sub(/^[ \t]+-/, "", item); item = unquote(item)
+      match($0, /^[ \t]*/)
+      indent = RLENGTH
+      trimmed = substr($0, indent + 1)
+      if (trimmed ~ /^([#]|$)/) next
+      if (trimmed ~ /^-([ \t]|$)/) {
+        line = trimmed
+        sub(/^-+[ \t]*/, "", line)
+        item = clean_item(line)
         if (length(item) > 0) print item
         next
       }
-      if ($0 ~ /^[ \t]*(#.*)?$/) next
       exit
     }
+
     {
-      t = $0; sub(/^[ \t]+/, "", t)
-      k = t; sub(/:.*/, "", k)
+      match($0, /^[ \t]*/)
+      indent = RLENGTH
+      trimmed = substr($0, indent + 1)
+      if (trimmed ~ /^([#]|$)/) next
+
+      k = trimmed
+      sub(/:.*/, "", k)
+      gsub(/^["\047]|["\047]$/, "", k)
+      gsub(/[[:space:]]/, "", k)
       if (k != key) next
-      v = t; sub(/^[^:]*:[ \t]*/, "", v)
-      if (v ~ /^(#.*)?$/) { in_list=1; next }
-      if (v ~ /^\[/) {
-        sub(/^\[/, "", v); sub(/\][ \t]*(#.*)?$/, "", v)
-        n = split(v, parts, ",")
-        for (i = 1; i <= n; i++) { item = unquote(parts[i]); if (length(item) > 0) print item }
+
+      val = trimmed
+      sub(/^[^:]*:[ \t]*/, "", val)
+
+      if (val ~ /^\[/) {
+        sub(/\][^\]]*$/, "]", val)
+        if (val ~ /^\[.*\]$/) {
+          inner = substr(val, 2, length(val) - 2)
+          parse_inline_array(inner)
+          exit
+        }
+      }
+
+      v_clean = val
+      sub(/[ \t]*#.*$/, "", v_clean)
+      sub(/^[ \t]+/, "", v_clean)
+      sub(/[ \t]+$/, "", v_clean)
+
+      if (v_clean == "") {
+        in_list = 1
+        next
+      } else {
+        item = clean_item(v_clean)
+        if (length(item) > 0) print item
         exit
       }
-      item = unquote(v)
-      if (length(item) > 0) print item
-      exit
     }
   ' "$_ypdm_f"
+}
+
+# Backward-compatible wrapper delegating to _yaml_parse_plugin_default_from_manifest.
+_yaml_plugin_default_from_manifest() {
+  _yaml_parse_plugin_default_from_manifest "$1" "$2"
 }
 
 # Resolve plugins.<plugin>.<key> as newline-separated items (scalars yield one line).

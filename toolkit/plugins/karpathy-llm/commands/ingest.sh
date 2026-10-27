@@ -95,11 +95,54 @@ ingest_source_file() {
   esac
   _src_rel="$(printf '%s' "$_src_rel" | sed -e 's#^\./##')"
 
+  _rel_noext="${_src_rel%.*}"
   _s_base="$(basename "$_src_abs" .md)"
-  _s_slug="$(printf '%s' "$_s_base" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '-' | sed -e 's/^-//' -e 's/-$//')"
-  case "$_s_slug" in
-    index|hot|_log) _s_slug="doc-${_s_slug}" ;;
-  esac
+  _base_lower="$(printf '%s' "$_s_base" | tr '[:upper:]' '[:lower:]')"
+
+  _matched_source=0
+  _is_nested=0
+  for _src_root in $(karpathy_get_sources 2>/dev/null || true) "${_raw:-}"; do
+    [ -n "$_src_root" ] || continue
+    case "$_src_root" in
+      *'*'*|*'?'*|*'['*) continue ;;
+    esac
+    _clean_sroot="$(printf '%s' "$_src_root" | sed -e 's#^\./##' -e 's#/*$##')"
+    case "$_src_rel" in
+      "$_clean_sroot"/*)
+        _matched_source=1
+        _inner_path="${_src_rel#"$_clean_sroot"/}"
+        case "$_inner_path" in
+          */*) _is_nested=1 ;;
+        esac
+        break
+        ;;
+    esac
+  done
+
+  # If not matched to a configured directory source, check if relative dir has multiple segments
+  if [ "$_matched_source" -eq 0 ]; then
+    _rel_dir="$(dirname "$_src_rel")"
+    case "$_rel_dir" in
+      */*) _is_nested=1 ;;
+    esac
+  fi
+
+  # Derive deterministic, collision-free slug from path
+  if [ "$_is_nested" -eq 1 ] || [ "$_base_lower" = "readme" ]; then
+    # Nested directory documentation file (e.g. docs/api/README.md -> doc-docs-api-readme.md)
+    # or generic readme avoiding wiki namespace collisions
+    _norm_slug="$(printf '%s' "$_rel_noext" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '-' | sed -e 's/^-//' -e 's/-$//')"
+    case "$_norm_slug" in
+      doc-*) _s_slug="$_norm_slug" ;;
+      *)     _s_slug="doc-${_norm_slug}" ;;
+    esac
+  else
+    # Top-level documentation file (e.g. docs/roadmap.md -> roadmap.md, docs/top-level.md -> top-level.md)
+    _s_slug="$(printf '%s' "$_s_base" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '-' | sed -e 's/^-//' -e 's/-$//')"
+    case "$_s_slug" in
+      index|hot|_log) _s_slug="doc-${_s_slug}" ;;
+    esac
+  fi
   _s_target="$_wiki_path/${_s_slug}.md"
 
   # Title
@@ -205,7 +248,10 @@ LOG_EOF
   [ "$_quiet" -eq 1 ] || printf '[WIKI] Ingested source: %s -> %s.md\n' "$_src_rel" "$_s_slug"
 }
 
-# Ingest specified repo targets
+_ingested_count=0
+_ingested_paths=""
+
+# 1. Ingest specifically requested member repository targets
 if [ -n "$_repo_targets" ]; then
   while IFS= read -r _rt || [ -n "$_rt" ]; do
     [ -n "$_rt" ] || continue
@@ -220,6 +266,9 @@ if [ -n "$_repo_targets" ]; then
     for _rm in README.md readme.md README.markdown README; do
       if [ -f "$_kl_repo_path/$_rm" ]; then
         ingest_repo_readme "$_rt" "$_kl_repo_path" "$_rm" "$_kl_repo_rel"
+        _ingested_count=$((_ingested_count + 1))
+        _ingested_paths="${_ingested_paths:+$_ingested_paths
+}${_kl_repo_rel}/${_rm}"
         _found_readme=1
         break
       fi
@@ -232,66 +281,85 @@ $_repo_targets
 EOF_REPOS
 fi
 
-# Ingest specified source targets
-if [ -n "$_source_targets" ]; then
-  while IFS= read -r _st || [ -n "$_st" ]; do
-    [ -n "$_st" ] || continue
-    case "$_st" in
-      /*) _s_abs="$_st" ;;
-      *)  _s_abs="$_root/$_st" ;;
+# 2. Ingest source targets (explicit --source or all configured sources if no explicit --repo)
+if [ -n "$_source_targets" ] || [ -z "$_repo_targets" ]; then
+  _arg_source="${_source_targets:-}"
+  _tmp_ingest_list="$(mktemp)"
+
+  karpathy_expand_source_files "$_arg_source" > "$_tmp_ingest_list"
+
+  while IFS= read -r _abs_file || [ -n "$_abs_file" ]; do
+    [ -n "$_abs_file" ] || continue
+    [ -f "$_abs_file" ] || continue
+
+    case "$_abs_file" in
+      "$_root"/*) _f_rel="${_abs_file#"$_root"/}" ;;
+      *) _f_rel="$_abs_file" ;;
+    esac
+    _f_rel="$(printf '%s' "$_f_rel" | sed -e 's#^\./##')"
+
+    # Detect if file represents a member repository README
+    _is_repo_readme=0
+    _r_target_name=""
+    _readme_fname="$(basename "$_abs_file")"
+
+    case "$_readme_fname" in
+      [Rr][Ee][Aa][Dd][Mm][Ee]*)
+        if command -v yaml_list_repos >/dev/null 2>&1; then
+          for _r_cand in $(yaml_list_repos 2>/dev/null || true); do
+            [ -n "$_r_cand" ] || continue
+            kl_resolve_repo_paths "$_r_cand"
+            if [ "$_f_rel" = "${_kl_repo_rel}/${_readme_fname}" ]; then
+              _is_repo_readme=1
+              _r_target_name="$_r_cand"
+              break
+            fi
+          done
+        fi
+        if [ "$_is_repo_readme" -eq 0 ] && [ -n "${_clean_repos:-}" ]; then
+          case "$_f_rel" in
+            "${_clean_repos}"/*/"$_readme_fname")
+              _repo_part="${_f_rel#"${_clean_repos}"/}"
+              _r_target_name="${_repo_part%%/*}"
+              _is_repo_readme=1
+              ;;
+          esac
+        fi
+        ;;
     esac
 
-    if [ -f "$_s_abs" ]; then
-      ingest_source_file "$_s_abs"
-    elif [ -d "$_s_abs" ]; then
-      for _f in "$_s_abs"/*.md; do
-        [ -f "$_f" ] || continue
-        ingest_source_file "$_f"
-      done
+    if [ "$_is_repo_readme" -eq 1 ] && [ -n "$_r_target_name" ]; then
+      kl_resolve_repo_paths "$_r_target_name"
+      ingest_repo_readme "$_r_target_name" "$_kl_repo_path" "$_readme_fname" "$_kl_repo_rel"
+      _ingested_count=$((_ingested_count + 1))
+      _ingested_paths="${_ingested_paths:+$_ingested_paths
+}$_f_rel"
     else
-      echo "Warning: Source target '$_st' not found" >&2
+      ingest_source_file "$_abs_file"
+      _ingested_count=$((_ingested_count + 1))
+      _ingested_paths="${_ingested_paths:+$_ingested_paths
+}$_f_rel"
     fi
-  done <<EOF_SOURCES
-$_source_targets
-EOF_SOURCES
+  done < "$_tmp_ingest_list"
+  rm -f "$_tmp_ingest_list"
 fi
 
-# If neither --repo nor --source specified, ingest all configured sources and enabled member repos
-if [ -z "$_repo_targets" ] && [ -z "$_source_targets" ]; then
-  # 1. Enabled member repositories
-  for _rname in $(yaml_list_repos 2>/dev/null || true); do
-    [ -n "$_rname" ] || continue
-    yaml_repo_enabled "$_rname" 2>/dev/null || continue
-    kl_resolve_repo_paths "$_rname"
+# Append ingestion summary audit entry to _log.md
+if [ "$_ingested_count" -gt 0 ] && [ -f "$_wiki_path/_log.md" ]; then
+  cat >> "$_wiki_path/_log.md" <<BATCH_LOG_EOF
 
-    [ -d "$_kl_repo_path" ] || continue
-    for _rm in README.md readme.md README.markdown README; do
-      if [ -f "$_kl_repo_path/$_rm" ]; then
-        ingest_repo_readme "$_rname" "$_kl_repo_path" "$_rm" "$_kl_repo_rel"
-        break
-      fi
-    done
-  done
-
-  # 2. Configured intake directories
-  if command -v plugin_source_dirs >/dev/null 2>&1; then
-    for _sdir in $(plugin_source_dirs "karpathy-llm" 2>/dev/null || true); do
-      [ -n "$_sdir" ] || continue
-      case "$_sdir" in
-        *'*'*|*'?'*|*'['*) continue ;;
-      esac
-      if [ -d "$_root/$_sdir" ]; then
-        for _f in "$_root/$_sdir"/*.md; do
-          [ -f "$_f" ] || continue
-          ingest_source_file "$_f"
-        done
-      fi
-    done
-  fi
+### Ingestion Run Summary — ${_today}
+* **Total Files Ingested:** ${_ingested_count}
+* **Ingested Sources:**
+BATCH_LOG_EOF
+  printf '%s\n' "$_ingested_paths" | while IFS= read -r _ip; do
+    [ -n "$_ip" ] || continue
+    printf "  - \`%s\`\n" "$_ip"
+  done >> "$_wiki_path/_log.md"
 fi
 
 # Enforce ~500-word ceiling on hot.md
-kl_condense_hot_cache
+kl_condense_hot_cache "$_ingested_count"
 
 [ "$_quiet" -eq 1 ] || printf '[WIKI] Ingest complete.\n'
 exit 0
