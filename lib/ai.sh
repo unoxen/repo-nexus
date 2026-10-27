@@ -326,7 +326,7 @@ _ai_emit_workflow_plugin_instructions() {
     fi
   fi
   for _aewp_f in $_aewp_files; do
-    printf '\n### Plugin Directives (`%s`)\n' "$_aewp_p"
+    printf "\n### Plugin Directives (\`%s\`)\n" "$_aewp_p"
     # Demote headings so plugin docs nest under Section 4.
     sed -e 's/^\(#\{1,\}\) /\1## /' "$_aewp_f"
   done
@@ -336,116 +336,120 @@ _ai_emit_workflow_plugin_instructions() {
 # Output depends only on the merged configuration and RNEX_VERSION.
 render_ai_instructions() {
   _rai_dir="${1:-$NEXUS_DIR}"
-  (
-    if [ -z "${NEXUS_DIR:-}" ] || [ "$_rai_dir" != "${NEXUS_DIR:-}" ]; then
-      NEXUS_DIR="$_rai_dir"
-      WORKSPACE_YAML="$_rai_dir/${RNEX_CONFIG_FILE:-rnex.yaml}"
-      WORKSPACE_LOCAL_YAML="$_rai_dir/${RNEX_LOCAL_CONFIG_FILE:-.local.rnex.yaml}"
-      export NEXUS_DIR WORKSPACE_YAML WORKSPACE_LOCAL_YAML
-    fi
-    _rai_rd="$(yaml_get_repos_dir 2>/dev/null || true)"
-    [ -n "$_rai_rd" ] || _rai_rd="repos"
-    _rai_ws="$(yaml_get_top_level "name" 2>/dev/null || true)"
-    [ -n "$_rai_ws" ] || _rai_ws="$(basename "$_rai_dir")"
-    _rai_plugins="$(yaml_list_enabled_plugins_sorted 2>/dev/null || true)"
+  _rai_old_nexus="${NEXUS_DIR:-}"
+  _rai_old_wy="${WORKSPACE_YAML:-}"
+  _rai_old_wly="${WORKSPACE_LOCAL_YAML:-}"
+  if [ -z "${NEXUS_DIR:-}" ] || [ "$_rai_dir" != "${NEXUS_DIR:-}" ]; then
+    NEXUS_DIR="$_rai_dir"
+    WORKSPACE_YAML="$_rai_dir/${RNEX_CONFIG_FILE:-rnex.yaml}"
+    WORKSPACE_LOCAL_YAML="$_rai_dir/${RNEX_LOCAL_CONFIG_FILE:-.local.rnex.yaml}"
+  fi
+  _rai_rd="$(yaml_get_repos_dir 2>/dev/null || true)"
+  [ -n "$_rai_rd" ] || _rai_rd="repos"
+  _rai_ws="$(yaml_get_top_level "name" 2>/dev/null || true)"
+  [ -n "$_rai_ws" ] || _rai_ws="$(basename "$_rai_dir")"
+  _rai_plugins="$(yaml_list_enabled_plugins_sorted 2>/dev/null || true)"
 
-    _rai_kp=0
-    _rai_wiki=""
-    _rai_src_dirs=""
-    if printf '%s\n' "$_rai_plugins" | grep -qx "karpathy-llm"; then
-      _rai_kp=1
-      _rai_wiki="$(yaml_get_merged_plugin_config "karpathy-llm" "wiki_dir" "wiki" 2>/dev/null | sed -n '1p')"
-      _rai_wiki="${_rai_wiki%/}"
-      [ -n "$_rai_wiki" ] || _rai_wiki="wiki"
-      _rai_src_dirs="$(yaml_get_merged_plugin_config "karpathy-llm" "sources" 2>/dev/null | grep -v '[*?]' | sed -e 's#/*$#/#' | _ai_md_code_list)"
-    fi
+  _rai_kp=0
+  _rai_wiki=""
+  _rai_src_dirs=""
+  if printf '%s\n' "$_rai_plugins" | grep -qx "karpathy-llm"; then
+    _rai_kp=1
+    _rai_wiki="$(yaml_get_merged_plugin_config "karpathy-llm" "wiki_dir" "wiki" 2>/dev/null | sed -n '1p')"
+    _rai_wiki="${_rai_wiki%/}"
+    [ -n "$_rai_wiki" ] || _rai_wiki="wiki"
+    _rai_src_dirs="$(yaml_get_merged_plugin_config "karpathy-llm" "sources" 2>/dev/null | grep -v '[*?]' | sed -e 's#/*$#/#' | _ai_md_code_list)"
+  fi
 
-    # Header & Section 1
-    printf '# Repo Nexus Workspace Instructions (rnex v%s)\n\n' "${RNEX_VERSION:-unknown}"
-    printf '> Pre-compiled from merged workspace configuration (`.local.rnex.yaml` > `rnex.yaml`).\n\n'
-    printf '## 1. Strict Operating Constraints\n'
-    printf -- '- **NO CONFIG READS**: DO NOT read or search for rnex.yaml or .local.rnex.yaml. The complete merged configuration is embedded in Section 2.\n'
-    printf -- '- **READ FILES ONCE**: Read each file at most once per session. Never re-read a file already in context.\n'
-    if [ "$_rai_kp" -eq 1 ]; then
-      printf -- '- **NO BLIND SCANS**: Never run broad directory scans or unbounded searches across `%s/`%s.\n' "$_rai_rd" "${_rai_src_dirs:+ or raw intake directories ($_rai_src_dirs)}"
-    else
-      printf -- '- **NO BLIND SCANS**: Never run broad directory scans or unbounded searches across `%s/`.\n' "$_rai_rd"
-    fi
+  # Header & Section 1
+  printf '# Repo Nexus Workspace Instructions (rnex v%s)\n\n' "${RNEX_VERSION:-unknown}"
+  printf "> Pre-compiled from merged workspace configuration (\`.local.rnex.yaml\` > \`rnex.yaml\`).\n\n"
+  printf '## 1. Strict Operating Constraints\n'
+  printf -- '- **NO CONFIG READS**: DO NOT read or search for rnex.yaml or .local.rnex.yaml. The complete merged configuration is embedded in Section 2.\n'
+  printf -- '- **READ FILES ONCE**: Read each file at most once per session. Never re-read a file already in context.\n'
+  if [ "$_rai_kp" -eq 1 ]; then
+    printf -- "- **NO BLIND SCANS**: Never run broad directory scans or unbounded searches across \`%s/\`%s.\n" "$_rai_rd" "${_rai_src_dirs:+ or raw intake directories ($_rai_src_dirs)}"
+  else
+    printf -- "- **NO BLIND SCANS**: Never run broad directory scans or unbounded searches across \`%s/\`.\n" "$_rai_rd"
+  fi
 
-    # Section 2
-    printf '\n## 2. Merged Workspace Configuration\n'
-    printf -- '- **Workspace**: `%s`\n' "$_rai_ws"
-    printf -- '- **Repositories Root**: `%s/`\n' "$_rai_rd"
-    _rai_pl="$(printf '%s\n' "$_rai_plugins" | _ai_md_code_list)"
-    printf -- '- **Enabled Plugins**: %s\n' "${_rai_pl:-_none_}"
+  # Section 2
+  printf '\n## 2. Merged Workspace Configuration\n'
+  printf -- "- **Workspace**: \`%s\`\n" "$_rai_ws"
+  printf -- "- **Repositories Root**: \`%s/\`\n" "$_rai_rd"
+  _rai_pl="$(printf '%s\n' "$_rai_plugins" | _ai_md_code_list)"
+  printf -- '- **Enabled Plugins**: %s\n' "${_rai_pl:-_none_}"
 
-    _rai_rows=""
-    _rai_disabled=""
-    for _rai_r in $(yaml_list_all_repos_sorted 2>/dev/null || true); do
-      if ! is_enabled_val "$(yaml_get_merged_repo_field "$_rai_r" "enabled" "true")"; then
-        _rai_disabled="${_rai_disabled}${_rai_r}
+  _rai_rows=""
+  _rai_disabled=""
+  for _rai_r in $(yaml_list_all_repos_sorted 2>/dev/null || true); do
+    if ! is_enabled_val "$(yaml_get_merged_repo_field "$_rai_r" "enabled" "true")"; then
+      _rai_disabled="${_rai_disabled}${_rai_r}
 "
-        continue
-      fi
-      _rai_br="$(yaml_get_merged_repo_field "$_rai_r" "branch" "main")"
-      _rai_mode="READ-WRITE"
-      is_truthy "$(yaml_get_merged_repo_field "$_rai_r" "readonly" "false")" && _rai_mode="READ-ONLY"
-      _rai_desc="$(_ai_md_cell "$(yaml_get_merged_repo_field "$_rai_r" "description" "")")"
-      _rai_rows="${_rai_rows}| \`${_rai_r}\` | \`${_rai_rd}/${_rai_r}/\` | \`${_rai_br}\` | \`${_rai_mode}\` | ${_rai_desc} |
+      continue
+    fi
+    _rai_br="$(yaml_get_merged_repo_field "$_rai_r" "branch" "main")"
+    _rai_mode="READ-WRITE"
+    is_truthy "$(yaml_get_merged_repo_field "$_rai_r" "readonly" "false")" && _rai_mode="READ-ONLY"
+    _rai_desc="$(_ai_md_cell "$(yaml_get_merged_repo_field "$_rai_r" "description" "")")"
+    _rai_rows="${_rai_rows}| \`${_rai_r}\` | \`${_rai_rd}/${_rai_r}/\` | \`${_rai_br}\` | \`${_rai_mode}\` | ${_rai_desc} |
 "
-    done
+  done
 
-    printf '\n### Active Member Repositories\n'
-    if [ -n "$_rai_rows" ]; then
-      printf '| Repository | Path | Branch | Mode | Description |\n'
-      printf '| :--- | :--- | :--- | :--- | :--- |\n'
-      printf '%s' "$_rai_rows"
-    else
-      printf '_No active member repositories._\n'
-    fi
-    if [ -n "$_rai_disabled" ]; then
-      printf '\n- **Disabled Repositories (Do Not Access)**: %s\n' "$(printf '%s' "$_rai_disabled" | _ai_md_code_list)"
-    fi
+  printf '\n### Active Member Repositories\n'
+  if [ -n "$_rai_rows" ]; then
+    printf '| Repository | Path | Branch | Mode | Description |\n'
+    printf '| :--- | :--- | :--- | :--- | :--- |\n'
+    printf '%s' "$_rai_rows"
+  else
+    printf '_No active member repositories._\n'
+  fi
+  if [ -n "$_rai_disabled" ]; then
+    printf '\n- **Disabled Repositories (Do Not Access)**: %s\n' "$(printf '%s' "$_rai_disabled" | _ai_md_code_list)"
+  fi
 
-    if [ "$_rai_kp" -eq 1 ]; then
-      _rai_srcs="$(yaml_get_merged_plugin_config "karpathy-llm" "sources" 2>/dev/null | _ai_md_code_list)"
-      printf '\n### Resolved Knowledge Base (`karpathy-llm`)\n'
-      printf -- '- **Curated Wiki Path**: `%s/`\n' "$_rai_wiki"
-      printf -- '- **Raw Intake Sources**: %s *(read-only inputs used strictly during `rnex plugin karpathy-llm ingest`; do not browse during normal tasks)*\n' "${_rai_srcs:-_none_}"
-    fi
+  if [ "$_rai_kp" -eq 1 ]; then
+    _rai_srcs="$(yaml_get_merged_plugin_config "karpathy-llm" "sources" 2>/dev/null | _ai_md_code_list)"
+    printf "\n### Resolved Knowledge Base (\`karpathy-llm\`)\n"
+    printf -- "- **Curated Wiki Path**: \`%s/\`\n" "$_rai_wiki"
+    printf -- "- **Raw Intake Sources**: %s *(read-only inputs used strictly during \`rnex plugin karpathy-llm ingest\`; do not browse during normal tasks)*\n" "${_rai_srcs:-_none_}"
+  fi
 
-    # Section 3
-    printf '\n## 3. Mandatory Execution Sequence\n'
-    printf 'Execute these steps in strict order:\n'
-    _rai_n=1
-    if [ "$_rai_kp" -eq 1 ]; then
-      printf '1. **Step 1 — Read Wiki Hot Cache**: Read `%s/hot.md` first for workspace architecture, repository boundaries, and active contracts.\n' "$_rai_wiki"
-      printf '2. **Step 2 — Lookup Topic in Wiki Index**: If task details are not fully covered in `%s/hot.md`, read `%s/index.md` and read only the relevant atomic page(s) in `%s/`. Do NOT read raw intake sources%s or `%s/` before completing Steps 1–2.\n' "$_rai_wiki" "$_rai_wiki" "$_rai_wiki" "${_rai_src_dirs:+ ($_rai_src_dirs)}" "$_rai_rd"
-      _rai_n=3
-    fi
-    printf '%s. **Step %s — Targeted Repository Access**: Inspect or modify only the specific files in active `%s/<name>/` required for the task. Never modify or commit inside `READ-ONLY` repositories.\n' "$_rai_n" "$_rai_n" "$_rai_rd"
-    _rai_n=$((_rai_n + 1))
-    printf '%s. **Step %s — Git & Maintenance**: Commit and push inside `%s/<name>/`. Run `rnex sync` if workspace state changes.\n' "$_rai_n" "$_rai_n" "$_rai_rd"
+  # Section 3
+  printf '\n## 3. Mandatory Execution Sequence\n'
+  printf 'Execute these steps in strict order:\n'
+  _rai_n=1
+  if [ "$_rai_kp" -eq 1 ]; then
+    printf "1. **Step 1 — Read Wiki Hot Cache**: Read \`%s/hot.md\` first for workspace architecture, repository boundaries, and active contracts.\n" "$_rai_wiki"
+    printf "2. **Step 2 — Lookup Topic in Wiki Index**: If task details are not fully covered in \`%s/hot.md\`, read \`%s/index.md\` and read only the relevant atomic page(s) in \`%s/\`. Do NOT read raw intake sources%s or \`%s/\` before completing Steps 1–2.\n" "$_rai_wiki" "$_rai_wiki" "$_rai_wiki" "${_rai_src_dirs:+ ($_rai_src_dirs)}" "$_rai_rd"
+    _rai_n=3
+  fi
+  printf "%s. **Step %s — Targeted Repository Access**: Inspect or modify only the specific files in active \`%s/<name>/\` required for the task. Never modify or commit inside \`READ-ONLY\` repositories.\n" "$_rai_n" "$_rai_n" "$_rai_rd"
+  _rai_n=$((_rai_n + 1))
+  printf "%s. **Step %s — Git & Maintenance**: Commit and push inside \`%s/<name>/\`. Run \`rnex sync\` if workspace state changes.\n" "$_rai_n" "$_rai_n" "$_rai_rd"
 
-    # Section 4
-    printf '\n## 4. Coding & Wiki Directives\n'
-    if [ -d "$_rai_dir/.rnex/skills" ] && [ -n "$(ls -A "$_rai_dir/.rnex/skills" 2>/dev/null)" ]; then
-      printf -- '- **Skills**: `.rnex/skills/` (load a skill only when its task applies).\n'
-    fi
-    if [ -d "$_rai_dir/.rnex/agents" ] && [ -n "$(ls -A "$_rai_dir/.rnex/agents" 2>/dev/null)" ]; then
-      printf -- '- **Subagents**: `.rnex/agents/`.\n'
-    fi
-    if [ "$_rai_kp" -eq 1 ]; then
-      printf -- '- **Behavioral Rules**: (1) State assumptions and surface trade-offs before coding; (2) Prefer minimal, non-speculative code; (3) Make surgical edits touching only required lines; (4) Verify changes against concrete goals.\n'
-      printf -- '- **Wiki Operations**: Never edit `%s/` files ad-hoc. To ingest raw sources or validate wiki frontmatter/links, run `rnex plugin karpathy-llm ingest` or `rnex plugin karpathy-llm lint` (or load `.rnex/plugins/karpathy-llm/skills/` only when executing ingestion/linting).\n' "$_rai_wiki"
-    fi
+  # Section 4
+  printf '\n## 4. Coding & Wiki Directives\n'
+  if [ -d "$_rai_dir/.rnex/skills" ] && [ -n "$(ls -A "$_rai_dir/.rnex/skills" 2>/dev/null)" ]; then
+    printf -- "- **Skills**: \`.rnex/skills/\` (load a skill only when its task applies).\n"
+  fi
+  if [ -d "$_rai_dir/.rnex/agents" ] && [ -n "$(ls -A "$_rai_dir/.rnex/agents" 2>/dev/null)" ]; then
+    printf -- "- **Subagents**: \`.rnex/agents/\`.\n"
+  fi
+  if [ "$_rai_kp" -eq 1 ]; then
+    printf -- '- **Behavioral Rules**: (1) State assumptions and surface trade-offs before coding; (2) Prefer minimal, non-speculative code; (3) Make surgical edits touching only required lines; (4) Verify changes against concrete goals.\n'
+    printf -- "- **Wiki Operations**: Never edit \`%s/\` files ad-hoc. To ingest raw sources or validate wiki frontmatter/links, run \`rnex plugin karpathy-llm ingest\` or \`rnex plugin karpathy-llm lint\` (or load \`.rnex/plugins/karpathy-llm/skills/\` only when executing ingestion/linting).\n" "$_rai_wiki"
+  fi
 
-    for _rai_p in $_rai_plugins; do
-      [ "$_rai_p" = "karpathy-llm" ] && continue
-      plugin_is_provider "$_rai_p" && continue
-      _ai_emit_workflow_plugin_instructions "$_rai_dir" "$_rai_p"
-    done
-  )
+  for _rai_p in $_rai_plugins; do
+    [ "$_rai_p" = "karpathy-llm" ] && continue
+    plugin_is_provider "$_rai_p" && continue
+    _ai_emit_workflow_plugin_instructions "$_rai_dir" "$_rai_p"
+  done
+
+  NEXUS_DIR="$_rai_old_nexus"
+  WORKSPACE_YAML="$_rai_old_wy"
+  WORKSPACE_LOCAL_YAML="$_rai_old_wly"
 }
 
 # Compile the unified .rnex/ai-instructions.md file consumed by AI coding agents.

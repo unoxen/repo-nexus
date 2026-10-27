@@ -365,7 +365,7 @@ KGATE_EOF
 (cd "$TEST_KGATE_WS" && ./rnex sync -y >/dev/null 2>&1) || true
 _kg_ai="$TEST_KGATE_WS/.rnex/ai-instructions.md"
 [ -f "$_kg_ai" ] || { fail "ai-instructions.md missing"; exit 1; }
-grep -qF '1. **Step 1 — Read Wiki Hot Cache**: Read `knowledge/hot.md`' "$_kg_ai" || { fail "Step 1 does not reference knowledge/hot.md"; exit 1; }
+grep -qF "1. **Step 1 — Read Wiki Hot Cache**: Read \`knowledge/hot.md\`" "$_kg_ai" || { fail "Step 1 does not reference knowledge/hot.md"; exit 1; }
 ! grep -qF 'rules/behavioral.md' "$_kg_ai" || { fail "ai-instructions.md references external behavioral.md"; exit 1; }
 ! grep -qF '# GitHub Copilot Integration' "$_kg_ai" || { fail "Copilot setup docs compiled into ai-instructions.md"; exit 1; }
 ! grep -qE '^[[:space:]]*(plugins|enabled):' "$_kg_ai" || { fail "YAML config snippets present in ai-instructions.md"; exit 1; }

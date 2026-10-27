@@ -109,7 +109,7 @@ chmod +x "$_cmd_plugin_dir/commands"/*
 
 # 1. Enable plugin and verify custom workflow plugin instructions are included in .rnex/ai-instructions.md
 "$TEST_WORKSPACE/rnex" plugin enable cmd-test >/dev/null
-grep -qF '### Plugin Directives (`cmd-test`)' "$TEST_WORKSPACE/.rnex/ai-instructions.md" || { fail "Custom workflow plugin header missing from ai-instructions.md"; exit 1; }
+grep -qF "### Plugin Directives (\`cmd-test\`)" "$TEST_WORKSPACE/.rnex/ai-instructions.md" || { fail "Custom workflow plugin header missing from ai-instructions.md"; exit 1; }
 grep -qF 'Follow custom workflow verification before committing.' "$TEST_WORKSPACE/.rnex/ai-instructions.md" || { fail "Custom workflow plugin instructions missing from ai-instructions.md"; exit 1; }
 
 # Configure rnex_hooks for before_plugin_command and after_plugin_command via .local.rnex.yaml

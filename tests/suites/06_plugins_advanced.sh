@@ -695,7 +695,7 @@ plugins:
 KPKG_LOCAL_EOF
 (cd "$TEST_KPKG_WS" && ./rnex sync -y >/dev/null)
 _kpkg_ai="$TEST_KPKG_WS/.rnex/ai-instructions.md"
-grep -qF '1. **Step 1 — Read Wiki Hot Cache**: Read `knowledge/hot.md`' "$_kpkg_ai" || { fail "Step 1 does not reference knowledge/hot.md"; exit 1; }
+grep -qF "1. **Step 1 — Read Wiki Hot Cache**: Read \`knowledge/hot.md\`" "$_kpkg_ai" || { fail "Step 1 does not reference knowledge/hot.md"; exit 1; }
 ! grep -qF 'rules/behavioral.md' "$_kpkg_ai" || { fail "ai-instructions.md references external behavioral.md"; exit 1; }
 ! grep -qF '# GitHub Copilot Integration' "$_kpkg_ai" || { fail "Copilot setup docs compiled into ai-instructions.md"; exit 1; }
 _kpkg_lines="$(wc -l < "$_kpkg_ai" | tr -d ' ')"

@@ -160,8 +160,8 @@ AI_MARKER_END="<!-- REPO-NEXUS:END -->"
 get_rnex_instructions() {
   printf "CRITICAL: You MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\` before executing any task or answering any query in this workspace.\n"
   printf '\n'
-  printf '1. Read `.rnex/ai-instructions.md` once at session start and follow its **Mandatory Execution Sequence** in strict order.\n'
-  printf '2. Do **NOT** read or search for `rnex.yaml` or `.local.rnex.yaml` — the merged configuration is already compiled inside `.rnex/ai-instructions.md`.\n'
+  printf "1. Read \`.rnex/ai-instructions.md\` once at session start and follow its **Mandatory Execution Sequence** in strict order.\n"
+  printf "2. Do **NOT** read or search for \`rnex.yaml\` or \`.local.rnex.yaml\` — the merged configuration is already compiled inside \`.rnex/ai-instructions.md\`.\n"
   printf '3. Read each file at most once per session.\n'
 }
 

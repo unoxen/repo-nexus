@@ -506,9 +506,9 @@ MERGE_LOCAL_EOF
 (cd "$TEST_MERGE_WS" && ./rnex sync -y >/dev/null 2>&1) || true
 _merge_ai="$TEST_MERGE_WS/.rnex/ai-instructions.md"
 [ -f "$_merge_ai" ] || { fail "ai-instructions.md missing after sync"; exit 1; }
-grep -qF '| `repo-alpha` | `repos/repo-alpha/` | `dev` | `READ-ONLY` |' "$_merge_ai" || { fail "repo-alpha not rendered with local overrides (dev, READ-ONLY)"; exit 1; }
-grep -qF '**Disabled Repositories (Do Not Access)**: `repo-beta`' "$_merge_ai" || { fail "repo-beta not listed as disabled"; exit 1; }
-! grep -qF '| `repo-beta` |' "$_merge_ai" || { fail "Disabled repo-beta present in active table"; exit 1; }
+grep -qF "| \`repo-alpha\` | \`repos/repo-alpha/\` | \`dev\` | \`READ-ONLY\` |" "$_merge_ai" || { fail "repo-alpha not rendered with local overrides (dev, READ-ONLY)"; exit 1; }
+grep -qF "**Disabled Repositories (Do Not Access)**: \`repo-beta\`" "$_merge_ai" || { fail "repo-beta not listed as disabled"; exit 1; }
+! grep -qF "| \`repo-beta\` |" "$_merge_ai" || { fail "Disabled repo-beta present in active table"; exit 1; }
 grep -qF 'DO NOT read or search for rnex.yaml or .local.rnex.yaml' "$_merge_ai" || { fail "Missing NO CONFIG READS constraint"; exit 1; }
 ! grep -qE "Read .*\.local\.rnex\.yaml" "$_merge_ai" || { fail "ai-instructions.md still instructs reading config files"; exit 1; }
 pass
@@ -538,13 +538,13 @@ _det_3="$(cksum < "$_merge_ai")"
 
 # Verify rnex repo set and rnex plugin enable/disable immediately update .rnex/ai-instructions.md
 (cd "$TEST_MERGE_WS" && ./rnex repo set repo-alpha --readwrite --local >/dev/null 2>&1)
-grep -qF '| `repo-alpha` | `repos/repo-alpha/` | `dev` | `READ-WRITE` |' "$_merge_ai" || { fail "rnex repo set --readwrite did not immediately update ai-instructions.md"; exit 1; }
+grep -qF "| \`repo-alpha\` | \`repos/repo-alpha/\` | \`dev\` | \`READ-WRITE\` |" "$_merge_ai" || { fail "rnex repo set --readwrite did not immediately update ai-instructions.md"; exit 1; }
 (cd "$TEST_MERGE_WS" && ./rnex repo set repo-alpha --readonly --local >/dev/null 2>&1)
-grep -qF '| `repo-alpha` | `repos/repo-alpha/` | `dev` | `READ-ONLY` |' "$_merge_ai" || { fail "rnex repo set --readonly did not immediately update ai-instructions.md"; exit 1; }
+grep -qF "| \`repo-alpha\` | \`repos/repo-alpha/\` | \`dev\` | \`READ-ONLY\` |" "$_merge_ai" || { fail "rnex repo set --readonly did not immediately update ai-instructions.md"; exit 1; }
 (cd "$TEST_MERGE_WS" && ./rnex plugin enable copilot >/dev/null 2>&1)
-grep -qF '**Enabled Plugins**: `copilot`' "$_merge_ai" || { fail "rnex plugin enable did not immediately update ai-instructions.md"; exit 1; }
+grep -qF "**Enabled Plugins**: \`copilot\`" "$_merge_ai" || { fail "rnex plugin enable did not immediately update ai-instructions.md"; exit 1; }
 (cd "$TEST_MERGE_WS" && ./rnex plugin disable copilot >/dev/null 2>&1)
-! grep -qF '`copilot`' "$_merge_ai" || { fail "rnex plugin disable did not immediately update ai-instructions.md"; exit 1; }
+! grep -qF "\`copilot\`" "$_merge_ai" || { fail "rnex plugin disable did not immediately update ai-instructions.md"; exit 1; }
 pass
 
 if [ "${_STANDALONE_RUN:-0}" -eq 1 ]; then
