@@ -552,7 +552,7 @@ yaml_get_git_hook_commands() {
   fi
 }
 
-# ---- RNEX Lifecycle Hooks Configuration Operations (rnex_hooks) -------------
+# ---- Lifecycle Hooks Configuration Operations (rnex_hooks) -------------
 
 # Extract list of hook/event names defined under rnex_hooks from a YAML file.
 _yaml_rnex_hooks_list_from_file() {

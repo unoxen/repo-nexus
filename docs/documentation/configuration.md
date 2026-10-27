@@ -52,7 +52,7 @@ git:
     pre-push:
       - "rnex plugin karpathy-llm lint --strict"
 
-# RNEX Lifecycle Hooks (Map of RNEX events to command lists)
+# Lifecycle Hooks (Map of RNEX events to command lists)
 rnex_hooks:
   before_init: []
   after_init:

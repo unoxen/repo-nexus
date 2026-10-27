@@ -8,13 +8,15 @@ head:
       content: nexus repository, meta repository, nexus repo, meta repo, virtual meta repository, virtual meta-repo, multi-repo workspace, repo nexus, rnex
 ---
 
-# Welcome to Repo Nexus (rnex) — Virtual Meta Repository & Nexus Repository
+# Repo Nexus (rnex)
+
+## Virtual Meta-Repository Orchestrator
 
 <div class="rnex-hero-wrapper">
 <div class="rnex-hero-content">
 
 <p class="rnex-hero-lead">
-The zero-dependency <strong>nexus repository</strong> (<strong>nexus repo</strong>) and <strong>meta repository</strong> (<strong>meta repo</strong>) to unite independent Git repositories into a cohesive AI-enabled workspace—without Git submodules or monorepo migrations.
+A lightweight, zero-dependency and AI-First Nexus Repository (Virtual Meta Repository Orchestrator) to unite independent Git repositories into a cohesive AI-enabled workspace without Git submodules or monorepo migrations.
 </p>
 
 <div class="rnex-hero-actions">

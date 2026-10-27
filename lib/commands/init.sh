@@ -191,7 +191,7 @@ git:
   hooks:
 $_hooks_block
 
-# RNEX Lifecycle Hooks
+# Lifecycle Hooks
 rnex_hooks:
   before_sync: []
   after_sync: []

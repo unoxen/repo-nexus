@@ -1,9 +1,9 @@
 ---
-title: RNEX Lifecycle Hooks
-description: Complete reference for RNEX lifecycle hooks, event triggers, configuration syntax, and environment variables.
+title: Lifecycle Hooks
+description: Complete reference for lifecycle hooks, event triggers, configuration syntax, and environment variables.
 ---
 
-# RNEX Lifecycle Hooks
+# Lifecycle Hooks
 
 Repo Nexus includes a built-in event-driven lifecycle hook system configured under the top-level `rnex_hooks:` block in `rnex.yaml` or `.local.rnex.yaml`.
 

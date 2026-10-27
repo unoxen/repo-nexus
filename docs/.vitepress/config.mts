@@ -105,7 +105,7 @@ export default withMermaid(
           activeMatch: '^/reference/',
           items: [
             { text: 'CLI Reference', link: '/reference/cli' },
-            { text: 'RNEX Lifecycle Hooks', link: '/reference/rnex-hooks' },
+            { text: 'Lifecycle Hooks', link: '/reference/rnex-hooks' },
             { text: 'Git Hooks', link: '/reference/git-hooks' },
             { text: 'Environment & Layout', link: '/reference/environment' }
           ]
@@ -169,7 +169,7 @@ export default withMermaid(
           collapsed: false,
           items: [
             { text: 'CLI Reference', link: '/reference/cli' },
-            { text: 'RNEX Lifecycle Hooks', link: '/reference/rnex-hooks' },
+            { text: 'Lifecycle Hooks', link: '/reference/rnex-hooks' },
             { text: 'Git Hooks', link: '/reference/git-hooks' },
             { text: 'Environment & Layout', link: '/reference/environment' }
           ]

@@ -223,6 +223,17 @@ div[class*='mermaid'] svg {
 }
 
 /* Doc Layout Hero & Features Grid */
+.vp-doc h1 + h2 {
+  margin-top: -0.25rem;
+  margin-bottom: 1.25rem;
+  padding-top: 0;
+  border-top: none;
+  font-size: 1.45rem;
+  font-weight: 600;
+  color: var(--vp-c-brand-1);
+  letter-spacing: -0.01em;
+}
+
 .rnex-hero-wrapper {
   display: flex;
   flex-direction: column-reverse;
