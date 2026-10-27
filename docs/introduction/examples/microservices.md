@@ -1,6 +1,10 @@
 ---
-title: "Example: Multi-Repo Microservices Setup"
-description: Concrete copy-pasteable setup for multi-repo microservices architectures with Repo Nexus.
+title: "Example: Multi-Repo Microservices Setup | Meta Repo & Nexus Repository"
+description: Concrete copy-pasteable meta repository (meta repo) and nexus repository (nexus repo) setup for multi-repo microservices architectures with Repo Nexus.
+head:
+  - - meta
+    - name: keywords
+      content: nexus repository, meta repository, nexus repo, meta repo, microservices, multi-repo architecture, rnex
 ---
 
 # Multi-Repo Microservices Setup

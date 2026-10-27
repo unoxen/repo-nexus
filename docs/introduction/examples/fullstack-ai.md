@@ -1,6 +1,10 @@
 ---
-title: "Example: Full-Stack AI Context Mirroring"
-description: Concrete copy-pasteable setup for multi-provider AI context synchronization across frontend and backend repos.
+title: "Example: Full-Stack AI Context Mirroring | Meta Repo & Nexus Repository"
+description: Concrete copy-pasteable meta repository (meta repo) and nexus repository (nexus repo) setup for multi-provider AI context synchronization across frontend and backend repos.
+head:
+  - - meta
+    - name: keywords
+      content: nexus repository, meta repository, nexus repo, meta repo, ai context mirroring, fullstack multi-repo, rnex
 ---
 
 # Full-Stack AI Context Mirroring

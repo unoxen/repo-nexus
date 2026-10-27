@@ -7,7 +7,7 @@ export default withMermaid(
   defineConfig({
     title: 'Repo Nexus (rnex)',
     titleTemplate: ':title | rnex',
-    description: 'Virtual Meta-Repo companion for multi-repo workspaces and shared AI context',
+    description: 'Lightweight Virtual Meta Repository (meta repo) and Nexus Repository (nexus repo) manager for multi-repo workspaces and shared AI context',
 
     // Dynamic base URL: defaults to '/repo-nexus/' for GitHub Pages, '/' for root/custom domain
     base,
@@ -22,9 +22,10 @@ export default withMermaid(
     head: [
       ['link', { rel: 'canonical', href: 'https://unoxen.github.io/repo-nexus/' }],
       ['meta', { property: 'og:type', content: 'website' }],
-      ['meta', { property: 'og:title', content: 'Repo Nexus (rnex) - Virtual Meta-Repo Companion' }],
-      ['meta', { property: 'og:description', content: 'Lightweight multi-repo workspace manager with auto-synced AI context (no git submodules)' }],
+      ['meta', { property: 'og:title', content: 'Repo Nexus (rnex) - Virtual Meta Repository & Nexus Repository (Meta Repo / Nexus Repo)' }],
+      ['meta', { property: 'og:description', content: 'Lightweight Virtual Meta Repository (meta repo) and Nexus Repository (nexus repo) manager with auto-synced AI context (no git submodules)' }],
       ['meta', { property: 'og:url', content: 'https://unoxen.github.io/repo-nexus/' }],
+      ['meta', { name: 'keywords', content: 'nexus repository, meta repository, nexus repo, meta repo, virtual meta repository, virtual meta-repo, multi-repo workspace, repo nexus, rnex' }],
       [
         'script',
         { type: 'application/ld+json' },
@@ -35,13 +36,17 @@ export default withMermaid(
           'alternateName': 'rnex',
           'applicationCategory': 'DeveloperApplication',
           'operatingSystem': 'POSIX (macOS, Linux, WSL)',
+          'description': 'Lightweight Virtual Meta Repository (meta repo) and Nexus Repository (nexus repo) manager for multi-repo workspaces and shared AI context',
           'url': 'https://unoxen.github.io/repo-nexus/',
-          'codeRepository': 'https://github.com/unoxen/repo-nexus'
+          'codeRepository': 'https://github.com/unoxen/repo-nexus',
+          'keywords': 'nexus repository, meta repository, nexus repo, meta repo, virtual meta repository, multi-repo'
         })
       ],
       ['meta', { name: 'theme-color', content: '#10b981' }],
       ['meta', { name: 'og:site_name', content: 'Repo Nexus (rnex)' }],
       ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
+      ['meta', { name: 'twitter:title', content: 'Repo Nexus (rnex) - Virtual Meta Repository & Nexus Repository (Meta Repo / Nexus Repo)' }],
+      ['meta', { name: 'twitter:description', content: 'Lightweight Virtual Meta Repository (meta repo) and Nexus Repository (nexus repo) manager with auto-synced AI context (no git submodules)' }],
       ['link', { rel: 'icon', type: 'image/svg+xml', href: `${base}dark_logo.svg`, media: '(prefers-color-scheme: light)' }],
       ['link', { rel: 'icon', type: 'image/svg+xml', href: `${base}light_logo.svg`, media: '(prefers-color-scheme: dark)' }]
     ],

@@ -1,6 +1,10 @@
 ---
-title: "Example: Selective Checkout & Read-Only Contracts"
-description: Concrete copy-pasteable setup for local machine overrides, selective checkout, and read-only repositories.
+title: "Example: Selective Checkout & Read-Only Contracts | Meta Repo & Nexus Repository"
+description: Concrete copy-pasteable setup for local machine overrides, selective checkout, and read-only repositories in a meta repository (meta repo) and nexus repository (nexus repo).
+head:
+  - - meta
+    - name: keywords
+      content: nexus repository, meta repository, nexus repo, meta repo, selective checkout, local overrides, rnex
 ---
 
 # Selective Checkout & Read-Only Contracts

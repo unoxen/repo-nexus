@@ -1,11 +1,15 @@
 ---
-title: Quick Start with Repo Nexus
-description: Learn prerequisites, installation options, and how to initialize your first Repo Nexus virtual meta-repo workspace in minutes.
+title: Quick Start with Repo Nexus | Meta Repository & Nexus Repo Setup
+description: Learn prerequisites, installation options, and how to initialize your first Repo Nexus virtual meta repository (meta repo) and nexus repository (nexus repo) workspace in minutes.
+head:
+  - - meta
+    - name: keywords
+      content: nexus repository, meta repository, nexus repo, meta repo, quick start, virtual meta repository, multi-repo setup, rnex
 ---
 
 # Quick Start
 
-Repo Nexus (`rnex`) orchestrates multi-repository projects into a unified workspace without requiring monorepo migrations or Git submodules. This walkthrough guides you through installing `rnex`, initializing your first workspace, and connecting member repositories.
+Repo Nexus (`rnex`) orchestrates multi-repository projects into a unified **nexus repository** (**nexus repo**) and **meta repository** (**meta repo**) workspace without requiring monorepo migrations or Git submodules. This walkthrough guides you through installing `rnex`, initializing your first workspace, and connecting member repositories.
 
 ## Prerequisites
 

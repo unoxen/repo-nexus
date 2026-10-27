@@ -1,7 +1,7 @@
 {
   "name": "repo-nexus",
-  "version": "0.8.13",
-  "description": "Lightweight, zero-dependency Virtual Meta-Repo companion for multi-repo workspaces and shared AI context (no git submodules)",
+  "version": "0.8.14",
+  "description": "Lightweight, zero-dependency Virtual Meta Repository (meta repo) and Nexus Repository (nexus repo) manager for multi-repo workspaces and shared AI context (no git submodules)",
   "bin": {
     "repo-nexus": "rnex",
     "rnex": "rnex"
@@ -28,11 +28,17 @@
   },
   "homepage": "https://unoxen.github.io/repo-nexus/",
   "keywords": [
-    "rnex",
-    "repo-nexus",
-    "virtual-meta-repo",
-    "meta-repo",
+    "nexus repository",
+    "meta repository",
+    "nexus repo",
+    "meta repo",
+    "virtual meta-repo",
+    "virtual meta repository",
     "multi-repo",
+    "repo-nexus",
+    "rnex",
+    "ai-context",
+    "context-repository",
     "agents-md",
     "ai-agents",
     "cursor-rules",

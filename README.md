@@ -1,3 +1,9 @@
+<p align="center">
+  <a href="https://unoxen.github.io/repo-nexus/">
+    <img src="docs/public/home.png" alt="Repo Nexus (rnex) — Virtual Meta Repository, Nexus Repository, Meta Repo, and Nexus Repo Manager" width="100%" />
+  </a>
+</p>
+
 # Repo Nexus (rnex)
 
 [![CI](https://github.com/unoxen/repo-nexus/actions/workflows/ci.yml/badge.svg)](https://github.com/unoxen/repo-nexus/actions/workflows/ci.yml)
@@ -9,12 +15,12 @@
 
 📖 **Documentation:** [https://unoxen.github.io/repo-nexus/](https://unoxen.github.io/repo-nexus/)
 
-A **Virtual Meta-Repo** companion for multi-repo workspaces and shared AI context. It organizes independent repositories into a unified workspace and shares lean routing instructions (`AGENTS.md`) **without Git submodules, monorepo migrations, or symlink fragility**.
+A lightweight, zero-dependency **Virtual Meta Repository** (**meta repo**) and **Nexus Repository** (**nexus repo**) manager for multi-repo workspaces and shared AI context. Repo Nexus organizes independent Git repositories into a unified **nexus repository** and **meta repository** workspace—sharing lean routing instructions (`AGENTS.md`) **without Git submodules, monorepo migrations, or symlink fragility**.
 
 - **No Git Submodules or Nested Git Collisions**: Member repositories are physically cloned into `./<repos_dir>/` (default: `./repos/`, configurable via `repos_dir`) and strictly ignored by workspace Git. Each repository maintains its own standalone history, remotes, branches, and commits with zero submodule friction.
 - **Unified Workspace for AI Coding Assistants**: Open one root folder to give Cursor, Claude Code, GitHub Copilot, Codex, or Antigravity complete cross-service visibility.
 - **Two-Level Configuration as Source of Truth**: Shared team manifest in `rnex.yaml` with machine-specific overrides in `.local.rnex.yaml` (highest priority).
-- **One Command Team Onboarding**: Teammates clone the meta-repo and run `rnex clone` to clone and configure all member repos in seconds.
+- **One Command Team Onboarding**: Teammates clone the **meta repository** (**meta repo** / **nexus repo**) and run `rnex clone` to clone and configure all member repositories in seconds.
 - **Cross-Repo Batch Operations**: Run arbitrary commands across all active repositories with `rnex exec <command>`.
 - **Scoped Plugins & Context Packs**: Modular plugin packages scoped under `.rnex/plugins/<plugin-name>/` with support for domain directories (e.g. `wiki/` and `./docs` for `karpathy-llm`).
 - **Zero Dependencies**: Pure POSIX shell CLI (`rnex`). Works out of the box across macOS, Linux, and Windows (WSL/Git Bash).
@@ -49,8 +55,8 @@ A **Virtual Meta-Repo** companion for multi-repo workspaces and shared AI contex
 
 | What It Is | What It Isn't |
 | :--- | :--- |
-| **A lightweight companion utility** (modular pure POSIX `/bin/sh` CLI). | **NOT a replacement for your workspace or tools.** It doesn't replace VS Code, Cursor, JetBrains, or your terminal. |
-| **A Virtual Meta-Repo orchestrator** managing member clones in `./<repos_dir>/` (default: `./repos/`). | **NOT a build tool or monorepo orchestrator.** It doesn't replace tools like Nx, Turborepo, Cargo, or Gradle. |
+| **A lightweight nexus repository & meta repository CLI** (modular pure POSIX `/bin/sh` CLI). | **NOT a replacement for your workspace or tools.** It doesn't replace VS Code, Cursor, JetBrains, or your terminal. |
+| **A Virtual Meta Repo & Nexus Repo orchestrator** managing autonomous member clones in `./<repos_dir>/` (default: `./repos/`). | **NOT a build tool or monorepo orchestrator.** It doesn't replace tools like Nx, Turborepo, Cargo, or Gradle. |
 | **Zero Git friction.** Repositories remain normal, autonomous Git repos. | **NOT Git submodules or subtrees.** No `.gitmodules` files, no detached HEADs, no commit coordination lock-in. |
 | **Strictly encapsulated.** Internal rnex assets live exclusively in `.rnex/`. | **NOT invasive.** Member repositories remain clean; workspace-related context is isolated to `<repos_dir>/<name>/.rnex/`. |
 

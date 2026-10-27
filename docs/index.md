@@ -1,16 +1,20 @@
 ---
 layout: doc
-title: Welcome to Repo Nexus (rnex)
-description: Lightweight, zero-dependency Virtual Meta-Repo companion for multi-repo workspaces and shared AI context (no git submodules).
+title: Repo Nexus (rnex) | Virtual Meta Repository & Nexus Repository (Meta Repo / Nexus Repo)
+description: Lightweight, zero-dependency Virtual Meta Repository (meta repo) and Nexus Repository (nexus repo) manager for multi-repo workspaces and shared AI context (no git submodules).
+head:
+  - - meta
+    - name: keywords
+      content: nexus repository, meta repository, nexus repo, meta repo, virtual meta repository, virtual meta-repo, multi-repo workspace, repo nexus, rnex
 ---
 
-# Welcome to Repo Nexus (rnex)
+# Welcome to Repo Nexus (rnex) — Virtual Meta Repository & Nexus Repository
 
 <div class="rnex-hero-wrapper">
 <div class="rnex-hero-content">
 
 <p class="rnex-hero-lead">
-The zero-dependency <strong>Virtual Meta-Repo</strong> companion for engineering teams and AI coding assistants. Unite independent Git repositories into a cohesive, high-velocity workspace without Git submodules or monorepo migrations.
+The zero-dependency <strong>nexus repository</strong> (<strong>nexus repo</strong>) and <strong>meta repository</strong> (<strong>meta repo</strong>) to unite independent Git repositories into a cohesive AI-enabled workspace—without Git submodules or monorepo migrations.
 </p>
 
 <div class="rnex-hero-actions">
@@ -67,7 +71,7 @@ The zero-dependency <strong>Virtual Meta-Repo</strong> companion for engineering
 
 ## Install rnex
 
-Initialize a unified meta-repo workspace and connect member repositories in three simple commands:
+Initialize a unified meta repository (meta repo) and nexus repository (nexus repo) workspace and connect member repositories in three simple commands:
 
 ::: code-group
 

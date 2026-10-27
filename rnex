@@ -2,8 +2,9 @@
 # shellcheck shell=sh
 # ============================================================================
 # rnex — Repo Nexus CLI
-# Lightweight zero-dependency Virtual Meta-Repo companion for multi-repo
-# workspaces and shared AI context (no git submodules).
+# Lightweight zero-dependency Virtual Meta Repository (meta repo) and Nexus
+# Repository (nexus repo) manager for multi-repo workspaces and shared AI
+# context (no git submodules).
 # Pure POSIX shell compatible (/bin/sh).
 # ============================================================================
 set -e

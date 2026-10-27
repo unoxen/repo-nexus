@@ -1,13 +1,25 @@
 ---
-title: Why Repo Nexus?
-description: Understand the architectural rationale behind Repo Nexus and how it solves the multi-repo vs monorepo dilemma without Git submodules.
+title: Why Repo Nexus? | Virtual Meta Repository & Nexus Repo Architecture
+description: Understand the architectural rationale behind the Repo Nexus virtual meta repository (meta repo) and nexus repository (nexus repo) workspace model without Git submodules.
+head:
+  - - meta
+    - name: keywords
+      content: nexus repository, meta repository, nexus repo, meta repo, virtual meta repository, why meta repo, git submodules alternative, multi-repo workspace, rnex
 ---
 
 # Why Repo Nexus?
 
 Modern engineering teams face an architectural dilemma: manage code across dozens of autonomous Git repositories, or consolidate everything into a monolithic repository (monorepo). Both approaches introduce friction as teams and AI coding assistants scale.
 
-Repo Nexus provides a third path: the **Virtual Meta-Repo**.
+Repo Nexus provides a third path: the **Virtual Meta Repository** (**meta repo**) and **Nexus Repository** (**nexus repo**).
+
+## What is a Meta Repository (Meta Repo)?
+
+A **meta repository** (**meta repo**) is an architectural pattern where an umbrella repository acts as a single coordination and onboarding point for multiple independent Git repositories. Rather than compiling all code into one giant monorepo, a meta repo coordinates member repositories as distinct, isolated Git checkouts within the workspace.
+
+## What is a Nexus Repository (Nexus Repo)?
+
+A **nexus repository** (**nexus repo**) serves as the central junction for configuration, team conventions, cross-repo tooling, and unified AI context. In `repo-nexus`, the nexus repo ensures that AI agents (Cursor, Claude Code, GitHub Copilot, Codex, Gemini, Windsurf) have a consistent understanding of all member repositories without leaking cross-repo state or requiring custom monorepo tooling.
 
 ## The Multi-Repo Dilemma
 
@@ -23,7 +35,7 @@ Git Submodules attempt to link independent repositories together, but introduce 
 3. **Complex Branching**: Branch switching in the parent repository does not track branch changes in submodules automatically.
 4. **AI Context Blindness**: AI assistants and editor language servers struggle with submodule boundaries and nested `.git` directories.
 
-## The Virtual Meta-Repo Solution
+## Nexus Repo vs Git Submodules: Why Virtual Orchestration Wins
 
 Repo Nexus acts as a lightweight coordinator around your repositories without altering their autonomous Git state:
 
@@ -45,4 +57,4 @@ Repo Nexus acts as a lightweight coordinator around your repositories without al
 
 ## Summary
 
-Repo Nexus gives you the developer experience and shared AI context of a monorepo while retaining the isolation, security boundaries, and modularity of independent repositories.
+Repo Nexus gives you the developer experience and shared AI context of a monorepo while retaining the isolation, security boundaries, and modularity of an autonomous multi-repo architecture.

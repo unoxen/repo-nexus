@@ -1209,6 +1209,40 @@ EOF_BOILERPLATE
 
 pass
 
+# ----------------------------------------------------------------------------
+# Fix 31: Terminology audit (zero 'companion' occurrences), SEO keyword presence, and top README image
+# ----------------------------------------------------------------------------
+run_test "Fix 31: Zero 'companion' occurrences, SEO keyword presence, and top README image"
+
+# 1. Assert zero occurrences of "companion" (case-insensitive) across key repository files and directories
+if grep -ri "companion" "$DIR/README.md" "$DIR/package.json" "$DIR/docs" "$DIR/rnex" "$DIR/lib" "$DIR/templates" "$DIR/toolkit" >/dev/null 2>&1; then
+  fail "Obsolete term 'companion' found in repository codebase"
+  exit 1
+fi
+
+# 2. Assert SEO keywords presence across README.md, package.json, docs/index.md, and docs/.vitepress/config.mts
+for _kw in "nexus repository" "meta repository" "nexus repo" "meta repo"; do
+  for _file in "$DIR/README.md" "$DIR/package.json" "$DIR/docs/index.md" "$DIR/docs/.vitepress/config.mts"; do
+    if ! grep -iq "$_kw" "$_file"; then
+      fail "Required SEO keyword '$_kw' missing in $_file"
+      exit 1
+    fi
+  done
+done
+
+# 3. Assert README.md begins with welcome hero image pointing to a valid file in docs/public/
+_img_src="$(head -n 10 "$DIR/README.md" | grep '<img ' | sed 's/.*src="\([^"]*\)".*/\1/')"
+[ -n "$_img_src" ] || { fail "README.md top 10 lines do not contain an <img> tag"; exit 1; }
+[ -f "$DIR/$_img_src" ] || { fail "Hero image '$_img_src' referenced in README.md does not exist"; exit 1; }
+
+# Assert img alt attribute contains required keywords
+_img_alt="$(head -n 10 "$DIR/README.md" | grep '<img ' | sed 's/.*alt="\([^"]*\)".*/\1/')"
+for _kw in "meta repository" "nexus repository" "meta repo" "nexus repo"; do
+  echo "$_img_alt" | grep -iq "$_kw" || { fail "README.md <img> alt attribute missing keyword '$_kw'"; exit 1; }
+done
+
+pass
+
 if [ "${_STANDALONE_RUN:-0}" -eq 1 ]; then
   report_results
 fi

@@ -67,7 +67,7 @@ cmd_help() {
   cat <<EOF
 
   rnex — Repo Nexus CLI  (v$RNEX_VERSION)
-  Virtual Meta-Repo companion for multi-repo AI workspaces (no git submodules).
+  Virtual Meta Repository & Nexus Repository manager for multi-repo AI workspaces (no git submodules).
 
   USAGE
   rnex [options] <command> [arguments]

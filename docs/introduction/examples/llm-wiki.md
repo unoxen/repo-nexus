@@ -1,6 +1,10 @@
 ---
-title: "Example: Automated Karpathy LLM Wiki Setup"
-description: Concrete copy-pasteable setup for Andrej Karpathy's LLM Wiki architecture in Repo Nexus.
+title: "Example: Automated Karpathy LLM Wiki Setup | Meta Repo & Nexus Repository"
+description: Concrete copy-pasteable setup for Andrej Karpathy's LLM Wiki architecture in a Repo Nexus meta repository (meta repo) and nexus repository (nexus repo).
+head:
+  - - meta
+    - name: keywords
+      content: nexus repository, meta repository, nexus repo, meta repo, karpathy llm wiki, ai knowledge graph, rnex
 ---
 
 # Automated Karpathy LLM Wiki Setup

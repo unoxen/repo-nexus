@@ -1,11 +1,15 @@
 ---
-title: CLI Reference
-description: Complete reference for all Repo Nexus commands, rnex repo subcommands, rnex plugin operations, and global flags.
+title: CLI Reference | Meta Repository & Nexus Repo Commands
+description: Complete reference for all Repo Nexus commands, rnex repo subcommands, rnex plugin operations, and global flags for meta repository (meta repo) and nexus repository (nexus repo) workspaces.
+head:
+  - - meta
+    - name: keywords
+      content: nexus repository, meta repository, nexus repo, meta repo, cli reference, rnex commands, bash cli, multi-repo cli
 ---
 
 # CLI Reference
 
-`rnex` is a zero-dependency CLI written entirely in pure POSIX `/bin/sh`. It orchestrates Virtual Meta-Repo workspaces, single-repository management under `rnex repo`, batch operations across `./repos/`, and extensible plugin commands.
+`rnex` is a zero-dependency CLI written entirely in pure POSIX `/bin/sh`. It orchestrates Virtual Meta Repository (**meta repo**) and Nexus Repository (**nexus repo**) workspaces, single-repository management under `rnex repo`, batch operations across `./repos/`, and extensible plugin commands.
 
 ---
 

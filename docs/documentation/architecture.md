@@ -1,11 +1,15 @@
 ---
-title: Virtual Meta-Repo Architecture
-description: Deep dive into the Repo Nexus workspace layout, member repository isolation, runtime directories, delimited context merging, and architecture diagram.
+title: Virtual Meta Repository & Nexus Repository Architecture
+description: Deep dive into the Repo Nexus virtual meta repository (meta repo) and nexus repository (nexus repo) workspace layout, member repository isolation, runtime directories, delimited context merging, and architecture diagram.
+head:
+  - - meta
+    - name: keywords
+      content: nexus repository, meta repository, nexus repo, meta repo, virtual meta repository, architecture, multi-repo design, rnex
 ---
 
-# Virtual Meta-Repo Architecture
+# Virtual Meta Repository & Nexus Repository Architecture
 
-Repo Nexus coordinates multiple repositories through a declarative directory hierarchy that balances workspace-wide orchestration with complete member repository autonomy.
+Repo Nexus coordinates multiple repositories through a declarative directory hierarchy that balances workspace-wide orchestration with complete member repository autonomy in a unified meta repository (meta repo) and nexus repository (nexus repo).
 
 ## Architecture Diagram
 
