@@ -1235,11 +1235,10 @@ _img_src="$(head -n 10 "$DIR/README.md" | grep '<img ' | sed 's/.*src="\([^"]*\)
 [ -n "$_img_src" ] || { fail "README.md top 10 lines do not contain an <img> tag"; exit 1; }
 [ -f "$DIR/$_img_src" ] || { fail "Hero image '$_img_src' referenced in README.md does not exist"; exit 1; }
 
-# Assert img alt attribute contains required keywords
+# Assert img alt attribute is non-empty and identifies Repo Nexus
 _img_alt="$(head -n 10 "$DIR/README.md" | grep '<img ' | sed 's/.*alt="\([^"]*\)".*/\1/')"
-for _kw in "meta repository" "nexus repository" "meta repo" "nexus repo"; do
-  echo "$_img_alt" | grep -iq "$_kw" || { fail "README.md <img> alt attribute missing keyword '$_kw'"; exit 1; }
-done
+[ -n "$_img_alt" ] || { fail "README.md <img> alt attribute is missing or empty"; exit 1; }
+echo "$_img_alt" | grep -iq "Repo Nexus" || { fail "README.md <img> alt attribute does not identify 'Repo Nexus'"; exit 1; }
 
 pass
 

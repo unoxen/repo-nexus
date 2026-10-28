@@ -1,4 +1,9 @@
-# Repo Nexus (rnex)
+<h1><a href="https://unoxen.github.io/repo-nexus/">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/public/dark_logo.svg">
+    <img alt="Repo Nexus" width=100 src="docs/public/dark_logo.svg">
+  </picture>
+</a></h1>
 
 [![CI](https://github.com/unoxen/repo-nexus/actions/workflows/ci.yml/badge.svg)](https://github.com/unoxen/repo-nexus/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/repo-nexus.svg)](https://www.npmjs.com/package/repo-nexus)
@@ -6,8 +11,6 @@
 [![POSIX Compatible](https://img.shields.io/badge/POSIX-compatible-success)](#)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey)](#)
 [![Documentation Site](https://img.shields.io/badge/docs-site-blue.svg)](https://unoxen.github.io/repo-nexus/)
-
-📖 **Documentation:** [https://unoxen.github.io/repo-nexus/](https://unoxen.github.io/repo-nexus/)
 
 A lightweight, zero-dependency and AI-First **Nexus Repository (Virtual Meta Repository Orchestrator)** for multi-repo workspaces. Repo Nexus organizes independent Git repositories into a unified **nexus repository** and **meta repository** workspace—sharing lean routing instructions (`AGENTS.md`) **without Git submodules, monorepo migrations, or symlink fragility**.
 
@@ -19,9 +22,7 @@ A lightweight, zero-dependency and AI-First **Nexus Repository (Virtual Meta Rep
 - **Scoped Plugins & Context Packs**: Modular plugin packages scoped under `.rnex/plugins/<plugin-name>/` with support for domain directories (e.g. `wiki/` and `./docs` for `karpathy-llm`).
 - **Zero Dependencies**: Pure POSIX shell CLI (`rnex`). Works out of the box across macOS, Linux, and Windows (WSL/Git Bash).
 
-> 📖 **Documentation & Guides**
->
-> Explore the comprehensive documentation, architecture guides, and interactive references on the **[Documentation Site](https://unoxen.github.io/repo-nexus/)**:
+> 📖 **[Documentation & Guides](https://unoxen.github.io/repo-nexus/)**
 >
 > - 🚀 **[Getting Started](https://unoxen.github.io/repo-nexus/introduction/quick-start)** — Step-by-step onboarding walkthrough and workspace setup
 > - 📐 **[Architecture](https://unoxen.github.io/repo-nexus/documentation/architecture)** & **[Why Repo Nexus?](https://unoxen.github.io/repo-nexus/introduction/why-rnex)** — Virtual Meta-Repo model, directory layout, and design rationale
