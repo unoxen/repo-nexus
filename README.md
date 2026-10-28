@@ -1,9 +1,3 @@
-<p align="center">
-  <a href="https://unoxen.github.io/repo-nexus/">
-    <img src="docs/public/home.png" alt="Repo Nexus (rnex) — Virtual Meta Repository, Nexus Repository, Meta Repo, and Nexus Repo Manager" width="20%" />
-  </a>
-</p>
-
 # Repo Nexus (rnex)
 
 [![CI](https://github.com/unoxen/repo-nexus/actions/workflows/ci.yml/badge.svg)](https://github.com/unoxen/repo-nexus/actions/workflows/ci.yml)
