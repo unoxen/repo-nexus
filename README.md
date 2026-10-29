@@ -1,7 +1,7 @@
 <h1><a href="https://unoxen.github.io/repo-nexus/">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/public/dark_logo.svg">
-    <img alt="Repo Nexus" width=100 src="docs/public/dark_logo.svg">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/public/logo.png">
+    <img alt="Repo Nexus" width=100 src="docs/public/logo.png">
   </picture>
 </a></h1>
 

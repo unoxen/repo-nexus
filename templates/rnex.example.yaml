@@ -15,9 +15,6 @@ description: "Multi-repo platform workspace and shared AI context"
 # Directory where member repositories are cloned (default: "./repos").
 # Automatically added to workspace .gitignore and un-ignored in .ignore.
 repos_dir: "./repos"
-# Optional workspace external plugins directory (e.g. "./plugins").
-# Subdirectories containing plugin.yaml are automatically discovered as external plugins.
-plugins_dir: "./plugins"
 code_workspace: "acme.code-workspace"
 
 # Git Integration (Ignore rules & Git hooks)
@@ -105,7 +102,7 @@ plugins:
   copilot:
     enabled: false
     skills: true
-  # Standalone external plugin outside plugins_dir (supports directory or manifest path)
+  # External / Custom Plugin (supports relative directory or plugin.yaml manifest path)
   my-plugin:
     enabled: true
     path: "./custom-plugins/my-plugin"

@@ -63,7 +63,7 @@ my-workspace/
 │   │   └── ...
 │   └── <repo-b>/
 │
-├── <plugins_dir>/                   # (Optional) External workspace plugins (configurable via plugins_dir)
+├── custom-plugins/                  # (Optional) External workspace plugins (mounted via plugins.<name>.path)
 │   └── <plugin-name>/               # External plugin bundle (plugin.yaml, hooks/, commands/, skills/)
 │
 ├── AGENTS.md                        # Permanent AI context routing file

@@ -13,10 +13,8 @@
 #     1. Explicit per-plugin path override (`plugins.<name>.path` in
 #        .local.rnex.yaml > rnex.yaml). Normalizes trailing `/plugin.yaml`
 #        to its parent directory.
-#     2. Subdirectory `<plugins_dir>/<name>/` containing `plugin.yaml` if
-#        `plugins_dir` is configured.
-#     3. Built-in embedded plugin in `$TOOLKIT_DIR/plugins/<name>`.
-#     4. Standard candidate toolkit/workspace directory search.
+#     2. Built-in embedded plugin in `$TOOLKIT_DIR/plugins/<name>`.
+#     3. Standard candidate toolkit directory search.
 #
 # Arguments:
 #   $1 - Plugin name (e.g. "karpathy-llm", "claude", "custom-plugin")
@@ -66,26 +64,13 @@ plugin_resolve_dir() {
     fi
   fi
 
-  # Priority 2: Configured plugins_dir/<plugin_name>/ containing plugin.yaml
-  if command -v yaml_get_plugins_dir >/dev/null 2>&1; then
-    _prd_pdir="$(yaml_get_plugins_dir 2>/dev/null || true)"
-    if [ -n "$_prd_pdir" ]; then
-      _prd_ext="$_prd_pdir/$_prd_name"
-      _prd_ext_res="$(resolve_path "$_prd_ext" 2>/dev/null || true)"
-      if [ -n "$_prd_ext_res" ] && [ -d "$_prd_ext_res" ] && [ -f "$_prd_ext_res/plugin.yaml" ]; then
-        printf '%s' "$_prd_ext_res"
-        return 0
-      fi
-    fi
-  fi
-
-  # Priority 3: Built-in embedded plugin in $TOOLKIT_DIR/plugins/<plugin_name>
+  # Priority 2: Built-in embedded plugin in $TOOLKIT_DIR/plugins/<plugin_name>
   if [ -n "${TOOLKIT_DIR:-}" ] && [ -d "$TOOLKIT_DIR/plugins/$_prd_name" ] && [ -f "$TOOLKIT_DIR/plugins/$_prd_name/plugin.yaml" ]; then
     resolve_path "$TOOLKIT_DIR/plugins/$_prd_name" 2>/dev/null || printf '%s' "$TOOLKIT_DIR/plugins/$_prd_name"
     return 0
   fi
 
-  # Priority 4: Candidate toolkit/workspace locations fallback
+  # Priority 3: Candidate toolkit locations fallback
   _sdir="$(dirname "$SCRIPT_LOCATION")"
   for _cand in \
     "${RNEX_ROOT:-}/toolkit/plugins/$_prd_name" \
@@ -95,7 +80,6 @@ plugin_resolve_dir() {
     "$NEXUS_DIR/toolkit/plugins/$_prd_name" \
     "$SCRIPT_LOCATION/toolkit/plugins/$_prd_name" \
     "$_sdir/toolkit/plugins/$_prd_name" \
-    "$NEXUS_DIR/plugins/$_prd_name" \
     "$NEXUS_DIR/.rnex/plugins/$_prd_name" \
     "$NEXUS_DIR/.nexus/plugins/$_prd_name"; do
     [ -n "$_cand" ] || continue
@@ -128,7 +112,6 @@ find_plugin_dir() {
     "$NEXUS_DIR/toolkit/plugins/$_query" \
     "$SCRIPT_LOCATION/toolkit/plugins/$_query" \
     "$_sdir/toolkit/plugins/$_query" \
-    "$NEXUS_DIR/plugins/$_query" \
     "$NEXUS_DIR/.rnex/plugins/$_query" \
     "$NEXUS_DIR/.nexus/plugins/$_query"; do
     [ -n "$_cand" ] || continue
@@ -148,8 +131,7 @@ find_plugin_dir() {
 #   the resolution hierarchy:
 #     1. Path-mapped external plugins declared via `plugins.<name>.path` in
 #        .local.rnex.yaml or rnex.yaml.
-#     2. External plugins residing under configured `plugins_dir` (e.g. ./plugins/*).
-#     3. Built-in embedded plugins shipped with rnex ($TOOLKIT_DIR/plugins/*).
+#     2. Built-in embedded plugins shipped with rnex ($TOOLKIT_DIR/plugins/*).
 #
 # Arguments:
 #   None
@@ -163,7 +145,7 @@ find_plugin_dir() {
 plugin_list_available() {
   _pla_seen=""
 
-  # 1. Path-mapped plugins explicitly configured in YAML
+  # 1. Path-mapped plugins explicitly configured in YAML (.local.rnex.yaml > rnex.yaml)
   if command -v yaml_list_plugins >/dev/null 2>&1; then
     for _pname in $(yaml_list_plugins 2>/dev/null || true); do
       [ -n "$_pname" ] || continue
@@ -180,28 +162,7 @@ plugin_list_available() {
     done
   fi
 
-  # 2. External plugins in configured plugins_dir
-  _pdir_cfg=""
-  if command -v yaml_get_plugins_dir >/dev/null 2>&1; then
-    _pdir_cfg="$(yaml_get_plugins_dir 2>/dev/null || true)"
-  fi
-  if [ -n "$_pdir_cfg" ] && [ -d "$_pdir_cfg" ]; then
-    for _sub in "$_pdir_cfg"/*; do
-      if [ -d "$_sub" ] && [ -f "$_sub/plugin.yaml" ]; then
-        _pname="$(plugin_get_field "$_sub" "name" 2>/dev/null || true)"
-        [ -n "$_pname" ] || _pname="$(basename "$_sub")"
-        case " $_pla_seen " in
-          *" $_pname "*) ;;
-          *)
-            _pla_seen="$_pla_seen $_pname"
-            printf '%s\n' "$_sub"
-            ;;
-        esac
-      fi
-    done
-  fi
-
-  # 3. Built-in embedded plugins ($TOOLKIT_DIR/plugins/*) and standard candidates
+  # 2. Built-in embedded plugins ($TOOLKIT_DIR/plugins/*) and standard candidates
   for _parent in \
     "${TOOLKIT_DIR:-}/plugins" \
     "${RNEX_ROOT:-}/toolkit/plugins" \

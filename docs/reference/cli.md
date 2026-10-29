@@ -178,7 +178,7 @@ Alias for `rnex list`.
 Manage plugins and execute plugin-provided CLI commands.
 
 ### `rnex plugin list`
-Lists all available, enabled, and disabled plugins (from built-in toolkit, workspace `plugins_dir`, or configured `path`) along with their declared CLI commands.
+Lists all available, enabled, and disabled plugins (from built-in toolkit or configured external plugin paths via `plugins.<name>.path`) along with their declared CLI commands.
 
 ```sh
 rnex plugin list

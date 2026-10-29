@@ -15,12 +15,12 @@ Repo Nexus uses a declarative YAML configuration system split across two layers:
 
 ### 2. Workstation Overrides (`.local.rnex.yaml`)
 * **Gitignored**: Never committed to version control.
-* **Developer Flexibility**: Enables individual engineers to disable repositories they don't work on, test experimental branches, or activate preferred editor plugins locally without polluting team configuration.
+* **Developer Flexibility**: Enables individual engineers to disable repositories they don't work on, test experimental branches, mount workstation-local external plugins via `plugins.<name>.path`, or activate preferred editor plugins locally without polluting team configuration.
 
 ### Merging Precedence
 Settings in `.local.rnex.yaml` take precedence over `rnex.yaml`:
 1. If a key is present in `.local.rnex.yaml`, its value overrides the value in `rnex.yaml`.
-2. Repositories and plugins are merged by name: disabling a repository in `.local.rnex.yaml` (`enabled: false`) overrides `enabled: true` in `rnex.yaml`.
+2. Repositories and plugins are merged by name: disabling a repository in `.local.rnex.yaml` (`enabled: false`) overrides `enabled: true` in `rnex.yaml`, and setting `plugins.<name>.path` in `.local.rnex.yaml` overrides `path` in `rnex.yaml`.
 
 ---
 
@@ -32,7 +32,6 @@ version: "1"
 name: "acme-platform"
 description: "Multi-repo platform workspace and shared AI context"
 repos_dir: "repos"
-plugins_dir: "plugins"
 code_workspace: "acme.code-workspace"
 
 # Git Integration (Ignore rules & Git hooks)
@@ -102,6 +101,7 @@ repos:
 
 # Scoped Plugins & AI Providers
 plugins:
+  # Built-in AI provider plugins
   claude:
     enabled: true
     skills: true
@@ -120,6 +120,14 @@ plugins:
   copilot:
     enabled: false
     skills: true
+
+  # External / Custom Plugin (loaded via explicit directory or manifest path)
+  acme-workflow:
+    enabled: true
+    path: "./custom-plugins/acme-workflow"
+    skills: true
+
+  # Built-in LLM Knowledge Base plugin
   karpathy-llm:
     enabled: true
     wiki_dir: "wiki"
@@ -140,7 +148,6 @@ plugins:
 | `version` | string | `"1"` | Schema version compatibility check. |
 | `name` | string | basename | Workspace identifier. |
 | `repos_dir` | string | `"repos"` | Directory where member repositories are cloned (automatically managed in `.gitignore` and `.ignore`). |
-| `plugins_dir` | string | `"toolkit/plugins"` | Directory for external workspace plugins. Subdirectories containing `plugin.yaml` are auto-discovered. |
 | `code_workspace`| string / bool | `false` | Path to generated `.code-workspace` file. |
 
 ### Git Integration (`git`)
@@ -160,10 +167,44 @@ Each key represents a repository name with:
 * `enabled`: Whether the repository is active and eligible for batch operations (`true` by default).
 * `readonly`: When `true`, instructs AI agents and developers that the repository is reference-only.
 
-### Scoped Plugins (`plugins`)
+### Scoped Plugins (`plugins.<name>`)
 
-Each key represents a plugin name with:
-* `enabled`: Whether the plugin is active (`true`/`false`).
-* `path`: (Optional) Explicit relative or absolute path to a custom plugin bundle directory or `plugin.yaml` manifest.
-* `skills`: Whether user skill proxies are projected to IDE folders.
-* Plugin-specific options (e.g. `wiki_dir`, `sources` for `karpathy-llm`).
+Plugins provide specialized AI assistant integration, agentic skills, and domain tooling. Configure built-in plugins directly or mount external custom plugins via `plugins.<name>.path`.
+
+| Field | Type | Default | Description |
+|:---|:---|:---|:---|
+| `plugins.<name>.enabled` | boolean | `false` | Enables or disables the plugin for the workspace (`rnex sync` installs enabled plugins into `.rnex/plugins/<name>/`). |
+| **`plugins.<name>.path`** | string | *(built-in)* | **External plugin location.** Relative (to workspace root) or absolute path to an external plugin directory (or its `plugin.yaml` manifest). Overrides built-in `toolkit/plugins/<name>`. |
+| `plugins.<name>.skills` | boolean | `true` | Controls whether AI provider plugins generate user skill/rule pointers (`rnex-*`) for active skills. |
+| `plugins.<name>.<option>` | any | `config_defaults` | Plugin-specific configuration options defined in the plugin's `plugin.yaml` (e.g., `wiki_dir` and `sources` for `karpathy-llm`). |
+
+#### External Plugin Resolution (`plugins.<name>.path`)
+
+To mount an external plugin that is not bundled with the Repo Nexus toolkit, provide an explicit `path:` under the plugin's entry in `rnex.yaml` or `.local.rnex.yaml`:
+
+```yaml
+# rnex.yaml (team-shared external plugin)
+plugins:
+  team-standards:
+    enabled: true
+    path: "./custom-plugins/team-standards"
+```
+
+```yaml
+# .local.rnex.yaml (local developer workstation override)
+plugins:
+  # Mount personal workstation tools
+  personal-agent:
+    enabled: true
+    path: "/Users/dev/dotfiles/rnex-plugins/personal-agent"
+
+  # Override team plugin with a local working copy
+  team-standards:
+    path: "../repos/team-standards"
+```
+
+::: tip Path Normalization & Precedence
+* **Precedence:** `.local.rnex.yaml` (`plugins.<name>.path`) > `rnex.yaml` (`plugins.<name>.path`) > Built-in `toolkit/plugins/<name>/`.
+* **Path Resolution:** Relative paths are resolved against the workspace root. Both directory paths (`./custom-plugins/team-standards`) and manifest file paths (`./custom-plugins/team-standards/plugin.yaml`) are supported.
+* **Auto-Discovery:** When declared with `path:`, external plugins appear in `rnex plugin list` and `rnex plugin info <name>` showing their resolved filesystem location and their manifest's declared version.
+:::

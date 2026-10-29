@@ -45,6 +45,9 @@ Environment variables exported to command scripts:
 * `RNEX_PLUGIN_COMMAND`: Subcommand name.
 * `RNEX_PLUGIN_ARGS`: Arguments string.
 
+### 5. External & Custom Plugin Mounting (`plugins.<name>.path`)
+Plugins are not limited to built-in toolkit packages. Any external plugin directory on disk, in a shared team repository, or on a developer's workstation can be mounted into `.rnex/plugins/<plugin-name>/` via `plugins.<name>.path` in `rnex.yaml` or `.local.rnex.yaml`. External plugins participate seamlessly in the full Repo Nexus lifecycle—including CLI subcommands, lifecycle hooks, skills, instructions, and rules mirroring.
+
 ---
 
 ## Built-In Plugins Catalog
@@ -88,15 +91,68 @@ rnex plugin <name> <command> [options...]
 
 ---
 
+## Connecting External Plugins (`plugins.<name>.path`)
+
+Repo Nexus supports external and custom plugins located anywhere on the filesystem, enabling enterprise teams to share centralized engineering plugins and developers to test local extensions without modifying the built-in toolkit.
+
+External plugins are configured canonicalizing the location via the per-plugin **`plugins.<name>.path`** setting in `rnex.yaml` or workstation-specific `.local.rnex.yaml`.
+
+### How `plugins.<name>.path` Works
+When a plugin declares a `path`, Repo Nexus treats that directory as the plugin bundle's source of truth. Running `rnex sync` (or `rnex plugin enable <name>`) reads the plugin's `plugin.yaml` manifest, compiles its `instructions/` into `.rnex/ai-instructions.md`, links or copies its `skills/` to `.rnex/plugins/<name>/skills/`, hooks its CLI scripts into `rnex plugin <name> <cmd>`, and registers its lifecycle hooks.
+
+### Team-Shared External Plugin (`rnex.yaml`)
+In shared team workspaces, commit external plugin references to `rnex.yaml` using relative paths or submodule locations:
+
+```yaml
+# rnex.yaml
+version: "1"
+name: "my-platform"
+
+plugins:
+  # Built-in plugin (loaded from toolkit/plugins/claude)
+  claude:
+    enabled: true
+
+  # External plugin (loaded from a relative path or shared repo)
+  team-standards:
+    enabled: true
+    path: "./custom-plugins/team-standards"
+    strict_mode: true
+```
+
+### Workstation-Local Plugin Override (`.local.rnex.yaml`)
+Developers can test or enable personal external plugins locally, or override the source path of an existing team plugin without modifying the version-controlled `rnex.yaml`:
+
+```yaml
+# .local.rnex.yaml
+plugins:
+  # Personal workstation tool suite
+  my-local-agent-tools:
+    enabled: true
+    path: "/Users/dev/dotfiles/rnex-plugins/agent-tools"
+
+  # Override team-standards plugin with a local development checkout
+  team-standards:
+    path: "../repos/team-standards"
+```
+
+::: tip Path Resolution & Normalization Rules
+* **Precedence:** `.local.rnex.yaml` (`plugins.<name>.path`) > `rnex.yaml` (`plugins.<name>.path`) > Built-in `toolkit/plugins/<name>/`. Local workstation overrides always take priority.
+* **Relative vs. Absolute Paths:** Relative paths (e.g., `./custom-plugins/my-plugin` or `../shared-plugins/my-plugin`) are resolved relative to the workspace root directory; absolute paths (e.g., `/Users/dev/plugins/my-plugin`) are resolved directly.
+* **Directory or Manifest Pointer:** `path` can point either to the plugin root directory (`./custom-plugins/my-plugin`) or directly to its manifest file (`./custom-plugins/my-plugin/plugin.yaml`). `rnex` automatically normalizes `/plugin.yaml` to the parent plugin directory.
+* **Version Reporting:** Built-in plugins match the `rnex` CLI version, while external plugins loaded via `plugins.<name>.path` dynamically report the `version:` declared in their own `plugin.yaml` across `rnex plugin list` and `rnex plugin info <name>`.
+:::
+
+---
+
 ## Authoring Custom Plugins
 
 Custom plugins allow packaging internal company standards, custom agent skills, or prompt libraries.
 
 ### Plugin Location & Discovery
-A plugin can be hosted in one of three locations:
-1. **Workspace Plugins Directory (`plugins_dir`)**: When `plugins_dir` is declared in `rnex.yaml` or `.local.rnex.yaml` (e.g. `plugins_dir: ./plugins`), any subdirectory containing a `plugin.yaml` manifest (e.g. `./plugins/my-plugin/`) is automatically discovered by `rnex plugin list`.
-2. **Explicit Plugin Path (`plugins.<name>.path`)**: For standalone or shared plugin bundles located outside `plugins_dir`, declare an explicit path in `rnex.yaml` or `.local.rnex.yaml` (e.g. `plugins: { my-plugin: { path: "../shared-plugins/my-plugin" } }`).
-3. **Built-in Toolkit Directory**: Standard plugins bundled directly with Repo Nexus under `toolkit/plugins/<my-plugin>/`.
+A plugin can be hosted in one of two locations:
+1. **External Plugin Path (`plugins.<name>.path`)**: External or custom plugins declared via `path:` in `rnex.yaml` or `.local.rnex.yaml` (e.g. `plugins: { my-plugin: { path: "./custom-plugins/my-plugin" } }`).
+2. **Built-in Toolkit Directory**: Standard plugins bundled directly with Repo Nexus under `toolkit/plugins/<my-plugin>/`.
 
 ### Plugin Directory Structure
 A plugin bundle is structured as follows:

@@ -47,8 +47,7 @@ export default withMermaid(
       ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
       ['meta', { name: 'twitter:title', content: 'Repo Nexus (rnex) - Virtual Meta Repository & Nexus Repository (Meta Repo / Nexus Repo)' }],
       ['meta', { name: 'twitter:description', content: 'Lightweight Virtual Meta Repository (meta repo) and Nexus Repository (nexus repo) manager with auto-synced AI context (no git submodules)' }],
-      ['link', { rel: 'icon', type: 'image/svg+xml', href: `${base}dark_logo.svg`, media: '(prefers-color-scheme: light)' }],
-      ['link', { rel: 'icon', type: 'image/svg+xml', href: `${base}light_logo.svg`, media: '(prefers-color-scheme: dark)' }]
+      ['link', { rel: 'icon', type: 'image/png', href: `${base}logo.png` }]
     ],
 
     markdown: {
@@ -58,8 +57,7 @@ export default withMermaid(
     themeConfig: {
       siteTitle: 'Repo Nexus (rnex)',
       logo: {
-        light: '/dark_logo.svg',
-        dark: '/light_logo.svg',
+        src: '/logo.png',
         alt: 'Repo Nexus Logo'
       },
 

@@ -124,62 +124,6 @@ get_repos_root() {
   printf '%s/%s' "$_grr_dir" "$(yaml_get_repos_dir)"
 }
 
-# ==============================================================================
-# yaml_get_plugins_dir
-#
-# Read the top-level plugins_dir setting from .local.rnex.yaml or rnex.yaml.
-# Priority: .local.rnex.yaml ($NEXUS_LOCAL_CONFIG) > rnex.yaml ($NEXUS_CONFIG).
-# Normalizes relative paths against the workspace root.
-# Returns empty string if unset or invalid (external plugins_dir is optional).
-#
-# @returns 0 and normalized path string to stdout if configured; empty otherwise.
-# @pure Read-only configuration query.
-# ==============================================================================
-yaml_get_plugins_dir() {
-  _yaml_resolve_files
-  _ygpd_local="${NEXUS_LOCAL_CONFIG:-$_wly}"
-  _ygpd_main="${NEXUS_CONFIG:-$_wy}"
-
-  _ygpd_val="$(_yaml_top_level_from_file "$_ygpd_local" "plugins_dir")"
-  [ -n "$_ygpd_val" ] || _ygpd_val="$(_yaml_top_level_from_file "$_ygpd_main" "plugins_dir")"
-
-  [ -n "$_ygpd_val" ] || return 0
-
-  # Normalize: strip leading/trailing whitespace and surrounding quotes
-  _ygpd_val="$(printf '%s' "$_ygpd_val" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d "'\"")"
-
-  # Strip trailing slashes
-  while [ "$_ygpd_val" != "${_ygpd_val%/}" ] && [ -n "${_ygpd_val%/}" ]; do
-    _ygpd_val="${_ygpd_val%/}"
-  done
-
-  # Validate against dangerous paths
-  case "$_ygpd_val" in
-    ''|'.'|'..'|'../*'|'*/..'|'*/../*')
-      return 0
-      ;;
-  esac
-
-  # If relative path, prefix with workspace root if available
-  _ws_root="${NEXUS_DIR:-${RNEX_ROOT:-.}}"
-  case "$_ygpd_val" in
-    /*) printf '%s' "$_ygpd_val" ;;
-    *)
-      if [ -n "$_ws_root" ] && [ "$_ws_root" != "." ]; then
-        _ygpd_clean="${_ygpd_val#./}"
-        printf '%s/%s' "$_ws_root" "$_ygpd_clean"
-      else
-        printf '%s' "$_ygpd_val"
-      fi
-      ;;
-  esac
-}
-
-# Return the path to the workspace external plugins directory if configured
-get_plugins_root() {
-  yaml_get_plugins_dir
-}
-
 # Resolve filesystem path for a specific member repository
 get_repo_path() {
   _grp_name="$1"

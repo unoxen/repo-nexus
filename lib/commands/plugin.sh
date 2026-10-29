@@ -127,7 +127,7 @@ cmd_plugin_info() {
           ' "$_pdir/plugin.yaml")"
         fi
         case "$_opt" in
-          *_dir|dir)
+          *_dir)
             _cur="$(printf '%s' "$_cur" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's#^\./##' -e 's#^/##' -e 's#/$##')"
             ;;
         esac

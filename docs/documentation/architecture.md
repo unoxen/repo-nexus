@@ -31,8 +31,8 @@ flowchart TB
         subgraph SchemaSections["Configuration Schema"]
             GitSchema["git:<br/>• ignore: [&lt;repos_dir&gt;/, **/.rnex*/, **/rnex*/]<br/>• hooks: {post-merge: [...], pre-commit: [...]}"]:::config
             RnexHooksSchema["rnex_hooks:<br/>• after_sync: [...]<br/>• after_clone: [...]<br/>• before_exec: [...]"]:::config
-            ReposSchema["repos_dir: ./repos<br/>plugins_dir: ./plugins<br/>repos:<br/>• url, branch, enabled, readonly"]:::config
-            PluginsSchema["plugins:<br/>• claude, cursor, codex, gemini,<br/>  windsurf, copilot, karpathy-llm"]:::config
+            ReposSchema["repos_dir: ./repos<br/>repos:<br/>• url, branch, enabled, readonly"]:::config
+            PluginsSchema["plugins:<br/>• claude, cursor, codex, gemini,<br/>  windsurf, copilot, karpathy-llm<br/>• path: &lt;external-plugin-path&gt;"]:::config
         end
 
         LocalYaml -->|Overrides| SharedYaml
@@ -115,7 +115,7 @@ my-workspace/
 ├── .git/                            # Meta-repo Git tracking (workspace config & docs only)
 ├── .gitignore                       # Managed deterministically via git.ignore
 ├── .ignore                          # Un-ignores <repos_dir>/* for ripgrep, Claude Code, and search tools
-├── rnex.yaml                        # Team-wide workspace declaration (repos_dir, plugins_dir, repos, plugins)
+├── rnex.yaml                        # Team-wide workspace declaration (repos_dir, repos, plugins)
 ├── .local.rnex.yaml                 # (Optional) Developer workstation overrides (gitignored)
 │
 ├── .rnex/                           # Workspace orchestration directory (gitignored)
@@ -132,7 +132,7 @@ my-workspace/
 │       ├── .git/
 │       └── src/
 │
-├── <plugins_dir>/                   # (Optional) External workspace plugins (configurable via plugins_dir)
+├── custom-plugins/                  # (Optional) External workspace plugins (mounted via plugins.<name>.path)
 │   └── custom-plugin/               # External plugin bundle (plugin.yaml, hooks/, commands/, skills/)
 │
 ├── AGENTS.md                        # Permanent universal AI agent router

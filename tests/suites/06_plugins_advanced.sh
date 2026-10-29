@@ -836,8 +836,8 @@ done
 pass
 
 # --------------------------------------------------------------------------
-run_test "External plugin discovery and lifecycle via plugins_dir setting"
-TEST_EXT_WS="$TEST_TMP/ext-plugins-dir-ws"
+run_test "External plugin discovery and lifecycle via plugins.<name>.path in rnex.yaml (directory & manifest normalization)"
+TEST_EXT_WS="$TEST_TMP/ext-plugins-path-ws"
 mkdir -p "$TEST_EXT_WS"
 cp "$CLI" "$TEST_EXT_WS/rnex"
 chmod +x "$TEST_EXT_WS/rnex"
@@ -847,138 +847,110 @@ git -C "$TEST_EXT_WS" init -q
 
 "$TEST_EXT_WS/rnex" init -y "$TEST_EXT_WS" >/dev/null
 
-# Configure plugins_dir: ./ext-plugins
-cat <<'EOF_EXT_CFG' >> "$TEST_EXT_WS/rnex.yaml"
-plugins_dir: ./ext-plugins
-EOF_EXT_CFG
+# Create external plugins outside toolkit/
+mkdir -p "$TEST_EXT_WS/ext/acme-plugin/commands" "$TEST_EXT_WS/ext/acme-plugin/skills" "$TEST_EXT_WS/ext/acme-plugin/hooks"
+cat <<'EOF_ACME_YAML' > "$TEST_EXT_WS/ext/acme-plugin/plugin.yaml"
+name: acme-plugin
+version: 2.3.0
+description: Acme external engineering workflow plugin
+commands:
+  - hello: Say hello from external plugin
+skills:
+  - skills/acme-skill.md: .rnex/plugins/acme-plugin/skills/acme-skill.md
+EOF_ACME_YAML
 
-# Create external plugin
-mkdir -p "$TEST_EXT_WS/ext-plugins/custom-dir-plug/commands" "$TEST_EXT_WS/ext-plugins/custom-dir-plug/skills"
-cat <<'EOF_PLUG_YAML' > "$TEST_EXT_WS/ext-plugins/custom-dir-plug/plugin.yaml"
-name: custom-dir-plug
-version: 2.1.0
-description: Custom workspace external plugin
+cat <<'EOF_ACME_HELLO' > "$TEST_EXT_WS/ext/acme-plugin/commands/hello.sh"
+#!/bin/sh
+printf 'hello-from-acme:%s\n' "${1:-world}"
+EOF_ACME_HELLO
+chmod +x "$TEST_EXT_WS/ext/acme-plugin/commands/hello.sh"
+
+cat <<'EOF_ACME_HOOK' > "$TEST_EXT_WS/ext/acme-plugin/hooks/after_sync.sh"
+#!/bin/sh
+printf 'acme-synced\n' > "$NEXUS_DIR/.rnex/acme-hook-ran"
+EOF_ACME_HOOK
+chmod +x "$TEST_EXT_WS/ext/acme-plugin/hooks/after_sync.sh"
+
+cat <<'EOF_ACME_SKILL' > "$TEST_EXT_WS/ext/acme-plugin/skills/acme-skill.md"
+# Acme Skill
+Domain skill bundled in external plugin.
+EOF_ACME_SKILL
+
+# Create a second external plugin to test unenabled discovery and manifest file pointer
+mkdir -p "$TEST_EXT_WS/ext/file-plugin/commands"
+cat <<'EOF_FILE_YAML' > "$TEST_EXT_WS/ext/file-plugin/plugin.yaml"
+name: file-plugin
+version: 1.4.0
+description: External plugin pointed to by manifest file
 commands:
   - ping: Respond with pong
-EOF_PLUG_YAML
-
-cat <<'EOF_PING_CMD' > "$TEST_EXT_WS/ext-plugins/custom-dir-plug/commands/ping.sh"
-#!/bin/sh
-printf 'pong:%s\n' "${1:-none}"
-EOF_PING_CMD
-chmod +x "$TEST_EXT_WS/ext-plugins/custom-dir-plug/commands/ping.sh"
-
-cat <<'EOF_EXT_SKILL' > "$TEST_EXT_WS/ext-plugins/custom-dir-plug/skills/ping-skill.md"
-# Ping Skill
-Skill for external plugin.
-EOF_EXT_SKILL
-
-# 1. Discover via plugin list
-_list_out="$(cd "$TEST_EXT_WS" && ./rnex plugin list 2>&1)"
-echo "$_list_out" | grep -q "custom-dir-plug" || { fail "custom-dir-plug not discovered in plugin list: $_list_out"; exit 1; }
-echo "$_list_out" | grep "custom-dir-plug" | grep -q "(v2.1.0)" || { fail "custom-dir-plug version 2.1.0 missing: $_list_out"; exit 1; }
-echo "$_list_out" | grep "custom-dir-plug" | grep -q "available" || { fail "custom-dir-plug not marked available: $_list_out"; exit 1; }
-
-# 2. Inspect info
-_info_out="$(cd "$TEST_EXT_WS" && ./rnex plugin info custom-dir-plug 2>&1)"
-echo "$_info_out" | grep -q "custom-dir-plug" || { fail "Plugin name missing from info: $_info_out"; exit 1; }
-echo "$_info_out" | grep -q "2.1.0" || { fail "Plugin version missing from info: $_info_out"; exit 1; }
-echo "$_info_out" | grep -q "ping" || { fail "Plugin command ping missing from info: $_info_out"; exit 1; }
-
-# 3. Enable external plugin
-(cd "$TEST_EXT_WS" && ./rnex plugin enable custom-dir-plug >/dev/null)
-[ -d "$TEST_EXT_WS/.rnex/plugins/custom-dir-plug" ] || { fail ".rnex/plugins/custom-dir-plug not synced"; exit 1; }
-[ -f "$TEST_EXT_WS/.rnex/plugins/custom-dir-plug/commands/ping.sh" ] || { fail "ping.sh not copied to scoped directory"; exit 1; }
-[ -f "$TEST_EXT_WS/.rnex/plugins/custom-dir-plug/skills/ping-skill.md" ] || { fail "ping-skill.md not copied to scoped directory"; exit 1; }
-
-# 4. Execute external plugin command (explicit and shorthand)
-_cmd_out="$(cd "$TEST_EXT_WS" && ./rnex plugin custom-dir-plug ping testarg 2>&1)" || { fail "Explicit plugin command failed: $_cmd_out"; exit 1; }
-echo "$_cmd_out" | grep -q "pong:testarg" || { fail "Command output mismatch: $_cmd_out"; exit 1; }
-
-_short_out="$(cd "$TEST_EXT_WS" && ./rnex plugin ping shortarg 2>&1)" || { fail "Shorthand plugin command failed: $_short_out"; exit 1; }
-echo "$_short_out" | grep -q "pong:shortarg" || { fail "Shorthand output mismatch: $_short_out"; exit 1; }
-
-# 5. Disable external plugin
-(cd "$TEST_EXT_WS" && ./rnex plugin disable custom-dir-plug >/dev/null)
-[ ! -d "$TEST_EXT_WS/.rnex/plugins/custom-dir-plug" ] || { fail ".rnex/plugins/custom-dir-plug still exists after disable"; exit 1; }
-pass
-
-# --------------------------------------------------------------------------
-run_test "External plugin discovery and lifecycle via per-plugin path override (directory and manifest paths)"
-TEST_PATH_WS="$TEST_TMP/ext-plugins-path-ws"
-mkdir -p "$TEST_PATH_WS"
-cp "$CLI" "$TEST_PATH_WS/rnex"
-chmod +x "$TEST_PATH_WS/rnex"
-cp -r "$DIR/toolkit" "$TEST_PATH_WS/toolkit"
-cp "$DIR/package.json" "$TEST_PATH_WS/package.json"
-git -C "$TEST_PATH_WS" init -q
-
-"$TEST_PATH_WS/rnex" init -y "$TEST_PATH_WS" >/dev/null
-
-# Create standalone external plugins outside workspace
-TEST_STANDALONE_DIR="$TEST_TMP/standalone-external"
-mkdir -p "$TEST_STANDALONE_DIR/dir-plug/commands" "$TEST_STANDALONE_DIR/file-plug/commands"
-
-cat <<'EOF_DIR_YAML' > "$TEST_STANDALONE_DIR/dir-plug/plugin.yaml"
-name: dir-plug
-version: 3.0.1
-description: Path override pointing to directory
-commands:
-  - greet: Greet command
-EOF_DIR_YAML
-
-cat <<'EOF_GREET_CMD' > "$TEST_STANDALONE_DIR/dir-plug/commands/greet.sh"
-#!/bin/sh
-printf 'hello-from-dir\n'
-EOF_GREET_CMD
-chmod +x "$TEST_STANDALONE_DIR/dir-plug/commands/greet.sh"
-
-cat <<'EOF_FILE_YAML' > "$TEST_STANDALONE_DIR/file-plug/plugin.yaml"
-name: file-plug
-version: 3.0.2
-description: Path override pointing to manifest file
-commands:
-  - status-check: Check status
 EOF_FILE_YAML
 
-cat <<'EOF_STATUS_CMD' > "$TEST_STANDALONE_DIR/file-plug/commands/status-check.sh"
+cat <<'EOF_FILE_PING' > "$TEST_EXT_WS/ext/file-plugin/commands/ping.sh"
 #!/bin/sh
-printf 'status-ok\n'
-EOF_STATUS_CMD
-chmod +x "$TEST_STANDALONE_DIR/file-plug/commands/status-check.sh"
+printf 'pong-from-file\n'
+EOF_FILE_PING
+chmod +x "$TEST_EXT_WS/ext/file-plugin/commands/ping.sh"
 
-# Declare both plugins in rnex.yaml: one directory path, one manifest file path
-cat <<EOF_PATH_CFG >> "$TEST_PATH_WS/rnex.yaml"
+# Configure plugins in rnex.yaml: acme-plugin enabled with directory path, file-plugin disabled with manifest path
+cat <<'EOF_RNEX_PLUG' >> "$TEST_EXT_WS/rnex.yaml"
 plugins:
-  dir-plug:
-    path: $TEST_STANDALONE_DIR/dir-plug
-  file-plug:
-    path: $TEST_STANDALONE_DIR/file-plug/plugin.yaml
-EOF_PATH_CFG
+  acme-plugin:
+    enabled: true
+    path: "./ext/acme-plugin"
+  file-plugin:
+    enabled: false
+    path: "./ext/file-plugin/plugin.yaml"
+EOF_RNEX_PLUG
 
-# 1. Verify discovery in plugin list
-_plist_out="$(cd "$TEST_PATH_WS" && ./rnex plugin list 2>&1)"
-echo "$_plist_out" | grep -q "dir-plug" || { fail "dir-plug missing from list: $_plist_out"; exit 1; }
-echo "$_plist_out" | grep "dir-plug" | grep -q "(v3.0.1)" || { fail "dir-plug version missing: $_plist_out"; exit 1; }
-echo "$_plist_out" | grep -q "file-plug" || { fail "file-plug missing from list: $_plist_out"; exit 1; }
-echo "$_plist_out" | grep "file-plug" | grep -q "(v3.0.2)" || { fail "file-plug version missing: $_plist_out"; exit 1; }
+# 1. Discover both via plugin list
+_list_out="$(cd "$TEST_EXT_WS" && ./rnex plugin list 2>&1)"
+echo "$_list_out" | grep -q "acme-plugin" || { fail "acme-plugin not discovered in plugin list: $_list_out"; exit 1; }
+echo "$_list_out" | grep "acme-plugin" | grep -q "(v2.3.0)" || { fail "acme-plugin version 2.3.0 missing: $_list_out"; exit 1; }
+echo "$_list_out" | grep "acme-plugin" | grep -q "enabled" || { fail "acme-plugin not marked enabled: $_list_out"; exit 1; }
+echo "$_list_out" | grep -q "file-plugin" || { fail "file-plugin not discovered in plugin list: $_list_out"; exit 1; }
+echo "$_list_out" | grep "file-plugin" | grep -q "(v1.4.0)" || { fail "file-plugin version 1.4.0 missing: $_list_out"; exit 1; }
+echo "$_list_out" | grep "file-plugin" | grep -q "disabled" || { fail "file-plugin not marked disabled: $_list_out"; exit 1; }
 
-# 2. Run sync and verify scoped synchronization
-(cd "$TEST_PATH_WS" && ./rnex sync >/dev/null)
-[ -d "$TEST_PATH_WS/.rnex/plugins/dir-plug" ] || { fail ".rnex/plugins/dir-plug not synced"; exit 1; }
-[ -d "$TEST_PATH_WS/.rnex/plugins/file-plug" ] || { fail ".rnex/plugins/file-plug not synced"; exit 1; }
+# 2. Inspect info
+_info_out="$(cd "$TEST_EXT_WS" && ./rnex plugin info acme-plugin 2>&1)"
+echo "$_info_out" | grep -q "acme-plugin" || { fail "Plugin name missing from info: $_info_out"; exit 1; }
+echo "$_info_out" | grep -q "2.3.0" || { fail "Plugin version missing from info: $_info_out"; exit 1; }
+echo "$_info_out" | grep -q "Location:" || { fail "Location header missing from info: $_info_out"; exit 1; }
+echo "$_info_out" | grep "Location:" | grep -q "ext/acme-plugin" || { fail "Resolved location wrong in info: $_info_out"; exit 1; }
+echo "$_info_out" | grep -q "hello" || { fail "Plugin command hello missing from info: $_info_out"; exit 1; }
 
-# 3. Execute commands from both plugins
-_greet_out="$(cd "$TEST_PATH_WS" && ./rnex plugin dir-plug greet 2>&1)" || { fail "dir-plug greet failed: $_greet_out"; exit 1; }
-echo "$_greet_out" | grep -q "hello-from-dir" || { fail "greet output mismatch: $_greet_out"; exit 1; }
+_finfo_out="$(cd "$TEST_EXT_WS" && ./rnex plugin info file-plugin 2>&1)"
+echo "$_finfo_out" | grep -q "1.4.0" || { fail "Manifest-pointed plugin version missing: $_finfo_out"; exit 1; }
+echo "$_finfo_out" | grep "Location:" | grep -q "ext/file-plugin" || { fail "Manifest-pointed plugin location not normalized: $_finfo_out"; exit 1; }
 
-_status_out="$(cd "$TEST_PATH_WS" && ./rnex plugin file-plug status-check 2>&1)" || { fail "file-plug status-check failed: $_status_out"; exit 1; }
-echo "$_status_out" | grep -q "status-ok" || { fail "status output mismatch: $_status_out"; exit 1; }
+# 3. Synchronize workspace and verify scoped installation
+(cd "$TEST_EXT_WS" && ./rnex sync >/dev/null)
+[ -d "$TEST_EXT_WS/.rnex/plugins/acme-plugin" ] || { fail ".rnex/plugins/acme-plugin not synced"; exit 1; }
+[ -f "$TEST_EXT_WS/.rnex/plugins/acme-plugin/commands/hello.sh" ] || { fail "hello.sh not copied to scoped directory"; exit 1; }
+[ -f "$TEST_EXT_WS/.rnex/plugins/acme-plugin/skills/acme-skill.md" ] || { fail "acme-skill.md not copied to scoped directory"; exit 1; }
+[ -f "$TEST_EXT_WS/.rnex/acme-hook-ran" ] || { fail "after_sync hook in external plugin did not execute"; exit 1; }
 
+# 4. Execute external plugin command (explicit and shorthand)
+_cmd_out="$(cd "$TEST_EXT_WS" && ./rnex plugin acme-plugin hello enterprise 2>&1)" || { fail "Explicit plugin command failed: $_cmd_out"; exit 1; }
+echo "$_cmd_out" | grep -q "hello-from-acme:enterprise" || { fail "Command output mismatch: $_cmd_out"; exit 1; }
+
+_short_out="$(cd "$TEST_EXT_WS" && ./rnex plugin hello dev 2>&1)" || { fail "Shorthand plugin command failed: $_short_out"; exit 1; }
+echo "$_short_out" | grep -q "hello-from-acme:dev" || { fail "Shorthand output mismatch: $_short_out"; exit 1; }
+
+# 5. Verify manifest file pointer normalization for acme-plugin as well
+sed 's|path: "./ext/acme-plugin"|path: "./ext/acme-plugin/plugin.yaml"|' "$TEST_EXT_WS/rnex.yaml" > "$TEST_EXT_WS/rnex.yaml.tmp"
+mv "$TEST_EXT_WS/rnex.yaml.tmp" "$TEST_EXT_WS/rnex.yaml"
+_cmd_out2="$(cd "$TEST_EXT_WS" && ./rnex plugin acme-plugin hello manifest-path 2>&1)" || { fail "Plugin command after manifest path change failed: $_cmd_out2"; exit 1; }
+echo "$_cmd_out2" | grep -q "hello-from-acme:manifest-path" || { fail "Manifest-path command output mismatch: $_cmd_out2"; exit 1; }
+
+# 6. Disable external plugin
+(cd "$TEST_EXT_WS" && ./rnex plugin disable acme-plugin >/dev/null)
+[ ! -d "$TEST_EXT_WS/.rnex/plugins/acme-plugin" ] || { fail ".rnex/plugins/acme-plugin still exists after disable"; exit 1; }
 pass
 
 # --------------------------------------------------------------------------
-run_test "Plugin resolution priority: .local.rnex.yaml > rnex.yaml (path > plugins_dir) > built-in"
+run_test "Plugin resolution priority: .local.rnex.yaml (path) > rnex.yaml (path) > built-in"
 TEST_PRIO_WS="$TEST_TMP/plugin-priority-ws"
 mkdir -p "$TEST_PRIO_WS"
 cp "$CLI" "$TEST_PRIO_WS/rnex"
@@ -989,14 +961,12 @@ git -C "$TEST_PRIO_WS" init -q
 
 "$TEST_PRIO_WS/rnex" init -y "$TEST_PRIO_WS" >/dev/null
 
-# Create external plugins that shadow built-in claude
-mkdir -p "$TEST_PRIO_WS/ws-plugins/claude"
-cat <<'EOF_DIR_CLAUDE' > "$TEST_PRIO_WS/ws-plugins/claude/plugin.yaml"
-name: claude
-version: 9.9.0-dir
-description: Claude plugin from plugins_dir
-EOF_DIR_CLAUDE
+# Built-in claude version
+_cli_ver="$(cd "$TEST_PRIO_WS" && ./rnex --version | awk '{print $2}')"
+_ver_builtin="$(cd "$TEST_PRIO_WS" && ./rnex plugin info claude | sed -n 's/.*(v\(.*\))/\1/p')"
+[ "$_ver_builtin" = "$_cli_ver" ] || { fail "Built-in claude should match CLI version: expected $_cli_ver, got $_ver_builtin"; exit 1; }
 
+# Create external plugins that shadow built-in claude
 mkdir -p "$TEST_PRIO_WS/shared-override/claude"
 cat <<'EOF_SHARED_CLAUDE' > "$TEST_PRIO_WS/shared-override/claude/plugin.yaml"
 name: claude
@@ -1011,23 +981,17 @@ version: 9.9.2-local-override
 description: Claude plugin from .local.rnex.yaml path
 EOF_LOCAL_CLAUDE
 
-# 1. Set plugins_dir: ./ws-plugins in rnex.yaml -> should override built-in toolkit
-cat <<'EOF_RNEX_PDIR' >> "$TEST_PRIO_WS/rnex.yaml"
-plugins_dir: ./ws-plugins
-EOF_RNEX_PDIR
-_ver_pdir="$(cd "$TEST_PRIO_WS" && ./rnex plugin info claude | sed -n 's/.*(v\(.*\))/\1/p')"
-[ "$_ver_pdir" = "9.9.0-dir" ] || { fail "plugins_dir did not override built-in: expected 9.9.0-dir, got $_ver_pdir"; exit 1; }
-
-# 2. Set plugins.claude.path: ./shared-override/claude in rnex.yaml -> should override plugins_dir
+# 1. Set plugins.claude.path: ./shared-override/claude in rnex.yaml -> should override built-in toolkit
 cat <<'EOF_RNEX_PATH' >> "$TEST_PRIO_WS/rnex.yaml"
 plugins:
   claude:
+    enabled: true
     path: ./shared-override/claude
 EOF_RNEX_PATH
 _ver_path="$(cd "$TEST_PRIO_WS" && ./rnex plugin info claude | sed -n 's/.*(v\(.*\))/\1/p')"
-[ "$_ver_path" = "9.9.1-shared-path" ] || { fail "rnex.yaml path did not override plugins_dir: expected 9.9.1-shared-path, got $_ver_path"; exit 1; }
+[ "$_ver_path" = "9.9.1-shared-path" ] || { fail "rnex.yaml path did not override built-in: expected 9.9.1-shared-path, got $_ver_path"; exit 1; }
 
-# 3. Set plugins.claude.path in .local.rnex.yaml -> should override rnex.yaml path
+# 2. Set plugins.claude.path in .local.rnex.yaml -> should override rnex.yaml path
 cat <<'EOF_LOCAL_PATH' > "$TEST_PRIO_WS/.local.rnex.yaml"
 plugins:
   claude:
@@ -1035,6 +999,43 @@ plugins:
 EOF_LOCAL_PATH
 _ver_local="$(cd "$TEST_PRIO_WS" && ./rnex plugin info claude | sed -n 's/.*(v\(.*\))/\1/p')"
 [ "$_ver_local" = "9.9.2-local-override" ] || { fail ".local.rnex.yaml path did not override rnex.yaml: expected 9.9.2-local-override, got $_ver_local"; exit 1; }
+
+# 3. Synchronize and verify that local override assets are synced to .rnex/plugins/claude
+(cd "$TEST_PRIO_WS" && ./rnex sync >/dev/null)
+_synced_ver="$(awk '/^version:[ ]*/ { sub(/^version:[ ]*/, ""); sub(/[ ]*#.*/, ""); print; exit }' "$TEST_PRIO_WS/.rnex/plugins/claude/plugin.yaml")"
+[ "$_synced_ver" = "9.9.2-local-override" ] || { fail "Synced plugin did not use local override: expected 9.9.2-local-override, got $_synced_ver"; exit 1; }
+
+pass
+
+# --------------------------------------------------------------------------
+run_test "Negative & invariant checks: zero references to plugins_dir or plugins.<name>.dir across engine, docs, and templates"
+# 1. Check for plugins_dir
+if grep -rn "plugins_dir" "$DIR/rnex" "$DIR/lib/" "$DIR/docs/" "$DIR/templates/" "$DIR/README.md" "$DIR/CONTRIBUTION.md" 2>/dev/null; then
+  fail "Found stale plugins_dir references"
+  exit 1
+fi
+
+# 2. Check for plugins.<name>.dir or plugin.<name>.dir or config lookup with "dir"
+if grep -rn "plugins\.<name>\.dir\|plugin\.<name>\.dir" "$DIR/rnex" "$DIR/lib/" "$DIR/docs/" "$DIR/templates/" "$DIR/README.md" "$DIR/CONTRIBUTION.md" 2>/dev/null; then
+  fail "Found stale plugins.<name>.dir references"
+  exit 1
+fi
+
+if grep -En 'yaml_(get_plugin_config|plugin_get).*["'"'"']dir["'"'"']' "$DIR/rnex" "$DIR/lib/" 2>/dev/null; then
+  fail "Found yaml_get_plugin_config or yaml_plugin_get query for 'dir'"
+  exit 1
+fi
+
+# 3. Verify documentation highlights plugins.<name>.path
+grep -q "plugins\.<name>\.path" "$DIR/docs/documentation/plugin-ecosystem.md" || {
+  fail "plugins.<name>.path not found in docs/documentation/plugin-ecosystem.md"
+  exit 1
+}
+
+grep -q "plugins\.<name>\.path" "$DIR/docs/documentation/configuration.md" || {
+  fail "plugins.<name>.path not found in docs/documentation/configuration.md"
+  exit 1
+}
 
 pass
 

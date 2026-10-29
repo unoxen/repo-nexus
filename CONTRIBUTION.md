@@ -79,11 +79,11 @@ Whenever you add a new command, flag, or hook behavior:
 
 Plugins provide specialized agent guidelines, workflows, skills, subagents, and scaffolding templates.
 
-Plugins can be authored directly within Repo Nexus as built-in plugins (`toolkit/plugins/<name>/`) or maintained externally via `plugins_dir` (e.g. `plugins_dir: ./plugins`) or per-plugin `path` overrides (`plugins.<name>.path`) in `rnex.yaml` or `.local.rnex.yaml`. For built-in plugins, `version:` in `plugin.yaml` is automatically synchronized with `RNEX_VERSION` in `package.json` by the maintainer pre-commit hook (`scripts/sync-plugin-versions.sh`).
+Plugins can be authored directly within Repo Nexus as built-in plugins (`toolkit/plugins/<name>/`) or maintained externally via per-plugin `path` configurations (`plugins.<name>.path`) in `rnex.yaml` or `.local.rnex.yaml`. For built-in plugins, `version:` in `plugin.yaml` is automatically synchronized with `RNEX_VERSION` in `package.json` by the maintainer pre-commit hook (`scripts/sync-plugin-versions.sh`).
 
 ### Directory Structure & Contract
 ```text
-<plugin-dir>/ (e.g. toolkit/plugins/<name>/ or <plugins_dir>/<name>/)
+<plugin-dir>/ (e.g. toolkit/plugins/<name>/ or <external-path>/)
 ├── plugin.yaml                  # Required: Plugin manifest & configuration schema
 ├── instructions/                # Optional: Markdown context files compiled into .rnex/ai-instructions.md
 ├── README.md                    # Optional: Plugin documentation & recipes
