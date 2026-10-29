@@ -2,6 +2,14 @@
 # shellcheck shell=sh
 set -e
 
+# Ensure standard user & package manager bin directories are in PATH (for GUI Git clients on macOS/Linux)
+for _p in /opt/homebrew/bin /usr/local/bin "$HOME/.nvm/current/bin" "$HOME/.volta/bin" "$HOME/.asdf/shims"; do
+  if [ -d "$_p" ] && case ":$PATH:" in *":$_p:"*) false;; *) true;; esac; then
+    PATH="$_p:$PATH"
+  fi
+done
+export PATH
+
 # Skip git tag creation if explicitly disabled via environment variable
 if [ -n "$SKIP_GIT_TAG" ]; then
   exit 0
@@ -20,7 +28,7 @@ fi
 # Fallback: if package.json was bumped in HEAD without pre-commit queueing it
 if [ -z "$TAG_NAME" ] && [ -f "$REPO_ROOT/package.json" ]; then
   if git diff-tree --no-commit-id --name-only -r HEAD 2>/dev/null | grep -qx "package.json"; then
-    _cur_ver="$(node -p 'require("./package.json").version' 2>/dev/null || awk -F'"' '/"version"[ ]*:/ { print $4; exit }' "$REPO_ROOT/package.json")"
+    _cur_ver="$(node -p 'require("./package.json").version' 2>/dev/null || awk '/^[ ]*"version"[ ]*:[ ]*"[0-9]/ { sub(/.*"version"[ ]*:[ ]*"/, ""); sub(/".*/, ""); print; exit }' "$REPO_ROOT/package.json")"
     if [ -n "$_cur_ver" ]; then
       TAG_NAME="v$_cur_ver"
     fi

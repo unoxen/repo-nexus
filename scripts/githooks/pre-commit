@@ -2,6 +2,14 @@
 # shellcheck shell=sh
 set -e
 
+# Ensure standard user & package manager bin directories are in PATH (for GUI Git clients on macOS/Linux)
+for _p in /opt/homebrew/bin /usr/local/bin "$HOME/.nvm/current/bin" "$HOME/.volta/bin" "$HOME/.asdf/shims"; do
+  if [ -d "$_p" ] && case ":$PATH:" in *":$_p:"*) false;; *) true;; esac; then
+    PATH="$_p:$PATH"
+  fi
+done
+export PATH
+
 # Skip version bump if explicitly disabled via environment variable
 if [ -n "$SKIP_VERSION_BUMP" ]; then
   exit 0
@@ -32,11 +40,16 @@ sync_toolkit_plugin_versions() {
   done
 }
 
-# If package.json version is already staged, ensure all plugin manifests match and do not bump again
-if git diff --cached "$PKG_JSON" 2>/dev/null | grep -q '^[+].*"version"[ ]*:'; then
-  CUR_VERSION="$(awk '/"version"[ ]*:/ { sub(/.*"version"[ ]*:[ ]*"/, ""); sub(/".*/, ""); print; exit }' "$PKG_JSON")"
+# If package.json top-level semver version was already explicitly bumped in the staged diff,
+# ensure all plugin manifests match and do not bump again.
+# Matches: '+' followed by whitespace, '"version"', ':', and a semver starting with a digit.
+# This prevents falsely matching script keys (e.g. "version": "./scripts/...") or dependency changes.
+if git diff --cached "$PKG_JSON" 2>/dev/null | grep -q '^[+][ ]*"version"[ ]*:[ ]*"[0-9]'; then
+  CUR_VERSION="$(awk '/^[ ]*"version"[ ]*:[ ]*"[0-9]/ { sub(/.*"version"[ ]*:[ ]*"/, ""); sub(/".*/, ""); print; exit }' "$PKG_JSON")"
   if [ -n "$CUR_VERSION" ]; then
     sync_toolkit_plugin_versions "$CUR_VERSION"
+    GIT_DIR="$(git rev-parse --git-dir 2>/dev/null || echo "$REPO_ROOT/.git")"
+    printf 'v%s\n' "$CUR_VERSION" > "$GIT_DIR/PENDING_VERSION_TAG"
   fi
   exit 0
 fi
@@ -46,8 +59,14 @@ if ! command -v npm >/dev/null 2>&1; then
 fi
 
 # Increment patch version without creating a git tag in pre-commit
-NEW_VERSION=$(npm version patch --no-git-tag-version)
-NEW_VERSION="${NEW_VERSION#v}"
+npm version patch --no-git-tag-version >/dev/null 2>&1 || npm version patch --no-git-tag-version
+
+# Read the newly bumped version directly from package.json (single source of truth)
+NEW_VERSION="$(awk '/^[ ]*"version"[ ]*:[ ]*"[0-9]/ { sub(/.*"version"[ ]*:[ ]*"/, ""); sub(/".*/, ""); print; exit }' "$PKG_JSON")"
+if [ -z "$NEW_VERSION" ]; then
+  printf 'Error: Unable to extract bumped version from %s\n' "$PKG_JSON" >&2
+  exit 1
+fi
 
 # Stage the updated package.json
 git add "$PKG_JSON"
