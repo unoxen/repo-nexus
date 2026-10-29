@@ -21,7 +21,7 @@ Reference for Repo Nexus runtime variables, directory layout conventions, and ex
 ### Batch Execution Variables (`rnex exec`)
 When `rnex exec` iterates through member repositories, it sets:
 * `RNEX_REPO_NAME`: Name of the repository currently executing the command.
-* `RNEX_REPO_PATH`: Relative path to the repository directory (e.g. `./repos/backend`).
+* `RNEX_REPO_PATH`: Relative path to the repository directory (e.g. `./repos/backend` or `<repos_dir>/backend`).
 * `RNEX_REPO_BRANCH`: Currently checked out Git branch or commit SHA.
 
 ### Hook Execution Variables (`rnex_hooks` & `git.hooks`)
@@ -43,7 +43,7 @@ my-workspace/
 ├── .git/                            # Meta-repo Git directory
 │   └── hooks/                       # Git hook wrappers generated from git.hooks
 ├── .gitignore                       # Managed deterministically via git.ignore
-├── .ignore                          # Un-ignores repos/* for code search tools
+├── .ignore                          # Un-ignores <repos_dir>/* for code search tools
 ├── rnex.yaml                        # Shared team configuration manifest
 ├── .local.rnex.yaml                 # (Optional) Developer workstation overrides
 │
@@ -57,11 +57,14 @@ my-workspace/
 │           ├── skills/              # Plugin-owned agentic skills
 │           └── rules/               # Mirrored plugin rules
 │
-├── repos/                           # Autonomous member repositories (git-ignored)
+├── <repos_dir>/                     # Autonomous member repositories (default: repos/, configurable via repos_dir)
 │   ├── <repo-a>/                    # Standard independent Git repository
 │   │   ├── .git/
 │   │   └── ...
 │   └── <repo-b>/
+│
+├── <plugins_dir>/                   # (Optional) External workspace plugins (configurable via plugins_dir)
+│   └── <plugin-name>/               # External plugin bundle (plugin.yaml, hooks/, commands/, skills/)
 │
 ├── AGENTS.md                        # Permanent AI context routing file
 ├── CLAUDE.md                        # Permanent Claude Code routing file

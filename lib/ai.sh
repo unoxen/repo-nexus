@@ -178,6 +178,7 @@ clean_rnex_gitignore() {
 plugin_get_instruction_file() {
   _pif_name="$1"
   _pif_pdir="${2:-}"
+  [ -n "$_pif_pdir" ] || _pif_pdir="$(plugin_resolve_dir "$_pif_name" 2>/dev/null || true)"
   [ -n "$_pif_pdir" ] || _pif_pdir="$(find_plugin_dir "$_pif_name" 2>/dev/null || true)"
   _pif_file=""
   if [ -n "$_pif_pdir" ]; then
@@ -281,6 +282,7 @@ reconcile_ai_instructions_files() {
 plugin_is_provider() {
   _pip_name="$1"
   _pip_pdir="${2:-}"
+  [ -n "$_pip_pdir" ] || _pip_pdir="$(plugin_resolve_dir "$_pip_name" 2>/dev/null || true)"
   [ -n "$_pip_pdir" ] || _pip_pdir="$(find_plugin_dir "$_pip_name" 2>/dev/null || true)"
   if [ -n "$_pip_pdir" ] && [ -f "$_pip_pdir/plugin.yaml" ]; then
     _pip_type="$(plugin_get_field "$_pip_pdir" "type" 2>/dev/null || true)"
@@ -305,7 +307,8 @@ _ai_md_code_list() {
 # Emit instruction files of enabled non-provider, non-built-in plugins (custom workflow plugins).
 _ai_emit_workflow_plugin_instructions() {
   _aewp_dir="$1"; _aewp_p="$2"
-  _aewp_pdir="$(find_plugin_dir "$_aewp_p" 2>/dev/null || true)"
+  _aewp_pdir="$(plugin_resolve_dir "$_aewp_p" 2>/dev/null || true)"
+  [ -n "$_aewp_pdir" ] || _aewp_pdir="$(find_plugin_dir "$_aewp_p" 2>/dev/null || true)"
   _aewp_files=""
   if [ -n "$_aewp_pdir" ] && [ -f "$_aewp_pdir/plugin.yaml" ]; then
     for _aewp_item in $(plugin_list_instructions "$_aewp_pdir" 2>/dev/null || true); do

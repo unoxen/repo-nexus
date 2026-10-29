@@ -48,7 +48,8 @@ _resolve_plugin_hook_script() {
     fi
   done
 
-  _rphs_src="$(find_plugin_dir "$_rphs_plugin" 2>/dev/null || true)"
+  _rphs_src="$(plugin_resolve_dir "$_rphs_plugin" 2>/dev/null || true)"
+  [ -n "$_rphs_src" ] || _rphs_src="$(find_plugin_dir "$_rphs_plugin" 2>/dev/null || true)"
   if [ -n "$_rphs_src" ]; then
     for _cand_name in "$@"; do
       if [ -f "$_rphs_src/hooks/$_cand_name" ]; then

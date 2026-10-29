@@ -20,15 +20,12 @@ git -C "$TEST_DET_WS" init -q
 
 "$TEST_DET_WS/rnex" init -y "$TEST_DET_WS" >/dev/null
 
-# 1. Verify all 5 plugins are available
+# 1. Verify all 5 plugins are available and maintain version parity with rnex CLI
+_rnex_ver="$(cd "$TEST_DET_WS" && ./rnex --version | awk '{print $2}')"
 _list_out="$(cd "$TEST_DET_WS" && ./rnex plugin list 2>&1)"
 for _p in claude cursor gemini karpathy-llm windsurf; do
   echo "$_list_out" | grep -q "$_p" || { fail "Plugin $_p not in plugin list"; exit 1; }
-  if [ "$_p" = "karpathy-llm" ]; then
-    echo "$_list_out" | grep "$_p" | grep -E -q "\(v(0\.5\.1|1\.0\.0)\)" || { fail "Plugin $_p version unexpected"; exit 1; }
-  else
-    echo "$_list_out" | grep "$_p" | grep -q "(v0.5.1)" || { fail "Plugin $_p is not v0.5.1"; exit 1; }
-  fi
+  echo "$_list_out" | grep "$_p" | grep -q "(v${_rnex_ver})" || { fail "Plugin $_p is not v${_rnex_ver} in plugin list"; exit 1; }
 done
 
 # 2. Test 'rnex plugin install <name>' alias for enable
@@ -824,6 +821,220 @@ grep -q 'sources:[ ]*\["custom_docs/nested/feature\.md"\]' "$TEST_REC_WS/wiki/do
 
 _lint_override_out="$(cd "$TEST_REC_WS" && ./rnex plugin karpathy-llm lint --strict 2>&1)" || { fail "rnex plugin karpathy-llm lint --strict after override failed: $_lint_override_out"; exit 1; }
 echo "$_lint_override_out" | grep -q "Wiki lint passed" || { fail "Lint output mismatch after override: $_lint_override_out"; exit 1; }
+
+pass
+
+# --------------------------------------------------------------------------
+run_test "Embedded plugin version parity across all built-in manifests"
+_cli_ver="$("$TEST_REC_WS/rnex" --version | awk '{print $2}')"
+for _manifest in "$DIR"/toolkit/plugins/*/plugin.yaml; do
+  [ -f "$_manifest" ] || continue
+  _m_pname="$(basename "$(dirname "$_manifest")")"
+  _m_ver="$(awk '/^version:[ ]*/ { sub(/^version:[ ]*/, ""); sub(/[ ]*#.*/, ""); print; exit }' "$_manifest")"
+  [ "$_m_ver" = "$_cli_ver" ] || { fail "Plugin $_m_pname version ($_m_ver) does not match CLI version ($_cli_ver)"; exit 1; }
+done
+pass
+
+# --------------------------------------------------------------------------
+run_test "External plugin discovery and lifecycle via plugins_dir setting"
+TEST_EXT_WS="$TEST_TMP/ext-plugins-dir-ws"
+mkdir -p "$TEST_EXT_WS"
+cp "$CLI" "$TEST_EXT_WS/rnex"
+chmod +x "$TEST_EXT_WS/rnex"
+cp -r "$DIR/toolkit" "$TEST_EXT_WS/toolkit"
+cp "$DIR/package.json" "$TEST_EXT_WS/package.json"
+git -C "$TEST_EXT_WS" init -q
+
+"$TEST_EXT_WS/rnex" init -y "$TEST_EXT_WS" >/dev/null
+
+# Configure plugins_dir: ./ext-plugins
+cat <<'EOF_EXT_CFG' >> "$TEST_EXT_WS/rnex.yaml"
+plugins_dir: ./ext-plugins
+EOF_EXT_CFG
+
+# Create external plugin
+mkdir -p "$TEST_EXT_WS/ext-plugins/custom-dir-plug/commands" "$TEST_EXT_WS/ext-plugins/custom-dir-plug/skills"
+cat <<'EOF_PLUG_YAML' > "$TEST_EXT_WS/ext-plugins/custom-dir-plug/plugin.yaml"
+name: custom-dir-plug
+version: 2.1.0
+description: Custom workspace external plugin
+commands:
+  - ping: Respond with pong
+EOF_PLUG_YAML
+
+cat <<'EOF_PING_CMD' > "$TEST_EXT_WS/ext-plugins/custom-dir-plug/commands/ping.sh"
+#!/bin/sh
+printf 'pong:%s\n' "${1:-none}"
+EOF_PING_CMD
+chmod +x "$TEST_EXT_WS/ext-plugins/custom-dir-plug/commands/ping.sh"
+
+cat <<'EOF_EXT_SKILL' > "$TEST_EXT_WS/ext-plugins/custom-dir-plug/skills/ping-skill.md"
+# Ping Skill
+Skill for external plugin.
+EOF_EXT_SKILL
+
+# 1. Discover via plugin list
+_list_out="$(cd "$TEST_EXT_WS" && ./rnex plugin list 2>&1)"
+echo "$_list_out" | grep -q "custom-dir-plug" || { fail "custom-dir-plug not discovered in plugin list: $_list_out"; exit 1; }
+echo "$_list_out" | grep "custom-dir-plug" | grep -q "(v2.1.0)" || { fail "custom-dir-plug version 2.1.0 missing: $_list_out"; exit 1; }
+echo "$_list_out" | grep "custom-dir-plug" | grep -q "available" || { fail "custom-dir-plug not marked available: $_list_out"; exit 1; }
+
+# 2. Inspect info
+_info_out="$(cd "$TEST_EXT_WS" && ./rnex plugin info custom-dir-plug 2>&1)"
+echo "$_info_out" | grep -q "custom-dir-plug" || { fail "Plugin name missing from info: $_info_out"; exit 1; }
+echo "$_info_out" | grep -q "2.1.0" || { fail "Plugin version missing from info: $_info_out"; exit 1; }
+echo "$_info_out" | grep -q "ping" || { fail "Plugin command ping missing from info: $_info_out"; exit 1; }
+
+# 3. Enable external plugin
+(cd "$TEST_EXT_WS" && ./rnex plugin enable custom-dir-plug >/dev/null)
+[ -d "$TEST_EXT_WS/.rnex/plugins/custom-dir-plug" ] || { fail ".rnex/plugins/custom-dir-plug not synced"; exit 1; }
+[ -f "$TEST_EXT_WS/.rnex/plugins/custom-dir-plug/commands/ping.sh" ] || { fail "ping.sh not copied to scoped directory"; exit 1; }
+[ -f "$TEST_EXT_WS/.rnex/plugins/custom-dir-plug/skills/ping-skill.md" ] || { fail "ping-skill.md not copied to scoped directory"; exit 1; }
+
+# 4. Execute external plugin command (explicit and shorthand)
+_cmd_out="$(cd "$TEST_EXT_WS" && ./rnex plugin custom-dir-plug ping testarg 2>&1)" || { fail "Explicit plugin command failed: $_cmd_out"; exit 1; }
+echo "$_cmd_out" | grep -q "pong:testarg" || { fail "Command output mismatch: $_cmd_out"; exit 1; }
+
+_short_out="$(cd "$TEST_EXT_WS" && ./rnex plugin ping shortarg 2>&1)" || { fail "Shorthand plugin command failed: $_short_out"; exit 1; }
+echo "$_short_out" | grep -q "pong:shortarg" || { fail "Shorthand output mismatch: $_short_out"; exit 1; }
+
+# 5. Disable external plugin
+(cd "$TEST_EXT_WS" && ./rnex plugin disable custom-dir-plug >/dev/null)
+[ ! -d "$TEST_EXT_WS/.rnex/plugins/custom-dir-plug" ] || { fail ".rnex/plugins/custom-dir-plug still exists after disable"; exit 1; }
+pass
+
+# --------------------------------------------------------------------------
+run_test "External plugin discovery and lifecycle via per-plugin path override (directory and manifest paths)"
+TEST_PATH_WS="$TEST_TMP/ext-plugins-path-ws"
+mkdir -p "$TEST_PATH_WS"
+cp "$CLI" "$TEST_PATH_WS/rnex"
+chmod +x "$TEST_PATH_WS/rnex"
+cp -r "$DIR/toolkit" "$TEST_PATH_WS/toolkit"
+cp "$DIR/package.json" "$TEST_PATH_WS/package.json"
+git -C "$TEST_PATH_WS" init -q
+
+"$TEST_PATH_WS/rnex" init -y "$TEST_PATH_WS" >/dev/null
+
+# Create standalone external plugins outside workspace
+TEST_STANDALONE_DIR="$TEST_TMP/standalone-external"
+mkdir -p "$TEST_STANDALONE_DIR/dir-plug/commands" "$TEST_STANDALONE_DIR/file-plug/commands"
+
+cat <<'EOF_DIR_YAML' > "$TEST_STANDALONE_DIR/dir-plug/plugin.yaml"
+name: dir-plug
+version: 3.0.1
+description: Path override pointing to directory
+commands:
+  - greet: Greet command
+EOF_DIR_YAML
+
+cat <<'EOF_GREET_CMD' > "$TEST_STANDALONE_DIR/dir-plug/commands/greet.sh"
+#!/bin/sh
+printf 'hello-from-dir\n'
+EOF_GREET_CMD
+chmod +x "$TEST_STANDALONE_DIR/dir-plug/commands/greet.sh"
+
+cat <<'EOF_FILE_YAML' > "$TEST_STANDALONE_DIR/file-plug/plugin.yaml"
+name: file-plug
+version: 3.0.2
+description: Path override pointing to manifest file
+commands:
+  - status-check: Check status
+EOF_FILE_YAML
+
+cat <<'EOF_STATUS_CMD' > "$TEST_STANDALONE_DIR/file-plug/commands/status-check.sh"
+#!/bin/sh
+printf 'status-ok\n'
+EOF_STATUS_CMD
+chmod +x "$TEST_STANDALONE_DIR/file-plug/commands/status-check.sh"
+
+# Declare both plugins in rnex.yaml: one directory path, one manifest file path
+cat <<EOF_PATH_CFG >> "$TEST_PATH_WS/rnex.yaml"
+plugins:
+  dir-plug:
+    path: $TEST_STANDALONE_DIR/dir-plug
+  file-plug:
+    path: $TEST_STANDALONE_DIR/file-plug/plugin.yaml
+EOF_PATH_CFG
+
+# 1. Verify discovery in plugin list
+_plist_out="$(cd "$TEST_PATH_WS" && ./rnex plugin list 2>&1)"
+echo "$_plist_out" | grep -q "dir-plug" || { fail "dir-plug missing from list: $_plist_out"; exit 1; }
+echo "$_plist_out" | grep "dir-plug" | grep -q "(v3.0.1)" || { fail "dir-plug version missing: $_plist_out"; exit 1; }
+echo "$_plist_out" | grep -q "file-plug" || { fail "file-plug missing from list: $_plist_out"; exit 1; }
+echo "$_plist_out" | grep "file-plug" | grep -q "(v3.0.2)" || { fail "file-plug version missing: $_plist_out"; exit 1; }
+
+# 2. Run sync and verify scoped synchronization
+(cd "$TEST_PATH_WS" && ./rnex sync >/dev/null)
+[ -d "$TEST_PATH_WS/.rnex/plugins/dir-plug" ] || { fail ".rnex/plugins/dir-plug not synced"; exit 1; }
+[ -d "$TEST_PATH_WS/.rnex/plugins/file-plug" ] || { fail ".rnex/plugins/file-plug not synced"; exit 1; }
+
+# 3. Execute commands from both plugins
+_greet_out="$(cd "$TEST_PATH_WS" && ./rnex plugin dir-plug greet 2>&1)" || { fail "dir-plug greet failed: $_greet_out"; exit 1; }
+echo "$_greet_out" | grep -q "hello-from-dir" || { fail "greet output mismatch: $_greet_out"; exit 1; }
+
+_status_out="$(cd "$TEST_PATH_WS" && ./rnex plugin file-plug status-check 2>&1)" || { fail "file-plug status-check failed: $_status_out"; exit 1; }
+echo "$_status_out" | grep -q "status-ok" || { fail "status output mismatch: $_status_out"; exit 1; }
+
+pass
+
+# --------------------------------------------------------------------------
+run_test "Plugin resolution priority: .local.rnex.yaml > rnex.yaml (path > plugins_dir) > built-in"
+TEST_PRIO_WS="$TEST_TMP/plugin-priority-ws"
+mkdir -p "$TEST_PRIO_WS"
+cp "$CLI" "$TEST_PRIO_WS/rnex"
+chmod +x "$TEST_PRIO_WS/rnex"
+cp -r "$DIR/toolkit" "$TEST_PRIO_WS/toolkit"
+cp "$DIR/package.json" "$TEST_PRIO_WS/package.json"
+git -C "$TEST_PRIO_WS" init -q
+
+"$TEST_PRIO_WS/rnex" init -y "$TEST_PRIO_WS" >/dev/null
+
+# Create external plugins that shadow built-in claude
+mkdir -p "$TEST_PRIO_WS/ws-plugins/claude"
+cat <<'EOF_DIR_CLAUDE' > "$TEST_PRIO_WS/ws-plugins/claude/plugin.yaml"
+name: claude
+version: 9.9.0-dir
+description: Claude plugin from plugins_dir
+EOF_DIR_CLAUDE
+
+mkdir -p "$TEST_PRIO_WS/shared-override/claude"
+cat <<'EOF_SHARED_CLAUDE' > "$TEST_PRIO_WS/shared-override/claude/plugin.yaml"
+name: claude
+version: 9.9.1-shared-path
+description: Claude plugin from shared rnex.yaml path
+EOF_SHARED_CLAUDE
+
+mkdir -p "$TEST_PRIO_WS/local-override/claude"
+cat <<'EOF_LOCAL_CLAUDE' > "$TEST_PRIO_WS/local-override/claude/plugin.yaml"
+name: claude
+version: 9.9.2-local-override
+description: Claude plugin from .local.rnex.yaml path
+EOF_LOCAL_CLAUDE
+
+# 1. Set plugins_dir: ./ws-plugins in rnex.yaml -> should override built-in toolkit
+cat <<'EOF_RNEX_PDIR' >> "$TEST_PRIO_WS/rnex.yaml"
+plugins_dir: ./ws-plugins
+EOF_RNEX_PDIR
+_ver_pdir="$(cd "$TEST_PRIO_WS" && ./rnex plugin info claude | sed -n 's/.*(v\(.*\))/\1/p')"
+[ "$_ver_pdir" = "9.9.0-dir" ] || { fail "plugins_dir did not override built-in: expected 9.9.0-dir, got $_ver_pdir"; exit 1; }
+
+# 2. Set plugins.claude.path: ./shared-override/claude in rnex.yaml -> should override plugins_dir
+cat <<'EOF_RNEX_PATH' >> "$TEST_PRIO_WS/rnex.yaml"
+plugins:
+  claude:
+    path: ./shared-override/claude
+EOF_RNEX_PATH
+_ver_path="$(cd "$TEST_PRIO_WS" && ./rnex plugin info claude | sed -n 's/.*(v\(.*\))/\1/p')"
+[ "$_ver_path" = "9.9.1-shared-path" ] || { fail "rnex.yaml path did not override plugins_dir: expected 9.9.1-shared-path, got $_ver_path"; exit 1; }
+
+# 3. Set plugins.claude.path in .local.rnex.yaml -> should override rnex.yaml path
+cat <<'EOF_LOCAL_PATH' > "$TEST_PRIO_WS/.local.rnex.yaml"
+plugins:
+  claude:
+    path: ./local-override/claude
+EOF_LOCAL_PATH
+_ver_local="$(cd "$TEST_PRIO_WS" && ./rnex plugin info claude | sed -n 's/.*(v\(.*\))/\1/p')"
+[ "$_ver_local" = "9.9.2-local-override" ] || { fail ".local.rnex.yaml path did not override rnex.yaml: expected 9.9.2-local-override, got $_ver_local"; exit 1; }
 
 pass
 

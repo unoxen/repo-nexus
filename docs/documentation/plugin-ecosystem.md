@@ -16,13 +16,13 @@ Each plugin is self-contained and managed declaratively via `rnex.yaml` or works
 ### 1. Scoped Isolation (`.rnex/plugins/<plugin-name>/`)
 When a plugin is enabled in `rnex.yaml` (or `.local.rnex.yaml`), its rules, instructions, commands, hooks, and skills are scoped directly under `.rnex/plugins/<plugin-name>/`. This keeps workspace root directories clean and avoids naming collisions between plugins while tracking active plugin configuration in `rnex.yaml`.
 
-### 2. Lazy / On-Demand Member Repository Isolation
-Member repositories in `repos/<name>/` remain completely clean by default. A member repository only receives an isolated `repos/<name>/.rnex/` directory on demand if a plugin or custom integration explicitly requires repository-level state, and any orphaned plugin directories are automatically pruned during `rnex sync`.
+### 2. Complete Member Repository Autonomy
+Member repositories live in the configured `repos_dir` (default: `./repos/`) and remain 100% clean and untouched with zero `.rnex/` directories inside member trees. All workspace orchestration, caches, and sync metadata reside exclusively within `.rnex/` at the workspace root.
 
 ### 3. Decoupled Two-Tier Skills Architecture
 Repo Nexus decouples functional plugins from AI provider plugins:
 - **Core Skills (`toolkit/skills/` $\rightarrow$ `.rnex/skills/`)**: Workspace-level capabilities owned by Repo Nexus core.
-- **Plugin Skills (`toolkit/plugins/<plugin>/skills/` $\rightarrow$ `.rnex/plugins/<plugin>/skills/`)**: Scoped domain skills owned exclusively by individual plugins.
+- **Plugin Skills (`<plugin-dir>/skills/` $\rightarrow$ `.rnex/plugins/<plugin>/skills/`)**: Scoped domain skills owned exclusively by individual plugins.
 - **User Skills**: Provider plugins (`copilot`, `claude`, `codex`, `gemini`, `cursor`, and `windsurf`) project zero-logic user skill pointers into active provider directories using native `SKILL.md` bundles with YAML frontmatter in skill directories (`.github/skills/`, `.claude/skills/`, `.codex/skills/`, `.agents/skills/`) and flat files in rule directories (`.cursor/rules/`, `.windsurf/rules/`), redirecting AI assistants directly to the underlying agentic skills in `.rnex/`.
 
 ### 4. Extensible Plugin Command Engine
@@ -92,8 +92,14 @@ rnex plugin <name> <command> [options...]
 
 Custom plugins allow packaging internal company standards, custom agent skills, or prompt libraries.
 
+### Plugin Location & Discovery
+A plugin can be hosted in one of three locations:
+1. **Workspace Plugins Directory (`plugins_dir`)**: When `plugins_dir` is declared in `rnex.yaml` or `.local.rnex.yaml` (e.g. `plugins_dir: ./plugins`), any subdirectory containing a `plugin.yaml` manifest (e.g. `./plugins/my-plugin/`) is automatically discovered by `rnex plugin list`.
+2. **Explicit Plugin Path (`plugins.<name>.path`)**: For standalone or shared plugin bundles located outside `plugins_dir`, declare an explicit path in `rnex.yaml` or `.local.rnex.yaml` (e.g. `plugins: { my-plugin: { path: "../shared-plugins/my-plugin" } }`).
+3. **Built-in Toolkit Directory**: Standard plugins bundled directly with Repo Nexus under `toolkit/plugins/<my-plugin>/`.
+
 ### Plugin Directory Structure
-A plugin lives in a directory (e.g. `toolkit/plugins/<my-plugin>/`):
+A plugin bundle is structured as follows:
 
 ```text
 my-plugin/

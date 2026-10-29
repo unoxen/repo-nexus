@@ -8,6 +8,7 @@
   },
   "scripts": {
     "prepare": "git config core.hooksPath scripts/githooks 2>/dev/null || true",
+    "version": "./scripts/sync-plugin-versions.sh && git add toolkit/plugins/*/plugin.yaml",
     "test": "./tests/test_cli.sh",
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",

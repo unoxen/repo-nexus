@@ -15,7 +15,7 @@ cmd_plugin_list() {
     [ -n "$_pdir" ] || continue
     _name="$(plugin_get_field "$_pdir" "name")"
     [ -n "$_name" ] || _name="$(basename "$_pdir")"
-    _version="$(plugin_get_field "$_pdir" "version")"
+    _version="$(plugin_get_version "$_name" "$_pdir")"
     _desc="$(plugin_get_field "$_pdir" "description")"
 
     if yaml_plugin_enabled "$_name"; then
@@ -56,12 +56,13 @@ cmd_plugin_info() {
   _pname="$1"
   [ -n "$_pname" ] || die "Usage: rnex plugin info <name>"
 
-  _pdir="$(find_plugin_dir "$_pname" 2>/dev/null || true)"
+  _pdir="$(plugin_resolve_dir "$_pname" 2>/dev/null || true)"
+  [ -n "$_pdir" ] || _pdir="$(find_plugin_dir "$_pname" 2>/dev/null || true)"
   [ -n "$_pdir" ] || die "Plugin '$_pname' not found."
 
   _name="$(plugin_get_field "$_pdir" "name")"
   [ -n "$_name" ] || _name="$_pname"
-  _ver="$(plugin_get_field "$_pdir" "version")"
+  _ver="$(plugin_get_version "$_name" "$_pdir")"
   _desc="$(plugin_get_field "$_pdir" "description")"
   _author="$(plugin_get_field "$_pdir" "author")"
   _home="$(plugin_get_field "$_pdir" "homepage")"
@@ -181,7 +182,8 @@ cmd_plugin_enable() {
   done
   [ -n "$_pname" ] || die "Usage: rnex plugin enable [--local] <name>"
 
-  _pdir="$(find_plugin_dir "$_pname" 2>/dev/null || true)"
+  _pdir="$(plugin_resolve_dir "$_pname" 2>/dev/null || true)"
+  [ -n "$_pdir" ] || _pdir="$(find_plugin_dir "$_pname" 2>/dev/null || true)"
   [ -n "$_pdir" ] || die "Plugin '$_pname' not found."
 
   _name="$(plugin_get_field "$_pdir" "name")"
@@ -214,7 +216,8 @@ cmd_plugin_disable() {
   done
   [ -n "$_pname" ] || die "Usage: rnex plugin disable [--local] <name>"
 
-  _pdir="$(find_plugin_dir "$_pname" 2>/dev/null || true)"
+  _pdir="$(plugin_resolve_dir "$_pname" 2>/dev/null || true)"
+  [ -n "$_pdir" ] || _pdir="$(find_plugin_dir "$_pname" 2>/dev/null || true)"
   _name="$_pname"
   if [ -n "$_pdir" ]; then
     _n="$(plugin_get_field "$_pdir" "name")"
@@ -245,7 +248,8 @@ cmd_plugin_update() {
   _update_pname="$1"
   if [ -n "$_update_pname" ]; then
     yaml_has_plugin "$_update_pname" || die "Plugin '$_update_pname' is not enabled in workspace"
-    _pdir="$(find_plugin_dir "$_update_pname" 2>/dev/null || true)"
+    _pdir="$(plugin_resolve_dir "$_update_pname" 2>/dev/null || true)"
+    [ -n "$_pdir" ] || _pdir="$(find_plugin_dir "$_update_pname" 2>/dev/null || true)"
     [ -n "$_pdir" ] || die "Plugin '$_update_pname' not found."
     log_info "Updating plugin '$_update_pname'..."
     cmd_sync

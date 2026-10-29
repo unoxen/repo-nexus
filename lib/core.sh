@@ -116,6 +116,35 @@ resolve_version() {
 
 RNEX_VERSION="$(resolve_version)"
 
+# Locate the built-in toolkit directory containing embedded plugins and assets.
+# Priority: explicit RNEX_TOOLKIT_DIR > pre-set TOOLKIT_DIR > SCRIPT_LOCATION/toolkit >
+# parent/toolkit > NEXUS_DIR/toolkit.
+find_toolkit_dir() {
+  if [ -n "$RNEX_TOOLKIT_DIR" ] && [ -d "$RNEX_TOOLKIT_DIR" ]; then
+    printf '%s' "$RNEX_TOOLKIT_DIR"
+    return 0
+  fi
+  if [ -n "$TOOLKIT_DIR" ] && [ -d "$TOOLKIT_DIR" ]; then
+    printf '%s' "$TOOLKIT_DIR"
+    return 0
+  fi
+  _sdir="$(dirname "$SCRIPT_LOCATION")"
+  for _cand in \
+    "${RNEX_ROOT:-}/toolkit" \
+    "$SCRIPT_LOCATION/toolkit" \
+    "$_sdir/toolkit" \
+    "$_sdir/../toolkit" \
+    "${NEXUS_DIR:-}/toolkit"; do
+    if [ -n "$_cand" ] && [ -d "$_cand" ]; then
+      printf '%s' "$_cand"
+      return 0
+    fi
+  done
+  return 1
+}
+
+TOOLKIT_DIR="${TOOLKIT_DIR:-$(find_toolkit_dir 2>/dev/null || true)}"
+
 # Compare two dot-separated version strings (e.g., "0.7.38" vs "0.7.39").
 # Returns:
 #   0 if $1 == $2

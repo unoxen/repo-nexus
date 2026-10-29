@@ -45,7 +45,7 @@ A lightweight, zero-dependency and AI-First Nexus Repository (Virtual Meta Repos
   <div class="rnex-feature-card">
     <div class="rnex-feature-icon">🗂️</div>
     <h3>No Git Submodules</h3>
-    <p>Autonomous member repositories clone directly into <code>./repos/</code> as independent Git repositories with their own branches, tags, and remotes. No detached HEAD traps.</p>
+    <p>Autonomous member repositories clone directly into your configured <code>repos_dir</code> (default <code>./repos/</code>) as independent Git repositories with their own branches, tags, and remotes. No detached HEAD traps.</p>
   </div>
   <div class="rnex-feature-card">
     <div class="rnex-feature-icon">🤖</div>

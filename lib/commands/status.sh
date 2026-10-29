@@ -198,9 +198,10 @@ cmd_status() {
   else
     echo "$_active_plugins" | while read -r _pname; do
       [ -n "$_pname" ] || continue
-      _pdir="$(find_plugin_dir "$_pname" 2>/dev/null || true)"
+      _pdir="$(plugin_resolve_dir "$_pname" 2>/dev/null || true)"
+      [ -n "$_pdir" ] || _pdir="$(find_plugin_dir "$_pname" 2>/dev/null || true)"
       if [ -n "$_pdir" ]; then
-        _ver="$(plugin_get_field "$_pdir" "version")"
+        _ver="$(plugin_get_version "$_pname" "$_pdir")"
         _desc="$(plugin_get_field "$_pdir" "description")"
         if ! yaml_plugin_enabled "$_pname"; then
           printf '  %b○%b %-18s %b[disabled locally]%b\n' "$_DIM" "$_NC" "$_pname" "$_DIM" "$_NC"

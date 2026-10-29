@@ -29,9 +29,9 @@ flowchart TB
         SharedYaml["rnex.yaml<br/>(Shared Team Manifest — Priority 2)"]:::config
         
         subgraph SchemaSections["Configuration Schema"]
-            GitSchema["git:<br/>• ignore: [repos/, **/.rnex*/, **/rnex*/]<br/>• hooks: {post-merge: [...], pre-commit: [...]}"]:::config
+            GitSchema["git:<br/>• ignore: [&lt;repos_dir&gt;/, **/.rnex*/, **/rnex*/]<br/>• hooks: {post-merge: [...], pre-commit: [...]}"]:::config
             RnexHooksSchema["rnex_hooks:<br/>• after_sync: [...]<br/>• after_clone: [...]<br/>• before_exec: [...]"]:::config
-            ReposSchema["repos:<br/>• url, branch, enabled, readonly"]:::config
+            ReposSchema["repos_dir: ./repos<br/>plugins_dir: ./plugins<br/>repos:<br/>• url, branch, enabled, readonly"]:::config
             PluginsSchema["plugins:<br/>• claude, cursor, codex, gemini,<br/>  windsurf, copilot, karpathy-llm"]:::config
         end
 
@@ -71,16 +71,16 @@ flowchart TB
         GitIgnoreFile[".gitignore<br/>(Managed deterministically via git.ignore)"]:::tracked
     end
 
-    subgraph GitIgnored["4. Git-Ignored Runtime &amp; Generated Assets (**/.rnex*/, **/rnex*/, repos/)"]
+    subgraph GitIgnored["4. Git-Ignored Runtime &amp; Generated Assets (**/.rnex*/, **/rnex*/, &lt;repos_dir&gt;/)"]
         direction TB
         RnexDir[".rnex/ Internal Harness<br/>• .rnex/ai-instructions.md<br/>• .rnex/skills/ &amp; .rnex/plugins/&lt;name&gt;/commands/<br/>• .rnex/sync_stamp"]:::ignored
         AIProxies["Generated AI Skill &amp; Rule Proxies (rnex-*)<br/>• .claude/skills/rnex-* | .codex/skills/rnex-*<br/>• .agents/skills/rnex-* | .cursor/rules/rnex-*<br/>• .windsurf/rules/rnex-* | .github/skills/rnex-*"]:::ignored
         GitHooksDir[".git/hooks/* Wrappers<br/>(Executes git.hooks command lists)"]:::ignored
 
-        subgraph MemberRepos["./repos/ (Autonomous Member Clones — No Git Submodules)"]
-            RepoA["repos/backend/<br/>(Standalone .git, branch, remotes)"]:::repo
-            RepoB["repos/frontend/<br/>(Standalone .git, branch, remotes)"]:::repo
-            RepoC["repos/shared-contracts/<br/>(Read-Only / Selective Clone)"]:::repo
+        subgraph MemberRepos["&lt;repos_dir&gt;/ (Autonomous Member Clones — No Git Submodules)"]
+            RepoA["&lt;repos_dir&gt;/backend/<br/>(Standalone .git, branch, remotes)"]:::repo
+            RepoB["&lt;repos_dir&gt;/frontend/<br/>(Standalone .git, branch, remotes)"]:::repo
+            RepoC["&lt;repos_dir&gt;/shared-contracts/<br/>(Read-Only / Selective Clone)"]:::repo
         end
     end
 
@@ -115,7 +115,7 @@ my-workspace/
 ├── .git/                            # Meta-repo Git tracking (workspace config & docs only)
 ├── .gitignore                       # Managed deterministically via git.ignore
 ├── .ignore                          # Un-ignores <repos_dir>/* for ripgrep, Claude Code, and search tools
-├── rnex.yaml                        # Team-wide workspace declaration (includes repos_dir)
+├── rnex.yaml                        # Team-wide workspace declaration (repos_dir, plugins_dir, repos, plugins)
 ├── .local.rnex.yaml                 # (Optional) Developer workstation overrides (gitignored)
 │
 ├── .rnex/                           # Workspace orchestration directory (gitignored)
@@ -124,13 +124,16 @@ my-workspace/
 │   ├── plugins/                     # Enabled plugin instructions, skills, and agents
 │   └── skills/                      # Core workspace agentic skills (clone-sync, batch-exec, etc.)
 │
-├── repos/                           # Member repository clones in configured repos_dir (default: repos/)
+├── <repos_dir>/                     # Member repository clones (default: repos/, configurable via repos_dir)
 │   ├── backend/                     # Standard Git repository (remote: api.git)
 │   │   ├── .git/
 │   │   └── src/
 │   └── frontend/                    # Standard Git repository (remote: web.git)
 │       ├── .git/
 │       └── src/
+│
+├── <plugins_dir>/                   # (Optional) External workspace plugins (configurable via plugins_dir)
+│   └── custom-plugin/               # External plugin bundle (plugin.yaml, hooks/, commands/, skills/)
 │
 ├── AGENTS.md                        # Permanent universal AI agent router
 ├── CLAUDE.md                        # Permanent Claude Code router

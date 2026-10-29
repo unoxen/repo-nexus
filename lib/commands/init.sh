@@ -120,7 +120,8 @@ cmd_init() {
   else
     _init_plugins=""
     for _p in $_cli_plugins; do
-      _pdir="$(find_plugin_dir "$_p" 2>/dev/null || true)"
+      _pdir="$(plugin_resolve_dir "$_p" 2>/dev/null || true)"
+      [ -n "$_pdir" ] || _pdir="$(find_plugin_dir "$_p" 2>/dev/null || true)"
       _cfg_lines=""
       if [ -n "$_pdir" ] && [ -f "$_pdir/plugin.yaml" ]; then
         _cfg_lines="$(plugin_config_default_lines "$_pdir/plugin.yaml")"

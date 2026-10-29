@@ -124,6 +124,62 @@ get_repos_root() {
   printf '%s/%s' "$_grr_dir" "$(yaml_get_repos_dir)"
 }
 
+# ==============================================================================
+# yaml_get_plugins_dir
+#
+# Read the top-level plugins_dir setting from .local.rnex.yaml or rnex.yaml.
+# Priority: .local.rnex.yaml ($NEXUS_LOCAL_CONFIG) > rnex.yaml ($NEXUS_CONFIG).
+# Normalizes relative paths against the workspace root.
+# Returns empty string if unset or invalid (external plugins_dir is optional).
+#
+# @returns 0 and normalized path string to stdout if configured; empty otherwise.
+# @pure Read-only configuration query.
+# ==============================================================================
+yaml_get_plugins_dir() {
+  _yaml_resolve_files
+  _ygpd_local="${NEXUS_LOCAL_CONFIG:-$_wly}"
+  _ygpd_main="${NEXUS_CONFIG:-$_wy}"
+
+  _ygpd_val="$(_yaml_top_level_from_file "$_ygpd_local" "plugins_dir")"
+  [ -n "$_ygpd_val" ] || _ygpd_val="$(_yaml_top_level_from_file "$_ygpd_main" "plugins_dir")"
+
+  [ -n "$_ygpd_val" ] || return 0
+
+  # Normalize: strip leading/trailing whitespace and surrounding quotes
+  _ygpd_val="$(printf '%s' "$_ygpd_val" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d "'\"")"
+
+  # Strip trailing slashes
+  while [ "$_ygpd_val" != "${_ygpd_val%/}" ] && [ -n "${_ygpd_val%/}" ]; do
+    _ygpd_val="${_ygpd_val%/}"
+  done
+
+  # Validate against dangerous paths
+  case "$_ygpd_val" in
+    ''|'.'|'..'|'../*'|'*/..'|'*/../*')
+      return 0
+      ;;
+  esac
+
+  # If relative path, prefix with workspace root if available
+  _ws_root="${NEXUS_DIR:-${RNEX_ROOT:-.}}"
+  case "$_ygpd_val" in
+    /*) printf '%s' "$_ygpd_val" ;;
+    *)
+      if [ -n "$_ws_root" ] && [ "$_ws_root" != "." ]; then
+        _ygpd_clean="${_ygpd_val#./}"
+        printf '%s/%s' "$_ws_root" "$_ygpd_clean"
+      else
+        printf '%s' "$_ygpd_val"
+      fi
+      ;;
+  esac
+}
+
+# Return the path to the workspace external plugins directory if configured
+get_plugins_root() {
+  yaml_get_plugins_dir
+}
+
 # Resolve filesystem path for a specific member repository
 get_repo_path() {
   _grp_name="$1"
@@ -724,22 +780,101 @@ _yaml_plugin_get_from_file() {
   _yaml_section_get "$1" "plugins" "$2" "$3"
 }
 
-yaml_plugin_get() {
-  _pname="$1"; _key="$2"
+# ==============================================================================
+# yaml_get_plugin_config
+#
+# Query a scalar plugin configuration setting (plugins.<plugin>.<key>) with
+# strict two-level source-of-truth hierarchy and plugin defaults fallback:
+#   1. .local.rnex.yaml ($NEXUS_LOCAL_CONFIG or $WORKSPACE_LOCAL_YAML)
+#   2. rnex.yaml        ($NEXUS_CONFIG or $WORKSPACE_YAML)
+#   3. <resolved_plugin_dir>/plugin.yaml (config_defaults.<key>)
+#
+# @param $1 plugin_name Target plugin name (e.g. "karpathy-llm", "claude").
+# @param $2 key_name    Property key name (e.g. "path", "wiki_dir", "enabled").
+# @returns 0 and value string if resolved; 1 if unset/not found.
+# @pure Read-only configuration query.
+# ==============================================================================
+yaml_get_plugin_config() {
+  _ygpc_plugin="$1"
+  _ygpc_key="$2"
   _yaml_resolve_files
-  _val="$(_yaml_plugin_get_from_file "$_wly" "$_pname" "$_key")"
-  if [ -n "$_val" ]; then
-    printf '%s' "$_val"
-    return 0
+
+  _ygpc_local="${NEXUS_LOCAL_CONFIG:-$_wly}"
+  _ygpc_main="${NEXUS_CONFIG:-$_wy}"
+
+  # Determine potential alias key (e.g. auto_sync_on <-> autoSyncOn)
+  _ygpc_alt=""
+  case "$_ygpc_key" in
+    auto_sync_on) _ygpc_alt="autoSyncOn" ;;
+    autoSyncOn)   _ygpc_alt="auto_sync_on" ;;
+  esac
+
+  # 1. Query .local.rnex.yaml first
+  if [ -f "$_ygpc_local" ]; then
+    _val="$(_yaml_plugin_get_from_file "$_ygpc_local" "$_ygpc_plugin" "$_ygpc_key")"
+    [ -n "$_val" ] || [ -z "$_ygpc_alt" ] || _val="$(_yaml_plugin_get_from_file "$_ygpc_local" "$_ygpc_plugin" "$_ygpc_alt")"
+    if [ -n "$_val" ]; then
+      printf '%s' "$_val"
+      return 0
+    fi
   fi
-  _val="$(_yaml_plugin_get_from_file "$_wy" "$_pname" "$_key")"
-  if [ -n "$_val" ]; then
-    printf '%s' "$_val"
-    return 0
+
+  # 2. Query rnex.yaml next
+  if [ -f "$_ygpc_main" ]; then
+    _val="$(_yaml_plugin_get_from_file "$_ygpc_main" "$_ygpc_plugin" "$_ygpc_key")"
+    [ -n "$_val" ] || [ -z "$_ygpc_alt" ] || _val="$(_yaml_plugin_get_from_file "$_ygpc_main" "$_ygpc_plugin" "$_ygpc_alt")"
+    if [ -n "$_val" ]; then
+      printf '%s' "$_val"
+      return 0
+    fi
   fi
-  if [ "$_pname" = "karpathy-llm" ] && [ "$_key" = "wiki_dir" ]; then
-    yaml_get_top_level "wiki_dir"
+
+  # 3. Special case backwards compatibility for karpathy-llm top-level wiki_dir
+  if [ "$_ygpc_plugin" = "karpathy-llm" ] && [ "$_ygpc_key" = "wiki_dir" ]; then
+    _top_wd="$(yaml_get_top_level "wiki_dir")"
+    if [ -n "$_top_wd" ]; then
+      printf '%s' "$_top_wd"
+      return 0
+    fi
   fi
+
+  # 4. Fall back to resolved plugin directory plugin.yaml config_defaults
+  # Do not recurse if querying "path"
+  if [ "$_ygpc_key" != "path" ]; then
+    _ygpc_pdir=""
+    if command -v plugin_resolve_dir >/dev/null 2>&1; then
+      _ygpc_pdir="$(plugin_resolve_dir "$_ygpc_plugin" 2>/dev/null || true)"
+    elif command -v find_plugin_dir >/dev/null 2>&1; then
+      _ygpc_pdir="$(find_plugin_dir "$_ygpc_plugin" 2>/dev/null || true)"
+    fi
+
+    if [ -n "$_ygpc_pdir" ] && [ -f "$_ygpc_pdir/plugin.yaml" ]; then
+      _def_val="$(awk -v k="$_ygpc_key" -v alt="$_ygpc_alt" '
+        /^config_defaults:[ ]*$/ || /^config_defaults:[ ]*#/ { in_c=1; next }
+        in_c && /^[^ #]/ { exit }
+        in_c && ($0 ~ ("^[ ]*" k ":") || (length(alt) > 0 && $0 ~ ("^[ ]*" alt ":"))) {
+          line = $0
+          sub(/^[ ]*[a-zA-Z0-9_.-]+:[ ]*/, "", line)
+          sub(/[ ]*#.*/, "", line)
+          sub(/^[ ]+/, "", line)
+          sub(/[ \t\r]+$/, "", line)
+          gsub(/^["\047]|["\047]$/, "", line)
+          print line
+          exit
+        }
+      ' "$_ygpc_pdir/plugin.yaml")"
+      if [ -n "$_def_val" ]; then
+        printf '%s' "$_def_val"
+        return 0
+      fi
+    fi
+  fi
+
+  return 1
+}
+
+yaml_plugin_get() {
+  yaml_get_plugin_config "$1" "$2"
 }
 
 # ==============================================================================
@@ -993,9 +1128,11 @@ yaml_get_plugin_list() {
     fi
   fi
 
-  # 3. Otherwise fall back to toolkit/plugins/$plugin_name/plugin.yaml under config_defaults:
+  # 3. Otherwise fall back to resolved plugin.yaml under config_defaults:
   _ygpl_pdir=""
-  if command -v find_plugin_dir >/dev/null 2>&1; then
+  if command -v plugin_resolve_dir >/dev/null 2>&1; then
+    _ygpl_pdir="$(plugin_resolve_dir "$_ygpl_plugin" 2>/dev/null || true)"
+  elif command -v find_plugin_dir >/dev/null 2>&1; then
     _ygpl_pdir="$(find_plugin_dir "$_ygpl_plugin" 2>/dev/null || true)"
   fi
   if [ -z "$_ygpl_pdir" ]; then

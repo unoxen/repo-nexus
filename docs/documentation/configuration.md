@@ -32,6 +32,7 @@ version: "1"
 name: "acme-platform"
 description: "Multi-repo platform workspace and shared AI context"
 repos_dir: "repos"
+plugins_dir: "plugins"
 code_workspace: "acme.code-workspace"
 
 # Git Integration (Ignore rules & Git hooks)
@@ -139,6 +140,7 @@ plugins:
 | `version` | string | `"1"` | Schema version compatibility check. |
 | `name` | string | basename | Workspace identifier. |
 | `repos_dir` | string | `"repos"` | Directory where member repositories are cloned (automatically managed in `.gitignore` and `.ignore`). |
+| `plugins_dir` | string | `"toolkit/plugins"` | Directory for external workspace plugins. Subdirectories containing `plugin.yaml` are auto-discovered. |
 | `code_workspace`| string / bool | `false` | Path to generated `.code-workspace` file. |
 
 ### Git Integration (`git`)
@@ -157,3 +159,11 @@ Each key represents a repository name with:
 * `branch`: Default Git branch to checkout.
 * `enabled`: Whether the repository is active and eligible for batch operations (`true` by default).
 * `readonly`: When `true`, instructs AI agents and developers that the repository is reference-only.
+
+### Scoped Plugins (`plugins`)
+
+Each key represents a plugin name with:
+* `enabled`: Whether the plugin is active (`true`/`false`).
+* `path`: (Optional) Explicit relative or absolute path to a custom plugin bundle directory or `plugin.yaml` manifest.
+* `skills`: Whether user skill proxies are projected to IDE folders.
+* Plugin-specific options (e.g. `wiki_dir`, `sources` for `karpathy-llm`).

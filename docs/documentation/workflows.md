@@ -20,13 +20,13 @@ cd developer-workspace
 rnex clone
 ```
 
-All member repositories are automatically cloned into `./repos/`, plugins are synchronized, and multi-root workspace files are prepared.
+All member repositories are automatically cloned into `<repos_dir>/` (default `./repos/`), plugins are synchronized, and multi-root workspace files are prepared.
 
 ---
 
 ## Batch Execution with `rnex exec`
 
-The `rnex exec` command runs arbitrary shell commands sequentially across every active member repository in `./repos/`.
+The `rnex exec` command runs arbitrary shell commands sequentially across every active member repository in `<repos_dir>/` (default `./repos/`).
 
 ### Checking Git Status Across All Repositories
 

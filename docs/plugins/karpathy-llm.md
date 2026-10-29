@@ -22,7 +22,7 @@ It requires **zero external vector databases, embedding pipelines, or heavy MCP 
 ### 2. Multi-Repo Context Engineering & Autonomy (`rules/behavioral.md`)
 - Guidelines tailored specifically for multi-repo virtual workspaces:
   - Always read workspace configuration (`.local.rnex.yaml` and `rnex.yaml`) first.
-  - Respect member repository autonomy (`repos/<name>/`).
+  - Respect member repository autonomy (`<repos_dir>/<name>/`, default `repos/<name>/`).
   - Read `wiki/hot.md` and `wiki/index.md` once per session for orientation.
   - Perform Git commits directly inside individual member repositories.
 
@@ -117,7 +117,7 @@ The `sources` setting defines where the Karpathy LLM Wiki discovers raw intake d
 - **Directory Paths (e.g. `docs`, `notes`)**: Repo Nexus recursively scans the directory for all files. Hidden directories (starting with `.`) and `node_modules` are automatically pruned.
 - **Recursive Globs (e.g. `"repos/**/README.md"`)**: Pure POSIX `/bin/sh` pattern resolution matches files at arbitrary directory depths. Always quote globs containing `*` in YAML. Directories named `.git`, `.rnex`, and `node_modules` are pruned during traversal.
 - **Single-Level Globs (e.g. `repos/*/README.md` or `docs/*.md`)**: Matches files at a fixed directory level.
-- **Active Repository Filtering**: Any resolved path located within `repos/<name>/` is checked against member repository status. If a repository is disabled (`enabled: false`) in `rnex.yaml` or `.local.rnex.yaml`, its files are automatically excluded.
+- **Active Repository Filtering**: Any resolved path located within `<repos_dir>/<name>/` (default `repos/<name>/`) is checked against member repository status. If a repository is disabled (`enabled: false`) in `rnex.yaml` or `.local.rnex.yaml`, its files are automatically excluded.
 - **Two-Level Configuration Precedence**: If `sources` is declared in `.local.rnex.yaml`, it completely overrides the `sources` list defined in `rnex.yaml`.
 - **Legacy Migration**: Existing configurations with `raw_dir: <dir>` are automatically rewritten to a `sources` list during `rnex sync`.
 - **Directory Provisioning**: When running `rnex sync`, explicit directory entries (such as `docs`) are created automatically if missing. Glob patterns (containing `*`, `?`, or `[`) and file targets are never converted into directories.
@@ -231,5 +231,5 @@ rnex plugin disable karpathy-llm
 ```
 
 When disabled:
-- Scoped assets under `.rnex/plugins/karpathy-llm/` and any on-demand member repository plugin directories are cleanly removed.
+- Scoped assets under `.rnex/plugins/karpathy-llm/` are cleanly removed.
 - **Your data in `./docs/` and `wiki/` is preserved 100% intact.** Repo Nexus never deletes user-generated knowledge bases upon plugin disablement.

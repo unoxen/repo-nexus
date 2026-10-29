@@ -20,8 +20,24 @@ if git diff --cached --quiet; then
   exit 0
 fi
 
-# If package.json version is already staged, do not bump again
+# Synchronize version across all built-in toolkit plugin manifests
+sync_toolkit_plugin_versions() {
+  _target_ver="$1"
+  [ -n "$_target_ver" ] || return 0
+  for _manifest in "$REPO_ROOT"/toolkit/plugins/*/plugin.yaml; do
+    [ -f "$_manifest" ] || continue
+    _tmp_m="$_manifest.tmp.$$"
+    sed "s/^version:[ ].*/version: $_target_ver/" "$_manifest" > "$_tmp_m" && mv "$_tmp_m" "$_manifest"
+    git add "$_manifest"
+  done
+}
+
+# If package.json version is already staged, ensure all plugin manifests match and do not bump again
 if git diff --cached "$PKG_JSON" 2>/dev/null | grep -q '^[+].*"version"[ ]*:'; then
+  CUR_VERSION="$(awk '/"version"[ ]*:/ { sub(/.*"version"[ ]*:[ ]*"/, ""); sub(/".*/, ""); print; exit }' "$PKG_JSON")"
+  if [ -n "$CUR_VERSION" ]; then
+    sync_toolkit_plugin_versions "$CUR_VERSION"
+  fi
   exit 0
 fi
 
@@ -38,6 +54,9 @@ git add "$PKG_JSON"
 if [ -f "$REPO_ROOT/package-lock.json" ]; then
   git add "$REPO_ROOT/package-lock.json"
 fi
+
+# Synchronize and stage all built-in plugin manifests to match package.json version
+sync_toolkit_plugin_versions "$NEW_VERSION"
 
 # Queue version git tag to be created on the commit by post-commit hook
 GIT_DIR="$(git rev-parse --git-dir 2>/dev/null || echo "$REPO_ROOT/.git")"

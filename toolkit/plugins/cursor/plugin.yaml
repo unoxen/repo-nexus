@@ -1,5 +1,5 @@
 name: cursor
-version: 0.5.1
+version: 0.8.16
 description: Cursor IDE integration (maintains .cursorrules and generates user skills in .cursor/rules/)
 author: unoxen
 homepage: https://github.com/unoxen/repo-nexus

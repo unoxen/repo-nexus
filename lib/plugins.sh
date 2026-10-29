@@ -4,12 +4,125 @@
 # lib/plugins.sh — Plugin Engine (discovery, metadata, and scoped synchronization)
 # ============================================================================
 
+# ============================================================================
+# plugin_resolve_dir
+#
+# Summary:
+#   Resolve the directory for a given plugin name according to the resolution
+#   priority order:
+#     1. Explicit per-plugin path override (`plugins.<name>.path` in
+#        .local.rnex.yaml > rnex.yaml). Normalizes trailing `/plugin.yaml`
+#        to its parent directory.
+#     2. Subdirectory `<plugins_dir>/<name>/` containing `plugin.yaml` if
+#        `plugins_dir` is configured.
+#     3. Built-in embedded plugin in `$TOOLKIT_DIR/plugins/<name>`.
+#     4. Standard candidate toolkit/workspace directory search.
+#
+# Arguments:
+#   $1 - Plugin name (e.g. "karpathy-llm", "claude", "custom-plugin")
+#
+# Returns:
+#   Outputs the resolved directory path to stdout; returns 0 on success,
+#   or 1 if the plugin directory cannot be resolved.
+#
+# Purity:
+#   @pure (stateless filesystem inspection based on configuration)
+# ============================================================================
+plugin_resolve_dir() {
+  _prd_name="$1"
+  [ -n "$_prd_name" ] || return 1
+
+  _ws_root="${NEXUS_DIR:-${RNEX_ROOT:-.}}"
+
+  # Priority 1: Explicit per-plugin path override (.local.rnex.yaml > rnex.yaml)
+  if command -v yaml_get_plugin_config >/dev/null 2>&1; then
+    _prd_path="$(yaml_get_plugin_config "$_prd_name" "path" 2>/dev/null || true)"
+    if [ -n "$_prd_path" ]; then
+      # Normalize trailing /plugin.yaml to parent directory
+      case "$_prd_path" in
+        */plugin.yaml) _prd_path="${_prd_path%/plugin.yaml}" ;;
+        plugin.yaml)   _prd_path="." ;;
+      esac
+      # Strip trailing slashes
+      while [ "$_prd_path" != "${_prd_path%/}" ] && [ -n "${_prd_path%/}" ]; do
+        _prd_path="${_prd_path%/}"
+      done
+      # If relative path, prefix with workspace root if needed
+      case "$_prd_path" in
+        /*) _prd_full="$_prd_path" ;;
+        *)
+          if [ -n "$_ws_root" ] && [ "$_ws_root" != "." ]; then
+            _prd_full="$_ws_root/${_prd_path#./}"
+          else
+            _prd_full="$_prd_path"
+          fi
+          ;;
+      esac
+      _prd_resolved="$(resolve_path "$_prd_full" 2>/dev/null || true)"
+      if [ -n "$_prd_resolved" ] && [ -d "$_prd_resolved" ] && [ -f "$_prd_resolved/plugin.yaml" ]; then
+        printf '%s' "$_prd_resolved"
+        return 0
+      fi
+    fi
+  fi
+
+  # Priority 2: Configured plugins_dir/<plugin_name>/ containing plugin.yaml
+  if command -v yaml_get_plugins_dir >/dev/null 2>&1; then
+    _prd_pdir="$(yaml_get_plugins_dir 2>/dev/null || true)"
+    if [ -n "$_prd_pdir" ]; then
+      _prd_ext="$_prd_pdir/$_prd_name"
+      _prd_ext_res="$(resolve_path "$_prd_ext" 2>/dev/null || true)"
+      if [ -n "$_prd_ext_res" ] && [ -d "$_prd_ext_res" ] && [ -f "$_prd_ext_res/plugin.yaml" ]; then
+        printf '%s' "$_prd_ext_res"
+        return 0
+      fi
+    fi
+  fi
+
+  # Priority 3: Built-in embedded plugin in $TOOLKIT_DIR/plugins/<plugin_name>
+  if [ -n "${TOOLKIT_DIR:-}" ] && [ -d "$TOOLKIT_DIR/plugins/$_prd_name" ] && [ -f "$TOOLKIT_DIR/plugins/$_prd_name/plugin.yaml" ]; then
+    resolve_path "$TOOLKIT_DIR/plugins/$_prd_name" 2>/dev/null || printf '%s' "$TOOLKIT_DIR/plugins/$_prd_name"
+    return 0
+  fi
+
+  # Priority 4: Candidate toolkit/workspace locations fallback
+  _sdir="$(dirname "$SCRIPT_LOCATION")"
+  for _cand in \
+    "${RNEX_ROOT:-}/toolkit/plugins/$_prd_name" \
+    "${TOOLKIT_DIR:-}/plugins/$_prd_name" \
+    "${RNEX_TOOLKIT_DIR:-}/plugins/$_prd_name" \
+    "${RNEX_PLUGINS_DIR:-}/$_prd_name" \
+    "$NEXUS_DIR/toolkit/plugins/$_prd_name" \
+    "$SCRIPT_LOCATION/toolkit/plugins/$_prd_name" \
+    "$_sdir/toolkit/plugins/$_prd_name" \
+    "$NEXUS_DIR/plugins/$_prd_name" \
+    "$NEXUS_DIR/.rnex/plugins/$_prd_name" \
+    "$NEXUS_DIR/.nexus/plugins/$_prd_name"; do
+    [ -n "$_cand" ] || continue
+    if [ -f "$_cand/plugin.yaml" ]; then
+      resolve_path "$_cand" 2>/dev/null || printf '%s' "$_cand"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
 # Search all candidate toolkit directories and locate a plugin by name containing plugin.yaml.
 find_plugin_dir() {
   _query="$1"
+  if command -v plugin_resolve_dir >/dev/null 2>&1; then
+    _res="$(plugin_resolve_dir "$_query" 2>/dev/null || true)"
+    if [ -n "$_res" ]; then
+      printf '%s' "$_res"
+      return 0
+    fi
+  fi
+
   _sdir="$(dirname "$SCRIPT_LOCATION")"
   for _cand in \
     "${RNEX_ROOT:-}/toolkit/plugins/$_query" \
+    "${TOOLKIT_DIR:-}/plugins/$_query" \
     "${RNEX_TOOLKIT_DIR:-}/plugins/$_query" \
     "${RNEX_PLUGINS_DIR:-}/$_query" \
     "$NEXUS_DIR/toolkit/plugins/$_query" \
@@ -27,29 +140,86 @@ find_plugin_dir() {
   return 1
 }
 
-# Scan and list all unique plugin directories across workspace and toolkit locations.
-list_all_available_plugin_dirs() {
-  _sdir="$(dirname "$SCRIPT_LOCATION")"
-  _dirs=""
+# ============================================================================
+# plugin_list_available
+#
+# Summary:
+#   Discovers and lists all unique available plugin directories according to
+#   the resolution hierarchy:
+#     1. Path-mapped external plugins declared via `plugins.<name>.path` in
+#        .local.rnex.yaml or rnex.yaml.
+#     2. External plugins residing under configured `plugins_dir` (e.g. ./plugins/*).
+#     3. Built-in embedded plugins shipped with rnex ($TOOLKIT_DIR/plugins/*).
+#
+# Arguments:
+#   None
+#
+# Returns:
+#   Outputs resolved directory paths, one per line.
+#
+# Purity:
+#   @pure (stateless filesystem and configuration inspection)
+# ============================================================================
+plugin_list_available() {
+  _pla_seen=""
+
+  # 1. Path-mapped plugins explicitly configured in YAML
+  if command -v yaml_list_plugins >/dev/null 2>&1; then
+    for _pname in $(yaml_list_plugins 2>/dev/null || true); do
+      [ -n "$_pname" ] || continue
+      _pdir="$(plugin_resolve_dir "$_pname" 2>/dev/null || true)"
+      if [ -n "$_pdir" ] && [ -f "$_pdir/plugin.yaml" ]; then
+        case " $_pla_seen " in
+          *" $_pname "*) ;;
+          *)
+            _pla_seen="$_pla_seen $_pname"
+            printf '%s\n' "$_pdir"
+            ;;
+        esac
+      fi
+    done
+  fi
+
+  # 2. External plugins in configured plugins_dir
+  _pdir_cfg=""
+  if command -v yaml_get_plugins_dir >/dev/null 2>&1; then
+    _pdir_cfg="$(yaml_get_plugins_dir 2>/dev/null || true)"
+  fi
+  if [ -n "$_pdir_cfg" ] && [ -d "$_pdir_cfg" ]; then
+    for _sub in "$_pdir_cfg"/*; do
+      if [ -d "$_sub" ] && [ -f "$_sub/plugin.yaml" ]; then
+        _pname="$(plugin_get_field "$_sub" "name" 2>/dev/null || true)"
+        [ -n "$_pname" ] || _pname="$(basename "$_sub")"
+        case " $_pla_seen " in
+          *" $_pname "*) ;;
+          *)
+            _pla_seen="$_pla_seen $_pname"
+            printf '%s\n' "$_sub"
+            ;;
+        esac
+      fi
+    done
+  fi
+
+  # 3. Built-in embedded plugins ($TOOLKIT_DIR/plugins/*) and standard candidates
   for _parent in \
+    "${TOOLKIT_DIR:-}/plugins" \
     "${RNEX_ROOT:-}/toolkit/plugins" \
     "${RNEX_TOOLKIT_DIR:-}/plugins" \
     "${RNEX_PLUGINS_DIR:-}" \
     "$NEXUS_DIR/toolkit/plugins" \
     "$SCRIPT_LOCATION/toolkit/plugins" \
-    "$_sdir/toolkit/plugins" \
-    "$NEXUS_DIR/plugins" \
-    "$NEXUS_DIR/.rnex/plugins" \
-    "$NEXUS_DIR/.nexus/plugins"; do
+    "$(dirname "$SCRIPT_LOCATION")/toolkit/plugins"; do
     [ -n "$_parent" ] || continue
     if [ -d "$_parent" ]; then
       for _sub in "$_parent"/*; do
         if [ -d "$_sub" ] && [ -f "$_sub/plugin.yaml" ]; then
-          _b="$(basename "$_sub")"
-          case " $_dirs " in
-            *" $_b "*) ;;
+          _pname="$(plugin_get_field "$_sub" "name" 2>/dev/null || true)"
+          [ -n "$_pname" ] || _pname="$(basename "$_sub")"
+          case " $_pla_seen " in
+            *" $_pname "*) ;;
             *)
-              _dirs="$_dirs $_b"
+              _pla_seen="$_pla_seen $_pname"
               printf '%s\n' "$_sub"
               ;;
           esac
@@ -57,6 +227,11 @@ list_all_available_plugin_dirs() {
       done
     fi
   done
+}
+
+# Scan and list all unique plugin directories across workspace and toolkit locations.
+list_all_available_plugin_dirs() {
+  plugin_list_available
 }
 
 # Extract a top-level scalar field (e.g. name, version, description) from plugin.yaml.
@@ -70,6 +245,80 @@ plugin_get_field() {
       print
     }
   ' "$_pdir/plugin.yaml"
+}
+
+# ============================================================================
+# plugin_get_version
+#
+# Summary:
+#   Retrieve the effective version of a plugin. Built-in embedded plugins
+#   located in $TOOLKIT_DIR/plugins/<name> have version parity with rnex and
+#   always report $RNEX_VERSION. External or custom plugins report the
+#   'version' field from their plugin.yaml, defaulting to 'custom' if unset.
+#
+# Arguments:
+#   $1 - Plugin name (e.g. "karpathy-llm", "claude")
+#   $2 - (Optional) Pre-resolved directory path of the plugin
+#
+# Returns:
+#   Outputs the version string to stdout.
+#
+# Purity:
+#   @pure (stateless inspection of plugin metadata, no side effects)
+# ============================================================================
+plugin_get_version() {
+  _pgv_name="$1"
+  _pgv_dir="${2:-}"
+  [ -n "$_pgv_name" ] || return 1
+
+  # If directory was not provided, attempt resolution
+  if [ -z "$_pgv_dir" ]; then
+    if command -v plugin_resolve_dir >/dev/null 2>&1; then
+      _pgv_dir="$(plugin_resolve_dir "$_pgv_name" 2>/dev/null || true)"
+    fi
+    [ -n "$_pgv_dir" ] || _pgv_dir="$(find_plugin_dir "$_pgv_name" 2>/dev/null || true)"
+  fi
+
+  # Resolve canonical path for the built-in toolkit plugin directory
+  _tk_plugin_dir=""
+  if [ -n "$TOOLKIT_DIR" ] && [ -d "$TOOLKIT_DIR/plugins/$_pgv_name" ]; then
+    _tk_plugin_dir="$(resolve_path "$TOOLKIT_DIR/plugins/$_pgv_name" 2>/dev/null || true)"
+  fi
+
+  # Resolve canonical path for the candidate plugin directory
+  _res_plugin_dir=""
+  if [ -n "$_pgv_dir" ]; then
+    _res_plugin_dir="$(resolve_path "$_pgv_dir" 2>/dev/null || true)"
+  fi
+
+  # Case 1: The resolved directory directly matches the built-in toolkit plugin
+  if [ -n "$_tk_plugin_dir" ] && [ -n "$_res_plugin_dir" ] && [ "$_tk_plugin_dir" = "$_res_plugin_dir" ]; then
+    printf '%s' "${RNEX_VERSION:-0.8.16}"
+    return 0
+  fi
+
+  # Case 2: The directory is a scoped copy inside .rnex/plugins/<name> or .nexus/plugins/<name>
+  # originating from a built-in embedded plugin
+  case "$_res_plugin_dir" in
+    */.rnex/plugins/$_pgv_name|*/.nexus/plugins/$_pgv_name)
+      if [ -n "$_tk_plugin_dir" ] && [ -d "$_tk_plugin_dir" ]; then
+        printf '%s' "${RNEX_VERSION:-0.8.16}"
+        return 0
+      fi
+      ;;
+  esac
+
+  # Case 3: External or custom plugin — extract version from plugin.yaml
+  _ver=""
+  if [ -n "$_pgv_dir" ] && [ -f "$_pgv_dir/plugin.yaml" ]; then
+    _ver="$(plugin_get_field "$_pgv_dir" "version" 2>/dev/null || true)"
+  fi
+
+  if [ -n "$_ver" ]; then
+    printf '%s' "$_ver"
+  else
+    printf 'custom'
+  fi
 }
 
 # Resolve target user skill directory for a provider plugin from plugin.yaml (with fallback).
@@ -341,7 +590,8 @@ sync_plugins() {
   yaml_list_plugins | while read -r _pname; do
     [ -n "$_pname" ] || continue
     yaml_plugin_enabled "$_pname" || continue
-    _pdir="$(find_plugin_dir "$_pname" 2>/dev/null || true)"
+    _pdir="$(plugin_resolve_dir "$_pname" 2>/dev/null || true)"
+    [ -n "$_pdir" ] || _pdir="$(find_plugin_dir "$_pname" 2>/dev/null || true)"
     if [ -z "$_pdir" ]; then
       log_warn "Plugin '$_pname' declared in config but not found on disk"
       continue

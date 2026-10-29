@@ -35,7 +35,7 @@ All shell scripts must pass [ShellCheck](https://www.shellcheck.net/) with **zer
   ```
 
 ### Strict Encapsulation & Agnostic Core
-- **Encapsulation**: All internal state, compiled context, sync stamps, and installed hooks must reside exclusively in `.rnex/` at the workspace root, or `repos/<name>/.rnex/` within member repositories. Never create or leave internal files in the workspace root or member repo source trees.
+- **Encapsulation**: All internal state, compiled context, sync stamps, and installed hooks must reside exclusively in `.rnex/` at the workspace root. Member repositories remain 100% clean and untouched with zero `.rnex/` directories. Never create or leave internal files in the workspace root or member repo source trees.
 - **Agnostic Core**: The core `./rnex` binary and core libraries in `lib/` must remain **100% plugin-agnostic**. Never hardcode plugin names, provider-specific prompts, or domain-specific logic into `./rnex`. All domain extensions belong inside `toolkit/plugins/<name>/`.
 
 ---
@@ -75,13 +75,15 @@ Whenever you add a new command, flag, or hook behavior:
 
 ---
 
-## 3. Authoring Plugins (`toolkit/plugins/<name>/`)
+## 3. Authoring Plugins (`toolkit/plugins/<name>/` or External Plugins)
 
 Plugins provide specialized agent guidelines, workflows, skills, subagents, and scaffolding templates.
 
+Plugins can be authored directly within Repo Nexus as built-in plugins (`toolkit/plugins/<name>/`) or maintained externally via `plugins_dir` (e.g. `plugins_dir: ./plugins`) or per-plugin `path` overrides (`plugins.<name>.path`) in `rnex.yaml` or `.local.rnex.yaml`. For built-in plugins, `version:` in `plugin.yaml` is automatically synchronized with `RNEX_VERSION` in `package.json` by the maintainer pre-commit hook (`scripts/sync-plugin-versions.sh`).
+
 ### Directory Structure & Contract
 ```text
-toolkit/plugins/<name>/
+<plugin-dir>/ (e.g. toolkit/plugins/<name>/ or <plugins_dir>/<name>/)
 ├── plugin.yaml                  # Required: Plugin manifest & configuration schema
 ├── instructions/                # Optional: Markdown context files compiled into .rnex/ai-instructions.md
 ├── README.md                    # Optional: Plugin documentation & recipes

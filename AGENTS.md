@@ -8,7 +8,7 @@ Instructions and operational constraints for AI agents working within the `repo-
 - **DRY & Reusable Utilities**: Strictly avoid copy-paste. Implement solutions by extracting reusable helpers, library functions, and shared utilities into `lib/`.
 - **Modularity, Contracts & Loose Coupling**: Keep the codebase modular with minimal hard coupling between components. Work through well-defined contracts and open interfaces, applying established design patterns.
 - **Plugin-Agnostic Core**: The core CLI (`./rnex`) and `lib/` must remain completely vendor- and plugin-agnostic. Provider- and domain-specific integrations belong in `toolkit/plugins/<name>/`.
-- **Strict Encapsulation**: Internal state, generated caches, and sync metadata must reside strictly within `.rnex/` (or `repos/<name>/.rnex/`). Never pollute the repository root or member repository trees.
+- **Strict Encapsulation**: Internal state, generated caches, and sync metadata must reside strictly within `.rnex/`. Member repositories remain 100% clean and untouched with zero `.rnex/` folders inside member trees. Never pollute the repository root or member repository trees.
 
 ## 2. Testing & Verification Workflow
 Before proposing or committing changes:

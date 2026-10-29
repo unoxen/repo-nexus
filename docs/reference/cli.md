@@ -9,7 +9,7 @@ head:
 
 # CLI Reference
 
-`rnex` is a zero-dependency CLI written entirely in pure POSIX `/bin/sh`. It orchestrates Virtual Meta Repository (**meta repo**) and Nexus Repository (**nexus repo**) workspaces, single-repository management under `rnex repo`, batch operations across `./repos/`, and extensible plugin commands.
+`rnex` is a zero-dependency CLI written entirely in pure POSIX `/bin/sh`. It orchestrates Virtual Meta Repository (**meta repo**) and Nexus Repository (**nexus repo**) workspaces, single-repository management under `rnex repo`, batch operations across `<repos_dir>/` (default `./repos/`), and extensible plugin commands.
 
 ---
 
@@ -37,6 +37,7 @@ rnex init [options] [directory]
 ```
 
 * `-y`, `--yes`: Non-interactive mode; accepts all defaults automatically.
+* `--repos-dir <dir>`: Set custom directory for member repositories (default: `repos`).
 * `--code-workspace`: Enable VS Code multi-root workspace file (pass string for custom file name).
 * `--hooks`: Force-enable automated Git hooks setup during initialization.
 * `--no-hooks`: Skip Git hooks configuration during initialization.
@@ -68,7 +69,7 @@ rnex status
 ```
 
 ### `rnex clone`
-Clones all enabled member repositories declared in configuration that are missing from `./repos/`.
+Clones all enabled member repositories declared in configuration that are missing from `<repos_dir>/` (default: `./repos/`).
 
 ```sh
 rnex clone
@@ -112,7 +113,7 @@ rnex completion <bash|zsh|fish>
 Manage individual member repositories without affecting the entire workspace.
 
 ### `rnex repo add`
-Registers a repository in configuration and clones it into `./repos/<name>`.
+Registers a repository in configuration and clones it into `<repos_dir>/<name>` (default: `./repos/<name>`).
 
 ```sh
 rnex repo add <url> [--name <name>] [--branch <branch>] [--local] [--disabled] [--readonly]
@@ -132,7 +133,7 @@ Unregisters a repository from configuration.
 rnex repo remove <name> [--purge] [-y|--yes]
 ```
 
-* `--purge`: Also deletes the repository directory from disk (`./repos/<name>`).
+* `--purge`: Also deletes the repository directory from disk (`<repos_dir>/<name>`).
 * `-y`, `--yes`: Skip confirmation prompt when purging.
 
 ### `rnex repo set`
@@ -147,7 +148,7 @@ rnex repo set <name> [--enable|--disable] [--readonly|--readwrite] [--global|--l
 * `--local` / `--global`: Write to `.local.rnex.yaml` (default) or `rnex.yaml`.
 
 ### `rnex repo clone`
-Clones a single registered member repository into `./repos/<name>`.
+Clones a single registered member repository into `<repos_dir>/<name>` (default: `./repos/<name>`).
 
 ```sh
 rnex repo clone <name>
@@ -177,7 +178,7 @@ Alias for `rnex list`.
 Manage plugins and execute plugin-provided CLI commands.
 
 ### `rnex plugin list`
-Lists all available, enabled, and disabled plugins along with their declared CLI commands.
+Lists all available, enabled, and disabled plugins (from built-in toolkit, workspace `plugins_dir`, or configured `path`) along with their declared CLI commands.
 
 ```sh
 rnex plugin list
