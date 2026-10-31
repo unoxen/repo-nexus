@@ -8,6 +8,16 @@
 
 GITIGNORE_MARKER_START="# REPO-NEXUS:START"
 GITIGNORE_MARKER_END="# REPO-NEXUS:END"
+AI_MARKER_START="<!-- REPO-NEXUS:START -->"
+AI_MARKER_END="<!-- REPO-NEXUS:END -->"
+
+# Emit the single critical routing directive for initial provider instruction files.
+# All detailed execution rules, constraints, and workspace context reside in .rnex/ai-instructions.md.
+if ! command -v get_rnex_instructions >/dev/null 2>&1; then
+  get_rnex_instructions() {
+    printf "CRITICAL: You MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\` before executing any task or answering any query in this workspace.\n"
+  }
+fi
 
 # Emit the delimited Repo Nexus .gitignore section synced with git.ignore configuration.
 _build_rnex_gitignore_section() {

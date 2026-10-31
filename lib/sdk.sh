@@ -157,12 +157,10 @@ fi
 AI_MARKER_START="<!-- REPO-NEXUS:START -->"
 AI_MARKER_END="<!-- REPO-NEXUS:END -->"
 
+# Emit the single critical routing directive for initial provider instruction files.
+# All detailed execution rules, constraints, and workspace context reside in .rnex/ai-instructions.md.
 get_rnex_instructions() {
   printf "CRITICAL: You MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\` before executing any task or answering any query in this workspace.\n"
-  printf '\n'
-  printf "1. Read \`.rnex/ai-instructions.md\` once at session start and follow its **Mandatory Execution Sequence** in strict order.\n"
-  printf "2. Do **NOT** read or search for \`rnex.yaml\` or \`.local.rnex.yaml\` — the merged configuration is already compiled inside \`.rnex/ai-instructions.md\`.\n"
-  printf '3. Read each file at most once per session.\n'
 }
 
 # Safely merge delimited Repo Nexus routing instructions (<!-- REPO-NEXUS:START -->)
@@ -265,7 +263,7 @@ merge_rnex_instructions() {
   {
     printf '\n%s\n' "$AI_MARKER_START"
     cat "$_body_tmp"
-    printf '\n%s\n' "$AI_MARKER_END"
+    printf '%s\n' "$AI_MARKER_END"
   } >> "$_tmp"
   mv "$_tmp" "$_dst"
   rm -f "$_body_tmp"

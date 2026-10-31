@@ -21,7 +21,7 @@ mkdir -p "$_root/.cursor/rules"
 {
   printf -- '---\ndescription: Repo Nexus Virtual Meta-Repo routing protocol\nglobs: *\nalwaysApply: true\n---\n\n%s\n' "${AI_MARKER_START:-<!-- REPO-NEXUS:START -->}"
   get_rnex_instructions
-  printf '\n%s\n' "${AI_MARKER_END:-<!-- REPO-NEXUS:END -->}"
+  printf '%s\n' "${AI_MARKER_END:-<!-- REPO-NEXUS:END -->}"
 } > "$_root/.cursor/rules/rnex-context.mdc"
 rm -f "$_root/.cursor/rules/repo-nexus.mdc" 2>/dev/null || true
 

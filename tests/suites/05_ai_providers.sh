@@ -125,6 +125,17 @@ grep -q "REPO-NEXUS:START" "$TEST_PROVIDERS_WS/.cursorrules" || { fail "REPO-NEX
 grep -q "# Windsurf Custom" "$TEST_PROVIDERS_WS/.windsurfrules" || { fail "Custom section lost in .windsurfrules"; exit 1; }
 grep -q "REPO-NEXUS:START" "$TEST_PROVIDERS_WS/.windsurfrules" || { fail "REPO-NEXUS block missing in .windsurfrules"; exit 1; }
 
+_expected_3line_block="$(printf '<!-- REPO-NEXUS:START -->\nCRITICAL: You MUST read and strictly follow all instructions in `.rnex/ai-instructions.md` before executing any task or answering any query in this workspace.\n<!-- REPO-NEXUS:END -->')"
+for _chk_f in CLAUDE.md GEMINI.md .cursorrules .windsurfrules; do
+  _blk="$(awk '/<!-- REPO-NEXUS:START -->/,/<!-- REPO-NEXUS:END -->/' "$TEST_PROVIDERS_WS/$_chk_f")"
+  [ "$_blk" = "$_expected_3line_block" ] || { fail "$_chk_f router block did not match expected 3-line block: $_blk"; exit 1; }
+  ! grep -qE "^[0-9]+\.[[:space:]]*Read" "$TEST_PROVIDERS_WS/$_chk_f" || { fail "$_chk_f contains redundant numbered rules"; exit 1; }
+  ! grep -q "Mandatory Execution Sequence" "$TEST_PROVIDERS_WS/$_chk_f" || { fail "$_chk_f contains redundant Mandatory Execution Sequence"; exit 1; }
+  ! grep -q "Read each file at most once per session" "$TEST_PROVIDERS_WS/$_chk_f" || { fail "$_chk_f contains redundant single-read rule"; exit 1; }
+done
+_cursor_mdc_blk="$(awk '/<!-- REPO-NEXUS:START -->/,/<!-- REPO-NEXUS:END -->/' "$TEST_PROVIDERS_WS/.cursor/rules/rnex-context.mdc")"
+[ "$_cursor_mdc_blk" = "$_expected_3line_block" ] || { fail ".cursor/rules/rnex-context.mdc router block did not match expected 3-line block: $_cursor_mdc_blk"; exit 1; }
+
 # Add custom user skills and extra files across all providers
 echo "custom" > "$TEST_PROVIDERS_WS/.claude/skills/my-claude-skill.md"
 echo "custom" > "$TEST_PROVIDERS_WS/.agents/skills/my-gemini-skill.md"
@@ -140,6 +151,9 @@ echo "custom" > "$TEST_PROVIDERS_WS/.windsurf/rules/my-user-rule.md"
 
 [ -f "$TEST_PROVIDERS_WS/AGENTS.md" ] || { fail "AGENTS.md missing when provider plugins disabled"; exit 1; }
 grep -q "REPO-NEXUS:START" "$TEST_PROVIDERS_WS/AGENTS.md" || { fail "AGENTS.md missing REPO-NEXUS instructions"; exit 1; }
+_agents_blk="$(awk '/<!-- REPO-NEXUS:START -->/,/<!-- REPO-NEXUS:END -->/' "$TEST_PROVIDERS_WS/AGENTS.md")"
+[ "$_agents_blk" = "$_expected_3line_block" ] || { fail "AGENTS.md router block did not match expected 3-line block: $_agents_blk"; exit 1; }
+! grep -qE "^[0-9]+\.[[:space:]]*Read" "$TEST_PROVIDERS_WS/AGENTS.md" || { fail "AGENTS.md contains redundant numbered rules"; exit 1; }
 
 # Verify Repo Nexus generated User Skills were cleaned up
 [ ! -d "$TEST_PROVIDERS_WS/.claude/skills/rnex-clone-sync" ] || { fail "rnex User Skill not cleaned from claude"; exit 1; }
@@ -204,6 +218,9 @@ grep -q "My Custom Copilot Developer Rules" "$TEST_PROVIDERS_WS/.github/copilot-
 (cd "$TEST_PROVIDERS_WS" && ./rnex plugin enable copilot >/dev/null)
 (cd "$TEST_PROVIDERS_WS" && ./rnex sync -y --quiet >/dev/null)
 grep -q "REPO-NEXUS:START" "$TEST_PROVIDERS_WS/.github/copilot-instructions.md" || { fail "REPO-NEXUS block not merged when copilot enabled"; exit 1; }
+_copilot_blk="$(awk '/<!-- REPO-NEXUS:START -->/,/<!-- REPO-NEXUS:END -->/' "$TEST_PROVIDERS_WS/.github/copilot-instructions.md")"
+[ "$_copilot_blk" = "$_expected_3line_block" ] || { fail ".github/copilot-instructions.md router block did not match expected 3-line block: $_copilot_blk"; exit 1; }
+! grep -qE "^[0-9]+\.[[:space:]]*Read" "$TEST_PROVIDERS_WS/.github/copilot-instructions.md" || { fail ".github/copilot-instructions.md contains redundant numbered rules"; exit 1; }
 grep -q "My Custom Copilot Developer Rules" "$TEST_PROVIDERS_WS/.github/copilot-instructions.md" || { fail "Custom rules lost when copilot merged"; exit 1; }
 [ -f "$TEST_PROVIDERS_WS/.github/skills/rnex-batch-exec/SKILL.md" ] || { fail "User skills not generated in .github/skills/ when copilot enabled"; exit 1; }
 
@@ -371,6 +388,50 @@ grep -qF "1. **Step 1 — Read Wiki Hot Cache**: Read \`knowledge/hot.md\`" "$_k
 ! grep -qE '^[[:space:]]*(plugins|enabled):' "$_kg_ai" || { fail "YAML config snippets present in ai-instructions.md"; exit 1; }
 _kg_lines="$(wc -l < "$_kg_ai" | tr -d ' ')"
 [ "$_kg_lines" -lt 60 ] || { fail "ai-instructions.md too long: $_kg_lines lines (expected < 60)"; exit 1; }
+# --------------------------------------------------------------------------
+run_test "rnex sync cleanly replaces legacy 6-line REPO-NEXUS router block with 3-line block preserving user content"
+TEST_UPGRADE_BLOCK_WS="$TEST_TMP/upgrade-block-workspace"
+mkdir -p "$TEST_UPGRADE_BLOCK_WS"
+cp "$CLI" "$TEST_UPGRADE_BLOCK_WS/rnex"
+chmod +x "$TEST_UPGRADE_BLOCK_WS/rnex"
+cp -r "$DIR/toolkit" "$TEST_UPGRADE_BLOCK_WS/toolkit"
+"$TEST_UPGRADE_BLOCK_WS/rnex" init -y "$TEST_UPGRADE_BLOCK_WS" >/dev/null 2>&1
+
+cat <<'LEGACY_BLOCK_AGENTS' > "$TEST_UPGRADE_BLOCK_WS/AGENTS.md"
+# My Custom Instructions Header
+Developer notes before rnex block.
+
+<!-- REPO-NEXUS:START -->
+CRITICAL: You MUST read and strictly follow all instructions in `.rnex/ai-instructions.md` before executing any task or answering any query in this workspace.
+
+1. Read `.rnex/ai-instructions.md` once at session start and follow its **Mandatory Execution Sequence** in strict order.
+2. Do **NOT** read or search for `rnex.yaml` or `.local.rnex.yaml` — the merged configuration is already compiled inside `.rnex/ai-instructions.md`.
+3. Read each file at most once per session.
+<!-- REPO-NEXUS:END -->
+
+# My Custom Instructions Footer
+Developer notes after rnex block.
+LEGACY_BLOCK_AGENTS
+
+(cd "$TEST_UPGRADE_BLOCK_WS" && ./rnex sync -y >/dev/null 2>&1)
+
+grep -q "My Custom Instructions Header" "$TEST_UPGRADE_BLOCK_WS/AGENTS.md" || { fail "Header lost during router block replacement"; exit 1; }
+grep -q "Developer notes before rnex block." "$TEST_UPGRADE_BLOCK_WS/AGENTS.md" || { fail "Pre-content lost during router block replacement"; exit 1; }
+grep -q "My Custom Instructions Footer" "$TEST_UPGRADE_BLOCK_WS/AGENTS.md" || { fail "Footer lost during router block replacement"; exit 1; }
+grep -q "Developer notes after rnex block." "$TEST_UPGRADE_BLOCK_WS/AGENTS.md" || { fail "Post-content lost during router block replacement"; exit 1; }
+
+_upg_block="$(awk '/<!-- REPO-NEXUS:START -->/,/<!-- REPO-NEXUS:END -->/' "$TEST_UPGRADE_BLOCK_WS/AGENTS.md")"
+_exp_block="$(printf '<!-- REPO-NEXUS:START -->\nCRITICAL: You MUST read and strictly follow all instructions in `.rnex/ai-instructions.md` before executing any task or answering any query in this workspace.\n<!-- REPO-NEXUS:END -->')"
+[ "$_upg_block" = "$_exp_block" ] || { fail "Replaced REPO-NEXUS block did not match 3-line block: $_upg_block"; exit 1; }
+
+! grep -q "1. Read \`.rnex/ai-instructions.md\`" "$TEST_UPGRADE_BLOCK_WS/AGENTS.md" || { fail "Old rule 1 still present in AGENTS.md"; exit 1; }
+! grep -q "2. Do \*\*NOT\*\* read" "$TEST_UPGRADE_BLOCK_WS/AGENTS.md" || { fail "Old rule 2 still present in AGENTS.md"; exit 1; }
+! grep -q "3. Read each file at most once" "$TEST_UPGRADE_BLOCK_WS/AGENTS.md" || { fail "Old rule 3 still present in AGENTS.md"; exit 1; }
+! grep -q "Mandatory Execution Sequence" "$TEST_UPGRADE_BLOCK_WS/AGENTS.md" || { fail "Old execution sequence line still present in AGENTS.md"; exit 1; }
+
+# Verify .rnex/ai-instructions.md remains untouched and fully intact
+grep -q "Mandatory Execution Sequence" "$TEST_UPGRADE_BLOCK_WS/.rnex/ai-instructions.md" || { fail "ai-instructions.md missing Mandatory Execution Sequence"; exit 1; }
+grep -q "Strict Operating Constraints" "$TEST_UPGRADE_BLOCK_WS/.rnex/ai-instructions.md" || { fail "ai-instructions.md missing Strict Operating Constraints"; exit 1; }
 pass
 
 if [ "${_STANDALONE_RUN:-0}" -eq 1 ]; then

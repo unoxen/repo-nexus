@@ -62,9 +62,15 @@ pass
 run_test "Directive in AGENTS.md and compiled instructions in .rnex/ai-instructions.md"
 _agents_content="$(cat "$TEST_WORKSPACE/AGENTS.md")"
 echo "$_agents_content" | grep -q "CRITICAL: You MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\`" || { fail "AGENTS.md missing critical directive"; exit 1; }
-echo "$_agents_content" | grep -q "Mandatory Execution Sequence" || { fail "AGENTS.md missing execution sequence routing"; exit 1; }
-echo "$_agents_content" | grep -q "Read each file at most once per session" || { fail "AGENTS.md missing single-read rule"; exit 1; }
+! echo "$_agents_content" | grep -q "Mandatory Execution Sequence" || { fail "AGENTS.md should not contain redundant execution sequence rule"; exit 1; }
+! echo "$_agents_content" | grep -q "Read each file at most once per session" || { fail "AGENTS.md should not contain redundant single-read rule"; exit 1; }
+! echo "$_agents_content" | grep -q "Do NOT read or search for rnex.yaml" || { fail "AGENTS.md should not contain redundant config read rule"; exit 1; }
+! echo "$_agents_content" | grep -qE "^[0-9]+\.[[:space:]]*Read" || { fail "AGENTS.md must not contain numbered rules"; exit 1; }
 ! echo "$_agents_content" | grep -qE "Read.*\.local\.rnex\.yaml" || { fail "AGENTS.md must not instruct reading .local.rnex.yaml"; exit 1; }
+
+_extracted_block="$(awk '/<!-- REPO-NEXUS:START -->/,/<!-- REPO-NEXUS:END -->/' "$TEST_WORKSPACE/AGENTS.md")"
+_expected_block="$(printf '<!-- REPO-NEXUS:START -->\nCRITICAL: You MUST read and strictly follow all instructions in `.rnex/ai-instructions.md` before executing any task or answering any query in this workspace.\n<!-- REPO-NEXUS:END -->')"
+[ "$_extracted_block" = "$_expected_block" ] || { fail "AGENTS.md REPO-NEXUS block did not match expected 3-line block: $_extracted_block"; exit 1; }
 
 _ai_content="$(cat "$TEST_WORKSPACE/.rnex/ai-instructions.md")"
 echo "$_ai_content" | grep -q "NO CONFIG READS" || { fail ".rnex/ai-instructions.md missing NO CONFIG READS"; exit 1; }
