@@ -407,14 +407,176 @@ yaml_get_git_ignore() {
   } | awk '!seen[$0]++'
 }
 
-# Extract list of hook names defined under git.hooks from a YAML file.
-_yaml_git_hooks_list_from_file() {
-  _yghl_f="$1"
-  [ -f "$_yghl_f" ] || return 0
+# ---- Git Configuration Operations (git.ignore & git.hooks) -----------------
+
+# Extract list of hook names defined under git.hooks from a single YAML file.
+# Supports all three canonical YAML schemas:
+# 1. Nested map:      git.hooks.<hook_name>: [commands] | enabled: false
+# 2. Block sequence: - <hook_name>
+# 3. Inline array:   hooks: [<hook_name>, ...]
+#
+# @param $1 Absolute or relative path to the YAML file to inspect.
+# @returns Newline-delimited list of valid hook names.
+# @pure Does not mutate any external state or global variables.
+_yaml_parse_git_hooks_from_file() {
+  _ypgh_f="$1"
+  [ -f "$_ypgh_f" ] || return 0
   awk '
+    function unquote(v) {
+      sub(/^[ \t]+/, "", v)
+      if (v ~ /^"/) {
+        sub(/^"/, "", v)
+        sub(/"[ \t]*(#.*)?$/, "", v)
+      } else if (v ~ /^\047/) {
+        sub(/^\047/, "", v)
+        sub(/\047[ \t]*(#.*)?$/, "", v)
+      } else {
+        sub(/[ \t]+#.*$/, "", v)
+        sub(/[ \t]+$/, "", v)
+      }
+      return v
+    }
+
+    # Locate top-level git: section
     /^[ \t]*git:[ \t]*(#.*)?$/ { in_git=1; next }
     in_git && /^[^ \t#]/ { exit }
     !in_git { next }
+
+    {
+      match($0, /^[ \t]*/)
+      indent = RLENGTH
+      trimmed = substr($0, indent + 1)
+    }
+    trimmed ~ /^([#]|$)/ { next }
+
+    # Detect exit from hooks subsection when indentation drops
+    in_hooks && (indent <= hooks_indent) { in_hooks=0 }
+
+    !in_hooks {
+      if (trimmed ~ /^hooks:[ \t]*/) {
+        in_hooks = 1
+        hooks_indent = indent
+        hook_item_indent = -1
+        current_hook = ""
+        val = trimmed
+        sub(/^hooks:[ \t]*/, "", val)
+        val = unquote(val)
+        # Handle inline array on declaration line: hooks: [pre-commit, post-merge]
+        if (val ~ /^\[/) {
+          sub(/^\[/, "", val)
+          sub(/\][ \t]*(#.*)?$/, "", val)
+          n = split(val, parts, ",")
+          for (i = 1; i <= n; i++) {
+            item = unquote(parts[i])
+            if (item ~ /^[a-z][a-z0-9-]*$/) {
+              if (!(item in hook_seen)) {
+                hook_seen[item] = 1
+                hook_names[++hook_count] = item
+              }
+              hook_enabled[item] = 1
+            }
+          }
+          in_hooks = 0
+        }
+      }
+      next
+    }
+
+    in_hooks {
+      if (hook_item_indent == -1) {
+        hook_item_indent = indent
+      }
+
+      if (indent == hook_item_indent) {
+        # 1. Block sequence item: - <hook_name>
+        if (trimmed ~ /^-([ \t]|$)/) {
+          current_hook = ""
+          val = substr(trimmed, 2)
+          item = unquote(val)
+          if (item ~ /^[a-z][a-z0-9-]*$/) {
+            if (!(item in hook_seen)) {
+              hook_seen[item] = 1
+              hook_names[++hook_count] = item
+            }
+            hook_enabled[item] = 1
+          }
+          next
+        }
+
+        # 2. Nested map key: <hook_name>: [value]
+        if (trimmed ~ /^[a-z0-9"\047][^:]*:[ \t]*/) {
+          k = trimmed
+          sub(/:.*/, "", k)
+          k = unquote(k)
+          if (k ~ /^[a-z][a-z0-9-]*$/) {
+            current_hook = k
+            if (!(k in hook_seen)) {
+              hook_seen[k] = 1
+              hook_names[++hook_count] = k
+            }
+            val = trimmed
+            sub(/^[^:]*:[ \t]*/, "", val)
+            val = unquote(val)
+            if (val == "false" || val ~ /^\{[ \t]*enabled:[ \t]*false[ \t]*\}/) {
+              hook_enabled[k] = 0
+            } else {
+              hook_enabled[k] = 1
+            }
+          } else {
+            current_hook = ""
+          }
+          next
+        }
+      }
+
+      # 3. Child property under current_hook (e.g., enabled: false)
+      if (current_hook != "" && indent > hook_item_indent) {
+        if (trimmed ~ /^enabled:[ \t]*false([ \t]|$|#)/) {
+          hook_enabled[current_hook] = 0
+        }
+      }
+    }
+
+    END {
+      for (i = 1; i <= hook_count; i++) {
+        h = hook_names[i]
+        if (hook_enabled[h]) {
+          print h
+        }
+      }
+    }
+  ' "$_ypgh_f"
+}
+
+# Extract list of hook names explicitly disabled under git.hooks from a single YAML file.
+# Matches hooks set to false or with enabled: false.
+#
+# @param $1 Path to YAML file.
+# @returns Newline-delimited list of explicitly disabled hook names.
+# @pure
+_yaml_parse_disabled_git_hooks_from_file() {
+  _ypdgh_f="$1"
+  [ -f "$_ypdgh_f" ] || return 0
+  awk '
+    function unquote(v) {
+      sub(/^[ \t]+/, "", v)
+      if (v ~ /^"/) {
+        sub(/^"/, "", v)
+        sub(/"[ \t]*(#.*)?$/, "", v)
+      } else if (v ~ /^\047/) {
+        sub(/^\047/, "", v)
+        sub(/\047[ \t]*(#.*)?$/, "", v)
+      } else {
+        sub(/[ \t]+#.*$/, "", v)
+        sub(/[ \t]+$/, "", v)
+      }
+      return v
+    }
+
+    /^[ \t]*git:[ \t]*(#.*)?$/ { in_git=1; next }
+    in_git && /^[^ \t#]/ { exit }
+    !in_git { next }
+
     {
       match($0, /^[ \t]*/)
       indent = RLENGTH
@@ -425,10 +587,11 @@ _yaml_git_hooks_list_from_file() {
     in_hooks && (indent <= hooks_indent) { in_hooks=0 }
 
     !in_hooks {
-      if (trimmed ~ /^hooks:[ \t]*(#.*)?$/) {
+      if (trimmed ~ /^hooks:[ \t]*/) {
         in_hooks = 1
         hooks_indent = indent
         hook_item_indent = -1
+        current_hook = ""
       }
       next
     }
@@ -437,27 +600,100 @@ _yaml_git_hooks_list_from_file() {
       if (hook_item_indent == -1) {
         hook_item_indent = indent
       }
+
       if (indent == hook_item_indent) {
-        k = trimmed
-        sub(/:.*/, "", k)
-        gsub(/^["\047]|["\047]$/, "", k)
-        gsub(/[[:space:]]/, "", k)
-        if (length(k) > 0) print k
+        if (trimmed ~ /^[a-z0-9"\047][^:]*:[ \t]*/) {
+          k = trimmed
+          sub(/:.*/, "", k)
+          k = unquote(k)
+          if (k ~ /^[a-z][a-z0-9-]*$/) {
+            current_hook = k
+            if (!(k in hook_seen)) {
+              hook_seen[k] = 1
+              hook_names[++hook_count] = k
+            }
+            val = trimmed
+            sub(/^[^:]*:[ \t]*/, "", val)
+            val = unquote(val)
+            if (val == "false" || val ~ /^\{[ \t]*enabled:[ \t]*false[ \t]*\}/) {
+              hook_disabled[k] = 1
+            } else {
+              hook_disabled[k] = 0
+            }
+          } else {
+            current_hook = ""
+          }
+          next
+        }
+      }
+
+      if (current_hook != "" && indent > hook_item_indent) {
+        if (trimmed ~ /^enabled:[ \t]*false([ \t]|$|#)/) {
+          hook_disabled[current_hook] = 1
+        }
       }
     }
-  ' "$_yghl_f"
+
+    END {
+      for (i = 1; i <= hook_count; i++) {
+        h = hook_names[i]
+        if (hook_disabled[h]) {
+          print h
+        }
+      }
+    }
+  ' "$_ypdgh_f"
+}
+
+# Compatibility alias for legacy callers
+_yaml_git_hooks_list_from_file() {
+  _yaml_parse_git_hooks_from_file "$@"
 }
 
 # Enumerate configured hook names under git.hooks merged from rnex.yaml and .local.rnex.yaml.
-yaml_list_git_hooks() {
+# Respects .local.rnex.yaml priority: hooks explicitly disabled in .local.rnex.yaml are excluded.
+# Results are strictly deduplicated and sorted deterministically.
+#
+# @returns Newline-delimited list of configured Git hook names.
+# @pure Stateless read-only YAML parsing.
+yaml_get_git_hooks() {
   _yaml_resolve_files
+  _local_hooks=""
+  _local_disabled=""
+  if [ -f "$_wly" ]; then
+    _local_hooks="$(_yaml_parse_git_hooks_from_file "$_wly")"
+    _local_disabled="$(_yaml_parse_disabled_git_hooks_from_file "$_wly")"
+  fi
+  _base_hooks=""
+  if [ -f "$_wy" ]; then
+    _base_hooks="$(_yaml_parse_git_hooks_from_file "$_wy")"
+  fi
   {
-    _yaml_git_hooks_list_from_file "$_wy"
-    _yaml_git_hooks_list_from_file "$_wly"
-  } | awk '!seen[$0]++'
+    printf '%s\n' "$_local_hooks"
+    if [ -n "$_base_hooks" ]; then
+      printf '%s\n' "$_base_hooks" | while read -r _bh; do
+        [ -n "$_bh" ] || continue
+        if [ -n "$_local_disabled" ] && printf '%s\n' "$_local_disabled" | grep -qx "$_bh"; then
+          continue
+        fi
+        printf '%s\n' "$_bh"
+      done
+    fi
+  } | awk 'NF' | LC_ALL=C sort -u
+}
+
+# Backward compatibility alias for yaml_get_git_hooks
+yaml_list_git_hooks() {
+  yaml_get_git_hooks "$@"
 }
 
 # Extract command list for a specific hook under git.hooks.<hook_name> from a YAML file.
+# Supports block lists, inline string arrays, and single command strings.
+#
+# @param $1 Path to YAML file.
+# @param $2 Target hook name.
+# @returns Newline-delimited list of shell command strings.
+# @pure
 _yaml_git_hook_commands_from_file() {
   _yghc_f="$1"; _yghc_hook="$2"
   [ -f "$_yghc_f" ] || return 0
@@ -487,7 +723,10 @@ _yaml_git_hook_commands_from_file() {
     trimmed ~ /^([#]|$)/ { next }
 
     in_hook_cmds {
-      if (indent > target_indent || (indent == target_indent && trimmed ~ /^-([ \t]|$)/)) {
+      if (indent > target_indent) {
+        if (trimmed ~ /^enabled:[ \t]*false([ \t]|$|#)/) {
+          exit
+        }
         if (trimmed ~ /^-([ \t]|$)/) {
           item = unquote(substr(trimmed, 2))
           if (length(item) > 0) print item
@@ -510,12 +749,15 @@ _yaml_git_hook_commands_from_file() {
     in_hooks {
       k = trimmed
       sub(/:.*/, "", k)
-      gsub(/^["\047]|["\047]$/, "", k)
-      gsub(/[[:space:]]/, "", k)
+      k = unquote(k)
       if (k == target_hook && trimmed ~ /:[ \t]*/) {
         target_indent = indent
         val = trimmed
         sub(/^[^:]*:[ \t]*/, "", val)
+        val = unquote(val)
+        if (val == "false") {
+          exit
+        }
         if (val ~ /^(#.*)?$/) {
           in_hook_cmds = 1
           next
@@ -530,8 +772,10 @@ _yaml_git_hook_commands_from_file() {
           }
           exit
         }
-        item = unquote(val)
-        if (length(item) > 0) print item
+        if (val != "true" && val !~ /^\{/) {
+          item = unquote(val)
+          if (length(item) > 0) print item
+        }
         exit
       }
     }
@@ -540,12 +784,21 @@ _yaml_git_hook_commands_from_file() {
 
 # Read command list for a specific hook under git.hooks.<hook_name>
 # with .local.rnex.yaml override priority.
+#
+# @param $1 Hook name to query (e.g., pre-commit, post-merge).
+# @returns Shell commands to execute for the given hook.
+# @pure
 yaml_get_git_hook_commands() {
   _hook_name="$1"
   _yaml_resolve_files
-  if [ -f "$_wly" ] && _yaml_git_hooks_list_from_file "$_wly" | grep -qx "$_hook_name"; then
-    _yaml_git_hook_commands_from_file "$_wly" "$_hook_name"
-    return 0
+  if [ -f "$_wly" ]; then
+    if _yaml_parse_disabled_git_hooks_from_file "$_wly" | grep -qx "$_hook_name"; then
+      return 0
+    fi
+    if _yaml_parse_git_hooks_from_file "$_wly" | grep -qx "$_hook_name"; then
+      _yaml_git_hook_commands_from_file "$_wly" "$_hook_name"
+      return 0
+    fi
   fi
   if [ -f "$_wy" ]; then
     _yaml_git_hook_commands_from_file "$_wy" "$_hook_name"

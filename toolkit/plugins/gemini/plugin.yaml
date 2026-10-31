@@ -1,5 +1,5 @@
 name: gemini
-version: 0.8.20
+version: 0.8.21
 description: Google Gemini and Antigravity integration (maintains GEMINI.md instructions and generates user skills in .agents/skills/)
 author: unoxen
 homepage: https://github.com/unoxen/repo-nexus

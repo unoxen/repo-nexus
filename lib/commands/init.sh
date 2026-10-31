@@ -160,6 +160,7 @@ cmd_init() {
     if [ "$_init_git_hooks" = "false" ]; then
       _hooks_block='    post-merge: []
     post-checkout: []
+    post-commit: []
     pre-commit: []
     pre-push: []'
     else
@@ -167,6 +168,7 @@ cmd_init() {
       - "rnex sync --quiet"
     post-checkout:
       - "rnex sync --quiet"
+    post-commit: []
     pre-commit: []
     pre-push: []'
     fi

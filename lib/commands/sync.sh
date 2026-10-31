@@ -108,7 +108,15 @@ cmd_sync() {
   sync_plugins
 
   # 3.2. Reconcile Git hooks
-  install_git_hooks "$NEXUS_DIR"
+  if [ -e "$NEXUS_DIR/.git" ]; then
+    hooks_sync_all "$NEXUS_DIR"
+    if [ "$_sync_quiet" -eq 0 ]; then
+      _synced_hooks="$(yaml_get_git_hooks 2>/dev/null || true)"
+      if [ -n "$_synced_hooks" ]; then
+        log_ok "Synchronized Git hook wrappers in $(hooks_get_dir "$NEXUS_DIR" 2>/dev/null || echo ".git/hooks")"
+      fi
+    fi
+  fi
 
   # 3.3. Reconcile member repos (.rnex/ harness sync)
   yaml_list_repos | while read -r _name; do

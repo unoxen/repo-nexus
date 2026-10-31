@@ -99,24 +99,35 @@ cmd_status() {
   fi
 
   _git_dir=""
+  _git_dir_label=".git"
   if git -C "$NEXUS_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     _git_dir="$(git -C "$NEXUS_DIR" rev-parse --git-dir 2>/dev/null || echo "$NEXUS_DIR/.git")"
-  fi
-  _configured_hooks="$(yaml_list_git_hooks 2>/dev/null || true)"
-  _hooks_active=0
-  if [ -n "$_git_dir" ] && [ -x "$_git_dir/hooks/post-merge" ]; then
-    _hooks_active=1
+    _git_dir_label="$(basename "$_git_dir")"
   fi
 
-  if [ -n "$_configured_hooks" ]; then
-    if [ "$_hooks_active" -eq 1 ]; then
-      printf '  %b✓%b Git Hooks:     active (wrappers in %s/hooks)\n' "$_G" "$_NC" "$(basename "$_git_dir")"
-    else
-      printf '  %b!%b Git Hooks:     configured in git.hooks, but wrappers missing in %s/hooks (run "rnex sync")\n' "$_Y" "$_NC" "$(basename "$_git_dir")"
-    fi
+  _hooks_verify_rc=0
+  hooks_verify_all "$NEXUS_DIR" || _hooks_verify_rc=$?
+
+  if [ "$_hooks_verify_rc" -eq 0 ]; then
+    printf '  %b✓%b Git Hooks:     active (wrappers in %s/hooks)\n' "$_G" "$_NC" "$_git_dir_label"
+  elif [ "$_hooks_verify_rc" -eq 1 ]; then
+    printf '  %b!%b Git Hooks:     configured in git.hooks, but wrappers missing in %s/hooks (run "rnex sync")\n' "$_Y" "$_NC" "$_git_dir_label"
   else
-    if [ "$_hooks_active" -eq 1 ]; then
-      printf '  %b●%b Git Hooks:     wrappers active in %s/hooks\n' "$_DIM" "$_NC" "$(basename "$_git_dir")"
+    # Exit code 2: no Git hooks configured in workspace
+    _any_wrappers=0
+    _chk_dir="$(hooks_get_dir "$NEXUS_DIR" 2>/dev/null || true)"
+    if [ -n "$_chk_dir" ] && [ -d "$_chk_dir" ]; then
+      for _wh in "$_chk_dir"/*; do
+        [ -f "$_wh" ] || continue
+        if grep -q "REPO-NEXUS-HOOK-WRAPPER" "$_wh" 2>/dev/null || \
+           grep -q "Managed automatically by rnex" "$_wh" 2>/dev/null; then
+          _any_wrappers=1
+          break
+        fi
+      done
+    fi
+    if [ "$_any_wrappers" -eq 1 ]; then
+      printf '  %b●%b Git Hooks:     wrappers active in %s/hooks\n' "$_DIM" "$_NC" "$_git_dir_label"
     else
       printf '  %b○%b Git Hooks:     none configured in git.hooks (run "rnex sync" to install wrappers)\n' "$_DIM" "$_NC"
     fi

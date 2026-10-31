@@ -368,6 +368,195 @@ _run_count="$(wc -l < "$TEST_RNEX_RECURSE_WS/reentrant_log" | tr -d ' ')"
 [ "$_run_count" -eq 1 ] || { fail "reentrant hook executed $_run_count times instead of exactly 1"; exit 1; }
 pass
 
+# --------------------------------------------------------------------------
+run_test "Missing wrappers warning in rnex status resolved deterministically by rnex sync"
+TEST_SYNC_HOOKS_WS="$TEST_TMP/sync-hooks-resolution-ws"
+mkdir -p "$TEST_SYNC_HOOKS_WS"
+cp "$CLI" "$TEST_SYNC_HOOKS_WS/rnex"
+chmod +x "$TEST_SYNC_HOOKS_WS/rnex"
+cp -r "$DIR/toolkit" "$TEST_SYNC_HOOKS_WS/toolkit"
+cp "$DIR/package.json" "$TEST_SYNC_HOOKS_WS/package.json"
+git -C "$TEST_SYNC_HOOKS_WS" init -q
+
+"$TEST_SYNC_HOOKS_WS/rnex" init -y "$TEST_SYNC_HOOKS_WS" >/dev/null
+
+cat <<'SYNC_YAML' > "$TEST_SYNC_HOOKS_WS/rnex.yaml"
+version: 1.0.0
+git:
+  hooks:
+    pre-commit:
+      - "echo 'sync-check' > /dev/null"
+    post-merge: []
+repos:
+plugins:
+SYNC_YAML
+
+# Remove all installed wrappers to trigger missing wrappers condition
+rm -rf "$TEST_SYNC_HOOKS_WS/.git/hooks"/*
+
+# rnex status must detect missing wrappers and output explicit warning
+_status_out="$(cd "$TEST_SYNC_HOOKS_WS" && ./rnex status 2>&1)"
+echo "$_status_out" | grep -q "Git Hooks:[ ]*configured in git.hooks, but wrappers missing" || {
+  fail "rnex status did not report missing wrappers warning when .git/hooks was cleared"; exit 1;
+}
+
+# Run rnex sync to reconcile and restore wrappers
+(cd "$TEST_SYNC_HOOKS_WS" && ./rnex sync --quiet)
+
+# Verify wrappers are restored and executable
+[ -x "$TEST_SYNC_HOOKS_WS/.git/hooks/pre-commit" ] || { fail "pre-commit wrapper missing after rnex sync"; exit 1; }
+[ -x "$TEST_SYNC_HOOKS_WS/.git/hooks/post-merge" ] || { fail "post-merge wrapper missing after rnex sync"; exit 1; }
+
+# rnex status must now report active wrappers without warning
+_status_clean="$(cd "$TEST_SYNC_HOOKS_WS" && ./rnex status 2>&1)"
+echo "$_status_clean" | grep -q "Git Hooks:[ ]*active" || {
+  fail "rnex status did not report active hooks after rnex sync"; exit 1;
+}
+! echo "$_status_clean" | grep -q "wrappers missing" || {
+  fail "rnex status still reports wrappers missing after rnex sync"; exit 1;
+}
+pass
+
+# --------------------------------------------------------------------------
+run_test "YAML format coverage: block sequence, inline array, and .local.rnex.yaml disabling"
+TEST_YAML_HOOKS_WS="$TEST_TMP/yaml-formats-hooks-ws"
+mkdir -p "$TEST_YAML_HOOKS_WS"
+cp "$CLI" "$TEST_YAML_HOOKS_WS/rnex"
+chmod +x "$TEST_YAML_HOOKS_WS/rnex"
+cp -r "$DIR/toolkit" "$TEST_YAML_HOOKS_WS/toolkit"
+cp "$DIR/package.json" "$TEST_YAML_HOOKS_WS/package.json"
+git -C "$TEST_YAML_HOOKS_WS" init -q
+
+"$TEST_YAML_HOOKS_WS/rnex" init -y "$TEST_YAML_HOOKS_WS" >/dev/null
+
+# 1. Test block sequence (- pre-commit)
+cat <<'SEQ_YAML' > "$TEST_YAML_HOOKS_WS/rnex.yaml"
+version: 1.0.0
+git:
+  hooks:
+    - pre-commit
+    - pre-push
+repos:
+plugins:
+SEQ_YAML
+
+rm -rf "$TEST_YAML_HOOKS_WS/.git/hooks"/*
+(cd "$TEST_YAML_HOOKS_WS" && ./rnex sync --quiet)
+[ -x "$TEST_YAML_HOOKS_WS/.git/hooks/pre-commit" ] || { fail "pre-commit wrapper missing from block sequence config"; exit 1; }
+[ -x "$TEST_YAML_HOOKS_WS/.git/hooks/pre-push" ] || { fail "pre-push wrapper missing from block sequence config"; exit 1; }
+_seq_status="$(cd "$TEST_YAML_HOOKS_WS" && ./rnex status 2>&1)"
+echo "$_seq_status" | grep -q "Git Hooks:[ ]*active" || { fail "status did not report active for block sequence"; exit 1; }
+
+# 2. Test inline array (hooks: [pre-commit, post-checkout])
+cat <<'INLINE_YAML' > "$TEST_YAML_HOOKS_WS/rnex.yaml"
+version: 1.0.0
+git:
+  hooks: [pre-commit, post-checkout]
+repos:
+plugins:
+INLINE_YAML
+
+(cd "$TEST_YAML_HOOKS_WS" && ./rnex sync --quiet)
+[ -x "$TEST_YAML_HOOKS_WS/.git/hooks/pre-commit" ] || { fail "pre-commit wrapper missing from inline array config"; exit 1; }
+[ -x "$TEST_YAML_HOOKS_WS/.git/hooks/post-checkout" ] || { fail "post-checkout wrapper missing from inline array config"; exit 1; }
+_inline_status="$(cd "$TEST_YAML_HOOKS_WS" && ./rnex status 2>&1)"
+echo "$_inline_status" | grep -q "Git Hooks:[ ]*active" || { fail "status did not report active for inline array"; exit 1; }
+
+# 3. Test .local.rnex.yaml explicitly disabling a hook (pre-commit: false)
+cat <<'LOCAL_DISABLE_YAML' > "$TEST_YAML_HOOKS_WS/.local.rnex.yaml"
+git:
+  hooks:
+    pre-commit: false
+LOCAL_DISABLE_YAML
+
+(cd "$TEST_YAML_HOOKS_WS" && ./rnex sync --quiet)
+_disable_status="$(cd "$TEST_YAML_HOOKS_WS" && ./rnex status 2>&1)"
+echo "$_disable_status" | grep -q "Git Hooks:[ ]*active" || { fail "status did not report active after local disable"; exit 1; }
+! echo "$_disable_status" | grep -q "wrappers missing" || { fail "status reported missing wrapper for locally disabled hook"; exit 1; }
+pass
+
+# --------------------------------------------------------------------------
+run_test "Custom user hook preservation (.user), chaining, and cleanup on unconfigure"
+TEST_USER_HOOKS_WS="$TEST_TMP/user-hook-ws"
+mkdir -p "$TEST_USER_HOOKS_WS"
+cp "$CLI" "$TEST_USER_HOOKS_WS/rnex"
+chmod +x "$TEST_USER_HOOKS_WS/rnex"
+cp -r "$DIR/toolkit" "$TEST_USER_HOOKS_WS/toolkit"
+cp "$DIR/package.json" "$TEST_USER_HOOKS_WS/package.json"
+git -C "$TEST_USER_HOOKS_WS" init -q
+
+"$TEST_USER_HOOKS_WS/rnex" init -y "$TEST_USER_HOOKS_WS" >/dev/null
+
+# Create a pre-existing custom user pre-commit hook before configuring rnex
+cat <<'USER_HOOK_EOF' > "$TEST_USER_HOOKS_WS/.git/hooks/pre-commit"
+#!/bin/sh
+echo "USER_HOOK_EXECUTED" >> hook_execution.log
+USER_HOOK_EOF
+chmod +x "$TEST_USER_HOOKS_WS/.git/hooks/pre-commit"
+
+# Configure pre-commit in rnex.yaml
+cat <<'CONFIG_YAML' > "$TEST_USER_HOOKS_WS/rnex.yaml"
+version: 1.0.0
+git:
+  hooks:
+    pre-commit:
+      - "echo 'RNEX_HOOK_EXECUTED' >> hook_execution.log"
+repos:
+plugins:
+CONFIG_YAML
+
+# Sync workspace: rnex sync should preserve custom hook as pre-commit.user
+(cd "$TEST_USER_HOOKS_WS" && ./rnex sync --quiet)
+
+[ -f "$TEST_USER_HOOKS_WS/.git/hooks/pre-commit.user" ] || {
+  fail "custom user hook was not preserved as .git/hooks/pre-commit.user"; exit 1;
+}
+grep -q "USER_HOOK_EXECUTED" "$TEST_USER_HOOKS_WS/.git/hooks/pre-commit.user" || {
+  fail "pre-commit.user did not contain user hook content"; exit 1;
+}
+grep -q "REPO-NEXUS-HOOK-WRAPPER" "$TEST_USER_HOOKS_WS/.git/hooks/pre-commit" || {
+  fail ".git/hooks/pre-commit was not replaced with Repo Nexus wrapper"; exit 1;
+}
+
+# Execute hook wrapper and verify both rnex commands and user hook run
+rm -f "$TEST_USER_HOOKS_WS/hook_execution.log"
+(cd "$TEST_USER_HOOKS_WS" && .git/hooks/pre-commit)
+
+[ -f "$TEST_USER_HOOKS_WS/hook_execution.log" ] || { fail "hook execution log was not created"; exit 1; }
+grep -q "RNEX_HOOK_EXECUTED" "$TEST_USER_HOOKS_WS/hook_execution.log" || {
+  fail "rnex hook command did not execute"; exit 1;
+}
+grep -q "USER_HOOK_EXECUTED" "$TEST_USER_HOOKS_WS/hook_execution.log" || {
+  fail "preserved user hook was not chained/executed"; exit 1;
+}
+
+# Unconfigure pre-commit from rnex.yaml
+cat <<'CLEAN_YAML' > "$TEST_USER_HOOKS_WS/rnex.yaml"
+version: 1.0.0
+git:
+  hooks:
+    post-merge: []
+repos:
+plugins:
+CLEAN_YAML
+
+# Run rnex sync: stale pre-commit wrapper should be removed and pre-commit.user restored!
+(cd "$TEST_USER_HOOKS_WS" && ./rnex sync --quiet)
+
+[ ! -f "$TEST_USER_HOOKS_WS/.git/hooks/pre-commit.user" ] || {
+  fail "pre-commit.user was not removed/restored after unconfiguring"; exit 1;
+}
+[ -x "$TEST_USER_HOOKS_WS/.git/hooks/pre-commit" ] || {
+  fail ".git/hooks/pre-commit was not restored as executable"; exit 1;
+}
+grep -q "USER_HOOK_EXECUTED" "$TEST_USER_HOOKS_WS/.git/hooks/pre-commit" || {
+  fail ".git/hooks/pre-commit does not contain original user hook content after restore"; exit 1;
+}
+! grep -q "REPO-NEXUS-HOOK-WRAPPER" "$TEST_USER_HOOKS_WS/.git/hooks/pre-commit" || {
+  fail ".git/hooks/pre-commit still has wrapper marker after restore"; exit 1;
+}
+pass
+
 if [ "${_STANDALONE_RUN:-0}" -eq 1 ]; then
   report_results
 fi

@@ -6,6 +6,22 @@
 
 RNEX_MANAGED_GIT_HOOKS="post-merge post-checkout post-commit pre-commit pre-push"
 
+# Validate that a hook name adheres strictly to POSIX Git hook naming conventions.
+# Pattern: ^[a-z][a-z0-9-]*$ (prevents path traversal and shell injection attacks).
+#
+# @param $1 Hook name to validate.
+# @returns 0 if valid, 1 otherwise.
+# @pure
+hooks_validate_name() {
+  _hvn_name="${1:-}"
+  case "$_hvn_name" in
+    "") return 1 ;;
+    [!a-z]*) return 1 ;;
+    *[!a-z0-9-]*) return 1 ;;
+    *) return 0 ;;
+  esac
+}
+
 # ---- Shared Hook Resolution & Environment Helpers --------------------------
 
 # Resolve active workspace root for hook execution without mutating global state
@@ -250,70 +266,220 @@ run_plugin_git_hooks() {
 
 # ---- Git Hooks Management --------------------------------------------------
 
-_create_hook_script() {
-  _dst="$1"
-  _hook_type="$2"
+# Resolve the canonical filesystem path to the Git hooks directory (.git/hooks).
+# Handles standard repositories, git worktrees, and custom gitdirs.
+#
+# @param $1 Optional workspace root path (defaults to $NEXUS_DIR or current directory).
+# @returns Outputs absolute or canonical path to the hooks directory.
+# @pure Does not mutate filesystem state.
+hooks_get_dir() {
+  _hgd_ws="${1:-${NEXUS_DIR:-.}}"
+  if ! git -C "$_hgd_ws" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    return 1
+  fi
+  _hgd_path="$(git -C "$_hgd_ws" rev-parse --git-path hooks 2>/dev/null || true)"
+  if [ -z "$_hgd_path" ]; then
+    if [ -d "$_hgd_ws/.git" ]; then
+      _hgd_path="$_hgd_ws/.git/hooks"
+    else
+      return 1
+    fi
+  fi
+  case "$_hgd_path" in
+    /*) ;;
+    *)  _hgd_path="$_hgd_ws/$_hgd_path" ;;
+  esac
+  printf '%s' "$_hgd_path"
+  return 0
+}
 
-  # Preserve custom / repository-owned wrappers that are not auto-managed by rnex
-  if [ -f "$_dst" ] && ! grep -q "Managed automatically by rnex" "$_dst" 2>/dev/null; then
+# Verify whether an executable Repo Nexus hook wrapper is installed in .git/hooks.
+# Checks that the file exists, is executable, and contains the official wrapper marker.
+#
+# @param $1 Hook name to inspect (e.g., pre-commit, post-merge).
+# @param $2 Optional workspace root path.
+# @returns 0 if installed and valid, 1 otherwise.
+# @pure
+hooks_is_wrapper_installed() {
+  _hiw_name="$1"
+  _hiw_ws="${2:-${NEXUS_DIR:-.}}"
+  hooks_validate_name "$_hiw_name" || return 1
+  _hiw_dir="$(hooks_get_dir "$_hiw_ws")" || return 1
+  _hiw_file="$_hiw_dir/$_hiw_name"
+  [ -f "$_hiw_file" ] || return 1
+  [ -x "$_hiw_file" ] || return 1
+  if grep -q "REPO-NEXUS-HOOK-WRAPPER" "$_hiw_file" 2>/dev/null || \
+     grep -q "Managed automatically by rnex" "$_hiw_file" 2>/dev/null; then
     return 0
   fi
+  # Also consider installed if preserved user wrapper or custom team hook is active
+  if [ -f "$_hiw_dir/${_hiw_name}.user" ]; then
+    return 0
+  fi
+  return 1
+}
 
-  mkdir -p "$(dirname "$_dst")"
-  _sub_tmp="$(mktemp "${_dst}.tmp.XXXXXX" 2>/dev/null || mktemp)"
+# Install or update an executable Repo Nexus hook wrapper in .git/hooks.
+# Preserves existing non-managed user hooks:
+# - If the hook has configured commands in rnex.yaml, moves existing hook to <hook>.user and chains it.
+# - If the hook has no configured commands, preserves the custom wrapper in place untouched.
+# Prevents self-rewrite / inode churn by checking cmp -s before writing.
+#
+# @param $1 Hook name to install.
+# @param $2 Optional workspace root path.
+# @returns 0 on success, 1 on failure.
+# @sideEffects Creates/modifies files in .git/hooks/.
+hooks_install_wrapper() {
+  _hiw_hook="$1"
+  _hiw_ws="${2:-${NEXUS_DIR:-.}}"
+  hooks_validate_name "$_hiw_hook" || return 1
+  _hiw_dir="$(hooks_get_dir "$_hiw_ws")" || return 1
+  mkdir -p "$_hiw_dir"
+  _hiw_dst="$_hiw_dir/$_hiw_hook"
+
+  # If a custom non-sample hook exists without Repo Nexus marker:
+  if [ -f "$_hiw_dst" ]; then
+    if ! grep -q "REPO-NEXUS-HOOK-WRAPPER" "$_hiw_dst" 2>/dev/null && \
+       ! grep -q "Managed automatically by rnex" "$_hiw_dst" 2>/dev/null; then
+      _hook_cmds="$(yaml_get_git_hook_commands "$_hiw_hook" 2>/dev/null || true)"
+      if [ -n "$_hook_cmds" ]; then
+        # Hook has configured rnex commands: preserve user hook as .user and chain
+        mv "$_hiw_dst" "${_hiw_dst}.user"
+        chmod +x "${_hiw_dst}.user" 2>/dev/null || true
+      else
+        # Hook has no custom rnex commands: preserve custom wrapper untouched in place
+        return 0
+      fi
+    fi
+  fi
+
+  _sub_tmp="$(mktemp "${_hiw_dst}.tmp.XXXXXX" 2>/dev/null || mktemp)"
   cat > "$_sub_tmp" <<HOOK_EOF
 #!/bin/sh
-# Repo Nexus Git Hook: $_hook_type
+# Repo Nexus Git Hook: $_hiw_hook
+# REPO-NEXUS-HOOK-WRAPPER
 # Managed automatically by rnex. Do not edit manually.
 
 _dir="\$(git rev-parse --show-toplevel 2>/dev/null)"
 [ -n "\$_dir" ] || _dir="\$(cd "\$(dirname "\$0")/../.." 2>/dev/null && pwd -P)"
 if [ -x "\$_dir/rnex" ]; then
-  "\$_dir/rnex" _hook $_hook_type "\$@"
+  "\$_dir/rnex" _hook $_hiw_hook "\$@"
 elif command -v rnex >/dev/null 2>&1; then
-  rnex _hook $_hook_type "\$@"
+  rnex _hook $_hiw_hook "\$@"
 fi
+_rnex_rc=\$?
+
+# Chain preserved user hook if present
+_hooks_dir="\$(dirname "\$0")"
+if [ -x "\$_hooks_dir/${_hiw_hook}.user" ]; then
+  "\$_hooks_dir/${_hiw_hook}.user" "\$@" || exit \$?
+fi
+
+exit \$_rnex_rc
 HOOK_EOF
 
   chmod +x "$_sub_tmp"
 
   # Avoid rewriting / modifying file if already identical (prevents inode churn & self-rewrite)
-  if [ -f "$_dst" ] && cmp -s "$_sub_tmp" "$_dst"; then
+  if [ -f "$_hiw_dst" ] && cmp -s "$_sub_tmp" "$_hiw_dst"; then
     rm -f "$_sub_tmp"
     return 0
   fi
 
-  cp "$_sub_tmp" "$_dst" 2>/dev/null || mv "$_sub_tmp" "$_dst" 2>/dev/null || true
+  cp "$_sub_tmp" "$_hiw_dst" 2>/dev/null || mv "$_sub_tmp" "$_hiw_dst" 2>/dev/null || true
   rm -f "$_sub_tmp" 2>/dev/null || true
+  chmod +x "$_hiw_dst" 2>/dev/null || true
+  return 0
 }
 
-_install_managed_hook_scripts() {
-  _imh_dir="$1"
-  mkdir -p "$_imh_dir"
-  for _h in $RNEX_MANAGED_GIT_HOOKS; do
-    _create_hook_script "$_imh_dir/$_h" "$_h"
+# Synchronize all configured Git hooks into .git/hooks wrappers.
+# 1. Installs/updates wrappers for all configured hooks from yaml_get_git_hooks.
+# 2. Removes stale Repo Nexus wrappers for hooks no longer configured, restoring <hook>.user if present.
+# 3. Cleans up legacy .rnex/hooks if core.hooksPath was configured to it.
+#
+# @param $1 Optional workspace root path.
+# @returns 0 on success.
+# @sideEffects Modifies files in .git/hooks/.
+hooks_sync_all() {
+  _hsa_ws="${1:-${NEXUS_DIR:-.}}"
+  _hsa_dir="$(hooks_get_dir "$_hsa_ws")" || return 0
+  mkdir -p "$_hsa_dir"
+
+  _configured_hooks="$(yaml_get_git_hooks 2>/dev/null || true)"
+
+  # 1. Install or update wrappers for all configured hooks
+  for _hsa_hook in $_configured_hooks; do
+    [ -n "$_hsa_hook" ] || continue
+    hooks_install_wrapper "$_hsa_hook" "$_hsa_ws"
   done
+
+  # 2. Clean up stale Repo Nexus wrappers for hooks no longer configured
+  if [ -d "$_hsa_dir" ]; then
+    for _hsa_file in "$_hsa_dir"/*; do
+      [ -f "$_hsa_file" ] || continue
+      case "$_hsa_file" in
+        *.sample|*.user|*.tmp.*) continue ;;
+      esac
+      _hsa_base="$(basename "$_hsa_file")"
+      if grep -q "REPO-NEXUS-HOOK-WRAPPER" "$_hsa_file" 2>/dev/null || \
+         grep -q "Managed automatically by rnex" "$_hsa_file" 2>/dev/null; then
+        if [ -n "$_configured_hooks" ] && printf '%s\n' "$_configured_hooks" | grep -qx "$_hsa_base"; then
+          : # Configured hook, keep active
+        else
+          rm -f "$_hsa_file"
+          # Restore preserved user hook if present
+          if [ -f "$_hsa_dir/${_hsa_base}.user" ]; then
+            mv "$_hsa_dir/${_hsa_base}.user" "$_hsa_file"
+            chmod +x "$_hsa_file" 2>/dev/null || true
+          fi
+        fi
+      fi
+    done
+  fi
+
+  # 3. Clean up legacy .rnex/hooks if core.hooksPath was previously set to it
+  _hp="$(git -C "$_hsa_ws" config --get core.hooksPath 2>/dev/null || true)"
+  if [ "$_hp" = ".rnex/hooks" ] || [ "$_hp" = "$_hsa_ws/.rnex/hooks" ]; then
+    git -C "$_hsa_ws" config --unset core.hooksPath 2>/dev/null || true
+  fi
+  rm -rf "$_hsa_ws/.rnex/hooks" 2>/dev/null || true
+  return 0
 }
 
+# Verify that all configured Git hooks have active wrappers installed in .git/hooks.
+#
+# @param $1 Optional workspace root path.
+# @returns 0 if all configured hooks are installed and executable,
+#          1 if any configured hook wrapper is missing/invalid,
+#          2 if no Git hooks are configured in workspace.
+# @pure
+hooks_verify_all() {
+  _hva_ws="${1:-${NEXUS_DIR:-.}}"
+  _hva_hooks="$(yaml_get_git_hooks 2>/dev/null || true)"
+  [ -n "$_hva_hooks" ] || return 2
+
+  _hva_dir="$(hooks_get_dir "$_hva_ws")" || return 1
+  [ -d "$_hva_dir" ] || return 1
+
+  for _hva_h in $_hva_hooks; do
+    [ -n "$_hva_h" ] || continue
+    if ! hooks_is_wrapper_installed "$_hva_h" "$_hva_ws"; then
+      return 1
+    fi
+  done
+  return 0
+}
+
+# Backward compatibility wrapper for install_git_hooks
 install_git_hooks() {
-  _ws_dir="${1:-$NEXUS_DIR}"
+  _ws_dir="${1:-${NEXUS_DIR:-.}}"
   if ! git -C "$_ws_dir" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     return 0
   fi
-  _git_dir="$(cd "$_ws_dir" 2>/dev/null && git rev-parse --git-dir 2>/dev/null)"
-  case "$_git_dir" in
-    /*) ;;
-    *)  _git_dir="$_ws_dir/$_git_dir" ;;
-  esac
-  [ -d "$_git_dir" ] || return 0
-  _hooks_dir="$_git_dir/hooks"
-  _install_managed_hook_scripts "$_hooks_dir"
-  # Clean up legacy .rnex/hooks if core.hooksPath was previously set to it
-  _hp="$(git -C "$_ws_dir" config --get core.hooksPath 2>/dev/null || true)"
-  if [ "$_hp" = ".rnex/hooks" ] || [ "$_hp" = "$_ws_dir/.rnex/hooks" ]; then
-    git -C "$_ws_dir" config --unset core.hooksPath || true
-  fi
-  rm -rf "$_ws_dir/.rnex/hooks" 2>/dev/null || true
+  for _imh in $RNEX_MANAGED_GIT_HOOKS; do
+    hooks_install_wrapper "$_imh" "$_ws_dir"
+  done
+  hooks_sync_all "$_ws_dir"
 }
 
 # Delegate to repository-owned hook in scripts/githooks/<hook> or .githooks/<hook>
