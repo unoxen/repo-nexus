@@ -1,5 +1,5 @@
 name: copilot
-version: 0.8.19
+version: 0.8.20
 description: GitHub Copilot integration (maintains .github/copilot-instructions.md and user skills in .github/skills/)
 author: unoxen
 homepage: https://github.com/unoxen/repo-nexus

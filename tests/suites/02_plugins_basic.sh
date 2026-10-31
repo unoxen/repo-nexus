@@ -69,7 +69,10 @@ echo "$_agents_content" | grep -q "CRITICAL: You MUST read and strictly follow a
 ! echo "$_agents_content" | grep -qE "Read.*\.local\.rnex\.yaml" || { fail "AGENTS.md must not instruct reading .local.rnex.yaml"; exit 1; }
 
 _extracted_block="$(awk '/<!-- REPO-NEXUS:START -->/,/<!-- REPO-NEXUS:END -->/' "$TEST_WORKSPACE/AGENTS.md")"
-_expected_block="$(printf '<!-- REPO-NEXUS:START -->\nCRITICAL: You MUST read and strictly follow all instructions in `.rnex/ai-instructions.md` before executing any task or answering any query in this workspace.\n<!-- REPO-NEXUS:END -->')"
+_expected_block="$(printf '%s\n%s\n%s' \
+  "<!-- REPO-NEXUS:START -->" \
+  "CRITICAL: You MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\` before executing any task or answering any query in this workspace." \
+  "<!-- REPO-NEXUS:END -->")"
 [ "$_extracted_block" = "$_expected_block" ] || { fail "AGENTS.md REPO-NEXUS block did not match expected 3-line block: $_extracted_block"; exit 1; }
 
 _ai_content="$(cat "$TEST_WORKSPACE/.rnex/ai-instructions.md")"

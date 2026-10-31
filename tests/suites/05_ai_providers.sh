@@ -125,7 +125,10 @@ grep -q "REPO-NEXUS:START" "$TEST_PROVIDERS_WS/.cursorrules" || { fail "REPO-NEX
 grep -q "# Windsurf Custom" "$TEST_PROVIDERS_WS/.windsurfrules" || { fail "Custom section lost in .windsurfrules"; exit 1; }
 grep -q "REPO-NEXUS:START" "$TEST_PROVIDERS_WS/.windsurfrules" || { fail "REPO-NEXUS block missing in .windsurfrules"; exit 1; }
 
-_expected_3line_block="$(printf '<!-- REPO-NEXUS:START -->\nCRITICAL: You MUST read and strictly follow all instructions in `.rnex/ai-instructions.md` before executing any task or answering any query in this workspace.\n<!-- REPO-NEXUS:END -->')"
+_expected_3line_block="$(printf '%s\n%s\n%s' \
+  "<!-- REPO-NEXUS:START -->" \
+  "CRITICAL: You MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\` before executing any task or answering any query in this workspace." \
+  "<!-- REPO-NEXUS:END -->")"
 for _chk_f in CLAUDE.md GEMINI.md .cursorrules .windsurfrules; do
   _blk="$(awk '/<!-- REPO-NEXUS:START -->/,/<!-- REPO-NEXUS:END -->/' "$TEST_PROVIDERS_WS/$_chk_f")"
   [ "$_blk" = "$_expected_3line_block" ] || { fail "$_chk_f router block did not match expected 3-line block: $_blk"; exit 1; }
@@ -421,7 +424,10 @@ grep -q "My Custom Instructions Footer" "$TEST_UPGRADE_BLOCK_WS/AGENTS.md" || { 
 grep -q "Developer notes after rnex block." "$TEST_UPGRADE_BLOCK_WS/AGENTS.md" || { fail "Post-content lost during router block replacement"; exit 1; }
 
 _upg_block="$(awk '/<!-- REPO-NEXUS:START -->/,/<!-- REPO-NEXUS:END -->/' "$TEST_UPGRADE_BLOCK_WS/AGENTS.md")"
-_exp_block="$(printf '<!-- REPO-NEXUS:START -->\nCRITICAL: You MUST read and strictly follow all instructions in `.rnex/ai-instructions.md` before executing any task or answering any query in this workspace.\n<!-- REPO-NEXUS:END -->')"
+_exp_block="$(printf '%s\n%s\n%s' \
+  "<!-- REPO-NEXUS:START -->" \
+  "CRITICAL: You MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\` before executing any task or answering any query in this workspace." \
+  "<!-- REPO-NEXUS:END -->")"
 [ "$_upg_block" = "$_exp_block" ] || { fail "Replaced REPO-NEXUS block did not match 3-line block: $_upg_block"; exit 1; }
 
 ! grep -q "1. Read \`.rnex/ai-instructions.md\`" "$TEST_UPGRADE_BLOCK_WS/AGENTS.md" || { fail "Old rule 1 still present in AGENTS.md"; exit 1; }
