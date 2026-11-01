@@ -162,9 +162,9 @@ cd "$TEST_WORKSPACE"
 pass
 
 # --------------------------------------------------------------------------
-run_test "Remove member repository (unregisters and deletes repos/<name> via --purge)"
-"$TEST_WORKSPACE/rnex" repo remove test-app --purge >/dev/null
-[ ! -e "$TEST_WORKSPACE/repos/test-app" ] || { fail "Physical repo folder was not deleted on remove --purge"; exit 1; }
+run_test "Remove member repository (unregisters and deletes repos/<name> from disk)"
+"$TEST_WORKSPACE/rnex" repo remove test-app >/dev/null
+[ ! -e "$TEST_WORKSPACE/repos/test-app" ] || { fail "Physical repo folder was not deleted on remove"; exit 1; }
 ! grep -q "test-app:" "$TEST_WORKSPACE/rnex.yaml" || { fail "test-app still in rnex.yaml"; exit 1; }
 [ -d "$TEST_REPO/src" ] || { fail "Original source repo was deleted"; exit 1; }
 pass

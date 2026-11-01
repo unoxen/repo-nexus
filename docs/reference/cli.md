@@ -51,7 +51,7 @@ rnex init [options] [directory]
 * `--plugin <name>`: Enable any specified plugin during initialization (repeatable).
 
 ### `rnex sync`
-Single reconciliation command: syncs skills, plugins, Git hooks & ignore rules, and compiles `.rnex/ai-instructions.md`.
+Single reconciliation command: syncs skills, plugins, Git hooks & ignore rules, compiles `.rnex/ai-instructions.md`, and prunes unlisted/deleted member repositories from `<repos_dir>` so the directory strictly matches configuration.
 
 ```sh
 rnex sync [options]
@@ -127,14 +127,14 @@ rnex repo add <url> [--name <name>] [--branch <branch>] [--local] [--disabled] [
 * `--readonly`: Register with `readonly: true`.
 
 ### `rnex repo remove`
-Unregisters a repository from configuration.
+Unregisters a repository from configuration and deletes its directory from disk.
 
 ```sh
 rnex repo remove <name> [--purge] [-y|--yes]
 ```
 
-* `--purge`: Also deletes the repository directory from disk (`<repos_dir>/<name>`).
-* `-y`, `--yes`: Skip confirmation prompt when purging.
+* `--purge`: Deletes the repository directory from disk (`<repos_dir>/<name>`). (Retained for backward compatibility; repo directory is deleted upon removal).
+* `-y`, `--yes`: Skip confirmation prompt.
 
 ### `rnex repo set`
 Updates repository state and flags.

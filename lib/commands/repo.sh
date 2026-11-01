@@ -75,7 +75,7 @@ Subcommands:
   add <url> [--name <name>] [--branch <branch>] [--local] [--disabled] [--readonly]
                       Add and optionally clone a member repository
   remove <name> [--purge] [-y|--yes]
-                      Remove a repository from configuration (use --purge to delete directory)
+                      Remove a repository from configuration and delete its directory from disk
   set <name> [--enable|--disable] [--readonly|--readwrite] [--global|--local]
                       Update repository configuration flags (default: --local)
   clone <name>        Clone a single member repository
@@ -223,7 +223,7 @@ cmd_repo_add() {
   log_ok "Registered and added repo '${_name}'"
 }
 
-# Remove a member repository from configuration. Deletes local folder only when --purge is specified.
+# Remove a member repository from configuration and delete its local directory from disk.
 # Usage:
 #   rnex repo remove <name> [--purge] [-y|--yes]
 cmd_repo_remove() {
@@ -253,12 +253,26 @@ cmd_repo_remove() {
   _target_dir="$(resolve_repo_path "$_name")"
   yaml_remove_repo "$_name"
 
-  if [ "$_purge" -eq 1 ] && [ -d "$_target_dir" ]; then
-    rm -rf "$_target_dir"
-    log_ok "Removed and deleted repo '$_name' ($_target_dir)"
+  _ws_root="${NEXUS_DIR:-${RNEX_ROOT:-.}}"
+  while [ "$_ws_root" != "${_ws_root%/}" ] && [ -n "${_ws_root%/}" ]; do
+    _ws_root="${_ws_root%/}"
+  done
+
+  _clean_target="$_target_dir"
+  while [ "$_clean_target" != "${_clean_target%/}" ] && [ -n "${_clean_target%/}" ]; do
+    _clean_target="${_clean_target%/}"
+  done
+
+  if [ -n "$_clean_target" ] && \
+     [ "$_clean_target" != "/" ] && \
+     [ "$_clean_target" != "$_ws_root" ] && \
+     { [ -d "$_clean_target" ] || [ -L "$_clean_target" ]; }; then
+    rm -rf "${_clean_target:?}"
+    log_ok "Removed and deleted repo '$_name' ($_clean_target)"
   else
-    log_ok "Unregistered repo '$_name'"
+    log_ok "Removed repo '$_name'"
   fi
+  update_sync_stamp "$NEXUS_DIR"
   build_ai_instructions "$NEXUS_DIR"
   sync_code_workspace
   run_hook "after_sync" "$@"

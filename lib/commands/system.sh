@@ -125,7 +125,7 @@ cmd_help() {
     rnex repo clone api                         # Clone single member repo
     rnex repo status api                        # Show details and git status for api repo
     rnex repo exec api git log -1               # Run command in repos/api
-    rnex repo remove api --purge                # Remove api and purge repos/api directory
+    rnex repo remove api                        # Remove api and delete repos/api directory
     rnex clone                                  # Clone all team repositories defined in rnex.yaml
     rnex exec git status -s                     # Check Git status across all repos
     rnex exec npm test                          # Run tests in all repos

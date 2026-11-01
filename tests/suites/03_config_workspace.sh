@@ -258,7 +258,7 @@ done
 pass
 
 # --------------------------------------------------------------------------
-run_test "rnex repo add with --branch, repo set multi-flags, and repo remove with/without --purge"
+run_test "rnex repo add with --branch, repo set multi-flags, repo remove (deletes from disk), and rnex sync unlisted pruning"
 TEST_REPO_OPS_WS="$TEST_TMP/repo-ops-workspace"
 mkdir -p "$TEST_REPO_OPS_WS"
 cp "$CLI" "$TEST_REPO_OPS_WS/rnex"
@@ -303,15 +303,33 @@ echo "$_rstatus_out" | grep -q "Target Branch: develop" || { fail "rnex repo sta
 _rexec_out="$(cd "$TEST_REPO_OPS_WS" && ./rnex repo exec api git status -s 2>&1)"
 echo "$_rexec_out" | grep -q "\[api\]" || { fail "rnex repo exec did not run in api repo"; exit 1; }
 
-# 5. Remove repo without --purge (keeps repos/api on disk)
+# 5. Remove repo without --purge (deletes repos/api from disk)
 (cd "$TEST_REPO_OPS_WS" && ./rnex repo remove api >/dev/null)
 ! grep -q "api:" "$TEST_REPO_OPS_WS/rnex.yaml" || { fail "api still present in rnex.yaml after remove"; exit 1; }
-[ -d "$TEST_REPO_OPS_WS/repos/api/.git" ] || { fail "repos/api was deleted without --purge"; exit 1; }
+[ ! -d "$TEST_REPO_OPS_WS/repos/api" ] || { fail "repos/api was not deleted without --purge"; exit 1; }
 
 # 6. Re-add and remove with --purge (deletes repos/api from disk)
 (cd "$TEST_REPO_OPS_WS" && ./rnex repo add "$_branch_repo_dir" --name api >/dev/null)
+[ -d "$TEST_REPO_OPS_WS/repos/api/.git" ] || { fail "repos/api was not re-cloned"; exit 1; }
 (cd "$TEST_REPO_OPS_WS" && ./rnex repo remove api --purge -y >/dev/null)
 [ ! -d "$TEST_REPO_OPS_WS/repos/api" ] || { fail "repos/api directory was not deleted with --purge"; exit 1; }
+
+# 7. Add repo, simulate manual deletion from rnex.yaml, and verify rnex sync deletes it from repos_dir
+(cd "$TEST_REPO_OPS_WS" && ./rnex repo add "$_branch_repo_dir" --name api >/dev/null)
+[ -d "$TEST_REPO_OPS_WS/repos/api/.git" ] || { fail "repos/api was not re-cloned"; exit 1; }
+sed -e '/^  api:/,/^[a-zA-Z]/ { /^  api:/d; /^    /d; }' "$TEST_REPO_OPS_WS/rnex.yaml" > "$TEST_REPO_OPS_WS/rnex.yaml.tmp"
+mv "$TEST_REPO_OPS_WS/rnex.yaml.tmp" "$TEST_REPO_OPS_WS/rnex.yaml"
+! grep -q "api:" "$TEST_REPO_OPS_WS/rnex.yaml" || { fail "api still present in rnex.yaml"; exit 1; }
+[ -d "$TEST_REPO_OPS_WS/repos/api" ] || { fail "repos/api should still exist prior to rnex sync"; exit 1; }
+
+# Also create an unlisted directory in repos/
+mkdir -p "$TEST_REPO_OPS_WS/repos/unlisted-dir"
+touch "$TEST_REPO_OPS_WS/repos/unlisted-dir/rogue.txt"
+
+(cd "$TEST_REPO_OPS_WS" && ./rnex sync -y >/dev/null)
+[ ! -d "$TEST_REPO_OPS_WS/repos/api" ] || { fail "rnex sync did not delete unlisted repo api from repos dir"; exit 1; }
+[ ! -d "$TEST_REPO_OPS_WS/repos/unlisted-dir" ] || { fail "rnex sync did not delete unlisted directory from repos dir"; exit 1; }
+[ -f "$TEST_REPO_OPS_WS/repos/.gitkeep" ] || { fail "rnex sync removed .gitkeep from repos dir"; exit 1; }
 pass
 
 # --------------------------------------------------------------------------
