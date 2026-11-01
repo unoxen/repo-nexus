@@ -32,8 +32,6 @@ A lightweight, zero-dependency and AI-First Nexus Repository (Virtual Meta Repos
 </div>
 </div>
 
----
-
 ## Key Highlights
 
 <div class="rnex-features-grid">

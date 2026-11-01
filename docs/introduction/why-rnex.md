@@ -13,6 +13,8 @@ Modern engineering teams face an architectural dilemma: manage code across dozen
 
 Repo Nexus provides a third path: the **Virtual Meta Repository** (**meta repo**) and **Nexus Repository** (**nexus repo**).
 
+![Repo Nexus Presentation Diagram](/presentation-diagram.jpg)
+
 ## What is a Meta Repository (Meta Repo)?
 
 A **meta repository** (**meta repo**) is an architectural pattern where an umbrella repository acts as a single coordination and onboarding point for multiple independent Git repositories. Rather than compiling all code into one giant monorepo, a meta repo coordinates member repositories as distinct, isolated Git checkouts within the workspace.

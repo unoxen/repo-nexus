@@ -106,8 +106,6 @@ flowchart TB
     MainContext -.->|Routes AI Assistants to| CuratedWiki
 ```
 
----
-
 ## Filesystem Layout
 
 A fully initialized Repo Nexus workspace is structured as follows:
