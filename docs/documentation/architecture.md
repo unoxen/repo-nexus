@@ -11,6 +11,8 @@ head:
 
 Repo Nexus coordinates multiple repositories through a declarative directory hierarchy that balances workspace-wide orchestration with complete member repository autonomy in a unified meta repository (meta repo) and nexus repository (nexus repo).
 
+![Repo Nexus Presentation Diagram](/presentation-diagram.jpg)
+
 ## Architecture Diagram
 
 The following diagram illustrates how configuration flows through the core engine to manage tracked meta-repo assets, git-ignored runtime files, and autonomous member clones:
