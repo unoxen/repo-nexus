@@ -62,6 +62,7 @@ for _asset in lib templates toolkit; do
     cp -R "$_src_dir/$_asset" "$INSTALL_DIR/$_asset"
   fi
 done
+rm -rf "$INSTALL_DIR/toolkit/plugins"/*/tests 2>/dev/null || true
 rm -rf "$_tmp_dir"
 
 chmod +x "$INSTALL_DIR/rnex"

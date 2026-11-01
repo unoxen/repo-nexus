@@ -253,12 +253,18 @@ grep -q "BEFORE_EXEC" "$TEST_RNEX_HOOKS_WS/hook_log" || { fail "before_exec hook
 grep -q "AFTER_EXEC" "$TEST_RNEX_HOOKS_WS/hook_log" || { fail "after_exec hook did not execute"; exit 1; }
 
 # 6. Plugin enable
-(cd "$TEST_RNEX_HOOKS_WS" && ./rnex plugin enable claude >/dev/null)
+mkdir -p "$TEST_RNEX_HOOKS_WS/toolkit/plugins/dummy-plugin"
+cat <<'EOF_DUMMY_PL' > "$TEST_RNEX_HOOKS_WS/toolkit/plugins/dummy-plugin/plugin.yaml"
+name: dummy-plugin
+version: 1.0.0
+description: Synthetic plugin for hook testing
+EOF_DUMMY_PL
+(cd "$TEST_RNEX_HOOKS_WS" && ./rnex plugin enable dummy-plugin >/dev/null)
 grep -q "BEFORE_PLUGIN_ENABLE" "$TEST_RNEX_HOOKS_WS/hook_log" || { fail "before_plugin_enable hook did not execute"; exit 1; }
 grep -q "AFTER_PLUGIN_ENABLE" "$TEST_RNEX_HOOKS_WS/hook_log" || { fail "after_plugin_enable hook did not execute"; exit 1; }
 
 # 7. Plugin disable
-(cd "$TEST_RNEX_HOOKS_WS" && ./rnex plugin disable claude >/dev/null)
+(cd "$TEST_RNEX_HOOKS_WS" && ./rnex plugin disable dummy-plugin >/dev/null)
 grep -q "BEFORE_PLUGIN_DISABLE" "$TEST_RNEX_HOOKS_WS/hook_log" || { fail "before_plugin_disable hook did not execute"; exit 1; }
 grep -q "AFTER_PLUGIN_DISABLE" "$TEST_RNEX_HOOKS_WS/hook_log" || { fail "after_plugin_disable hook did not execute"; exit 1; }
 

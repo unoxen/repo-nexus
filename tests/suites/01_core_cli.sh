@@ -185,11 +185,116 @@ echo "$_ver" | grep -q "$_expected_ver" || { fail "Version $_expected_ver not di
 pass
 
 # --------------------------------------------------------------------------
-run_test "Shell completion generator"
+run_test "Swallowed exit codes in cmd_exec and repo exec properly propagated"
+"$TEST_WORKSPACE/rnex" repo add "$TEST_REPO" --name repo-exec >/dev/null
+
+set +e
+"$TEST_WORKSPACE/rnex" exec "false" >/dev/null 2>&1
+_exec_rc=$?
+"$TEST_WORKSPACE/rnex" exec "exit 42" >/dev/null 2>&1
+_exec_rc42=$?
+"$TEST_WORKSPACE/rnex" repo exec repo-exec "exit 42" >/dev/null 2>&1
+_repo_exec_rc42=$?
+set -e
+[ "$_exec_rc" -ne 0 ] || { fail "rnex exec false returned 0"; exit 1; }
+[ "$_exec_rc42" -eq 42 ] || { fail "rnex exec exit 42 returned $_exec_rc42 (expected 42)"; exit 1; }
+[ "$_repo_exec_rc42" -eq 42 ] || { fail "rnex repo exec exit 42 returned $_repo_exec_rc42 (expected 42)"; exit 1; }
+"$TEST_WORKSPACE/rnex" exec "true" >/dev/null
+pass
+
+# --------------------------------------------------------------------------
+run_test "Shell completion generator (bash, zsh, fish) including readonly"
 _zsh_comp="$("$TEST_WORKSPACE/rnex" completion zsh 2>&1)"
 echo "$_zsh_comp" | grep -q "compdef rnex" || { fail "zsh completion missing compdef"; exit 1; }
+echo "$_zsh_comp" | grep -q "readonly" || { fail "zsh completion missing readonly"; exit 1; }
 _bash_comp="$("$TEST_WORKSPACE/rnex" completion bash 2>&1)"
 echo "$_bash_comp" | grep -q "complete -F _rnex_completions" || { fail "bash completion missing complete -F"; exit 1; }
+_fish_comp="$("$TEST_WORKSPACE/rnex" completion fish 2>&1)"
+echo "$_fish_comp" | grep -q "readonly" || { fail "fish completion missing readonly"; exit 1; }
+pass
+
+# --------------------------------------------------------------------------
+run_test "--config / -c pre-flight check_auto_sync detects changes from outside directory"
+TEST_CFG_EXT_WS="$TEST_TMP/cfg-ext-ws"
+mkdir -p "$TEST_CFG_EXT_WS"
+cp "$CLI" "$TEST_CFG_EXT_WS/rnex"
+chmod +x "$TEST_CFG_EXT_WS/rnex"
+cp "$DIR/package.json" "$TEST_CFG_EXT_WS/package.json"
+cp -r "$DIR/lib" "$TEST_CFG_EXT_WS/lib"
+cp -r "$DIR/templates" "$TEST_CFG_EXT_WS/templates"
+(cd "$TEST_CFG_EXT_WS" && ./rnex init -y >/dev/null)
+[ -f "$TEST_CFG_EXT_WS/.rnex/sync_stamp" ] || { fail "sync stamp missing after init"; exit 1; }
+
+printf "\n# modified config\n" >> "$TEST_CFG_EXT_WS/rnex.yaml"
+
+cd "$TEST_OUTSIDE"
+_outside_out="$("$TEST_CFG_EXT_WS/rnex" -c "$TEST_CFG_EXT_WS/rnex.yaml" list 2>&1)"
+cd "$DIR"
+
+_new_sum="$(cd "$TEST_CFG_EXT_WS" && cksum rnex.yaml .local.rnex.yaml 2>/dev/null | cksum | awk '{print $1, $2}')"
+_stamp_val="$(cat "$TEST_CFG_EXT_WS/.rnex/sync_stamp" 2>/dev/null)"
+[ "$_new_sum" = "$_stamp_val" ] || { fail "Auto-sync was not triggered for custom config from external directory"; exit 1; }
+pass
+
+# --------------------------------------------------------------------------
+run_test "Exclude docs/ and tests/ from installations, npm packaging, and remove remaining .gitkeep files"
+# 1. Verify package.json files array excludes docs/
+grep -q '"docs/"' "$DIR/package.json" && { fail "package.json files array still includes docs/"; exit 1; }
+grep -q '"rnex"' "$DIR/package.json" || { fail "package.json missing rnex in files"; exit 1; }
+grep -q '"lib/"' "$DIR/package.json" || { fail "package.json missing lib/ in files"; exit 1; }
+grep -q '"templates/"' "$DIR/package.json" || { fail "package.json missing templates/ in files"; exit 1; }
+grep -q '"toolkit/"' "$DIR/package.json" || { fail "package.json missing toolkit/ in files"; exit 1; }
+
+# 2. Verify .npmignore contains /docs/ and toolkit/plugins/*/tests/
+grep -q '/docs/' "$DIR/.npmignore" || { fail ".npmignore missing /docs/"; exit 1; }
+grep -q 'toolkit/plugins/\*/tests/' "$DIR/.npmignore" || { fail ".npmignore missing toolkit/plugins/*/tests/"; exit 1; }
+
+# 3. Verify no tracked .gitkeep files remain in repository
+_gitkeep_count="$(git -C "$DIR" ls-files "*.gitkeep" 2>/dev/null | wc -l | tr -d ' ')"
+[ "$_gitkeep_count" -eq 0 ] || { fail "Found $_gitkeep_count tracked .gitkeep files"; exit 1; }
+
+# 4. Verify rnex install copies runtime assets and excludes docs/ and tests/
+TEST_CLI_INST_BIN="$TEST_TMP/test-cli-inst-bin"
+TEST_CLI_INST_SHARE="$TEST_TMP/test-cli-inst-share"
+mkdir -p "$TEST_CLI_INST_BIN" "$TEST_CLI_INST_SHARE"
+RNEX_INSTALL_DIR="$TEST_CLI_INST_SHARE" "$DIR/rnex" install "$TEST_CLI_INST_BIN" >/dev/null
+[ -x "$TEST_CLI_INST_BIN/rnex" ] || { fail "rnex install did not create executable in bin dir"; exit 1; }
+[ -d "$TEST_CLI_INST_SHARE/lib" ] || { fail "rnex install did not copy lib/ to install dir"; exit 1; }
+[ -d "$TEST_CLI_INST_SHARE/templates" ] || { fail "rnex install did not copy templates/ to install dir"; exit 1; }
+[ -d "$TEST_CLI_INST_SHARE/toolkit" ] || { fail "rnex install did not copy toolkit/ to install dir"; exit 1; }
+[ ! -d "$TEST_CLI_INST_SHARE/docs" ] || { fail "rnex install leaked docs/ into install dir"; exit 1; }
+[ ! -d "$TEST_CLI_INST_SHARE/toolkit/plugins/claude/tests" ] || { fail "rnex install leaked tests into install dir"; exit 1; }
+
+# 5. Verify scripts/install.sh copies runtime assets and excludes docs/ and tests/
+TEST_SCRIPT_INST_BIN="$TEST_TMP/test-script-inst-bin"
+TEST_SCRIPT_INST_SHARE="$TEST_TMP/test-script-inst-share"
+mkdir -p "$TEST_SCRIPT_INST_BIN" "$TEST_SCRIPT_INST_SHARE"
+RNEX_REPO_URL="$DIR" RNEX_INSTALL_DIR="$TEST_SCRIPT_INST_SHARE" RNEX_BIN_DIR="$TEST_SCRIPT_INST_BIN" sh "$DIR/scripts/install.sh" >/dev/null
+[ -x "$TEST_SCRIPT_INST_BIN/rnex" ] || { fail "scripts/install.sh did not create executable in bin dir"; exit 1; }
+[ -d "$TEST_SCRIPT_INST_SHARE/lib" ] || { fail "scripts/install.sh did not copy lib/ to install dir"; exit 1; }
+[ -d "$TEST_SCRIPT_INST_SHARE/templates" ] || { fail "scripts/install.sh did not copy templates/ to install dir"; exit 1; }
+[ -d "$TEST_SCRIPT_INST_SHARE/toolkit" ] || { fail "scripts/install.sh did not copy toolkit/ to install dir"; exit 1; }
+[ ! -d "$TEST_SCRIPT_INST_SHARE/docs" ] || { fail "scripts/install.sh leaked docs/ into install dir"; exit 1; }
+[ ! -d "$TEST_SCRIPT_INST_SHARE/toolkit/plugins/claude/tests" ] || { fail "scripts/install.sh leaked tests into install dir"; exit 1; }
+pass
+
+# --------------------------------------------------------------------------
+run_test "Terminology audit (zero 'companion' occurrences), SEO keyword presence, and top README image"
+if grep -ri "companion" "$DIR/README.md" "$DIR/package.json" "$DIR/docs" "$DIR/rnex" "$DIR/lib" "$DIR/templates" "$DIR/toolkit" >/dev/null 2>&1; then
+  fail "Obsolete term 'companion' found in repository codebase"; exit 1
+fi
+
+for _kw in "nexus repository" "meta repository" "nexus repo" "meta repo"; do
+  for _file in "$DIR/README.md" "$DIR/package.json" "$DIR/docs/index.md" "$DIR/docs/.vitepress/config.mts"; do
+    if ! grep -iq "$_kw" "$_file"; then
+      fail "Required SEO keyword '$_kw' missing in $_file"; exit 1
+    fi
+  done
+done
+
+_img_src="$(head -n 10 "$DIR/README.md" | grep '<img ' | sed 's/.*src="\([^"]*\)".*/\1/')"
+[ -n "$_img_src" ] || { fail "README.md top 10 lines do not contain an <img> tag"; exit 1; }
+[ -f "$DIR/$_img_src" ] || { fail "Hero image '$_img_src' referenced in README.md does not exist"; exit 1; }
 pass
 
 if [ "${_STANDALONE_RUN:-0}" -eq 1 ]; then

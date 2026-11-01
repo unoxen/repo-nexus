@@ -14,12 +14,15 @@ Instructions and operational constraints for AI agents working within the `repo-
 Before proposing or committing changes:
 - **Linting**: Ensure shell scripts comply with ShellCheck:
   ```sh
-  shellcheck -s sh rnex lib/*.sh lib/commands/*.sh scripts/*.sh tests/*.sh
+  shellcheck -s sh rnex lib/*.sh lib/commands/*.sh scripts/*.sh tests/*.sh tests/suites/*.sh toolkit/plugins/*/tests/*.sh
   ```
 - **CLI Test Suite**: Run the automated test suite to ensure tests pass:
   ```sh
-  ./tests/test_cli.sh           # Run entire test suite
-  ./tests/test_cli.sh <suite>    # Run specific suite (e.g., ./tests/test_cli.sh 01)
+  ./tests/test_cli.sh           # Run entire test suite (core + plugins)
+  ./tests/test_cli.sh core      # Run core engine test suites
+  ./tests/test_cli.sh plugins   # Run all plugin test suites
+  ./tests/test_cli.sh <name>    # Run specific suite or plugin (e.g., ./tests/test_cli.sh 01, ./tests/test_cli.sh claude)
+  sh toolkit/plugins/<name>/tests/test_plugin.sh # Run a plugin test independently
   ```
 - **Documentation**: When updating docs or specs, verify the VitePress build:
   ```sh

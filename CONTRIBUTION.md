@@ -58,20 +58,32 @@ Before opening a pull request, run the full automated CLI test suite:
 ```sh
 ./tests/test_cli.sh
 ```
-The test suite executes isolated end-to-end tests across all commands, plugins, Git hooks, two-level configurations, and auto-sync behaviors.
+The test suite executes isolated end-to-end tests across core engine modules (`tests/suites/`) and every independent plugin test suite (`toolkit/plugins/*/tests/test_plugin.sh`).
 
-You can also run individual modular test suites located under `tests/suites/`:
+You can run individual modular test suites or plugin suites:
 ```sh
-# Run a specific suite by name or number prefix:
+# Run core test suites only:
+./tests/test_cli.sh core
+
+# Run all plugin test suites only:
+./tests/test_cli.sh plugins
+
+# Run a specific core suite by number or prefix:
 ./tests/test_cli.sh 01
-./tests/test_cli.sh 06
+./tests/test_cli.sh 02
+
+# Run a specific plugin test suite:
+./tests/test_cli.sh claude
+./tests/test_cli.sh karpathy-llm
+
+# Run a plugin test suite completely standalone:
+sh toolkit/plugins/claude/tests/test_plugin.sh
 ```
 
-### Adding Tests for New Features
-Whenever you add a new command, flag, or hook behavior:
-1. Add corresponding test assertions to the relevant suite under `tests/suites/` (or create a new suite).
-2. Verify that your tests pass locally via `./tests/test_cli.sh`.
-3. Ensure CI passes on `.github/workflows/ci.yml`.
+### Adding Tests for New Features & Plugins
+- **Core CLI & Engine**: Add test assertions to the relevant suite under `tests/suites/01_core_cli.sh` .. `04_git_hooks.sh`.
+- **Plugins**: Maintain independent test suites inside `toolkit/plugins/<name>/tests/test_plugin.sh`. Each plugin test suite must be runnable standalone and isolated from other plugins.
+- **Verification**: Run `./tests/test_cli.sh` to ensure all tests pass cleanly.
 
 ---
 
@@ -95,7 +107,9 @@ Plugins can be authored directly within Repo Nexus as built-in plugins (`toolkit
 ├── rules/                       # Optional: Coding rules (*.md)
 ├── skills/                      # Optional: Plugin-owned agentic skills (*.md)
 ├── agents/                      # Optional: Autonomous subagent declarations (*.agent.md)
-└── templates/                   # Optional: Functional templates copied during rnex sync
+├── templates/                   # Optional: Functional templates copied during rnex sync
+└── tests/                       # Recommended: Independent plugin automated test suite
+    └── test_plugin.sh           # Standalone test runner for this plugin
 ```
 
 ### Plugin Manifest (`plugin.yaml`)

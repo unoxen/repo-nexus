@@ -169,11 +169,11 @@ repo-nexus/
 │   ├── install.sh                  # Zero-dependency standalone installer
 │   └── githooks/                   # Repository maintainer release hooks
 ├── tests/
-│   ├── test_cli.sh                 # Main test runner
+│   ├── test_cli.sh                 # Main test runner (core + per-plugin suites)
 │   ├── test_helper.sh              # Shared test harness and utilities
-│   └── suites/                     # Modular test suites (01–07)
+│   └── suites/                     # Core CLI engine test suites (01–04)
 ├── toolkit/                        # Built-in plugins and core agentic skills
-│   ├── plugins/                    # Scoped workspace & AI provider plugins
+│   ├── plugins/                    # Scoped workspace plugins with independent tests
 │   └── skills/                     # Core workspace agentic skills
 └── README.md
 ```

@@ -37,6 +37,7 @@ cmd_install() {
         cp -R "$_src_root/$_asset" "$_install_dir/$_asset"
       fi
     done
+    rm -rf "$_install_dir/toolkit/plugins"/*/tests 2>/dev/null || true
   fi
 
   _installed_cli="$_install_dir/rnex"

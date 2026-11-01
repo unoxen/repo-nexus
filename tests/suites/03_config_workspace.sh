@@ -172,47 +172,6 @@ echo "$_status_out" | grep -q "Git Ignore:" || { fail "Status did not show Git I
 echo "$_status_out" | grep -q "Workspace AI Context" || { fail "Status did not show AI Context"; exit 1; }
 pass
 
-# --------------------------------------------------------------------------
-run_test "Enabling provider plugin creates provider instruction file, cleans inactive AGENTS.md, and creates User Skills"
-# Enable gemini plugin in workspace
-"$TEST_WORKSPACE/rnex" plugin enable gemini >/dev/null
-[ -f "$TEST_WORKSPACE/GEMINI.md" ] || { fail "GEMINI.md missing when gemini enabled"; exit 1; }
-[ -f "$TEST_WORKSPACE/.geminiignore" ] || { fail ".geminiignore missing when gemini enabled"; exit 1; }
-grep -qFx "# REPO-NEXUS:START" "$TEST_WORKSPACE/.geminiignore" || { fail ".geminiignore missing # REPO-NEXUS:START delimiter"; exit 1; }
-grep -qFx "# REPO-NEXUS:END" "$TEST_WORKSPACE/.geminiignore" || { fail ".geminiignore missing # REPO-NEXUS:END delimiter"; exit 1; }
-# AGENTS.md (which only had default rnex instructions and is not gemini's instruction file) is cleaned
-[ ! -f "$TEST_WORKSPACE/AGENTS.md" ] || { fail "AGENTS.md should not be retained when gemini provides GEMINI.md"; exit 1; }
-[ -d "$TEST_WORKSPACE/.agents/skills" ] || { fail ".agents/skills not created"; exit 1; }
-[ ! -d "$TEST_WORKSPACE/.gemini/skills" ] || { fail "incorrect .gemini/skills was created"; exit 1; }
-[ -f "$TEST_WORKSPACE/.agents/skills/rnex-clone-sync/SKILL.md" ] || { fail "rnex-clone-sync missing in .agents/skills"; exit 1; }
-_status_fixed="$("$TEST_WORKSPACE/rnex" status 2>&1)"
-echo "$_status_fixed" | grep -q "GEMINI.md" || { fail "Status did not show GEMINI.md"; exit 1; }
-echo "$_status_fixed" | grep -q ".agents/skills/" || { fail "Status did not show .agents/skills/"; exit 1; }
-# Disable gemini plugin; GEMINI.md (empty of user content) is deleted, .geminiignore is deleted, and AGENTS.md restored as fallback
-"$TEST_WORKSPACE/rnex" plugin disable gemini >/dev/null
-[ ! -f "$TEST_WORKSPACE/GEMINI.md" ] || { fail "GEMINI.md was not removed after disabling gemini (had no user content)"; exit 1; }
-[ ! -f "$TEST_WORKSPACE/.geminiignore" ] || { fail ".geminiignore was not removed after disabling gemini (had no user rules)"; exit 1; }
-[ -f "$TEST_WORKSPACE/AGENTS.md" ] || { fail "AGENTS.md missing after disabling provider plugin (should restore as fallback)"; exit 1; }
-grep -q "REPO-NEXUS:START" "$TEST_WORKSPACE/AGENTS.md" || { fail "AGENTS.md missing REPO-NEXUS instructions after disabling gemini"; exit 1; }
-[ ! -d "$TEST_WORKSPACE/.agents/skills/rnex-clone-sync" ] || { fail "User skills not cleaned up after disabling gemini"; exit 1; }
-pass
-
-# --------------------------------------------------------------------------
-run_test "Init with --claude flag sets up Claude plugin, CLAUDE.md, and User Skills without redundant AGENTS.md"
-TEST_AI_WS="$TEST_TMP/ai-workspace"
-mkdir -p "$TEST_AI_WS"
-cp "$CLI" "$TEST_AI_WS/rnex"
-chmod +x "$TEST_AI_WS/rnex"
-cp -r "$DIR/toolkit" "$TEST_AI_WS/toolkit"
-"$TEST_AI_WS/rnex" init -y --claude "$TEST_AI_WS" >/dev/null
-[ ! -f "$TEST_AI_WS/AGENTS.md" ] || { fail "AGENTS.md should not be created when claude provides CLAUDE.md"; exit 1; }
-[ -f "$TEST_AI_WS/CLAUDE.md" ] || { fail "CLAUDE.md missing after init --claude"; exit 1; }
-[ -d "$TEST_AI_WS/.claude/skills" ] || { fail ".claude/skills missing after init --claude"; exit 1; }
-[ -f "$TEST_AI_WS/.claude/skills/rnex-clone-sync/SKILL.md" ] || { fail "rnex-clone-sync/SKILL.md missing in .claude/skills"; exit 1; }
-grep -q "claude:" "$TEST_AI_WS/rnex.yaml" || { fail "claude plugin not enabled in rnex.yaml"; exit 1; }
-grep -q "CRITICAL: You MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\`" "$TEST_AI_WS/CLAUDE.md" || { fail "CLAUDE.md missing critical directive"; exit 1; }
-grep -q "Repo Nexus Workspace Instructions" "$TEST_AI_WS/.rnex/ai-instructions.md" || { fail ".rnex/ai-instructions.md missing Repo Nexus Workspace Instructions"; exit 1; }
-pass
 
 # --------------------------------------------------------------------------
 run_test "Configurable code_workspace generates and updates .code-workspace file"
@@ -350,6 +309,135 @@ echo "$_rexec_out" | grep -q "\[api\]" || { fail "rnex repo exec did not run in 
 (cd "$TEST_REPO_OPS_WS" && ./rnex repo add "$_branch_repo_dir" --name api >/dev/null)
 (cd "$TEST_REPO_OPS_WS" && ./rnex repo remove api --purge -y >/dev/null)
 [ ! -d "$TEST_REPO_OPS_WS/repos/api" ] || { fail "repos/api directory was not deleted with --purge"; exit 1; }
+pass
+
+# --------------------------------------------------------------------------
+run_test "Commented repo keys removed by _yaml_remove_repo_from_file"
+(cd "$TEST_REPO_OPS_WS" && ./rnex repo add "$TEST_REPO" --name commented-repo >/dev/null)
+sed -e 's/^  commented-repo:[ ]*$/  commented-repo: # inline comment for test/' "$TEST_REPO_OPS_WS/rnex.yaml" > "$TEST_REPO_OPS_WS/rnex.yaml.tmp"
+mv "$TEST_REPO_OPS_WS/rnex.yaml.tmp" "$TEST_REPO_OPS_WS/rnex.yaml"
+grep -q "commented-repo: # inline comment" "$TEST_REPO_OPS_WS/rnex.yaml" || { fail "Failed to prepare inline comment in rnex.yaml"; exit 1; }
+
+(cd "$TEST_REPO_OPS_WS" && ./rnex repo remove commented-repo --purge -y >/dev/null)
+! grep -q "commented-repo" "$TEST_REPO_OPS_WS/rnex.yaml" || { fail "commented-repo was not removed from rnex.yaml when having inline comment"; exit 1; }
+[ ! -d "$TEST_REPO_OPS_WS/repos/commented-repo" ] || { fail "repos/commented-repo directory was not deleted"; exit 1; }
+pass
+
+# --------------------------------------------------------------------------
+run_test "Repo remove flag ordering (-y and --purge before or after name)"
+(cd "$TEST_REPO_OPS_WS" && ./rnex repo add "$TEST_REPO" --name remove-flag-repo >/dev/null)
+(cd "$TEST_REPO_OPS_WS" && ./rnex repo remove -y --purge remove-flag-repo >/dev/null)
+[ ! -d "$TEST_REPO_OPS_WS/repos/remove-flag-repo" ] || { fail "remove -y <name> failed to delete repo directory"; exit 1; }
+! grep -q "remove-flag-repo" "$TEST_REPO_OPS_WS/rnex.yaml" || { fail "remove -y <name> failed to unregister repo from rnex.yaml"; exit 1; }
+pass
+
+# --------------------------------------------------------------------------
+run_test "cmd_clone uses resolve_repo_path for custom path resolution"
+mkdir -p "$TEST_REPO_OPS_WS/custom-repos"
+cat <<'EOF_CR' >> "$TEST_REPO_OPS_WS/rnex.yaml"
+  custom-path-repo:
+    path: custom-repos/my-custom-repo
+    url: ./dummy-url
+EOF_CR
+sed -e "s|\./dummy-url|$TEST_REPO|" "$TEST_REPO_OPS_WS/rnex.yaml" > "$TEST_REPO_OPS_WS/rnex.yaml.tmp"
+mv "$TEST_REPO_OPS_WS/rnex.yaml.tmp" "$TEST_REPO_OPS_WS/rnex.yaml"
+(cd "$TEST_REPO_OPS_WS" && ./rnex clone >/dev/null)
+[ -d "$TEST_REPO_OPS_WS/custom-repos/my-custom-repo/.git" ] || { fail "cmd_clone did not use resolve_repo_path to clone into custom path"; exit 1; }
+pass
+
+# --------------------------------------------------------------------------
+run_test "rnex repo add infers repository name from URL or path when name argument is omitted"
+TEST_INFER_WS="$TEST_TMP/infer-name-workspace"
+mkdir -p "$TEST_INFER_WS"
+cp "$CLI" "$TEST_INFER_WS/rnex"
+chmod +x "$TEST_INFER_WS/rnex"
+cp -r "$DIR/lib" "$TEST_INFER_WS/lib"
+cp "$DIR/package.json" "$TEST_INFER_WS/package.json"
+(cd "$TEST_INFER_WS" && ./rnex init -y >/dev/null)
+
+# 1. rnex repo add with local repo path clones and infers name from directory
+(cd "$TEST_INFER_WS" && ./rnex repo add "$TEST_REPO" >/dev/null)
+[ -d "$TEST_INFER_WS/repos/dummy-repo/.git" ] || { fail "dummy-repo not cloned when name omitted"; exit 1; }
+grep -q "dummy-repo:" "$TEST_INFER_WS/rnex.yaml" || { fail "dummy-repo not registered in rnex.yaml"; exit 1; }
+
+# 2. rnex repo add with HTTPS URL ending in .git infers name
+(cd "$TEST_INFER_WS" && ./rnex repo add https://github.com/example-org/inferred-service.git --disabled >/dev/null)
+grep -q "inferred-service:" "$TEST_INFER_WS/rnex.yaml" || { fail "inferred-service not registered from .git URL"; exit 1; }
+
+# 3. rnex repo add with URL with trailing slash and --local infers name
+(cd "$TEST_INFER_WS" && ./rnex repo add --local https://github.com/example-org/inferred-local/ --disabled >/dev/null)
+grep -q "inferred-local:" "$TEST_INFER_WS/.local.rnex.yaml" || { fail "inferred-local not registered in local config"; exit 1; }
+
+# 4. rnex repo add with SSH scp-like URL infers name
+(cd "$TEST_INFER_WS" && ./rnex repo add git@github.com:example-org/ssh-service.git --disabled >/dev/null)
+grep -q "ssh-service:" "$TEST_INFER_WS/rnex.yaml" || { fail "ssh-service not registered from SSH URL"; exit 1; }
+
+# 5. Explicit --name form works as expected
+(cd "$TEST_INFER_WS" && ./rnex repo add https://github.com/example-org/other.git --name custom-alias --disabled >/dev/null)
+grep -q "custom-alias:" "$TEST_INFER_WS/rnex.yaml" || { fail "custom-alias not registered from --name form"; exit 1; }
+pass
+
+# --------------------------------------------------------------------------
+run_test "Member repository lazy/on-demand .rnex model and readonly: <boolean> setting"
+TEST_RO_WS="$TEST_TMP/ro-lazy-ws"
+mkdir -p "$TEST_RO_WS"
+cp "$CLI" "$TEST_RO_WS/rnex"
+chmod +x "$TEST_RO_WS/rnex"
+cp -r "$DIR/lib" "$TEST_RO_WS/lib"
+cp "$DIR/package.json" "$TEST_RO_WS/package.json"
+git -C "$TEST_RO_WS" init -q
+
+(cd "$TEST_RO_WS" && ./rnex init -y >/dev/null)
+
+# 1. rnex repo add clones repo cleanly without creating member .rnex/
+(cd "$TEST_RO_WS" && ./rnex repo add "$TEST_REPO" --name standard-repo >/dev/null)
+[ -d "$TEST_RO_WS/repos/standard-repo/.git" ] || { fail "standard-repo not cloned"; exit 1; }
+[ ! -d "$TEST_RO_WS/repos/standard-repo/.rnex" ] || { fail "standard-repo has unexpected .rnex/ folder"; exit 1; }
+! grep -q "rnex_dir" "$TEST_RO_WS/rnex.yaml" || { fail "rnex_dir setting unexpectedly written to rnex.yaml"; exit 1; }
+
+# 2. rnex list shows READONLY column defaulting to false
+_list_out="$(cd "$TEST_RO_WS" && ./rnex list 2>&1)"
+echo "$_list_out" | grep -q "READONLY" || { fail "rnex list missing READONLY column: $_list_out"; exit 1; }
+echo "$_list_out" | grep "standard-repo" | grep -q "false" || { fail "standard-repo readonly not false in list: $_list_out"; exit 1; }
+
+# 3. rnex repo add --readonly marks repository readonly
+(cd "$TEST_RO_WS" && ./rnex repo add "$TEST_REPO" --name reference-repo --readonly >/dev/null)
+grep -q "readonly: true" "$TEST_RO_WS/rnex.yaml" || { fail "readonly: true not found in rnex.yaml"; exit 1; }
+[ ! -d "$TEST_RO_WS/repos/reference-repo/.rnex" ] || { fail "reference-repo has unexpected .rnex/"; exit 1; }
+
+# 4. Status and list reflect readonly status
+_list_out="$(cd "$TEST_RO_WS" && ./rnex list 2>&1)"
+echo "$_list_out" | grep "reference-repo" | grep -q "true" || { fail "reference-repo readonly not true in list: $_list_out"; exit 1; }
+_status_out="$(cd "$TEST_RO_WS" && ./rnex status 2>&1)"
+echo "$_status_out" | grep "reference-repo" | grep -q "\[readonly\]" || { fail "reference-repo missing [readonly] in status: $_status_out"; exit 1; }
+
+# 5. rnex repo set readonly toggle commands (global and local)
+(cd "$TEST_RO_WS" && ./rnex repo set reference-repo --readwrite --global >/dev/null)
+grep -q "readonly: false" "$TEST_RO_WS/rnex.yaml" || { fail "readonly: false not updated in rnex.yaml"; exit 1; }
+
+(cd "$TEST_RO_WS" && ./rnex repo set standard-repo --readonly --local >/dev/null)
+[ -f "$TEST_RO_WS/.local.rnex.yaml" ] || { fail ".local.rnex.yaml missing"; exit 1; }
+grep -q "readonly: true" "$TEST_RO_WS/.local.rnex.yaml" || { fail "readonly: true not in .local.rnex.yaml"; exit 1; }
+
+# 6. Verify AI instructions mention readonly rules
+[ -f "$TEST_RO_WS/.rnex/ai-instructions.md" ] || { fail ".rnex/ai-instructions.md missing"; exit 1; }
+grep -q "READ-ONLY" "$TEST_RO_WS/.rnex/ai-instructions.md" || { fail "readonly directive missing from compiled AI instructions"; exit 1; }
+
+# 7. Lazy on-demand .rnex behavior:
+# - If user or plugin creates a custom file in member .rnex/, it is preserved
+mkdir -p "$TEST_RO_WS/repos/standard-repo/.rnex"
+echo "custom member context" > "$TEST_RO_WS/repos/standard-repo/.rnex/custom.txt"
+(cd "$TEST_RO_WS" && ./rnex sync -y --quiet >/dev/null)
+[ -f "$TEST_RO_WS/repos/standard-repo/.rnex/custom.txt" ] || { fail "custom member .rnex file deleted during sync"; exit 1; }
+
+# - If member repo only has boilerplate README, rnex sync prunes it
+mkdir -p "$TEST_RO_WS/repos/reference-repo/.rnex"
+cat <<'EOF_BOILERPLATE' > "$TEST_RO_WS/repos/reference-repo/.rnex/README.md"
+# .rnex — Repo Nexus Workspace Integration
+Repo Nexus Workspace Integration boilerplate
+EOF_BOILERPLATE
+(cd "$TEST_RO_WS" && ./rnex sync -y --quiet >/dev/null)
+[ ! -d "$TEST_RO_WS/repos/reference-repo/.rnex" ] || { fail "boilerplate .rnex was not pruned by sync"; exit 1; }
 pass
 
 # --------------------------------------------------------------------------

@@ -88,6 +88,35 @@ setup_test_workspace() {
   fi
 }
 
+setup_plugin_test_workspace() {
+  _plugin_name="$1"
+  _ws="${2:-$TEST_WORKSPACE}"
+  mkdir -p "$_ws" "$TEST_OUTSIDE"
+  setup_dummy_repo
+
+  if [ ! -f "$_ws/rnex" ]; then
+    cp "$CLI" "$_ws/rnex"
+    chmod +x "$_ws/rnex"
+  fi
+  if [ -f "$DIR/package.json" ] && [ ! -f "$_ws/package.json" ]; then
+    cp "$DIR/package.json" "$_ws/package.json"
+  fi
+  if [ -d "$DIR/lib" ] && [ ! -d "$_ws/lib" ]; then
+    cp -r "$DIR/lib" "$_ws/lib"
+  fi
+  if [ -d "$DIR/templates" ] && [ ! -d "$_ws/templates" ]; then
+    cp -r "$DIR/templates" "$_ws/templates"
+  fi
+  if [ -d "$DIR/toolkit/skills" ] && [ ! -d "$_ws/toolkit/skills" ]; then
+    mkdir -p "$_ws/toolkit"
+    cp -r "$DIR/toolkit/skills" "$_ws/toolkit/skills"
+  fi
+  if [ -n "$_plugin_name" ] && [ -d "$DIR/toolkit/plugins/$_plugin_name" ] && [ ! -d "$_ws/toolkit/plugins/$_plugin_name" ]; then
+    mkdir -p "$_ws/toolkit/plugins"
+    cp -r "$DIR/toolkit/plugins/$_plugin_name" "$_ws/toolkit/plugins/$_plugin_name"
+  fi
+}
+
 report_results() {
   echo ""
   echo "===================================="
