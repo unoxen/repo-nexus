@@ -1,6 +1,6 @@
 {
   "name": "repo-nexus",
-  "version": "0.8.25",
+  "version": "0.8.26",
   "description": "Lightweight, zero-dependency Virtual Meta Repository (meta repo) and Nexus Repository (nexus repo) manager for multi-repo workspaces and shared AI context (no git submodules)",
   "bin": {
     "repo-nexus": "rnex",
@@ -8,7 +8,7 @@
   },
   "scripts": {
     "prepare": "git config core.hooksPath scripts/githooks 2>/dev/null || true",
-    "version": "./scripts/sync-plugin-versions.sh && git add toolkit/plugins/*/plugin.yaml",
+    "version": "./scripts/sync-plugin-versions.sh && git add plugins/*/plugin.yaml",
     "test": "./tests/test_cli.sh",
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",
@@ -18,7 +18,8 @@
     "rnex",
     "lib/",
     "templates/",
-    "toolkit/"
+    "plugins/",
+    "skills/"
   ],
   "repository": {
     "type": "git",

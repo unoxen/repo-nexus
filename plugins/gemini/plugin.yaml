@@ -1,9 +1,9 @@
-name: claude
-version: 0.8.25
-description: Anthropic Claude Code integration (maintains CLAUDE.md instructions and generates user skills in .claude/skills/)
+name: gemini
+version: 0.8.26
+description: Google Gemini and Antigravity integration (maintains GEMINI.md instructions and generates user skills in .agents/skills/)
 author: unoxen
 homepage: https://github.com/unoxen/repo-nexus
-skill_dir: .claude/skills
+skill_dir: .agents/skills
 
 config_defaults:
   skills: true
@@ -14,4 +14,4 @@ config_descriptions:
   auto_sync_on: "SessionStart|false  (trigger auto-sync on lifecycle event, e.g. SessionStart)"
 
 instructions:
-  - instructions/rnex-claude-integration.md: .rnex/plugins/claude/instructions/rnex-claude-integration.md
+  - instructions/rnex-gemini-integration.md: .rnex/plugins/gemini/instructions/rnex-gemini-integration.md
