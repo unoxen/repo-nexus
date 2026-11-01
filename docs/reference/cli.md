@@ -178,7 +178,7 @@ Alias for `rnex list`.
 Manage plugins and execute plugin-provided CLI commands.
 
 ### `rnex plugin list`
-Lists all available, enabled, and disabled plugins (from built-in toolkit or configured external plugin paths via `plugins.<name>.path`) along with their declared CLI commands.
+Lists all available, enabled, and disabled plugins (from built-in plugins or configured external plugin paths via `plugins.<name>.path`) along with their declared CLI commands.
 
 ```sh
 rnex plugin list
@@ -206,7 +206,7 @@ rnex plugin disable [--local] <name>
 ```
 
 ### `rnex plugin update`
-Re-synchronizes and updates enabled plugins from toolkit sources.
+Re-synchronizes and updates enabled plugins from plugin sources.
 
 ```sh
 rnex plugin update [<name>]

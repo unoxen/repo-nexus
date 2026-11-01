@@ -57,11 +57,18 @@ rm -rf "$INSTALL_DIR"
 mkdir -p "$INSTALL_DIR"
 cp "$_src_dir/rnex" "$INSTALL_DIR/rnex"
 [ -f "$_src_dir/package.json" ] && cp "$_src_dir/package.json" "$INSTALL_DIR/package.json"
-for _asset in lib templates toolkit; do
+for _asset in lib templates plugins skills; do
   if [ -d "$_src_dir/$_asset" ]; then
     cp -R "$_src_dir/$_asset" "$INSTALL_DIR/$_asset"
   fi
 done
+if [ ! -d "$INSTALL_DIR/plugins" ] && [ -d "$_src_dir/toolkit/plugins" ]; then
+  cp -R "$_src_dir/toolkit/plugins" "$INSTALL_DIR/plugins"
+fi
+if [ ! -d "$INSTALL_DIR/skills" ] && [ -d "$_src_dir/toolkit/skills" ]; then
+  cp -R "$_src_dir/toolkit/skills" "$INSTALL_DIR/skills"
+fi
+rm -rf "$INSTALL_DIR/plugins"/*/tests 2>/dev/null || true
 rm -rf "$INSTALL_DIR/toolkit/plugins"/*/tests 2>/dev/null || true
 rm -rf "$_tmp_dir"
 

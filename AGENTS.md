@@ -7,14 +7,14 @@ Instructions and operational constraints for AI agents working within the `repo-
 - **Zero Runtime Dependencies**: No runtime dependencies on Node.js, Python, or external binaries. Rely solely on standard POSIX utilities (`awk`, `sed`, `grep`, `cat`, `mkdir`, `cp`, `rm`, `cksum`, `git`).
 - **DRY & Reusable Utilities**: Strictly avoid copy-paste. Implement solutions by extracting reusable helpers, library functions, and shared utilities into `lib/`.
 - **Modularity, Contracts & Loose Coupling**: Keep the codebase modular with minimal hard coupling between components. Work through well-defined contracts and open interfaces, applying established design patterns.
-- **Plugin-Agnostic Core**: The core CLI (`./rnex`) and `lib/` must remain completely vendor- and plugin-agnostic. Provider- and domain-specific integrations belong in `toolkit/plugins/<name>/`.
+- **Plugin-Agnostic Core**: The core CLI (`./rnex`) and `lib/` must remain completely vendor- and plugin-agnostic. Provider- and domain-specific integrations belong in `plugins/<name>/`.
 - **Strict Encapsulation**: Internal state, generated caches, and sync metadata must reside strictly within `.rnex/`. Member repositories remain 100% clean and untouched with zero `.rnex/` folders inside member trees. Never pollute the repository root or member repository trees.
 
 ## 2. Testing & Verification Workflow
 Before proposing or committing changes:
 - **Linting**: Ensure shell scripts comply with ShellCheck:
   ```sh
-  shellcheck -s sh rnex lib/*.sh lib/commands/*.sh scripts/*.sh tests/*.sh tests/suites/*.sh toolkit/plugins/*/tests/*.sh
+  shellcheck -s sh rnex lib/*.sh lib/commands/*.sh scripts/*.sh tests/*.sh tests/suites/*.sh plugins/*/*/*.sh
   ```
 - **CLI Test Suite**: Run the automated test suite to ensure tests pass:
   ```sh
@@ -22,7 +22,7 @@ Before proposing or committing changes:
   ./tests/test_cli.sh core      # Run core engine test suites
   ./tests/test_cli.sh plugins   # Run all plugin test suites
   ./tests/test_cli.sh <name>    # Run specific suite or plugin (e.g., ./tests/test_cli.sh 01, ./tests/test_cli.sh claude)
-  sh toolkit/plugins/<name>/tests/test_plugin.sh # Run a plugin test independently
+  sh plugins/<name>/tests/test_plugin.sh # Run a plugin test independently
   ```
 - **Documentation**: When updating docs or specs, verify the VitePress build:
   ```sh

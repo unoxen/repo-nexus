@@ -140,7 +140,7 @@ All declared member repositories are cloned and wired up automatically!
 repo-nexus/
 ├── package.json                    # npm package manifest (single version source of truth)
 ├── rnex                            # CLI entrypoint (pure POSIX /bin/sh)
-├── lib/                            # Modular POSIX shell libraries
+├── lib/                            # Modular POSIX shell runtime modules & rnex-env.sh
 │   ├── core.sh                     # Terminal colors, logging, path & version helpers
 │   ├── yaml.sh                     # Two-level YAML parser & config mutators
 │   ├── workspace.sh                # Workspace root discovery & auto-sync engine
@@ -150,13 +150,16 @@ repo-nexus/
 │   ├── ai.sh                       # AI routing instructions, .gitignore & .code-workspace
 │   ├── hooks.sh                    # Declarative Git hooks & lifecycle event dispatcher
 │   ├── commands.sh                 # CLI subcommand module loader
-│   └── commands/                   # Subcommand implementations (init, sync, repo, etc.)
-├── AGENTS.md                       # Routing-only universal AI instructions
-├── CHANGELOG.md                    # Release history and migration notes
-├── CONTRIBUTION.md                 # POSIX standards, testing setup, and plugin contract
+│   ├── commands/                   # Subcommand implementations (init, sync, repo, etc.)
+│   └── rnex-env.sh                 # Standalone workspace runtime environment bootstrap
+├── plugins/                        # Built-in scoped workspace plugins with independent tests
+├── skills/                         # Core workspace agentic skills
 ├── templates/
 │   ├── ai-instructions.sample.md   # Base template for .rnex/ai-instructions.md
 │   └── rnex.example.yaml           # Full config reference with examples
+├── AGENTS.md                       # Routing-only universal AI instructions
+├── CHANGELOG.md                    # Release history and migration notes
+├── CONTRIBUTION.md                 # POSIX standards, testing setup, and plugin contract
 ├── docs/
 │   ├── introduction/               # Welcome, Why rnex?, Quick Start, and Pure Examples
 │   ├── documentation/              # Architecture, Configuration, Workflows, Lifecycle, Plugins
@@ -172,9 +175,6 @@ repo-nexus/
 │   ├── test_cli.sh                 # Main test runner (core + per-plugin suites)
 │   ├── test_helper.sh              # Shared test harness and utilities
 │   └── suites/                     # Core CLI engine test suites (01–04)
-├── toolkit/                        # Built-in plugins and core agentic skills
-│   ├── plugins/                    # Scoped workspace plugins with independent tests
-│   └── skills/                     # Core workspace agentic skills
 └── README.md
 ```
 

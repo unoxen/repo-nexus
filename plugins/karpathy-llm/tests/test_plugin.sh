@@ -1,11 +1,12 @@
 #!/bin/sh
 # shellcheck shell=sh
 # ============================================================================
-# toolkit/plugins/karpathy-llm/tests/test_plugin.sh — Karpathy LLM Wiki Plugin Tests
+# plugins/karpathy-llm/tests/test_plugin.sh — Karpathy LLM Wiki Plugin Tests
 # ============================================================================
 set -e
 
-[ -n "$DIR" ] && [ -f "$DIR/rnex" ] || DIR="$(cd "$(dirname "$0")/../../../.." && pwd)"
+[ -n "$DIR" ] && [ -f "$DIR/rnex" ] || DIR="$(cd "$(dirname "$0")/../../.." 2>/dev/null && pwd)"
+[ -f "$DIR/rnex" ] || DIR="$(cd "$(dirname "$0")/../../../.." 2>/dev/null && pwd)"
 . "$DIR/tests/test_helper.sh"
 
 TEST_KARPATHY_WS="$TEST_TMP/karpathy-plugin-ws"
@@ -13,13 +14,16 @@ mkdir -p "$TEST_KARPATHY_WS"
 setup_plugin_test_workspace karpathy-llm "$TEST_KARPATHY_WS"
 cd "$TEST_KARPATHY_WS"
 
+_kl_pdir="$TEST_KARPATHY_WS/plugins/karpathy-llm"
+[ -d "$_kl_pdir" ] || _kl_pdir="$TEST_KARPATHY_WS/toolkit/plugins/karpathy-llm"
+
 # --------------------------------------------------------------------------
 run_test "Karpathy-llm: manifest integrity, version parity, and documentation accuracy"
 _cli_ver="$("$TEST_KARPATHY_WS/rnex" --version | awk '{print $2}')"
-_m_ver="$(awk '/^version:[ ]*/ { sub(/^version:[ ]*/, ""); sub(/[ ]*#.*/, ""); print; exit }' "$TEST_KARPATHY_WS/toolkit/plugins/karpathy-llm/plugin.yaml")"
+_m_ver="$(awk '/^version:[ ]*/ { sub(/^version:[ ]*/, ""); sub(/[ ]*#.*/, ""); print; exit }' "$_kl_pdir/plugin.yaml")"
 [ "$_m_ver" = "$_cli_ver" ] || { fail "Plugin version ($_m_ver) does not match CLI version ($_cli_ver)"; exit 1; }
 
-_yaml_file="$TEST_KARPATHY_WS/toolkit/plugins/karpathy-llm/plugin.yaml"
+_yaml_file="$_kl_pdir/plugin.yaml"
 # Assert placeholders are quoted in plugin.yaml
 grep -q 'templates/index\.md:[ ]*"{wiki_dir}/index\.md"' "$_yaml_file" || { fail "index.md placeholder not quoted in plugin.yaml"; exit 1; }
 grep -q 'templates/hot\.md:[ ]*"{wiki_dir}/hot\.md"' "$_yaml_file" || { fail "hot.md placeholder not quoted in plugin.yaml"; exit 1; }
@@ -34,7 +38,7 @@ fi
 ! grep -q "notify_on_changes" "$_yaml_file" || { fail "notify_on_changes still present in plugin.yaml"; exit 1; }
 ! grep -q "ingest_member_readmes" "$_yaml_file" || { fail "ingest_member_readmes still present in plugin.yaml"; exit 1; }
 
-_readme_file="$TEST_KARPATHY_WS/toolkit/plugins/karpathy-llm/README.md"
+_readme_file="$_kl_pdir/README.md"
 [ -f "$_readme_file" ] || { fail "README.md missing"; exit 1; }
 grep -q "sources" "$_readme_file" || { fail "README.md does not document sources"; exit 1; }
 ! grep -q "ingest_member_readmes" "$_readme_file" || { fail "README.md still mentions obsolete ingest_member_readmes"; exit 1; }
@@ -42,7 +46,7 @@ grep -q "sources" "$_readme_file" || { fail "README.md does not document sources
 ! grep -q "run_deterministic_checks" "$_readme_file" || { fail "README.md still mentions run_deterministic_checks"; exit 1; }
 ! grep -q "ai_cmd" "$_readme_file" || { fail "README.md still mentions ai_cmd"; exit 1; }
 
-_prompt_file="$TEST_KARPATHY_WS/toolkit/plugins/karpathy-llm/instructions/rnex-scaffolding-meta-prompt.md"
+_prompt_file="$_kl_pdir/instructions/rnex-scaffolding-meta-prompt.md"
 [ -f "$_prompt_file" ] || { fail "rnex-scaffolding-meta-prompt.md missing"; exit 1; }
 grep -q "sources: \[\][ ]*#[ ]*\./docs/ files this page was derived from" "$_prompt_file" || { fail "sources example does not reference ./docs/"; exit 1; }
 grep -q "# Typed relation fields — paths relative to wiki/" "$_prompt_file" || { fail "relations example does not reference wiki/"; exit 1; }
@@ -84,8 +88,8 @@ pass
 # --------------------------------------------------------------------------
 run_test "Karpathy-llm: user skill projection with synthetic provider and disable unregistration"
 # Create a synthetic mock provider plugin to test User Skill projection without depending on other real plugins
-mkdir -p "$TEST_KARPATHY_WS/toolkit/plugins/mock-provider"
-cat <<'EOF_MOCK' > "$TEST_KARPATHY_WS/toolkit/plugins/mock-provider/plugin.yaml"
+mkdir -p "$TEST_KARPATHY_WS/plugins/mock-provider"
+cat <<'EOF_MOCK' > "$TEST_KARPATHY_WS/plugins/mock-provider/plugin.yaml"
 name: mock-provider
 version: 1.0.0
 description: Mock AI provider for user skill projection testing
@@ -116,7 +120,7 @@ grep -q "\.rnex/plugins/karpathy-llm/skills/wiki-lint\.md" "$_usk_lint" || { fai
 
 # Clean up synthetic mock provider
 (cd "$TEST_KARPATHY_WS" && ./rnex plugin disable mock-provider >/dev/null)
-rm -rf "$TEST_KARPATHY_WS/toolkit/plugins/mock-provider" "$TEST_KARPATHY_WS/.mock"
+rm -rf "$TEST_KARPATHY_WS/plugins/mock-provider" "$TEST_KARPATHY_WS/.mock"
 pass
 
 # --------------------------------------------------------------------------

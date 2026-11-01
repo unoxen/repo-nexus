@@ -1,11 +1,12 @@
 #!/bin/sh
 # shellcheck shell=sh
 # ============================================================================
-# toolkit/plugins/gemini/tests/test_plugin.sh — Gemini Plugin Lifecycle & User Skills
+# plugins/gemini/tests/test_plugin.sh — Gemini Plugin Lifecycle & User Skills
 # ============================================================================
 set -e
 
-[ -n "$DIR" ] && [ -f "$DIR/rnex" ] || DIR="$(cd "$(dirname "$0")/../../../.." && pwd)"
+[ -n "$DIR" ] && [ -f "$DIR/rnex" ] || DIR="$(cd "$(dirname "$0")/../../.." 2>/dev/null && pwd)"
+[ -f "$DIR/rnex" ] || DIR="$(cd "$(dirname "$0")/../../../.." 2>/dev/null && pwd)"
 . "$DIR/tests/test_helper.sh"
 
 TEST_GEMINI_WS="$TEST_TMP/gemini-plugin-ws"
@@ -53,7 +54,9 @@ pass
 # --------------------------------------------------------------------------
 run_test "Gemini plugin: manifest metadata, version parity, and plugin info"
 _cli_ver="$("$TEST_GEMINI_WS/rnex" --version | awk '{print $2}')"
-_m_ver="$(awk '/^version:[ ]*/ { sub(/^version:[ ]*/, ""); sub(/[ ]*#.*/, ""); print; exit }' "$TEST_GEMINI_WS/toolkit/plugins/gemini/plugin.yaml")"
+_gemini_manifest="$TEST_GEMINI_WS/plugins/gemini/plugin.yaml"
+[ -f "$_gemini_manifest" ] || _gemini_manifest="$TEST_GEMINI_WS/toolkit/plugins/gemini/plugin.yaml"
+_m_ver="$(awk '/^version:[ ]*/ { sub(/^version:[ ]*/, ""); sub(/[ ]*#.*/, ""); print; exit }' "$_gemini_manifest")"
 [ "$_m_ver" = "$_cli_ver" ] || { fail "Gemini plugin version ($_m_ver) does not match CLI version ($_cli_ver)"; exit 1; }
 
 _pinfo_out="$(cd "$TEST_GEMINI_WS" && ./rnex plugin info gemini 2>&1)"

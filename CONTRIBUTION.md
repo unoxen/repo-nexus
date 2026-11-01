@@ -31,12 +31,12 @@ All shell scripts must pass [ShellCheck](https://www.shellcheck.net/) with **zer
 - **SC2115 (Guarded deletion)**: Always guard variable expansions in recursive removals (`rm -rf "${var:?}/subdir"`).
 - Run ShellCheck before submitting your pull request:
   ```sh
-  shellcheck -s sh rnex lib/*.sh lib/commands/*.sh scripts/*.sh scripts/githooks/* tests/*.sh tests/suites/*.sh toolkit/plugins/*/*/*.sh
+  shellcheck -s sh rnex lib/*.sh lib/commands/*.sh scripts/*.sh scripts/githooks/* tests/*.sh tests/suites/*.sh plugins/*/*/*.sh
   ```
 
 ### Strict Encapsulation & Agnostic Core
 - **Encapsulation**: All internal state, compiled context, sync stamps, and installed hooks must reside exclusively in `.rnex/` at the workspace root. Member repositories remain 100% clean and untouched with zero `.rnex/` directories. Never create or leave internal files in the workspace root or member repo source trees.
-- **Agnostic Core**: The core `./rnex` binary and core libraries in `lib/` must remain **100% plugin-agnostic**. Never hardcode plugin names, provider-specific prompts, or domain-specific logic into `./rnex`. All domain extensions belong inside `toolkit/plugins/<name>/`.
+- **Agnostic Core**: The core `./rnex` binary and core libraries in `lib/` must remain **100% plugin-agnostic**. Never hardcode plugin names, provider-specific prompts, or domain-specific logic into `./rnex`. All domain extensions belong inside `plugins/<name>/`.
 
 ---
 
@@ -58,7 +58,7 @@ Before opening a pull request, run the full automated CLI test suite:
 ```sh
 ./tests/test_cli.sh
 ```
-The test suite executes isolated end-to-end tests across core engine modules (`tests/suites/`) and every independent plugin test suite (`toolkit/plugins/*/tests/test_plugin.sh`).
+The test suite executes isolated end-to-end tests across core engine modules (`tests/suites/`) and every independent plugin test suite (`plugins/*/tests/test_plugin.sh`).
 
 You can run individual modular test suites or plugin suites:
 ```sh
@@ -77,25 +77,25 @@ You can run individual modular test suites or plugin suites:
 ./tests/test_cli.sh karpathy-llm
 
 # Run a plugin test suite completely standalone:
-sh toolkit/plugins/claude/tests/test_plugin.sh
+sh plugins/claude/tests/test_plugin.sh
 ```
 
 ### Adding Tests for New Features & Plugins
 - **Core CLI & Engine**: Add test assertions to the relevant suite under `tests/suites/01_core_cli.sh` .. `04_git_hooks.sh`.
-- **Plugins**: Maintain independent test suites inside `toolkit/plugins/<name>/tests/test_plugin.sh`. Each plugin test suite must be runnable standalone and isolated from other plugins.
+- **Plugins**: Maintain independent test suites inside `plugins/<name>/tests/test_plugin.sh`. Each plugin test suite must be runnable standalone and isolated from other plugins.
 - **Verification**: Run `./tests/test_cli.sh` to ensure all tests pass cleanly.
 
 ---
 
-## 3. Authoring Plugins (`toolkit/plugins/<name>/` or External Plugins)
+## 3. Authoring Plugins (`plugins/<name>/` or External Plugins)
 
 Plugins provide specialized agent guidelines, workflows, skills, subagents, and scaffolding templates.
 
-Plugins can be authored directly within Repo Nexus as built-in plugins (`toolkit/plugins/<name>/`) or maintained externally via per-plugin `path` configurations (`plugins.<name>.path`) in `rnex.yaml` or `.local.rnex.yaml`. For built-in plugins, `version:` in `plugin.yaml` is automatically synchronized with `RNEX_VERSION` in `package.json` by the maintainer pre-commit hook (`scripts/sync-plugin-versions.sh`).
+Plugins can be authored directly within Repo Nexus as built-in plugins (`plugins/<name>/`) or maintained externally via per-plugin `path` configurations (`plugins.<name>.path`) in `rnex.yaml` or `.local.rnex.yaml`. For built-in plugins, `version:` in `plugin.yaml` is automatically synchronized with `RNEX_VERSION` in `package.json` by the maintainer pre-commit hook (`scripts/sync-plugin-versions.sh`).
 
 ### Directory Structure & Contract
 ```text
-<plugin-dir>/ (e.g. toolkit/plugins/<name>/ or <external-path>/)
+<plugin-dir>/ (e.g. plugins/<name>/ or <external-path>/)
 ├── plugin.yaml                  # Required: Plugin manifest & configuration schema
 ├── instructions/                # Optional: Markdown context files compiled into .rnex/ai-instructions.md
 ├── README.md                    # Optional: Plugin documentation & recipes
@@ -153,15 +153,15 @@ Instruction files listed under `instructions:` in `plugin.yaml` (or a fallback `
 
 Repo Nexus enforces strict separation of skill ownership across two tiers:
 
-### 1. Core Workspace Agentic Skills (`toolkit/skills/`)
+### 1. Core Workspace Agentic Skills (`skills/`)
 Core skills provide fundamental meta-repo workflows and workspace automation:
-- Placed directly in `toolkit/skills/<skill-name>.md` (e.g. `clone-sync.md`, `batch-exec.md`, `workspace-status.md`).
+- Placed directly in `skills/<skill-name>.md` (e.g. `clone-sync.md`, `batch-exec.md`, `workspace-status.md`).
 - During `rnex sync`, core skills are copied to `.rnex/skills/<skill-name>.md`.
-- Never place plugin-specific skills in `toolkit/skills/` or `.rnex/skills/`.
+- Never place plugin-specific skills in `skills/` or `.rnex/skills/`.
 
-### 2. Plugin-Owned Agentic Skills (`toolkit/plugins/<plugin>/skills/`)
+### 2. Plugin-Owned Agentic Skills (`plugins/<plugin>/skills/`)
 Functional plugins encapsulate their own agentic skills:
-- Placed in `toolkit/plugins/<plugin>/skills/<skill-name>.md` (e.g. `wiki-ingest.md`, `wiki-lint.md`).
+- Placed in `plugins/<plugin>/skills/<skill-name>.md` (e.g. `wiki-ingest.md`, `wiki-lint.md`).
 - During `rnex sync`, copied exclusively to `.rnex/plugins/<plugin>/skills/<skill-name>.md`.
 
 ### 3. User Skill Generator & Plugin Contract API

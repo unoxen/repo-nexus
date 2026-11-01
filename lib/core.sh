@@ -116,7 +116,80 @@ resolve_version() {
 
 RNEX_VERSION="$(resolve_version)"
 
-# Locate the built-in toolkit directory containing embedded plugins and assets.
+# Locate the built-in plugins directory containing embedded plugins.
+# Priority: explicit RNEX_PLUGINS_DIR > pre-set PLUGINS_DIR > RNEX_ROOT/plugins >
+# SCRIPT_LOCATION/plugins > parent/plugins > NEXUS_DIR/plugins > legacy toolkit/plugins.
+find_plugins_root() {
+  if [ -n "$RNEX_PLUGINS_DIR" ] && [ -d "$RNEX_PLUGINS_DIR" ]; then
+    printf '%s' "$RNEX_PLUGINS_DIR"
+    return 0
+  fi
+  if [ -n "$PLUGINS_DIR" ] && [ -d "$PLUGINS_DIR" ]; then
+    printf '%s' "$PLUGINS_DIR"
+    return 0
+  fi
+  _sdir="$(dirname "$SCRIPT_LOCATION")"
+  for _cand in \
+    "${RNEX_ROOT:-}/plugins" \
+    "$SCRIPT_LOCATION/plugins" \
+    "$_sdir/plugins" \
+    "$_sdir/../plugins" \
+    "${NEXUS_DIR:-}/plugins" \
+    "${RNEX_TOOLKIT_DIR:-}/plugins" \
+    "${TOOLKIT_DIR:-}/plugins" \
+    "${RNEX_ROOT:-}/toolkit/plugins" \
+    "$SCRIPT_LOCATION/toolkit/plugins" \
+    "$_sdir/toolkit/plugins" \
+    "$_sdir/../toolkit/plugins" \
+    "${NEXUS_DIR:-}/toolkit/plugins"; do
+    if [ -n "$_cand" ] && [ -d "$_cand" ]; then
+      printf '%s' "$_cand"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# Locate the built-in skills directory containing core agentic skills.
+# Priority: explicit RNEX_SKILLS_DIR > pre-set SKILLS_DIR > RNEX_ROOT/skills >
+# SCRIPT_LOCATION/skills > parent/skills > NEXUS_DIR/skills > legacy toolkit/skills.
+find_skills_dir() {
+  if [ -n "$RNEX_SKILLS_DIR" ] && [ -d "$RNEX_SKILLS_DIR" ]; then
+    printf '%s' "$RNEX_SKILLS_DIR"
+    return 0
+  fi
+  if [ -n "$SKILLS_DIR" ] && [ -d "$SKILLS_DIR" ]; then
+    printf '%s' "$SKILLS_DIR"
+    return 0
+  fi
+  _sdir="$(dirname "$SCRIPT_LOCATION")"
+  for _cand in \
+    "${RNEX_ROOT:-}/skills" \
+    "$SCRIPT_LOCATION/skills" \
+    "$_sdir/skills" \
+    "$_sdir/../skills" \
+    "${NEXUS_DIR:-}/skills" \
+    "${RNEX_TOOLKIT_DIR:-}/skills" \
+    "${TOOLKIT_DIR:-}/skills" \
+    "${RNEX_ROOT:-}/toolkit/skills" \
+    "$SCRIPT_LOCATION/toolkit/skills" \
+    "$_sdir/toolkit/skills" \
+    "$_sdir/../toolkit/skills" \
+    "${NEXUS_DIR:-}/toolkit/skills"; do
+    if [ -n "$_cand" ] && [ -d "$_cand" ]; then
+      printf '%s' "$_cand"
+      return 0
+    fi
+  done
+  return 1
+}
+
+RNEX_PLUGINS_DIR="${RNEX_PLUGINS_DIR:-$(find_plugins_root 2>/dev/null || true)}"
+PLUGINS_DIR="${PLUGINS_DIR:-$RNEX_PLUGINS_DIR}"
+RNEX_SKILLS_DIR="${RNEX_SKILLS_DIR:-$(find_skills_dir 2>/dev/null || true)}"
+SKILLS_DIR="${SKILLS_DIR:-$RNEX_SKILLS_DIR}"
+
+# Locate the built-in toolkit directory containing embedded plugins and assets (legacy fallback).
 # Priority: explicit RNEX_TOOLKIT_DIR > pre-set TOOLKIT_DIR > SCRIPT_LOCATION/toolkit >
 # parent/toolkit > NEXUS_DIR/toolkit.
 find_toolkit_dir() {

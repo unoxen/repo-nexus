@@ -31,12 +31,21 @@ cmd_install() {
     rm -rf "$_install_dir/docs"
     cp "$_source_cli" "$_install_dir/rnex"
     [ -f "$_src_root/package.json" ] && cp "$_src_root/package.json" "$_install_dir/package.json"
-    for _asset in lib templates toolkit; do
+    for _asset in lib templates plugins skills; do
       if [ -d "$_src_root/$_asset" ]; then
         rm -rf "${_install_dir:?}/$_asset"
         cp -R "$_src_root/$_asset" "$_install_dir/$_asset"
       fi
     done
+    if [ ! -d "$_install_dir/plugins" ] && [ -d "$_src_root/toolkit/plugins" ]; then
+      rm -rf "${_install_dir:?}/plugins"
+      cp -R "$_src_root/toolkit/plugins" "$_install_dir/plugins"
+    fi
+    if [ ! -d "$_install_dir/skills" ] && [ -d "$_src_root/toolkit/skills" ]; then
+      rm -rf "${_install_dir:?}/skills"
+      cp -R "$_src_root/toolkit/skills" "$_install_dir/skills"
+    fi
+    rm -rf "$_install_dir/plugins"/*/tests 2>/dev/null || true
     rm -rf "$_install_dir/toolkit/plugins"/*/tests 2>/dev/null || true
   fi
 

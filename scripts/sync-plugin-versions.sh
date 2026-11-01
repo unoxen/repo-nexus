@@ -3,8 +3,8 @@
 # ============================================================================
 # scripts/sync-plugin-versions.sh — Maintainer Plugin Version Synchronization
 #
-# Synchronizes the 'version:' field in all built-in toolkit plugin manifests
-# (toolkit/plugins/*/plugin.yaml) with the current version in package.json.
+# Synchronizes the 'version:' field in all built-in plugin manifests
+# (plugins/*/plugin.yaml) with the current version in package.json.
 # Pure POSIX shell compatible (/bin/sh).
 # ============================================================================
 set -e
@@ -23,7 +23,7 @@ if [ -z "$VERSION" ]; then
   exit 1
 fi
 
-for manifest in "$REPO_ROOT"/toolkit/plugins/*/plugin.yaml; do
+for manifest in "$REPO_ROOT"/plugins/*/plugin.yaml "$REPO_ROOT"/toolkit/plugins/*/plugin.yaml; do
   [ -f "$manifest" ] || continue
   tmp="$manifest.tmp.$$"
   sed "s/^version:[ ].*/version: $VERSION/" "$manifest" > "$tmp" && mv "$tmp" "$manifest"

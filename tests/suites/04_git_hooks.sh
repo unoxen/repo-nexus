@@ -14,7 +14,8 @@ TEST_HOOKS_WS="$TEST_TMP/hooks-workspace"
 mkdir -p "$TEST_HOOKS_WS"
 cp "$CLI" "$TEST_HOOKS_WS/rnex"
 chmod +x "$TEST_HOOKS_WS/rnex"
-cp -r "$DIR/toolkit" "$TEST_HOOKS_WS/toolkit"
+cp -r "$DIR/plugins" "$TEST_HOOKS_WS/plugins"
+cp -r "$DIR/skills" "$TEST_HOOKS_WS/skills"
 cp "$DIR/package.json" "$TEST_HOOKS_WS/package.json"
 git -C "$TEST_HOOKS_WS" init -q
 
@@ -63,7 +64,8 @@ TEST_INIT_HOOKS="$TEST_TMP/init-hooks-ws"
 mkdir -p "$TEST_INIT_HOOKS"
 cp "$CLI" "$TEST_INIT_HOOKS/rnex"
 chmod +x "$TEST_INIT_HOOKS/rnex"
-cp -r "$DIR/toolkit" "$TEST_INIT_HOOKS/toolkit"
+cp -r "$DIR/plugins" "$TEST_INIT_HOOKS/plugins"
+cp -r "$DIR/skills" "$TEST_INIT_HOOKS/skills"
 cp "$DIR/package.json" "$TEST_INIT_HOOKS/package.json"
 git -C "$TEST_INIT_HOOKS" init -q
 
@@ -78,7 +80,8 @@ TEST_LOCAL_HOOKS="$TEST_TMP/local-hooks-ws"
 mkdir -p "$TEST_LOCAL_HOOKS"
 cp "$CLI" "$TEST_LOCAL_HOOKS/rnex"
 chmod +x "$TEST_LOCAL_HOOKS/rnex"
-cp -r "$DIR/toolkit" "$TEST_LOCAL_HOOKS/toolkit"
+cp -r "$DIR/plugins" "$TEST_LOCAL_HOOKS/plugins"
+cp -r "$DIR/skills" "$TEST_LOCAL_HOOKS/skills"
 cp "$DIR/package.json" "$TEST_LOCAL_HOOKS/package.json"
 git -C "$TEST_LOCAL_HOOKS" init -q
 
@@ -121,7 +124,8 @@ TEST_WRAPPER_WS="$TEST_TMP/wrapper-hooks-ws"
 mkdir -p "$TEST_WRAPPER_WS"
 cp "$CLI" "$TEST_WRAPPER_WS/rnex"
 chmod +x "$TEST_WRAPPER_WS/rnex"
-cp -r "$DIR/toolkit" "$TEST_WRAPPER_WS/toolkit"
+cp -r "$DIR/plugins" "$TEST_WRAPPER_WS/plugins"
+cp -r "$DIR/skills" "$TEST_WRAPPER_WS/skills"
 cp "$DIR/package.json" "$TEST_WRAPPER_WS/package.json"
 git -C "$TEST_WRAPPER_WS" init -q
 
@@ -166,7 +170,8 @@ TEST_RNEX_HOOKS_WS="$TEST_TMP/rnex-hooks-lifecycle-ws"
 mkdir -p "$TEST_RNEX_HOOKS_WS"
 cp "$CLI" "$TEST_RNEX_HOOKS_WS/rnex"
 chmod +x "$TEST_RNEX_HOOKS_WS/rnex"
-cp -r "$DIR/toolkit" "$TEST_RNEX_HOOKS_WS/toolkit"
+cp -r "$DIR/plugins" "$TEST_RNEX_HOOKS_WS/plugins"
+cp -r "$DIR/skills" "$TEST_RNEX_HOOKS_WS/skills"
 cp "$DIR/package.json" "$TEST_RNEX_HOOKS_WS/package.json"
 git -C "$TEST_RNEX_HOOKS_WS" init -q
 
@@ -253,8 +258,8 @@ grep -q "BEFORE_EXEC" "$TEST_RNEX_HOOKS_WS/hook_log" || { fail "before_exec hook
 grep -q "AFTER_EXEC" "$TEST_RNEX_HOOKS_WS/hook_log" || { fail "after_exec hook did not execute"; exit 1; }
 
 # 6. Plugin enable
-mkdir -p "$TEST_RNEX_HOOKS_WS/toolkit/plugins/dummy-plugin"
-cat <<'EOF_DUMMY_PL' > "$TEST_RNEX_HOOKS_WS/toolkit/plugins/dummy-plugin/plugin.yaml"
+mkdir -p "$TEST_RNEX_HOOKS_WS/plugins/dummy-plugin"
+cat <<'EOF_DUMMY_PL' > "$TEST_RNEX_HOOKS_WS/plugins/dummy-plugin/plugin.yaml"
 name: dummy-plugin
 version: 1.0.0
 description: Synthetic plugin for hook testing
@@ -280,7 +285,8 @@ TEST_RNEX_LOCAL_WS="$TEST_TMP/rnex-hooks-local-ws"
 mkdir -p "$TEST_RNEX_LOCAL_WS"
 cp "$CLI" "$TEST_RNEX_LOCAL_WS/rnex"
 chmod +x "$TEST_RNEX_LOCAL_WS/rnex"
-cp -r "$DIR/toolkit" "$TEST_RNEX_LOCAL_WS/toolkit"
+cp -r "$DIR/plugins" "$TEST_RNEX_LOCAL_WS/plugins"
+cp -r "$DIR/skills" "$TEST_RNEX_LOCAL_WS/skills"
 cp "$DIR/package.json" "$TEST_RNEX_LOCAL_WS/package.json"
 git -C "$TEST_RNEX_LOCAL_WS" init -q
 
@@ -319,7 +325,8 @@ TEST_RNEX_BLOCK_WS="$TEST_TMP/rnex-hooks-block-ws"
 mkdir -p "$TEST_RNEX_BLOCK_WS"
 cp "$CLI" "$TEST_RNEX_BLOCK_WS/rnex"
 chmod +x "$TEST_RNEX_BLOCK_WS/rnex"
-cp -r "$DIR/toolkit" "$TEST_RNEX_BLOCK_WS/toolkit"
+cp -r "$DIR/plugins" "$TEST_RNEX_BLOCK_WS/plugins"
+cp -r "$DIR/skills" "$TEST_RNEX_BLOCK_WS/skills"
 cp "$DIR/package.json" "$TEST_RNEX_BLOCK_WS/package.json"
 git -C "$TEST_RNEX_BLOCK_WS" init -q
 
@@ -348,7 +355,8 @@ TEST_RNEX_RECURSE_WS="$TEST_TMP/rnex-hooks-recurse-ws"
 mkdir -p "$TEST_RNEX_RECURSE_WS"
 cp "$CLI" "$TEST_RNEX_RECURSE_WS/rnex"
 chmod +x "$TEST_RNEX_RECURSE_WS/rnex"
-cp -r "$DIR/toolkit" "$TEST_RNEX_RECURSE_WS/toolkit"
+cp -r "$DIR/plugins" "$TEST_RNEX_RECURSE_WS/plugins"
+cp -r "$DIR/skills" "$TEST_RNEX_RECURSE_WS/skills"
 cp "$DIR/package.json" "$TEST_RNEX_RECURSE_WS/package.json"
 git -C "$TEST_RNEX_RECURSE_WS" init -q
 
@@ -380,7 +388,8 @@ TEST_SYNC_HOOKS_WS="$TEST_TMP/sync-hooks-resolution-ws"
 mkdir -p "$TEST_SYNC_HOOKS_WS"
 cp "$CLI" "$TEST_SYNC_HOOKS_WS/rnex"
 chmod +x "$TEST_SYNC_HOOKS_WS/rnex"
-cp -r "$DIR/toolkit" "$TEST_SYNC_HOOKS_WS/toolkit"
+cp -r "$DIR/plugins" "$TEST_SYNC_HOOKS_WS/plugins"
+cp -r "$DIR/skills" "$TEST_SYNC_HOOKS_WS/skills"
 cp "$DIR/package.json" "$TEST_SYNC_HOOKS_WS/package.json"
 git -C "$TEST_SYNC_HOOKS_WS" init -q
 
@@ -429,7 +438,8 @@ TEST_YAML_HOOKS_WS="$TEST_TMP/yaml-formats-hooks-ws"
 mkdir -p "$TEST_YAML_HOOKS_WS"
 cp "$CLI" "$TEST_YAML_HOOKS_WS/rnex"
 chmod +x "$TEST_YAML_HOOKS_WS/rnex"
-cp -r "$DIR/toolkit" "$TEST_YAML_HOOKS_WS/toolkit"
+cp -r "$DIR/plugins" "$TEST_YAML_HOOKS_WS/plugins"
+cp -r "$DIR/skills" "$TEST_YAML_HOOKS_WS/skills"
 cp "$DIR/package.json" "$TEST_YAML_HOOKS_WS/package.json"
 git -C "$TEST_YAML_HOOKS_WS" init -q
 
@@ -487,7 +497,8 @@ TEST_USER_HOOKS_WS="$TEST_TMP/user-hook-ws"
 mkdir -p "$TEST_USER_HOOKS_WS"
 cp "$CLI" "$TEST_USER_HOOKS_WS/rnex"
 chmod +x "$TEST_USER_HOOKS_WS/rnex"
-cp -r "$DIR/toolkit" "$TEST_USER_HOOKS_WS/toolkit"
+cp -r "$DIR/plugins" "$TEST_USER_HOOKS_WS/plugins"
+cp -r "$DIR/skills" "$TEST_USER_HOOKS_WS/skills"
 cp "$DIR/package.json" "$TEST_USER_HOOKS_WS/package.json"
 git -C "$TEST_USER_HOOKS_WS" init -q
 

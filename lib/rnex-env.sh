@@ -1,10 +1,13 @@
 #!/bin/sh
 # shellcheck shell=sh
 # ==============================================================================
-# templates/rnex-env.sh — Standalone Repo Nexus Environment Bootstrap
+# lib/rnex-env.sh — Standalone Repo Nexus Environment Bootstrap
 # ==============================================================================
-# Exports workspace root and dynamic member repository directories for hooks,
-# subshells, and background AI tasks.
+# Architectural Layer: Runtime Environment Contract / Subshell SDK Bootstrap
+# Design Pattern: Strategy / Service Locator / Bootstrap Contract
+# Single Responsibility:
+#   Exports workspace root and dynamic member repository directories for hooks,
+#   subshells, and background AI tasks, and locates and sources core SDK helpers.
 # ==============================================================================
 
 RNEX_ROOT="${RNEX_ROOT:-${NEXUS_DIR:-$(cd "$(dirname "$0")/../.." 2>/dev/null && pwd -P)}}"
@@ -12,8 +15,22 @@ export RNEX_ROOT
 
 # Resolve library directory
 if [ -z "${RNEX_LIB_DIR:-}" ]; then
-  for _lib_cand in "$RNEX_ROOT/lib" "$(dirname "$0")/../lib"; do
-    if [ -d "$_lib_cand" ] && [ -f "$_lib_cand/core.sh" ]; then
+  _rnex_bin_cand=""
+  if command -v rnex >/dev/null 2>&1; then
+    _rnex_bin_cand="$(dirname "$(command -v rnex)")"
+  fi
+  for _lib_cand in \
+    "$RNEX_ROOT/lib" \
+    "$(dirname "$0")/../lib" \
+    "$(dirname "$0")/../../lib" \
+    "$(dirname "$0")/../../../lib" \
+    "$(dirname "$0")/../../../../lib" \
+    "${RNEX_INSTALL_DIR:-}/lib" \
+    "${_rnex_bin_cand:+$_rnex_bin_cand/lib}" \
+    "${_rnex_bin_cand:+$_rnex_bin_cand/../lib}" \
+    "${_rnex_bin_cand:+$_rnex_bin_cand/../share/repo-nexus/lib}" \
+    "$HOME/.local/share/repo-nexus/lib"; do
+    if [ -n "$_lib_cand" ] && [ -d "$_lib_cand" ] && [ -f "$_lib_cand/core.sh" ]; then
       RNEX_LIB_DIR="$(cd "$_lib_cand" 2>/dev/null && pwd -P)"
       break
     fi

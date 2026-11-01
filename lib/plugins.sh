@@ -64,19 +64,28 @@ plugin_resolve_dir() {
     fi
   fi
 
-  # Priority 2: Built-in embedded plugin in $TOOLKIT_DIR/plugins/<plugin_name>
+  # Priority 2: Built-in embedded plugin in $RNEX_PLUGINS_DIR/<plugin_name>
+  if [ -n "${RNEX_PLUGINS_DIR:-}" ] && [ -d "$RNEX_PLUGINS_DIR/$_prd_name" ] && [ -f "$RNEX_PLUGINS_DIR/$_prd_name/plugin.yaml" ]; then
+    resolve_path "$RNEX_PLUGINS_DIR/$_prd_name" 2>/dev/null || printf '%s' "$RNEX_PLUGINS_DIR/$_prd_name"
+    return 0
+  fi
   if [ -n "${TOOLKIT_DIR:-}" ] && [ -d "$TOOLKIT_DIR/plugins/$_prd_name" ] && [ -f "$TOOLKIT_DIR/plugins/$_prd_name/plugin.yaml" ]; then
     resolve_path "$TOOLKIT_DIR/plugins/$_prd_name" 2>/dev/null || printf '%s' "$TOOLKIT_DIR/plugins/$_prd_name"
     return 0
   fi
 
-  # Priority 3: Candidate toolkit locations fallback
+  # Priority 3: Candidate plugin locations fallback
   _sdir="$(dirname "$SCRIPT_LOCATION")"
   for _cand in \
+    "${RNEX_ROOT:-}/plugins/$_prd_name" \
+    "${RNEX_PLUGINS_DIR:-}/$_prd_name" \
+    "${PLUGINS_DIR:-}/$_prd_name" \
+    "$SCRIPT_LOCATION/plugins/$_prd_name" \
+    "$_sdir/plugins/$_prd_name" \
+    "$NEXUS_DIR/plugins/$_prd_name" \
     "${RNEX_ROOT:-}/toolkit/plugins/$_prd_name" \
     "${TOOLKIT_DIR:-}/plugins/$_prd_name" \
     "${RNEX_TOOLKIT_DIR:-}/plugins/$_prd_name" \
-    "${RNEX_PLUGINS_DIR:-}/$_prd_name" \
     "$NEXUS_DIR/toolkit/plugins/$_prd_name" \
     "$SCRIPT_LOCATION/toolkit/plugins/$_prd_name" \
     "$_sdir/toolkit/plugins/$_prd_name" \
@@ -92,7 +101,7 @@ plugin_resolve_dir() {
   return 1
 }
 
-# Search all candidate toolkit directories and locate a plugin by name containing plugin.yaml.
+# Search all candidate plugin directories and locate a plugin by name containing plugin.yaml.
 find_plugin_dir() {
   _query="$1"
   if command -v plugin_resolve_dir >/dev/null 2>&1; then
@@ -105,10 +114,15 @@ find_plugin_dir() {
 
   _sdir="$(dirname "$SCRIPT_LOCATION")"
   for _cand in \
+    "${RNEX_ROOT:-}/plugins/$_query" \
+    "${RNEX_PLUGINS_DIR:-}/$_query" \
+    "${PLUGINS_DIR:-}/$_query" \
+    "$SCRIPT_LOCATION/plugins/$_query" \
+    "$_sdir/plugins/$_query" \
+    "$NEXUS_DIR/plugins/$_query" \
     "${RNEX_ROOT:-}/toolkit/plugins/$_query" \
     "${TOOLKIT_DIR:-}/plugins/$_query" \
     "${RNEX_TOOLKIT_DIR:-}/plugins/$_query" \
-    "${RNEX_PLUGINS_DIR:-}/$_query" \
     "$NEXUS_DIR/toolkit/plugins/$_query" \
     "$SCRIPT_LOCATION/toolkit/plugins/$_query" \
     "$_sdir/toolkit/plugins/$_query" \
@@ -162,12 +176,17 @@ plugin_list_available() {
     done
   fi
 
-  # 2. Built-in embedded plugins ($TOOLKIT_DIR/plugins/*) and standard candidates
+  # 2. Built-in embedded plugins ($RNEX_PLUGINS_DIR/*) and standard candidates
   for _parent in \
+    "${RNEX_PLUGINS_DIR:-}" \
+    "${PLUGINS_DIR:-}" \
+    "${RNEX_ROOT:-}/plugins" \
+    "$SCRIPT_LOCATION/plugins" \
+    "$(dirname "$SCRIPT_LOCATION")/plugins" \
+    "$NEXUS_DIR/plugins" \
     "${TOOLKIT_DIR:-}/plugins" \
     "${RNEX_ROOT:-}/toolkit/plugins" \
     "${RNEX_TOOLKIT_DIR:-}/plugins" \
-    "${RNEX_PLUGINS_DIR:-}" \
     "$NEXUS_DIR/toolkit/plugins" \
     "$SCRIPT_LOCATION/toolkit/plugins" \
     "$(dirname "$SCRIPT_LOCATION")/toolkit/plugins"; do
@@ -240,9 +259,11 @@ plugin_get_version() {
     [ -n "$_pgv_dir" ] || _pgv_dir="$(find_plugin_dir "$_pgv_name" 2>/dev/null || true)"
   fi
 
-  # Resolve canonical path for the built-in toolkit plugin directory
+  # Resolve canonical path for the built-in plugin directory
   _tk_plugin_dir=""
-  if [ -n "$TOOLKIT_DIR" ] && [ -d "$TOOLKIT_DIR/plugins/$_pgv_name" ]; then
+  if [ -n "$RNEX_PLUGINS_DIR" ] && [ -d "$RNEX_PLUGINS_DIR/$_pgv_name" ]; then
+    _tk_plugin_dir="$(resolve_path "$RNEX_PLUGINS_DIR/$_pgv_name" 2>/dev/null || true)"
+  elif [ -n "$TOOLKIT_DIR" ] && [ -d "$TOOLKIT_DIR/plugins/$_pgv_name" ]; then
     _tk_plugin_dir="$(resolve_path "$TOOLKIT_DIR/plugins/$_pgv_name" 2>/dev/null || true)"
   fi
 

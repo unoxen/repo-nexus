@@ -243,11 +243,12 @@ grep -q '"docs/"' "$DIR/package.json" && { fail "package.json files array still 
 grep -q '"rnex"' "$DIR/package.json" || { fail "package.json missing rnex in files"; exit 1; }
 grep -q '"lib/"' "$DIR/package.json" || { fail "package.json missing lib/ in files"; exit 1; }
 grep -q '"templates/"' "$DIR/package.json" || { fail "package.json missing templates/ in files"; exit 1; }
-grep -q '"toolkit/"' "$DIR/package.json" || { fail "package.json missing toolkit/ in files"; exit 1; }
+grep -q '"plugins/"' "$DIR/package.json" || { fail "package.json missing plugins/ in files"; exit 1; }
+grep -q '"skills/"' "$DIR/package.json" || { fail "package.json missing skills/ in files"; exit 1; }
 
-# 2. Verify .npmignore contains /docs/ and toolkit/plugins/*/tests/
+# 2. Verify .npmignore contains /docs/ and plugins/*/tests/
 grep -q '/docs/' "$DIR/.npmignore" || { fail ".npmignore missing /docs/"; exit 1; }
-grep -q 'toolkit/plugins/\*/tests/' "$DIR/.npmignore" || { fail ".npmignore missing toolkit/plugins/*/tests/"; exit 1; }
+grep -q 'plugins/\*/tests/' "$DIR/.npmignore" || { fail ".npmignore missing plugins/*/tests/"; exit 1; }
 
 # 3. Verify no tracked .gitkeep files remain in repository
 _gitkeep_count="$(git -C "$DIR" ls-files "*.gitkeep" 2>/dev/null | wc -l | tr -d ' ')"
@@ -261,9 +262,10 @@ RNEX_INSTALL_DIR="$TEST_CLI_INST_SHARE" "$DIR/rnex" install "$TEST_CLI_INST_BIN"
 [ -x "$TEST_CLI_INST_BIN/rnex" ] || { fail "rnex install did not create executable in bin dir"; exit 1; }
 [ -d "$TEST_CLI_INST_SHARE/lib" ] || { fail "rnex install did not copy lib/ to install dir"; exit 1; }
 [ -d "$TEST_CLI_INST_SHARE/templates" ] || { fail "rnex install did not copy templates/ to install dir"; exit 1; }
-[ -d "$TEST_CLI_INST_SHARE/toolkit" ] || { fail "rnex install did not copy toolkit/ to install dir"; exit 1; }
+[ -d "$TEST_CLI_INST_SHARE/plugins" ] || { fail "rnex install did not copy plugins/ to install dir"; exit 1; }
+[ -d "$TEST_CLI_INST_SHARE/skills" ] || { fail "rnex install did not copy skills/ to install dir"; exit 1; }
 [ ! -d "$TEST_CLI_INST_SHARE/docs" ] || { fail "rnex install leaked docs/ into install dir"; exit 1; }
-[ ! -d "$TEST_CLI_INST_SHARE/toolkit/plugins/claude/tests" ] || { fail "rnex install leaked tests into install dir"; exit 1; }
+[ ! -d "$TEST_CLI_INST_SHARE/plugins/claude/tests" ] || { fail "rnex install leaked tests into install dir"; exit 1; }
 
 # 5. Verify scripts/install.sh copies runtime assets and excludes docs/ and tests/
 TEST_SCRIPT_INST_BIN="$TEST_TMP/test-script-inst-bin"
@@ -273,14 +275,15 @@ RNEX_REPO_URL="$DIR" RNEX_INSTALL_DIR="$TEST_SCRIPT_INST_SHARE" RNEX_BIN_DIR="$T
 [ -x "$TEST_SCRIPT_INST_BIN/rnex" ] || { fail "scripts/install.sh did not create executable in bin dir"; exit 1; }
 [ -d "$TEST_SCRIPT_INST_SHARE/lib" ] || { fail "scripts/install.sh did not copy lib/ to install dir"; exit 1; }
 [ -d "$TEST_SCRIPT_INST_SHARE/templates" ] || { fail "scripts/install.sh did not copy templates/ to install dir"; exit 1; }
-[ -d "$TEST_SCRIPT_INST_SHARE/toolkit" ] || { fail "scripts/install.sh did not copy toolkit/ to install dir"; exit 1; }
+[ -d "$TEST_SCRIPT_INST_SHARE/plugins" ] || { fail "scripts/install.sh did not copy plugins/ to install dir"; exit 1; }
+[ -d "$TEST_SCRIPT_INST_SHARE/skills" ] || { fail "scripts/install.sh did not copy skills/ to install dir"; exit 1; }
 [ ! -d "$TEST_SCRIPT_INST_SHARE/docs" ] || { fail "scripts/install.sh leaked docs/ into install dir"; exit 1; }
-[ ! -d "$TEST_SCRIPT_INST_SHARE/toolkit/plugins/claude/tests" ] || { fail "scripts/install.sh leaked tests into install dir"; exit 1; }
+[ ! -d "$TEST_SCRIPT_INST_SHARE/plugins/claude/tests" ] || { fail "scripts/install.sh leaked tests into install dir"; exit 1; }
 pass
 
 # --------------------------------------------------------------------------
 run_test "Terminology audit (zero 'companion' occurrences), SEO keyword presence, and top README image"
-if grep -ri "companion" "$DIR/README.md" "$DIR/package.json" "$DIR/docs" "$DIR/rnex" "$DIR/lib" "$DIR/templates" "$DIR/toolkit" >/dev/null 2>&1; then
+if grep -ri "companion" "$DIR/README.md" "$DIR/package.json" "$DIR/docs" "$DIR/rnex" "$DIR/lib" "$DIR/templates" "$DIR/plugins" "$DIR/skills" >/dev/null 2>&1; then
   fail "Obsolete term 'companion' found in repository codebase"; exit 1
 fi
 

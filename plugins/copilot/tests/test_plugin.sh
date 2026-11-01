@@ -1,17 +1,21 @@
 #!/bin/sh
 # shellcheck shell=sh
 # ============================================================================
-# toolkit/plugins/copilot/tests/test_plugin.sh — Copilot Plugin Lifecycle & Hooks
+# plugins/copilot/tests/test_plugin.sh — Copilot Plugin Lifecycle & Hooks
 # ============================================================================
 set -e
 
-[ -n "$DIR" ] && [ -f "$DIR/rnex" ] || DIR="$(cd "$(dirname "$0")/../../../.." && pwd)"
+[ -n "$DIR" ] && [ -f "$DIR/rnex" ] || DIR="$(cd "$(dirname "$0")/../../.." 2>/dev/null && pwd)"
+[ -f "$DIR/rnex" ] || DIR="$(cd "$(dirname "$0")/../../../.." 2>/dev/null && pwd)"
 . "$DIR/tests/test_helper.sh"
 
 TEST_COPILOT_WS="$TEST_TMP/copilot-plugin-ws"
 mkdir -p "$TEST_COPILOT_WS"
 setup_plugin_test_workspace copilot "$TEST_COPILOT_WS"
 cd "$TEST_COPILOT_WS"
+
+_copilot_pdir="$TEST_COPILOT_WS/plugins/copilot"
+[ -d "$_copilot_pdir" ] || _copilot_pdir="$TEST_COPILOT_WS/toolkit/plugins/copilot"
 
 # --------------------------------------------------------------------------
 run_test "Copilot plugin: init --copilot provisions instructions and User Skills without AGENTS.md"
@@ -37,7 +41,7 @@ _copilot_block="$(awk '/<!-- REPO-NEXUS:START -->/,/<!-- REPO-NEXUS:END -->/' "$
 }
 
 # Verify integration instructions reference .github/skills/rnex-*/SKILL.md
-grep -q "\.github/skills/rnex-\*/SKILL\.md" "$TEST_COPILOT_WS/toolkit/plugins/copilot/instructions/rnex-copilot-integration.md" || {
+grep -q "\.github/skills/rnex-\*/SKILL\.md" "$_copilot_pdir/instructions/rnex-copilot-integration.md" || {
   fail "copilot integration missing .github/skills/rnex-*/SKILL.md reference"; exit 1;
 }
 
@@ -49,7 +53,7 @@ pass
 # --------------------------------------------------------------------------
 run_test "Copilot plugin: manifest metadata, version parity, and plugin info"
 _cli_ver="$("$TEST_COPILOT_WS/rnex" --version | awk '{print $2}')"
-_m_ver="$(awk '/^version:[ ]*/ { sub(/^version:[ ]*/, ""); sub(/[ ]*#.*/, ""); print; exit }' "$TEST_COPILOT_WS/toolkit/plugins/copilot/plugin.yaml")"
+_m_ver="$(awk '/^version:[ ]*/ { sub(/^version:[ ]*/, ""); sub(/[ ]*#.*/, ""); print; exit }' "$_copilot_pdir/plugin.yaml")"
 [ "$_m_ver" = "$_cli_ver" ] || { fail "Copilot plugin version ($_m_ver) does not match CLI version ($_cli_ver)"; exit 1; }
 
 _pinfo_out="$(cd "$TEST_COPILOT_WS" && ./rnex plugin info copilot 2>&1)"
@@ -63,7 +67,7 @@ run_test "Copilot plugin: standalone lifecycle hook execution in unpreloaded sub
 rm -f "$TEST_COPILOT_WS/.github/copilot-instructions.md"
 
 # Run copilot after_sync.sh in an isolated environment with NO preloaded core functions
-_sync_out="$(env -i PATH="$PATH" HOME="$HOME" RNEX_ROOT="$TEST_COPILOT_WS" sh "$TEST_COPILOT_WS/toolkit/plugins/copilot/hooks/after_sync.sh" 2>&1)" || {
+_sync_out="$(env -i PATH="$PATH" HOME="$HOME" RNEX_ROOT="$TEST_COPILOT_WS" sh "$_copilot_pdir/hooks/after_sync.sh" 2>&1)" || {
   fail "after_sync.sh failed in unpreloaded subshell: $_sync_out"; exit 1;
 }
 [ -f "$TEST_COPILOT_WS/.github/copilot-instructions.md" ] || { fail "copilot-instructions.md not created by standalone after_sync hook"; exit 1; }
@@ -72,7 +76,7 @@ grep -q "CRITICAL: You MUST read and strictly follow all instructions" "$TEST_CO
 }
 
 # Run copilot before_plugin_disable.sh in an isolated environment with NO preloaded core functions
-_dis_out="$(env -i PATH="$PATH" HOME="$HOME" RNEX_ROOT="$TEST_COPILOT_WS" sh "$TEST_COPILOT_WS/toolkit/plugins/copilot/hooks/before_plugin_disable.sh" 2>&1)" || {
+_dis_out="$(env -i PATH="$PATH" HOME="$HOME" RNEX_ROOT="$TEST_COPILOT_WS" sh "$_copilot_pdir/hooks/before_plugin_disable.sh" 2>&1)" || {
   fail "before_plugin_disable.sh failed in unpreloaded subshell: $_dis_out"; exit 1;
 }
 [ ! -f "$TEST_COPILOT_WS/.github/copilot-instructions.md" ] || {
@@ -105,7 +109,7 @@ grep -q "# Custom Copilot Rules" "$TEST_COPILOT_WS/.github/copilot-instructions.
 
 # Clean remaining user prompts and run disable hook; verify empty directory is removed
 rm -f "$TEST_COPILOT_WS/.github/prompts"/*
-(RNEX_ROOT="$TEST_COPILOT_WS" "$TEST_COPILOT_WS/toolkit/plugins/copilot/hooks/before_plugin_disable.sh" >/dev/null 2>&1 || true)
+(RNEX_ROOT="$TEST_COPILOT_WS" "$_copilot_pdir/hooks/before_plugin_disable.sh" >/dev/null 2>&1 || true)
 [ ! -d "$TEST_COPILOT_WS/.github/prompts" ] || { fail "Empty .github/prompts directory was not removed"; exit 1; }
 
 # Verify instructions file preserved custom content while REPO-NEXUS block was stripped

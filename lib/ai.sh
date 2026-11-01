@@ -567,19 +567,30 @@ write_rnex_env_script() {
   _bin_dir="$_dir/.rnex/bin"
   mkdir -p "$_bin_dir"
   _env_script="$_bin_dir/rnex-env.sh"
-  _src_sdk=""
+  _src_env=""
   for _cand in \
+    "${RNEX_LIB_DIR:-}/rnex-env.sh" \
+    "${RNEX_TEMPLATES_DIR:-}/rnex-env.sh" \
+    "$SCRIPT_LOCATION/lib/rnex-env.sh" \
+    "$SCRIPT_LOCATION/templates/rnex-env.sh" \
+    "$(dirname "$SCRIPT_LOCATION")/lib/rnex-env.sh" \
+    "$(dirname "$SCRIPT_LOCATION")/templates/rnex-env.sh" \
+    "$_dir/lib/rnex-env.sh" \
+    "$_dir/templates/rnex-env.sh" \
     "${RNEX_LIB_DIR:-}/sdk.sh" \
     "$SCRIPT_LOCATION/lib/sdk.sh" \
     "$(dirname "$SCRIPT_LOCATION")/lib/sdk.sh" \
     "$_dir/lib/sdk.sh"; do
     if [ -n "$_cand" ] && [ -f "$_cand" ]; then
-      _src_sdk="$_cand"
+      _src_env="$_cand"
       break
     fi
   done
-  if [ -n "$_src_sdk" ]; then
-    cp "$_src_sdk" "$_env_script"
+  if [ -n "$_src_env" ]; then
+    cp "$_src_env" "$_env_script"
+    # Materialize root-level .rnex/rnex-env.sh for backward-compatibility with callers
+    cp "$_src_env" "$_dir/.rnex/rnex-env.sh"
+    chmod +x "$_dir/.rnex/rnex-env.sh" 2>/dev/null || true
   fi
   chmod +x "$_env_script" 2>/dev/null || true
 }
@@ -605,13 +616,25 @@ get_active_provider_skill_dirs() {
 # Synchronize built-in core agentic skills into .rnex/skills/ and register
 # zero-logic user skill pointers across all active AI assistant directories.
 sync_rnex_base_assets() {
-  _src_toolkit=""
-  if [ -d "$SCRIPT_LOCATION/toolkit" ]; then
-    _src_toolkit="$SCRIPT_LOCATION/toolkit"
-  elif [ -d "$(dirname "$SCRIPT_LOCATION")/toolkit" ]; then
-    _src_toolkit="$(dirname "$SCRIPT_LOCATION")/toolkit"
-  elif [ -d "$NEXUS_DIR/toolkit" ]; then
-    _src_toolkit="$NEXUS_DIR/toolkit"
+  _src_skills=""
+  if [ -n "${RNEX_SKILLS_DIR:-}" ] && [ -d "$RNEX_SKILLS_DIR" ]; then
+    _src_skills="$RNEX_SKILLS_DIR"
+  elif [ -n "${SKILLS_DIR:-}" ] && [ -d "$SKILLS_DIR" ]; then
+    _src_skills="$SKILLS_DIR"
+  elif [ -d "$SCRIPT_LOCATION/skills" ]; then
+    _src_skills="$SCRIPT_LOCATION/skills"
+  elif [ -d "$(dirname "$SCRIPT_LOCATION")/skills" ]; then
+    _src_skills="$(dirname "$SCRIPT_LOCATION")/skills"
+  elif [ -d "$NEXUS_DIR/skills" ]; then
+    _src_skills="$NEXUS_DIR/skills"
+  elif [ -d "${RNEX_ROOT:-}/skills" ]; then
+    _src_skills="${RNEX_ROOT:-}/skills"
+  elif [ -d "$SCRIPT_LOCATION/toolkit/skills" ]; then
+    _src_skills="$SCRIPT_LOCATION/toolkit/skills"
+  elif [ -d "$(dirname "$SCRIPT_LOCATION")/toolkit/skills" ]; then
+    _src_skills="$(dirname "$SCRIPT_LOCATION")/toolkit/skills"
+  elif [ -d "$NEXUS_DIR/toolkit/skills" ]; then
+    _src_skills="$NEXUS_DIR/toolkit/skills"
   fi
 
   # Purge obsolete .rnex/prompts/ and .rnex/workflows/
@@ -627,8 +650,8 @@ sync_rnex_base_assets() {
   done
 
   # Sync base skills to .rnex/skills/
-  if [ -n "$_src_toolkit" ] && [ -d "$_src_toolkit/skills" ]; then
-    cp -f "$_src_toolkit"/skills/*.md "$NEXUS_DIR/.rnex/skills/" 2>/dev/null || true
+  if [ -n "$_src_skills" ] && [ -d "$_src_skills" ]; then
+    cp -f "$_src_skills"/*.md "$NEXUS_DIR/.rnex/skills/" 2>/dev/null || true
   fi
 
   # Purge any plugin-declared skills that may have been placed in core .rnex/skills/

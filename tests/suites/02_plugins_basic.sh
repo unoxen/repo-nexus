@@ -19,7 +19,7 @@ if ! grep -q "test-app:" "$TEST_WORKSPACE/rnex.yaml" 2>/dev/null; then
 fi
 
 # --------------------------------------------------------------------------
-run_test "Plugin engine: list command discovers plugins across toolkit"
+run_test "Plugin engine: list command discovers plugins across plugins"
 _plist_out="$("$TEST_WORKSPACE/rnex" plugin list 2>&1)"
 echo "$_plist_out" | grep -q "Repo Nexus Plugins" || { fail "Plugin list missing header: $_plist_out"; exit 1; }
 echo "$_plist_out" | grep -q "available" || { fail "Plugin list missing available marker: $_plist_out"; exit 1; }
@@ -27,7 +27,7 @@ pass
 
 # --------------------------------------------------------------------------
 run_test "Plugin engine: extensible commands, options forwarding, shorthand, and lifecycle hooks"
-_cmd_plugin_dir="$TEST_WORKSPACE/toolkit/plugins/cmd-test"
+_cmd_plugin_dir="$TEST_WORKSPACE/plugins/cmd-test"
 mkdir -p "$_cmd_plugin_dir/commands"
 cat <<'EOF_PLUG' > "$_cmd_plugin_dir/plugin.yaml"
 name: cmd-test
@@ -115,7 +115,7 @@ pass
 
 # --------------------------------------------------------------------------
 run_test "Plugin engine: scoped isolation, update with stale artifact purge, and clean disable"
-_sample_plugin_dir="$TEST_WORKSPACE/toolkit/plugins/sample-pkg"
+_sample_plugin_dir="$TEST_WORKSPACE/plugins/sample-pkg"
 mkdir -p "$_sample_plugin_dir/rules" "$_sample_plugin_dir/skills" "$_sample_plugin_dir/instructions"
 cat <<'EOF_SAMPLE' > "$_sample_plugin_dir/plugin.yaml"
 name: sample-pkg
@@ -183,20 +183,20 @@ chmod +x "$TEST_PHOOK_WS/rnex"
 cp "$DIR/package.json" "$TEST_PHOOK_WS/package.json"
 cp -r "$DIR/lib" "$TEST_PHOOK_WS/lib"
 cp -r "$DIR/templates" "$TEST_PHOOK_WS/templates"
-mkdir -p "$TEST_PHOOK_WS/toolkit/plugins/hook-tester/hooks"
+mkdir -p "$TEST_PHOOK_WS/plugins/hook-tester/hooks"
 
-cat <<'EOF_HT_YAML' > "$TEST_PHOOK_WS/toolkit/plugins/hook-tester/plugin.yaml"
+cat <<'EOF_HT_YAML' > "$TEST_PHOOK_WS/plugins/hook-tester/plugin.yaml"
 name: hook-tester
 version: 1.0.0
 description: Plugin testing lifecycle hooks
 EOF_HT_YAML
 
-cat <<'EOF_HT_BS' > "$TEST_PHOOK_WS/toolkit/plugins/hook-tester/hooks/before_sync.sh"
+cat <<'EOF_HT_BS' > "$TEST_PHOOK_WS/plugins/hook-tester/hooks/before_sync.sh"
 #!/bin/sh
 printf 'bs\n' >> "$RNEX_ROOT/bs_counts"
 EOF_HT_BS
 
-cat <<'EOF_HT_AS' > "$TEST_PHOOK_WS/toolkit/plugins/hook-tester/hooks/after_sync.sh"
+cat <<'EOF_HT_AS' > "$TEST_PHOOK_WS/plugins/hook-tester/hooks/after_sync.sh"
 #!/bin/sh
 if [ ! -f "$RNEX_ROOT/.rnex/sync_stamp" ]; then
   echo "STEP_ORDER_ERROR: sync_stamp missing before Step 3 completes" >&2
@@ -209,17 +209,17 @@ fi
 printf 'as\n' >> "$RNEX_ROOT/as_counts"
 EOF_HT_AS
 
-cat <<'EOF_HT_AI' > "$TEST_PHOOK_WS/toolkit/plugins/hook-tester/hooks/after_init.sh"
+cat <<'EOF_HT_AI' > "$TEST_PHOOK_WS/plugins/hook-tester/hooks/after_init.sh"
 #!/bin/sh
 printf 'ai\n' >> "$RNEX_ROOT/ai_counts"
 EOF_HT_AI
 
-cat <<'EOF_HT_AE' > "$TEST_PHOOK_WS/toolkit/plugins/hook-tester/hooks/after_exec.sh"
+cat <<'EOF_HT_AE' > "$TEST_PHOOK_WS/plugins/hook-tester/hooks/after_exec.sh"
 #!/bin/sh
 printf 'ae\n' >> "$RNEX_ROOT/ae_marker"
 EOF_HT_AE
 
-chmod +x "$TEST_PHOOK_WS/toolkit/plugins/hook-tester/hooks"/*
+chmod +x "$TEST_PHOOK_WS/plugins/hook-tester/hooks"/*
 
 # 1. after_init hook fires on init
 (cd "$TEST_PHOOK_WS" && ./rnex init -y >/dev/null)
@@ -252,17 +252,17 @@ pass
 # --------------------------------------------------------------------------
 run_test "Plugin engine: two-tier skills architecture and zero-logic User Skill generator contract"
 TEST_SKILLS_ARCH_WS="$TEST_TMP/skills-arch-ws"
-mkdir -p "$TEST_SKILLS_ARCH_WS/toolkit"
+mkdir -p "$TEST_SKILLS_ARCH_WS"
 cp "$CLI" "$TEST_SKILLS_ARCH_WS/rnex"
 chmod +x "$TEST_SKILLS_ARCH_WS/rnex"
 cp "$DIR/package.json" "$TEST_SKILLS_ARCH_WS/package.json"
 cp -r "$DIR/lib" "$TEST_SKILLS_ARCH_WS/lib"
 cp -r "$DIR/templates" "$TEST_SKILLS_ARCH_WS/templates"
-cp -r "$DIR/toolkit/skills" "$TEST_SKILLS_ARCH_WS/toolkit/skills"
+cp -r "$DIR/skills" "$TEST_SKILLS_ARCH_WS/skills"
 
 # Create a synthetic provider plugin and a synthetic domain plugin
-mkdir -p "$TEST_SKILLS_ARCH_WS/toolkit/plugins/sample-prov"
-cat <<'EOF_PROV_YAML' > "$TEST_SKILLS_ARCH_WS/toolkit/plugins/sample-prov/plugin.yaml"
+mkdir -p "$TEST_SKILLS_ARCH_WS/plugins/sample-prov"
+cat <<'EOF_PROV_YAML' > "$TEST_SKILLS_ARCH_WS/plugins/sample-prov/plugin.yaml"
 name: sample-prov
 version: 1.0.0
 description: Synthetic provider plugin
@@ -271,18 +271,18 @@ config_defaults:
   skills: true
 EOF_PROV_YAML
 
-mkdir -p "$TEST_SKILLS_ARCH_WS/toolkit/plugins/sample-domain/skills"
-mkdir -p "$TEST_SKILLS_ARCH_WS/toolkit/plugins/sample-domain/hooks"
-cat <<'EOF_DOM_YAML' > "$TEST_SKILLS_ARCH_WS/toolkit/plugins/sample-domain/plugin.yaml"
+mkdir -p "$TEST_SKILLS_ARCH_WS/plugins/sample-domain/skills"
+mkdir -p "$TEST_SKILLS_ARCH_WS/plugins/sample-domain/hooks"
+cat <<'EOF_DOM_YAML' > "$TEST_SKILLS_ARCH_WS/plugins/sample-domain/plugin.yaml"
 name: sample-domain
 version: 1.0.0
 description: Synthetic domain plugin
 skills:
   - skills/domain-work.md: .rnex/plugins/sample-domain/skills/domain-work.md
 EOF_DOM_YAML
-echo "# Domain Work Skill" > "$TEST_SKILLS_ARCH_WS/toolkit/plugins/sample-domain/skills/domain-work.md"
+echo "# Domain Work Skill" > "$TEST_SKILLS_ARCH_WS/plugins/sample-domain/skills/domain-work.md"
 
-cat <<'EOF_DOM_AS' > "$TEST_SKILLS_ARCH_WS/toolkit/plugins/sample-domain/hooks/after_sync.sh"
+cat <<'EOF_DOM_AS' > "$TEST_SKILLS_ARCH_WS/plugins/sample-domain/hooks/after_sync.sh"
 #!/bin/sh
 if [ -f "$RNEX_ROOT/.rnex/bin/rnex-env.sh" ]; then
   . "$RNEX_ROOT/.rnex/bin/rnex-env.sh"
@@ -290,14 +290,14 @@ fi
 rnex_generate_user_skill "domain-work" ".rnex/plugins/sample-domain/skills/domain-work.md" "sample-domain"
 EOF_DOM_AS
 
-cat <<'EOF_DOM_BPD' > "$TEST_SKILLS_ARCH_WS/toolkit/plugins/sample-domain/hooks/before_plugin_disable.sh"
+cat <<'EOF_DOM_BPD' > "$TEST_SKILLS_ARCH_WS/plugins/sample-domain/hooks/before_plugin_disable.sh"
 #!/bin/sh
 if [ -f "$RNEX_ROOT/.rnex/bin/rnex-env.sh" ]; then
   . "$RNEX_ROOT/.rnex/bin/rnex-env.sh"
 fi
 rnex_unregister_user_skill "domain-work" "sample-domain"
 EOF_DOM_BPD
-chmod +x "$TEST_SKILLS_ARCH_WS/toolkit/plugins/sample-domain/hooks"/*
+chmod +x "$TEST_SKILLS_ARCH_WS/plugins/sample-domain/hooks"/*
 
 (cd "$TEST_SKILLS_ARCH_WS" && ./rnex init -y >/dev/null)
 cat <<'EOF_WS_SKILLS' >> "$TEST_SKILLS_ARCH_WS/rnex.yaml"

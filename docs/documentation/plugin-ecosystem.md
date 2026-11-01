@@ -21,7 +21,7 @@ Member repositories live in the configured `repos_dir` (default: `./repos/`) and
 
 ### 3. Decoupled Two-Tier Skills Architecture
 Repo Nexus decouples functional plugins from AI provider plugins:
-- **Core Skills (`toolkit/skills/` $\rightarrow$ `.rnex/skills/`)**: Workspace-level capabilities owned by Repo Nexus core.
+- **Core Skills (`skills/` $\rightarrow$ `.rnex/skills/`)**: Workspace-level capabilities owned by Repo Nexus core.
 - **Plugin Skills (`<plugin-dir>/skills/` $\rightarrow$ `.rnex/plugins/<plugin>/skills/`)**: Scoped domain skills owned exclusively by individual plugins.
 - **User Skills**: Provider plugins (`copilot`, `claude`, `codex`, `gemini`, `cursor`, and `windsurf`) project zero-logic user skill pointers into active provider directories using native `SKILL.md` bundles with YAML frontmatter in skill directories (`.github/skills/`, `.claude/skills/`, `.codex/skills/`, `.agents/skills/`) and flat files in rule directories (`.cursor/rules/`, `.windsurf/rules/`), redirecting AI assistants directly to the underlying agentic skills in `.rnex/`.
 
@@ -46,7 +46,7 @@ Environment variables exported to command scripts:
 * `RNEX_PLUGIN_ARGS`: Arguments string.
 
 ### 5. External & Custom Plugin Mounting (`plugins.<name>.path`)
-Plugins are not limited to built-in toolkit packages. Any external plugin directory on disk, in a shared team repository, or on a developer's workstation can be mounted into `.rnex/plugins/<plugin-name>/` via `plugins.<name>.path` in `rnex.yaml` or `.local.rnex.yaml`. External plugins participate seamlessly in the full Repo Nexus lifecycle—including CLI subcommands, lifecycle hooks, skills, instructions, and rules mirroring.
+Plugins are not limited to built-in packages. Any external plugin directory on disk, in a shared team repository, or on a developer's workstation can be mounted into `.rnex/plugins/<plugin-name>/` via `plugins.<name>.path` in `rnex.yaml` or `.local.rnex.yaml`. External plugins participate seamlessly in the full Repo Nexus lifecycle—including CLI subcommands, lifecycle hooks, skills, instructions, and rules mirroring.
 
 ---
 
@@ -109,7 +109,7 @@ version: "1"
 name: "my-platform"
 
 plugins:
-  # Built-in plugin (loaded from toolkit/plugins/claude)
+  # Built-in plugin (loaded from plugins/claude)
   claude:
     enabled: true
 
@@ -137,7 +137,7 @@ plugins:
 ```
 
 ::: tip Path Resolution & Normalization Rules
-* **Precedence:** `.local.rnex.yaml` (`plugins.<name>.path`) > `rnex.yaml` (`plugins.<name>.path`) > Built-in `toolkit/plugins/<name>/`. Local workstation overrides always take priority.
+* **Precedence:** `.local.rnex.yaml` (`plugins.<name>.path`) > `rnex.yaml` (`plugins.<name>.path`) > Built-in `plugins/<name>/`. Local workstation overrides always take priority.
 * **Relative vs. Absolute Paths:** Relative paths (e.g., `./custom-plugins/my-plugin` or `../shared-plugins/my-plugin`) are resolved relative to the workspace root directory; absolute paths (e.g., `/Users/dev/plugins/my-plugin`) are resolved directly.
 * **Directory or Manifest Pointer:** `path` can point either to the plugin root directory (`./custom-plugins/my-plugin`) or directly to its manifest file (`./custom-plugins/my-plugin/plugin.yaml`). `rnex` automatically normalizes `/plugin.yaml` to the parent plugin directory.
 * **Version Reporting:** Built-in plugins match the `rnex` CLI version, while external plugins loaded via `plugins.<name>.path` dynamically report the `version:` declared in their own `plugin.yaml` across `rnex plugin list` and `rnex plugin info <name>`.
@@ -152,7 +152,7 @@ Custom plugins allow packaging internal company standards, custom agent skills, 
 ### Plugin Location & Discovery
 A plugin can be hosted in one of two locations:
 1. **External Plugin Path (`plugins.<name>.path`)**: External or custom plugins declared via `path:` in `rnex.yaml` or `.local.rnex.yaml` (e.g. `plugins: { my-plugin: { path: "./custom-plugins/my-plugin" } }`).
-2. **Built-in Toolkit Directory**: Standard plugins bundled directly with Repo Nexus under `toolkit/plugins/<my-plugin>/`.
+2. **Built-in Plugins Directory**: Standard plugins bundled directly with Repo Nexus under `plugins/<my-plugin>/`.
 
 ### Plugin Directory Structure
 A plugin bundle is structured as follows:

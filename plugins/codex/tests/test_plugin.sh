@@ -1,11 +1,12 @@
 #!/bin/sh
 # shellcheck shell=sh
 # ============================================================================
-# toolkit/plugins/codex/tests/test_plugin.sh — Codex Plugin Lifecycle & User Skills
+# plugins/codex/tests/test_plugin.sh — Codex Plugin Lifecycle & User Skills
 # ============================================================================
 set -e
 
-[ -n "$DIR" ] && [ -f "$DIR/rnex" ] || DIR="$(cd "$(dirname "$0")/../../../.." && pwd)"
+[ -n "$DIR" ] && [ -f "$DIR/rnex" ] || DIR="$(cd "$(dirname "$0")/../../.." 2>/dev/null && pwd)"
+[ -f "$DIR/rnex" ] || DIR="$(cd "$(dirname "$0")/../../../.." 2>/dev/null && pwd)"
 . "$DIR/tests/test_helper.sh"
 
 TEST_CODEX_WS="$TEST_TMP/codex-plugin-ws"
@@ -47,7 +48,9 @@ pass
 # --------------------------------------------------------------------------
 run_test "Codex plugin: manifest metadata, version parity, and plugin info"
 _cli_ver="$("$TEST_CODEX_WS/rnex" --version | awk '{print $2}')"
-_m_ver="$(awk '/^version:[ ]*/ { sub(/^version:[ ]*/, ""); sub(/[ ]*#.*/, ""); print; exit }' "$TEST_CODEX_WS/toolkit/plugins/codex/plugin.yaml")"
+_codex_manifest="$TEST_CODEX_WS/plugins/codex/plugin.yaml"
+[ -f "$_codex_manifest" ] || _codex_manifest="$TEST_CODEX_WS/toolkit/plugins/codex/plugin.yaml"
+_m_ver="$(awk '/^version:[ ]*/ { sub(/^version:[ ]*/, ""); sub(/[ ]*#.*/, ""); print; exit }' "$_codex_manifest")"
 [ "$_m_ver" = "$_cli_ver" ] || { fail "Codex plugin version ($_m_ver) does not match CLI version ($_cli_ver)"; exit 1; }
 
 _pinfo_out="$(cd "$TEST_CODEX_WS" && ./rnex plugin info codex 2>&1)"

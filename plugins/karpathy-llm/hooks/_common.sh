@@ -1,7 +1,7 @@
 #!/bin/sh
 # shellcheck shell=sh
 # ============================================================================
-# toolkit/plugins/karpathy-llm/hooks/_common.sh — Shared Karpathy Wiki Hook Bootstrap
+# plugins/karpathy-llm/hooks/_common.sh — Shared Karpathy Wiki Hook Bootstrap
 # ============================================================================
 
 _root="${RNEX_ROOT:-${NEXUS_DIR:-$PWD}}"
@@ -303,7 +303,7 @@ kl_ensure_wiki_files() {
     _kew_pdir="$(find_plugin_dir "karpathy-llm" 2>/dev/null || true)"
   fi
   if [ -z "$_kew_pdir" ]; then
-    for _kew_cand in "$_root/.rnex/plugins/karpathy-llm" "$_root/toolkit/plugins/karpathy-llm"; do
+    for _kew_cand in "$_root/.rnex/plugins/karpathy-llm" "$_root/plugins/karpathy-llm" "$_root/toolkit/plugins/karpathy-llm"; do
       if [ -d "$_kew_cand/templates" ]; then
         _kew_pdir="$_kew_cand"
         break

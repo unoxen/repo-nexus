@@ -4,7 +4,7 @@
 # lib/commands/plugin.sh — Plugin management commands
 # ============================================================================
 
-# List all available, enabled, and disabled plugins found in the workspace toolkit.
+# List all available, enabled, and disabled plugins found in the workspace and plugins directory.
 cmd_plugin_list() {
   require_workspace
   printf '\n%b%s%b\n' "$_B" "Repo Nexus Plugins" "$_NC"

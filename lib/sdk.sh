@@ -577,7 +577,7 @@ clean_provider_agents() {
   _r="${NEXUS_DIR:-${RNEX_ROOT:-.}}"
   [ -d "$_ag_dir" ] || return 0
 
-  for _pdir in "${SCRIPT_LOCATION:-$_r}/toolkit/plugins"/* "$_r/toolkit/plugins"/* "$_r/.rnex/plugins"/*; do
+  for _pdir in "${SCRIPT_LOCATION:-$_r}/plugins"/* "$_r/plugins"/* "${SCRIPT_LOCATION:-$_r}/toolkit/plugins"/* "$_r/toolkit/plugins"/* "$_r/.rnex/plugins"/*; do
     [ -d "$_pdir" ] || continue
     [ -d "$_pdir/agents" ] || continue
     for _afile in "$_pdir/agents"/*.md; do
