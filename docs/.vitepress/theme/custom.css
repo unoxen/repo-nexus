@@ -173,3 +173,21 @@ body {
     border-bottom-color: transparent !important;
   }
 }
+
+/**
+ * Architectural Layer: Documentation Theme Presentation
+ * Single Responsibility: Ensure Markdown tables fill the content column
+ * proportionally without rendering a phantom blank column on the right.
+ */
+.vp-doc table {
+  display: table;
+  width: 100%;
+  border-collapse: collapse;
+}
+
+@media (max-width: 768px) {
+  .vp-doc table {
+    display: block;
+    overflow-x: auto;
+  }
+}

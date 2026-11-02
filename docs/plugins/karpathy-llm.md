@@ -133,11 +133,13 @@ The `karpathy-llm` plugin provides native command-line subcommands via the exten
 Ingests raw intake documents and member repository READMEs into atomic, interlinked markdown pages in `wiki/`.
 
 ```sh
-rnex plugin karpathy-llm ingest [options]
+rnex plugin karpathy-llm ingest [options] [<file_path>]
 ```
 
 | Option | Type | Default | Description |
 |:---|:---|:---|:---|
+| `<file_path>` | string | *(all sources)* | Ingest a single specified markdown file directly. |
+| `--file, -f <path>` | string | *(all sources)* | Ingest a specific markdown file. |
 | `--source <path>` | string | *(all sources)* | Ingest a specific markdown file or intake directory instead of all configured `sources`. |
 | `--repo <name>` | string | *(all enabled repos)* | Ingest a specific member repository README (`repo-<name>.md`). |
 | `-q, --quiet` | boolean | `false` | Suppress non-error informational progress messages. |

@@ -71,9 +71,13 @@ export default withMermaid(
       nav: [
         {
           text: 'Introduction',
-          activeMatch: '^/(introduction/|$)',
+          activeMatch: '^/(index\\.html)?$|^/introduction/',
           items: [
-            { text: 'Welcome', link: '/' },
+            {
+              text: 'Welcome',
+              link: '/',
+              activeMatch: '^/(index\\.html)?$'
+            },
             { text: 'Why rnex?', link: '/introduction/why-rnex' },
             { text: 'Quick Start', link: '/introduction/quick-start' },
             {

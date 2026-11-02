@@ -49,7 +49,7 @@ Repo Nexus acts as a lightweight coordinator around your repositories without al
 ## Architectural Comparison
 
 | Dimension | Git Submodules | Monorepo (Nx / Turborepo) | Repo Nexus (`rnex`) |
-|:---|:---|:---|:---|
+| :--- | :--- | :--- | :--- |
 | **Repository Model** | Nested Git trees | Single giant repository | Virtual Meta-Repo umbrella |
 | **Git Complexity** | High (detached HEAD, pointer sync) | Low (single git log) | Zero (standard independent repos) |
 | **Migration Cost** | High | Massive (rewrite git history) | Instant (`rnex init` & `rnex repo add`) |

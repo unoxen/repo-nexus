@@ -219,6 +219,7 @@ Executes a subcommand exposed by an enabled plugin:
 rnex plugin <name> <command> [options...]
 ```
 
+* Example: `rnex plugin karpathy-llm ingest docs/notes.md`
 * Example: `rnex plugin karpathy-llm ingest --source docs/notes.md`
 * Example: `rnex plugin karpathy-llm lint --strict`
 * Shorthand execution: `rnex plugin <command> [options...]` when `<command>` is unique across enabled plugins.

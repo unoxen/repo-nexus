@@ -378,6 +378,57 @@ _lint_strict_err=0
 rm -f "$TEST_INTAKE_WS/wiki/broken-doc.md"
 pass
 
+# --------------------------------------------------------------------------
+run_test "Karpathy-llm: single-file ingestion, --file flag, missing-file validation, and batch fallback"
+TEST_SF_WS="$TEST_TMP/karpathy-singlefile-ws"
+mkdir -p "$TEST_SF_WS"
+setup_plugin_test_workspace karpathy-llm "$TEST_SF_WS"
+cd "$TEST_SF_WS"
+"$TEST_SF_WS/rnex" init -y --karpathy "$TEST_SF_WS" >/dev/null
+
+mkdir -p "$TEST_SF_WS/raw"
+cat <<'EOF_CFG_SF' > "$TEST_SF_WS/rnex.yaml"
+version: 1.0.0
+plugins:
+  karpathy-llm:
+    wiki_dir: wiki
+    sources: [raw]
+repos:
+EOF_CFG_SF
+(cd "$TEST_SF_WS" && ./rnex sync -y >/dev/null)
+
+printf '# Document A\nSingle file A content.\n' > "$TEST_SF_WS/raw/doc-a.md"
+printf '# Document B\nSingle file B content.\n' > "$TEST_SF_WS/raw/doc-b.md"
+printf '# Document C\nSingle file C content.\n' > "$TEST_SF_WS/raw/doc-c.md"
+
+# Test Case 1: Positional single file ingestion
+(cd "$TEST_SF_WS" && ./rnex plugin karpathy-llm ingest raw/doc-a.md >/dev/null)
+[ -f "$TEST_SF_WS/wiki/doc-a.md" ] || { fail "wiki/doc-a.md missing after single-file positional ingest"; exit 1; }
+[ ! -f "$TEST_SF_WS/wiki/doc-b.md" ] || { fail "wiki/doc-b.md should not have been ingested during single-file ingest"; exit 1; }
+[ ! -f "$TEST_SF_WS/wiki/doc-c.md" ] || { fail "wiki/doc-c.md should not have been ingested during single-file ingest"; exit 1; }
+
+# Test Case 2: --file / -f flag single file ingestion
+(cd "$TEST_SF_WS" && ./rnex plugin karpathy-llm ingest --file raw/doc-b.md >/dev/null)
+[ -f "$TEST_SF_WS/wiki/doc-b.md" ] || { fail "wiki/doc-b.md missing after --file ingest"; exit 1; }
+[ ! -f "$TEST_SF_WS/wiki/doc-c.md" ] || { fail "wiki/doc-c.md should not have been ingested during --file ingest"; exit 1; }
+
+# Test Case 3: Missing file error and exit code non-zero
+_missing_err=0
+_err_out="$( (cd "$TEST_SF_WS" && ./rnex plugin karpathy-llm ingest raw/nonexistent.md) 2>&1 )" || _missing_err=1
+[ "$_missing_err" -eq 1 ] || { fail "ingest of nonexistent file expected non-zero exit code"; exit 1; }
+echo "$_err_out" | grep -q 'File not found: "raw/nonexistent.md"' || { fail "Missing file error message mismatch: $_err_out"; exit 1; }
+
+# Test Case 3b: Directory argument error and exit code non-zero
+_dir_err=0
+_dir_out="$( (cd "$TEST_SF_WS" && ./rnex plugin karpathy-llm ingest raw) 2>&1 )" || _dir_err=1
+[ "$_dir_err" -eq 1 ] || { fail "ingest of directory argument expected non-zero exit code"; exit 1; }
+echo "$_dir_out" | grep -q 'Expected a file path, but "raw" is a directory' || { fail "Directory error message mismatch: $_dir_out"; exit 1; }
+
+# Test Case 4: Batch fallback when no file argument is passed
+(cd "$TEST_SF_WS" && ./rnex plugin karpathy-llm ingest >/dev/null)
+[ -f "$TEST_SF_WS/wiki/doc-c.md" ] || { fail "wiki/doc-c.md missing after batch fallback ingest"; exit 1; }
+pass
+
 if [ "${_STANDALONE_RUN:-0}" -eq 1 ]; then
   report_results
 fi

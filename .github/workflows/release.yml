@@ -1,0 +1,168 @@
+# =============================================================================
+# File: .github/workflows/release.yml
+# Architectural Layer: CI/CD Release Automation
+# Single Responsibility: Manually dispatched workflow (workflow_dispatch) to
+# validate, test, tag, and publish a GitHub Release for a specified Git commit
+# SHA or Git tag.
+# Security: OWASP-compliant environment variable binding (zero inline expression
+# injection), strict input regex validation, and least-privilege GITHUB_TOKEN.
+# =============================================================================
+
+name: Manual Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_ref:
+        description: 'Git tag (e.g., v0.7.6) or Git commit SHA (e.g., d46ba68) to release'
+        required: true
+        type: string
+      release_tag:
+        description: 'Tag name to create/use when target_ref is a commit SHA (optional; defaults to v<package.json version>)'
+        required: false
+        type: string
+      release_title:
+        description: 'Custom release title (optional; defaults to tag name)'
+        required: false
+        type: string
+      prerelease:
+        description: 'Mark as pre-release'
+        required: false
+        default: false
+        type: boolean
+      draft:
+        description: 'Save as draft release'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  create-release:
+    name: Validate, Test & Create GitHub Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository with full history and tags
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve and validate target ref (commit SHA or tag)
+        id: resolve
+        env:
+          INPUT_TARGET_REF: ${{ inputs.target_ref }}
+          INPUT_RELEASE_TAG: ${{ inputs.release_tag }}
+          INPUT_RELEASE_TITLE: ${{ inputs.release_title }}
+        run: |
+          set -eu
+
+          # 1. Validate INPUT_TARGET_REF against strict allowlist (alphanumeric, '.', '_', '-', '/')
+          if ! printf '%s\n' "$INPUT_TARGET_REF" | grep -Eq '^[A-Za-z0-9._/-]+$'; then
+            printf '::error::Invalid target_ref format: "%s"\n' "$INPUT_TARGET_REF"
+            exit 1
+          fi
+
+          # 2. Check if target_ref is an existing tag or a valid commit object
+          if git show-ref --tags --quiet --verify -- "refs/tags/${INPUT_TARGET_REF}"; then
+            RESOLVED_SHA="$(git rev-list -n 1 "refs/tags/${INPUT_TARGET_REF}")"
+            RESOLVED_TAG="$INPUT_TARGET_REF"
+            IS_EXISTING_TAG="true"
+          elif git rev-parse --quiet --verify "${INPUT_TARGET_REF}^{commit}" >/dev/null; then
+            RESOLVED_SHA="$(git rev-parse --verify "${INPUT_TARGET_REF}^{commit}")"
+            IS_EXISTING_TAG="false"
+            if [ -n "$INPUT_RELEASE_TAG" ]; then
+              RESOLVED_TAG="$INPUT_RELEASE_TAG"
+            else
+              # Extract version from package.json at the target commit
+              PKG_VERSION="$(git show "${RESOLVED_SHA}:package.json" | sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
+              if [ -z "$PKG_VERSION" ]; then
+                printf '::error::Could not derive version from package.json at commit %s. Provide release_tag explicitly.\n' "$RESOLVED_SHA"
+                exit 1
+              fi
+              RESOLVED_TAG="v${PKG_VERSION}"
+            fi
+          else
+            printf '::error::target_ref "%s" is neither an existing Git tag nor a valid Git commit.\n' "$INPUT_TARGET_REF"
+            exit 1
+          fi
+
+          # 3. Validate RESOLVED_TAG against strict semantic tag allowlist
+          if ! printf '%s\n' "$RESOLVED_TAG" | grep -Eq '^v?[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9._-]+)?$'; then
+            printf '::error::Invalid release tag format: "%s" (expected e.g. v0.7.6)\n' "$RESOLVED_TAG"
+            exit 1
+          fi
+
+          # 4. Checkout the exact resolved commit SHA in detached HEAD for verification
+          git checkout --detach "$RESOLVED_SHA"
+
+          RESOLVED_TITLE="${INPUT_RELEASE_TITLE:-$RESOLVED_TAG}"
+
+          {
+            printf 'sha=%s\n' "$RESOLVED_SHA"
+            printf 'tag=%s\n' "$RESOLVED_TAG"
+            printf 'title=%s\n' "$RESOLVED_TITLE"
+            printf 'is_existing_tag=%s\n' "$IS_EXISTING_TAG"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Run ShellCheck & POSIX CLI test suite at target commit
+        run: |
+          set -eu
+          shellcheck rnex lib/*.sh
+          ./tests/test_cli.sh
+
+      - name: Create and push Git tag if releasing from an untagged commit
+        if: steps.resolve.outputs.is_existing_tag == 'false'
+        env:
+          TARGET_SHA: ${{ steps.resolve.outputs.sha }}
+          RELEASE_TAG: ${{ steps.resolve.outputs.tag }}
+        run: |
+          set -eu
+          if git show-ref --tags --quiet --verify -- "refs/tags/${RELEASE_TAG}"; then
+            TAG_SHA="$(git rev-list -n 1 "refs/tags/${RELEASE_TAG}")"
+            if [ "$TAG_SHA" != "$TARGET_SHA" ]; then
+              printf '::error::Tag "%s" already exists at %s (cannot repoint to %s).\n' "$RELEASE_TAG" "$TAG_SHA" "$TARGET_SHA"
+              exit 1
+            fi
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a "$RELEASE_TAG" "$TARGET_SHA" -m "Release ${RELEASE_TAG}"
+            git push origin "refs/tags/${RELEASE_TAG}"
+          fi
+
+      - name: Create GitHub Release via GitHub CLI
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ steps.resolve.outputs.tag }}
+          RELEASE_TITLE: ${{ steps.resolve.outputs.title }}
+          TARGET_SHA: ${{ steps.resolve.outputs.sha }}
+          IS_DRAFT: ${{ inputs.draft }}
+          IS_PRERELEASE: ${{ inputs.prerelease }}
+        run: |
+          set -eu
+
+          # Fail safely if a GitHub Release for this tag already exists
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            printf '::error::A GitHub Release for tag "%s" already exists.\n' "$RELEASE_TAG"
+            exit 1
+          fi
+
+          set -- gh release create "$RELEASE_TAG" \
+            --target "$TARGET_SHA" \
+            --title "$RELEASE_TITLE" \
+            --generate-notes
+
+          if [ "$IS_DRAFT" = "true" ]; then
+            set -- "$@" --draft
+          fi
+
+          if [ "$IS_PRERELEASE" = "true" ]; then
+            set -- "$@" --prerelease
+          fi
+
+          "$@"

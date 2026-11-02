@@ -156,6 +156,8 @@ The `karpathy-llm` plugin provides parameterized commands via the `rnex plugin` 
 rnex plugin karpathy-llm ingest
 
 # Ingest a specific markdown source or member repository README
+rnex plugin karpathy-llm ingest docs/architecture.md
+rnex plugin karpathy-llm ingest --file docs/architecture.md
 rnex plugin karpathy-llm ingest --source docs/architecture.md
 rnex plugin karpathy-llm ingest --repo backend-api --quiet
 

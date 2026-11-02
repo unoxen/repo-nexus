@@ -166,19 +166,25 @@
   box-sizing: border-box;
 }
 
-/* Tables styling with responsive horizontal scrolling */
+/* Tables styling with responsive full-width layout and horizontal scrolling on mobile */
 .vp-doc table {
-  display: block !important;
-  max-width: 100% !important;
-  width: 100% !important;
-  overflow-x: auto !important;
-  -webkit-overflow-scrolling: touch;
-  border-collapse: separate;
+  display: table;
+  max-width: 100%;
+  width: 100%;
+  border-collapse: collapse;
   border-spacing: 0;
   border-radius: 8px;
   border: 1px solid var(--vp-c-divider);
   margin: 1.5rem 0;
   box-sizing: border-box;
+}
+
+@media (max-width: 768px) {
+  .vp-doc table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
 }
 
 .vp-doc th {

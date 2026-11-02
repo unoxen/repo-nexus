@@ -13,7 +13,7 @@ Use this skill when ingesting new reference materials, architecture documentatio
 You can also invoke the built-in deterministic ingest helper directly from the terminal:
 
 ```sh
-rnex plugin karpathy-llm ingest [--source <path>] [--repo <name>] [--quiet]
+rnex plugin karpathy-llm ingest [--file <path> | <path>] [--source <path>] [--repo <name>] [--quiet]
 ```
 
 ## Ingestion Protocol
