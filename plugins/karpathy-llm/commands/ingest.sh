@@ -201,7 +201,7 @@ HELP_EOF
   shift
 done
 
-_today="$(date +%Y-%m-%d 2>/dev/null || date +%F 2>/dev/null || echo "2026-10-15")"
+_today="$(kl_today 2>/dev/null || date -u +%Y-%m-%d 2>/dev/null || date +%Y-%m-%d 2>/dev/null || date +%F 2>/dev/null || echo "2026-10-15")"
 
 # Ensure baseline control files exist in wiki directory
 kl_ensure_wiki_files

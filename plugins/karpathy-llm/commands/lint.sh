@@ -53,7 +53,7 @@ done
 _errors=0
 _warnings=0
 _pages_checked=0
-_today="$(date +%Y-%m-%d 2>/dev/null || date +%F 2>/dev/null || echo "2026-10-15")"
+_today="$(kl_today 2>/dev/null || date -u +%Y-%m-%d 2>/dev/null || date +%Y-%m-%d 2>/dev/null || date +%F 2>/dev/null || echo "2026-10-15")"
 
 # Check 1: Wiki directory and core control files existence
 if [ ! -d "$_wiki_path" ]; then
@@ -87,15 +87,11 @@ for _page in "$_wiki_path"/*.md; do
 
   _pages_checked=$((_pages_checked + 1))
 
-  # Special check for index.md
+  # Special check for index.md (content-oriented catalog without mandatory frontmatter)
   if [ "$_pname" = "index.md" ]; then
-    if ! grep -E -q '^[ ]*title:[ ]*.' "$_page" 2>/dev/null; then
-      echo "Error: '$_wiki/index.md' missing frontmatter 'title'." >&2
-      _errors=$((_errors + 1))
-    fi
-    if ! grep -E -q '^[ ]*last_updated:[ ]*.' "$_page" 2>/dev/null; then
-      echo "Error: '$_wiki/index.md' missing frontmatter 'last_updated'." >&2
-      _errors=$((_errors + 1))
+    if grep -q 'YYYY-MM-DD' "$_page" 2>/dev/null; then
+      echo "Warning: '$_wiki/index.md' contains an unfilled 'YYYY-MM-DD' placeholder." >&2
+      _warnings=$((_warnings + 1))
     fi
     continue
   fi

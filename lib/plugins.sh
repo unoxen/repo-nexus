@@ -436,9 +436,13 @@ plugin_instantiate_template() {
   [ -z "$_s_val" ] && _s_val="$(printf '\140%s/\140' "$_r_val")"
   _s_val="$(printf '%s' "$_s_val" | sed -e 's/[\\&|]/\\&/g')"
 
+  # {today}: current UTC date (ISO-8601, YYYY-MM-DD)
+  _t_val="$(date -u +%Y-%m-%d 2>/dev/null || date +%Y-%m-%d 2>/dev/null || date +%F 2>/dev/null || echo "2026-10-15")"
+
   sed -e "s|{wiki_dir}|$_w_val|g" \
       -e "s|{raw_dir}|$_r_val|g" \
       -e "s|{sources}|$_s_val|g" \
+      -e "s|{today}|$_t_val|g" \
       "$_src" > "$_dest"
 }
 

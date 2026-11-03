@@ -49,6 +49,15 @@ get_cfg() {
   [ -n "$_gc_val" ] && printf '%s' "$_gc_val" || printf '%s' "$_gc_def"
 }
 
+# -----------------------------------------------------------------------------
+# kl_today
+# Summary: Returns the current UTC date formatted strictly as ISO-8601 YYYY-MM-DD.
+# @returns: Outputs 10-character ISO-8601 date string to stdout.
+# -----------------------------------------------------------------------------
+kl_today() {
+  date -u +%Y-%m-%d 2>/dev/null || date +%Y-%m-%d 2>/dev/null || date +%F 2>/dev/null || echo "2026-10-15"
+}
+
 # Resolve configured wiki directory path, normalized without leading/trailing slashes.
 karpathy_get_wiki_dir() {
   _kgw_w=""
@@ -316,19 +325,14 @@ kl_ensure_wiki_files() {
       if [ -n "$_kew_pdir" ] && [ -f "$_kew_pdir/templates/$_kew_f" ] && command -v plugin_instantiate_template >/dev/null 2>&1; then
         plugin_instantiate_template "karpathy-llm" "$_kew_pdir" "$_kew_pdir/templates/$_kew_f" "$_wiki_path/$_kew_f"
       elif [ -n "$_kew_pdir" ] && [ -f "$_kew_pdir/templates/$_kew_f" ]; then
-        sed -e "s|{wiki_dir}|$_wiki|g" -e "s|{raw_dir}|$_raw|g" -e "s|{sources}|\`$_raw/\`|g" "$_kew_pdir/templates/$_kew_f" > "$_wiki_path/$_kew_f"
+        sed -e "s|{wiki_dir}|$_wiki|g" -e "s|{raw_dir}|$_raw|g" -e "s|{sources}|\`$_raw/\`|g" -e "s|{today}|$(kl_today)|g" "$_kew_pdir/templates/$_kew_f" > "$_wiki_path/$_kew_f"
       fi
     fi
   done
 
-  _kew_today="$(date +%Y-%m-%d 2>/dev/null || date +%F 2>/dev/null || echo "2026-10-15")"
+  _kew_today="$(kl_today)"
   if [ ! -f "$_wiki_path/index.md" ]; then
     cat > "$_wiki_path/index.md" <<INDEX_INIT
----
-title: Wiki Index
-last_updated: ${_kew_today}
----
-
 # Wiki Index
 
 Master navigation index for the Karpathy LLM Wiki.
@@ -368,6 +372,9 @@ HOT_INIT
 Append-only audit trail recording all ingest and maintenance runs.
 
 ---
+
+### Initial Setup — ${_kew_today}
+* **Action:** Initialized Karpathy LLM Wiki architecture via \`karpathy-llm\` plugin.
 LOG_INIT
   fi
 }
@@ -406,7 +413,7 @@ kl_ingest_member_readme() {
   _m_force_log="${5:-0}"
   _src_file="$_m_path/$_m_readme"
   _target_page="$_wiki_path/repo-${_m_repo}.md"
-  _today="$(date +%Y-%m-%d 2>/dev/null || date +%F 2>/dev/null || echo "2026-10-15")"
+  _today="$(kl_today)"
 
   [ -f "$_src_file" ] || return 0
 

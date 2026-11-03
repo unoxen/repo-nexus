@@ -1,8 +1,3 @@
----
-title: Wiki Index
-last_updated: YYYY-MM-DD
----
-
 # Wiki Index
 
 Master navigation index for the Karpathy LLM Wiki. Agents query this index on demand when searching for specific domain concepts not covered in `hot.md`.

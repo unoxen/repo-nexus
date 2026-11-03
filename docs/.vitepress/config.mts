@@ -71,7 +71,9 @@ export default withMermaid(
       nav: [
         {
           text: 'Introduction',
-          activeMatch: '^/(index\\.html)?$|^/introduction/',
+          // Omit activeMatch on parent group: VitePress VPNavBarMenuGroup.vue passes
+          // !!props.item.activeMatch as asRegex to isChildActive(), causing child
+          // link: '/' to evaluate as unanchored new RegExp('/'), matching all routes.
           items: [
             {
               text: 'Welcome',

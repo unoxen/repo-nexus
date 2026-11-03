@@ -73,3 +73,86 @@ This creates two major frictions:
 
 ### Will rnex interfere with Git branches, remotes, or commit histories?
 **No.** The workspace root `.gitignore` ignores `<repos_dir>/` (default `repos/`). The workspace Git repository never commits or interferes with member repository contents.
+
+---
+
+## Implementation & Portability
+
+### Why is rnex written in pure POSIX `/bin/sh`?
+`repo-nexus` is implemented entirely in pure POSIX-compliant `/bin/sh` with zero external runtime dependencies (no Node.js, Python, or Rust required):
+- **Universal Portability**: Runs out-of-the-box on macOS, Linux, WSL2, Git Bash on Windows, and minimal Docker or CI/CD container environments.
+- **Zero Bootstrap Overhead**: Does not require installing package managers, compiling binaries, or downloading multi-megabyte dependencies before executing commands.
+- **Deterministic Reliability**: Relies exclusively on standard POSIX utilities (`awk`, `sed`, `grep`, `cat`, `mkdir`, `cp`, `rm`, `git`), avoiding version incompatibilities across operating systems.
+
+---
+
+## Configuration & Local Overrides
+
+### How does the 3-tier configuration hierarchy work?
+Repo Nexus resolves settings through a deterministic, 3-tier priority hierarchy:
+1. **Tier 1 (Highest Priority) — `.local.rnex.yaml`**: Uncommitted, developer-specific overrides on your local machine (e.g. customized paths, disabled repositories, machine-specific hooks). List values in `.local.rnex.yaml` replace the corresponding team list.
+2. **Tier 2 — `rnex.yaml`**: The committed team manifest defining active member repositories, default branches, shared plugins, and workspace lifecycle hooks.
+3. **Tier 3 (Lowest Priority) — `plugin.yaml`**: Built-in default configuration options defined within individual plugin manifests.
+
+Whenever you update configuration files, running `rnex sync` reconciles the workspace harness (`.rnex/`) and generated AI context.
+
+### How can I skip cloning or running commands on repositories I don't work on locally?
+You can disable individual repositories locally without modifying the shared `rnex.yaml`:
+```bash
+rnex repo set <repo-name> --disable --local
+```
+This writes `enabled: false` for that repository into `.local.rnex.yaml`. Subsequent executions of `rnex clone` and `rnex exec` will automatically skip that repository on your machine while leaving the team configuration untouched.
+
+---
+
+## AI Context Routing & Provider Plugins
+
+### Why is `AGENTS.md` a lean routing file instead of containing all prompts inline?
+`repo-nexus` follows the **Routing-Only Principle** for top-level agent instruction files:
+- **Token Economy**: Storing exhaustive instructions, schema definitions, and rules in `AGENTS.md` wastes large amounts of context window tokens on every agent interaction.
+- **Single Source of Truth**: Detailed workspace rules, environment paths, and conventions reside in `.rnex/ai-instructions.md`, compiled dynamically during `rnex sync`.
+- **Targeted Navigation**: `AGENTS.md` acts as a lean router that directs AI coding assistants (Claude Code, Cursor, Codex, Gemini, Copilot, Windsurf) to specific workspace contracts, repository maps, and plugin documentation on demand.
+
+### Are AI instruction files generated automatically by default?
+Yes, core routing files like `AGENTS.md` are established during `rnex init`. Specific provider tool configurations (e.g. `.cursor/rules/`, `.github/copilot-instructions.md`, `CLAUDE.md`) follow an **opt-in AI projection model**: they are generated and kept synchronized only when their corresponding provider plugins (`cursor`, `copilot`, `claude`, `gemini`, `codex`, `windsurf`) are enabled.
+
+---
+
+## Karpathy LLM Wiki (`karpathy-llm`)
+
+### How does the Karpathy LLM Wiki differ from traditional RAG?
+Traditional Retrieval-Augmented Generation (RAG) splits raw documents into arbitrary text chunks and dynamically retrieves top-k matches to synthesize answers from scratch on every query.
+
+In contrast, the **Karpathy LLM Wiki** architecture:
+- **Synthesizes Once on Ingest**: Source documents and member repository documentation are compiled into atomic, structured Markdown pages under your configured wiki directory (default `wiki/`).
+- **Knowledge Compounding**: Curated pages link to related concepts using standard Markdown links (`[Title](./page.md)`) and typed frontmatter graphs (`sources`, `related`, `extends`), allowing knowledge quality to compound over time as the codebase evolves.
+- **Deterministic Navigation**: Agents navigate compiled domain knowledge systematically via `hot.md` and `index.md` without exploratory trial-and-error searches.
+
+### What is the difference between `index.md`, `hot.md`, and `_log.md`?
+Each core wiki control file has a distinct architectural responsibility:
+- **`hot.md` (Rolling Orientation Cache)**: Strictly bounded under ~500 words. Agents read this file first on startup to gain immediate domain orientation, member repository entry points, and active focus areas without loading the entire knowledge graph.
+- **`index.md` (Content Navigation Catalog)**: A clean catalog starting with `# Wiki Index` that organizes all compiled wiki pages into categorized sections. Every entry includes a 1-line annotation so agents can pinpoint exact target documents.
+- **`_log.md` (Operational Audit Trail)**: An append-only, timestamped log recording every initialization, source ingestion, query synthesis, and lint validation run.
+
+### Can I ingest a single document or specific repository?
+Yes. The `ingest` command supports granular targeting:
+```bash
+# Ingest a single source document
+rnex plugin karpathy-llm ingest docs/spec.md
+# Or using the --file flag
+rnex plugin karpathy-llm ingest --file docs/spec.md
+
+# Ingest a specific member repository README
+rnex plugin karpathy-llm ingest --repo auth-svc
+
+# Batch-ingest all configured sources
+rnex plugin karpathy-llm ingest
+```
+
+---
+
+## Automation, Lifecycle Hooks & Git Hooks
+
+### What is the difference between Lifecycle Hooks and Git Hooks?
+- **Lifecycle Hooks**: Orchestration events triggered by `rnex` CLI commands (configured under `hooks:` in `rnex.yaml` or `.local.rnex.yaml`). Supported events include `before_sync`, `after_sync`, `before_clone`, `after_clone`, `before_repo_add`, `after_repo_add`, `before_exec`, and `after_exec`.
+- **Git Hooks**: Native Git client hooks installed directly into the workspace root `.git/hooks/` directory (e.g. `pre-commit`, `commit-msg`, `pre-push`). When Repo Nexus configures Git hooks, any pre-existing local hook is safely preserved as `<hook>.user` and chained non-destructively.

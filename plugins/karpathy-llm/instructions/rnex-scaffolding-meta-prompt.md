@@ -34,16 +34,7 @@ Do not create arbitrary or speculative subdirectories during initialization. Sca
 
 ### 2. Index File Format
 
-`wiki/index.md` uses its own frontmatter schema (it is the wiki navigation file, not an atomic content page):
-
-```yaml
----
-title: Wiki Index
-last_updated: YYYY-MM-DD
----
-```
-
-Followed by categorized Markdown link sections matching the project type from Q2.
+`wiki/index.md` is the central content-oriented navigation catalog. It contains no YAML frontmatter, starting cleanly with `# Wiki Index`, followed by categorized Markdown link sections matching the project type from Q2. Every entry maintains a concise 1-line annotation (e.g. `- [Topic](./topic.md): Brief description`).
 
 ---
 

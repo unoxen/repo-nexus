@@ -62,6 +62,14 @@ run_test "Karpathy-llm: init --karpathy sets up wiki templates, Hot Cache gate, 
 [ -f "$TEST_KARPATHY_WS/wiki/_log.md" ] || { fail "wiki/_log.md missing after init --karpathy"; exit 1; }
 [ -d "$TEST_KARPATHY_WS/docs" ] || { fail "docs/ directory missing after init --karpathy"; exit 1; }
 
+# Verify clean index.md (no frontmatter table) and dynamic date in _log.md
+_first_idx_line="$(head -n 1 "$TEST_KARPATHY_WS/wiki/index.md" 2>/dev/null || true)"
+[ "$_first_idx_line" = "# Wiki Index" ] || { fail "wiki/index.md does not start with '# Wiki Index': $_first_idx_line"; exit 1; }
+! grep -q "YYYY-MM-DD" "$TEST_KARPATHY_WS/wiki/index.md" || { fail "wiki/index.md contains YYYY-MM-DD placeholder"; exit 1; }
+! grep -q "last_updated" "$TEST_KARPATHY_WS/wiki/index.md" || { fail "wiki/index.md contains last_updated frontmatter"; exit 1; }
+! grep -q "YYYY-MM-DD" "$TEST_KARPATHY_WS/wiki/_log.md" || { fail "wiki/_log.md contains YYYY-MM-DD placeholder"; exit 1; }
+grep -q -E '^### Initial Setup — 20[0-9]{2}-[0-9]{2}-[0-9]{2}' "$TEST_KARPATHY_WS/wiki/_log.md" || { fail "wiki/_log.md missing valid Initial Setup date header"; exit 1; }
+
 # Scoped assets in .rnex/plugins/karpathy-llm/
 [ -d "$TEST_KARPATHY_WS/.rnex/plugins/karpathy-llm" ] || { fail ".rnex/plugins/karpathy-llm missing"; exit 1; }
 [ -f "$TEST_KARPATHY_WS/.rnex/plugins/karpathy-llm/rules/behavioral.md" ] || { fail "behavioral.md missing in scoped dir"; exit 1; }
@@ -149,6 +157,9 @@ mkdir -p "$TEST_KARPATHY_WS/\"{wiki_dir}" "$TEST_KARPATHY_WS/\"{raw_dir}" "$TEST
 
 # Verify template substitutions reflect custom paths without corruption
 grep -q "intake/raw/" "$TEST_KARPATHY_WS/docs/wiki/index.md" || { fail "docs/wiki/index.md missing intake/raw/"; exit 1; }
+! grep -q "YYYY-MM-DD" "$TEST_KARPATHY_WS/docs/wiki/index.md" || { fail "docs/wiki/index.md contains YYYY-MM-DD"; exit 1; }
+! grep -q "YYYY-MM-DD" "$TEST_KARPATHY_WS/docs/wiki/_log.md" || { fail "docs/wiki/_log.md contains YYYY-MM-DD"; exit 1; }
+grep -q -E '^### Initial Setup — 20[0-9]{2}-[0-9]{2}-[0-9]{2}' "$TEST_KARPATHY_WS/docs/wiki/_log.md" || { fail "docs/wiki/_log.md missing valid Initial Setup date header"; exit 1; }
 grep -q "docs/wiki/" "$TEST_KARPATHY_WS/docs/wiki/hot.md" || { fail "docs/wiki/hot.md missing docs/wiki/"; exit 1; }
 ! grep -q "docs/docs/wiki" "$TEST_KARPATHY_WS/docs/wiki/hot.md" || { fail "Found duplicated path docs/docs/wiki"; exit 1; }
 ! grep -q "intake/intake/raw" "$TEST_KARPATHY_WS/docs/wiki/hot.md" || { fail "Found duplicated path intake/intake/raw"; exit 1; }
