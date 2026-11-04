@@ -1,6 +1,6 @@
 # Agentic Skill: wiki-ingest
 
-Universal agentic skill protocol for decomposing and ingesting raw source materials into atomic Karpathy LLM Wiki pages.
+Universal agentic skill protocol for deterministically ingesting and enriching source materials in the Karpathy LLM Wiki.
 
 ---
 
@@ -10,7 +10,7 @@ Use this skill when ingesting new reference materials, architecture documentatio
 
 ## CLI Helper
 
-You can also invoke the built-in deterministic ingest helper directly from the terminal:
+Always scaffold wiki pages deterministically using the built-in CLI helper first before enriching in-place:
 
 ```sh
 rnex plugin karpathy-llm ingest [--file <path> | <path>] [--source <path>] [--repo <name>] [--quiet]
@@ -29,21 +29,21 @@ rnex plugin karpathy-llm ingest [--file <path> | <path>] [--source <path>] [--re
    - Scan direct source paths for source materials not yet recorded in `<wiki_dir>/_log.md`.
    - All source material is read directly in-place without staging copies. Never write directly to `<wiki_dir>/` without ingesting.
 
-2. **Read & Clarify:**
-   - Read each source document thoroughly in-place.
-   - If scope, domain boundaries, or terminology are ambiguous, ask one round of clarifying questions before decomposing.
+2. **Step 1 — Deterministic CLI Scaffolding:**
+   - Run `rnex plugin karpathy-llm ingest` (or `rnex plugin karpathy-llm ingest <path>`).
+   - The CLI deterministically scaffolds the exact 1-to-1 wiki file and registers it in `index.md`, `hot.md`, and `_log.md`:
+     - **Root Member Repository READMEs:** Mapped strictly to `<wiki_dir>/repo-<repo_name>.md`.
+     - **All Other Sources & Nested READMEs:** Mapped strictly to `<wiki_dir>/<slug>.md`, where `<slug>` is the normalized lowercase workspace-relative path (e.g., `docs/overview.md` becomes `<wiki_dir>/docs-overview.md`; `docs/api/README.md` becomes `<wiki_dir>/docs-api-readme.md`; `repos/app/apps/web/README.md` becomes `<wiki_dir>/repos-app-apps-web-readme.md`).
+     - Root-level files without a directory prefix normalizing to reserved wiki control file names (`index`, `hot`, `_log`) are prefixed with `root-` (e.g., `index.md` becomes `root-index.md`).
 
-3. **Atomic Decomposition & Page Naming:**
-   - Decompose each source into atomic wiki pages — **one per distinct concept, architecture contract, subsystem, or pattern**.
-   - A single source document commonly produces **5–25 atomic pages**. Never collapse an entire source document into a single page.
-   - Deterministic and collision-free page naming:
-     - **Member Repository READMEs:** Generate `<wiki_dir>/repo-<repo_name>.md`.
-     - **Top-Level Source Files:** Files directly under a configured source directory preserve the file basename `<wiki_dir>/<name>.md` (e.g., `docs/overview.md` becomes `<wiki_dir>/overview.md`).
-     - **Nested Directory Files:** Files in nested subdirectories generate a collision-free slug prefixed with `doc-` and normalized relative path (e.g., `docs/nested/deep/spec [v1].md` becomes `<wiki_dir>/doc-docs-nested-deep-spec-v1.md`).
-   - Place pages directly under `<wiki_dir>/` (e.g. `<wiki_dir>/<concept>.md`) or organized by clear domain categories.
+3. **Step 2 — In-Place Synthesis & Enrichment:**
+   - Read the source document(s) thoroughly in-place.
+   - Enrich the deterministically generated `<wiki_dir>/<slug>.md` page **in-place** rather than inventing ad-hoc file names.
+   - Synthesize architectural concepts, contracts, patterns, and trade-offs directly into the curated page.
+   - Do NOT append duplicate audit entries to `_log.md` if the page already exists and is being enriched.
 
 4. **Frontmatter Relations:**
-   - For every page, specify typed frontmatter relations:
+   - For every page, maintain typed frontmatter relations:
    ```yaml
    ---
    title: ""
@@ -63,15 +63,14 @@ rnex plugin karpathy-llm ingest [--file <path> | <path>] [--source <path>] [--re
    - Include standard Markdown links (`[Label](./page.md)`) inline where helpful.
 
 6. **Update Navigation Index (Annotated Links):**
-   - Update `<wiki_dir>/index.md` with links to all new pages in their corresponding sections.
-   - Include a concise 1-line summary next to each link (e.g. `- [Auth Flow](auth.md): JWT validation and token rotation`) so agents pinpoint target pages in a single read.
+   - Verify `<wiki_dir>/index.md` contains the link to the page with a concise 1-line summary next to each link (e.g. `- [Auth Flow](./auth-flow.md): JWT validation and token rotation`) so agents pinpoint target pages in a single read.
 
 7. **Update Hot Cache (Bounded ~500-Word Ceiling):**
    - Update `<wiki_dir>/hot.md` with rolling orientation summaries across 3 sections:
-     1. Architecture & Member Repo Map
-     2. Current Focus & Recent Ingests
+     1. Architecture & Member Repo Map (with direct links: `- **[<repo>](./repo-<slug>.md)** (\`<rel_path>\`): <summary>`)
+     2. Current Focus & Recent Ingests (with direct links: `- **[<title>](./<slug>.md)** (\`<src_rel>\`): <summary>`)
      3. Key Contracts & Boundaries
    - Maintain the strict ~500-word ceiling. Condense or prune older focus items.
 
-8. **Append Operation Log:**
-   - Append a timestamped entry to `<wiki_dir>/_log.md` detailing date, direct source path processed, generated atomic pages, and follow-ups.
+8. **Audit Verification:**
+   - Run `rnex plugin karpathy-llm lint` to verify that link paths, frontmatter schema, and word boundaries conform to wiki invariants.

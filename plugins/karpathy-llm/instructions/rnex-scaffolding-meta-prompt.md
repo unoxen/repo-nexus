@@ -72,9 +72,9 @@ In standalone repositories (outside Repo Nexus), append:
 ## Karpathy Wiki Rules
 
 - **Intake**: All source material (articles, transcripts, docs, notes) is resolved from configured `sources` (or legacy `raw_dir`, default: `./docs`) unmodified. Never write directly to `wiki/` without ingesting.
-- **Orientation**: Before answering domain questions, read `wiki/hot.md` for rolling context, and consult `wiki/index.md` on demand.
-- **Ingestion**: When files appear in configured sources, run the `wiki-ingest` workflow. One source document typically produces many atomic pages — do not collapse a source into a single file.
-- **Maintenance**: Run the `wiki-lint` workflow to validate paths, update `mentioned_in`, and preserve graph integrity.
+- **Orientation**: Before answering domain questions, read `wiki/hot.md` for rolling context. If `wiki/hot.md` directly links the target page, read it directly and skip `wiki/index.md`. Consult `wiki/index.md` on demand when a topic is not in `hot.md`.
+- **Ingestion**: When files appear in configured sources, run `rnex plugin karpathy-llm ingest` to scaffold deterministic 1-to-1 wiki pages (`repo-<name>.md` for root member repo READMEs; `<normalized-relative-path>.md` for all other sources), then enrich each page in-place.
+- **Maintenance**: Run `rnex plugin karpathy-llm lint` to validate paths, update `mentioned_in`, and preserve graph integrity.
 ```
 
 ---
@@ -85,13 +85,13 @@ Create workflow instruction files at `.agent/workflows/` (or `.agent/skills/` de
 
 **`wiki-ingest.md`**:
 1. Scan configured `sources` (or `<raw_dir>/`) for files not yet recorded in `wiki/_log.md`.
-2. For each source, read it fully. If scope or depth is unclear, ask one round of clarifying questions before proceeding.
-3. Decompose into atomic wiki pages — one per distinct concept, person, organization, event, or theme. A single article commonly produces 5–25 pages.
-4. For each page, write the required frontmatter (including `sources`, `related`, `extends`, `contradicts`). Leave `mentioned_in` empty — lint maintains it.
+2. Scaffold deterministic wiki pages via `rnex plugin karpathy-llm ingest` (`repo-<name>.md` for root member repo READMEs, `<path-prefix>-<name>.md` for intake sources).
+3. Read each source fully and enrich the corresponding `<wiki_dir>/<slug>.md` page in-place (capturing architecture concepts, contracts, and patterns).
+4. For each page, maintain typed frontmatter (`sources`, `related`, `extends`, `contradicts`, `mentioned_in`).
 5. Write a concise body with inline links where contextually helpful.
-6. Update `wiki/index.md` with links to all new pages.
-7. Update `wiki/hot.md` if it exists.
-8. Append a timestamped entry to `wiki/_log.md`.
+6. Verify `wiki/index.md` contains annotated links to all curated pages.
+7. Verify `wiki/hot.md` contains direct links to new pages within the ~500-word ceiling.
+8. Verify graph integrity using `rnex plugin karpathy-llm lint`.
 
 **`wiki-lint.md`**:
 1. For every page, verify that all paths in frontmatter relation fields (`related`, `extends`, `contradicts`, `sources`) resolve to existing files. Fix or flag broken paths.

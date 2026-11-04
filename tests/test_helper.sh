@@ -56,6 +56,20 @@ fail() {
   echo "  [✗] FAILED: $1"
 }
 
+link_dir_contents() {
+  _ldc_src="$1"
+  _ldc_dst="$2"
+  [ -d "$_ldc_src" ] || return 0
+  mkdir -p "$_ldc_dst"
+  for _ldc_item in "$_ldc_src"/*; do
+    [ -e "$_ldc_item" ] || continue
+    _ldc_base="$(basename "$_ldc_item")"
+    if [ ! -e "$_ldc_dst/$_ldc_base" ]; then
+      ln -s "$_ldc_item" "$_ldc_dst/$_ldc_base" 2>/dev/null || cp -R "$_ldc_item" "$_ldc_dst/$_ldc_base"
+    fi
+  done
+}
+
 setup_dummy_repo() {
   if [ ! -d "$TEST_REPO/.git" ]; then
     mkdir -p "$TEST_REPO/src"
@@ -78,19 +92,19 @@ setup_test_workspace() {
     cp "$DIR/package.json" "$TEST_WORKSPACE/package.json"
   fi
   if [ -d "$DIR/lib" ] && [ ! -d "$TEST_WORKSPACE/lib" ]; then
-    cp -r "$DIR/lib" "$TEST_WORKSPACE/lib"
+    link_dir_contents "$DIR/lib" "$TEST_WORKSPACE/lib"
   fi
   if [ -d "$DIR/plugins" ] && [ ! -d "$TEST_WORKSPACE/plugins" ]; then
-    cp -r "$DIR/plugins" "$TEST_WORKSPACE/plugins"
+    link_dir_contents "$DIR/plugins" "$TEST_WORKSPACE/plugins"
   fi
   if [ -d "$DIR/skills" ] && [ ! -d "$TEST_WORKSPACE/skills" ]; then
-    cp -r "$DIR/skills" "$TEST_WORKSPACE/skills"
+    link_dir_contents "$DIR/skills" "$TEST_WORKSPACE/skills"
   fi
   if [ -d "$DIR/toolkit" ] && [ ! -d "$TEST_WORKSPACE/toolkit" ]; then
-    cp -r "$DIR/toolkit" "$TEST_WORKSPACE/toolkit"
+    link_dir_contents "$DIR/toolkit" "$TEST_WORKSPACE/toolkit"
   fi
   if [ -d "$DIR/templates" ] && [ ! -d "$TEST_WORKSPACE/templates" ]; then
-    cp -r "$DIR/templates" "$TEST_WORKSPACE/templates"
+    link_dir_contents "$DIR/templates" "$TEST_WORKSPACE/templates"
   fi
 }
 
@@ -108,25 +122,24 @@ setup_plugin_test_workspace() {
     cp "$DIR/package.json" "$_ws/package.json"
   fi
   if [ -d "$DIR/lib" ] && [ ! -d "$_ws/lib" ]; then
-    cp -r "$DIR/lib" "$_ws/lib"
+    link_dir_contents "$DIR/lib" "$_ws/lib"
   fi
   if [ -d "$DIR/templates" ] && [ ! -d "$_ws/templates" ]; then
-    cp -r "$DIR/templates" "$_ws/templates"
+    link_dir_contents "$DIR/templates" "$_ws/templates"
   fi
   if [ -d "$DIR/skills" ] && [ ! -d "$_ws/skills" ]; then
-    cp -r "$DIR/skills" "$_ws/skills"
+    link_dir_contents "$DIR/skills" "$_ws/skills"
   elif [ -d "$DIR/toolkit/skills" ] && [ ! -d "$_ws/toolkit/skills" ]; then
-    mkdir -p "$_ws/toolkit"
-    cp -r "$DIR/toolkit/skills" "$_ws/toolkit/skills"
+    link_dir_contents "$DIR/toolkit/skills" "$_ws/toolkit/skills"
   fi
   if [ -n "$_plugin_name" ]; then
     if [ -d "$DIR/plugins/$_plugin_name" ] && [ ! -d "$_ws/plugins/$_plugin_name" ]; then
       mkdir -p "$_ws/plugins"
-      cp -r "$DIR/plugins/$_plugin_name" "$_ws/plugins/$_plugin_name"
+      ln -s "$DIR/plugins/$_plugin_name" "$_ws/plugins/$_plugin_name" 2>/dev/null || cp -R "$DIR/plugins/$_plugin_name" "$_ws/plugins/$_plugin_name"
     fi
     if [ -d "$DIR/toolkit/plugins/$_plugin_name" ] && [ ! -d "$_ws/toolkit/plugins/$_plugin_name" ]; then
       mkdir -p "$_ws/toolkit/plugins"
-      cp -r "$DIR/toolkit/plugins/$_plugin_name" "$_ws/toolkit/plugins/$_plugin_name"
+      ln -s "$DIR/toolkit/plugins/$_plugin_name" "$_ws/toolkit/plugins/$_plugin_name" 2>/dev/null || cp -R "$DIR/toolkit/plugins/$_plugin_name" "$_ws/toolkit/plugins/$_plugin_name"
     fi
   fi
 }
@@ -140,5 +153,8 @@ report_results() {
     echo "  $PASS/$TOTAL passed, $FAIL FAILED"
   fi
   echo "===================================="
+  if [ -n "${TEST_METRICS_FILE:-}" ]; then
+    printf '%s %s %s\n' "$TOTAL" "$PASS" "$FAIL" > "$TEST_METRICS_FILE"
+  fi
   [ "$FAIL" -eq 0 ] || exit 1
 }

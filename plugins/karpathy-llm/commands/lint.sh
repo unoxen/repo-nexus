@@ -259,19 +259,36 @@ if command -v karpathy_expand_source_files >/dev/null 2>&1; then
   rm -f "$_tmp_exp" "$_tmp_seen"
 fi
 
-# Append lint summary to _log.md
+# Append lint summary to _log.md (avoid duplicate identical consecutive lint run entries)
 if [ -f "$_wiki_path/_log.md" ]; then
   _status_text="Passed"
   if [ "$_errors" -gt 0 ] || { [ "$_strict" -eq 1 ] && [ "$_warnings" -gt 0 ]; }; then
     _status_text="Failed"
   fi
-  cat >> "$_wiki_path/_log.md" <<LOG_EOF
+  _strict_text="$([ "$_strict" -eq 1 ] && echo "true" || echo "false")"
+  _expected_header="### Wiki Lint Run — ${_today}"
+  _expected_line1="* **Status:** ${_status_text} (${_errors} errors, ${_warnings} warnings)."
+  _expected_line2="* **Strict Mode:** ${_strict_text}"
+  _expected_line3="* **Pages Checked:** ${_pages_checked}"
 
-### Wiki Lint Run — ${_today}
-* **Status:** ${_status_text} (${_errors} errors, ${_warnings} warnings).
-* **Strict Mode:** $([ "$_strict" -eq 1 ] && echo "true" || echo "false")
-* **Pages Checked:** ${_pages_checked}
+  _is_duplicate_lint=0
+  _tail_log="$(tail -n 10 "$_wiki_path/_log.md" 2>/dev/null || true)"
+  if printf '%s\n' "$_tail_log" | grep -F -q "$_expected_header" && \
+     printf '%s\n' "$_tail_log" | grep -F -q "$_expected_line1" && \
+     printf '%s\n' "$_tail_log" | grep -F -q "$_expected_line2" && \
+     printf '%s\n' "$_tail_log" | grep -F -q "$_expected_line3"; then
+    _is_duplicate_lint=1
+  fi
+
+  if [ "$_is_duplicate_lint" -eq 0 ]; then
+    cat >> "$_wiki_path/_log.md" <<LOG_EOF
+
+${_expected_header}
+${_expected_line1}
+${_expected_line2}
+${_expected_line3}
 LOG_EOF
+  fi
 fi
 
 if [ "$_quiet" -eq 0 ]; then

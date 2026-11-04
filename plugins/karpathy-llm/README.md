@@ -27,7 +27,7 @@ Reference specification: [setup-karpathy-wiki.md](https://github.com/unoxen/ai-t
 * **Audit Trail (`<wiki_dir>/_log.md`, default: `wiki/_log.md`):** Append-only log recording every ingest and lint operation with timestamped details.
 
 ### 4. Standardized Agent Skills (`skills/`)
-* **`wiki-ingest.md` (User Skill: `rnex-karpathy-llm-wiki-ingest`):** Decomposes raw source documents into 5–25 atomic wiki pages with frontmatter relations.
+* **`wiki-ingest.md` (User Skill: `rnex-karpathy-llm-wiki-ingest`):** Guides deterministic CLI scaffolding and in-place AI enrichment for intake source documents with typed frontmatter relations.
 * **`wiki-lint.md` (User Skill: `rnex-karpathy-llm-wiki-lint`):** Integrity audit protocol to validate paths, recompute `mentioned_in`, eliminate orphans, merge duplicates, audit inconsistencies, identify gaps, suggest source candidates, and rebuild indexes.
 
 ---

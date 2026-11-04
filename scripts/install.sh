@@ -29,13 +29,13 @@ _tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$_tmp_dir"' EXIT INT TERM
 _src_dir="$_tmp_dir/src"
 
-if [ "${RNEX_FORCE_TAR:-0}" -ne 1 ] && command -v git >/dev/null 2>&1; then
+if [ -n "${RNEX_INSTALL_SRC_DIR:-}" ] && [ -d "$RNEX_INSTALL_SRC_DIR" ]; then
+  _src_dir="$RNEX_INSTALL_SRC_DIR"
+elif [ -d "$REPO_URL" ]; then
+  _src_dir="$REPO_URL"
+elif [ "${RNEX_FORCE_TAR:-0}" -ne 1 ] && command -v git >/dev/null 2>&1; then
   printf '    %bFetching runtime assets via git...%b\n' "$_DIM" "$_NC"
-  if [ -d "$REPO_URL" ]; then
-    git clone --depth 1 --quiet "$REPO_URL" "$_src_dir"
-  else
-    git clone --depth 1 --quiet "$REPO_URL.git" "$_src_dir"
-  fi
+  git clone --depth 1 --quiet "$REPO_URL.git" "$_src_dir"
 else
   printf '    %bDownloading latest archive via curl/wget...%b\n' "$_DIM" "$_NC"
   _tmp_tar="$_tmp_dir/repo.tar.gz"

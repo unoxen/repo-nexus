@@ -208,14 +208,15 @@ kl_ensure_wiki_files
 
 # Ingest member repository README via shared _common.sh helper
 ingest_repo_readme() {
-  kl_ingest_member_readme "$1" "$2" "$3" "$4" 1
-  [ "$_quiet" -eq 1 ] || printf '[WIKI] Ingested member repository: %s\n' "$1"
+  kl_ingest_member_readme "$1" "$2" "$3" "$4" 0
+  [ "$_quiet" -eq 1 ] || [ "${_KL_LAST_INGESTED:-0}" -eq 0 ] || printf '[WIKI] Ingested member repository: %s\n' "$1"
 }
 
 # Ingest generic source markdown file
 ingest_source_file() {
   _src_abs="$1"
   [ -f "$_src_abs" ] || return 0
+  _KL_LAST_INGESTED=0
 
   # Compute relative path from workspace root
   case "$_src_abs" in
@@ -224,54 +225,10 @@ ingest_source_file() {
   esac
   _src_rel="$(printf '%s' "$_src_rel" | sed -e 's#^\./##')"
 
-  _rel_noext="${_src_rel%.*}"
   _s_base="$(basename "$_src_abs" .md)"
-  _base_lower="$(printf '%s' "$_s_base" | tr '[:upper:]' '[:lower:]')"
 
-  _matched_source=0
-  _is_nested=0
-  for _src_root in $(karpathy_get_sources 2>/dev/null || true) "${_raw:-}"; do
-    [ -n "$_src_root" ] || continue
-    case "$_src_root" in
-      *'*'*|*'?'*|*'['*) continue ;;
-    esac
-    _clean_sroot="$(printf '%s' "$_src_root" | sed -e 's#^\./##' -e 's#/*$##')"
-    case "$_src_rel" in
-      "$_clean_sroot"/*)
-        _matched_source=1
-        _inner_path="${_src_rel#"$_clean_sroot"/}"
-        case "$_inner_path" in
-          */*) _is_nested=1 ;;
-        esac
-        break
-        ;;
-    esac
-  done
-
-  # If not matched to a configured directory source, check if relative dir has multiple segments
-  if [ "$_matched_source" -eq 0 ]; then
-    _rel_dir="$(dirname "$_src_rel")"
-    case "$_rel_dir" in
-      */*) _is_nested=1 ;;
-    esac
-  fi
-
-  # Derive deterministic, collision-free slug from path
-  if [ "$_is_nested" -eq 1 ] || [ "$_base_lower" = "readme" ]; then
-    # Nested directory documentation file (e.g. docs/api/README.md -> doc-docs-api-readme.md)
-    # or generic readme avoiding wiki namespace collisions
-    _norm_slug="$(printf '%s' "$_rel_noext" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '-' | sed -e 's/^-//' -e 's/-$//')"
-    case "$_norm_slug" in
-      doc-*) _s_slug="$_norm_slug" ;;
-      *)     _s_slug="doc-${_norm_slug}" ;;
-    esac
-  else
-    # Top-level documentation file (e.g. docs/roadmap.md -> roadmap.md, docs/top-level.md -> top-level.md)
-    _s_slug="$(printf '%s' "$_s_base" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '-' | sed -e 's/^-//' -e 's/-$//')"
-    case "$_s_slug" in
-      index|hot|_log) _s_slug="doc-${_s_slug}" ;;
-    esac
-  fi
+  # Derive deterministic, collision-free slug using canonical helper
+  _s_slug="$(kl_source_to_slug "$_src_rel")"
   _s_target="$_wiki_path/${_s_slug}.md"
 
   # Title
@@ -299,6 +256,7 @@ ingest_source_file() {
   [ -z "$_s_summary" ] && _s_summary="Intake document ${_s_base}."
 
   if [ ! -f "$_s_target" ]; then
+    _KL_LAST_INGESTED=1
     cat > "$_s_target" <<PAGE_EOF
 ---
 title: "${_s_title}"
@@ -323,16 +281,18 @@ ${_s_summary}
 ## Contextual Links
 * See [Wiki Index](./index.md) for master knowledge graph index.
 PAGE_EOF
-  fi
 
-  # Log operation
-  cat >> "$_wiki_path/_log.md" <<LOG_EOF
+    # Log operation only when newly ingested (strictly idempotent)
+    if [ -f "$_wiki_path/_log.md" ]; then
+      cat >> "$_wiki_path/_log.md" <<LOG_EOF
 
 ### Source Ingest: ${_src_rel} — ${_today}
 * **Source:** \`${_src_rel}\`
 * **Ingested Page:** \`${_s_slug}.md\`
 * **Status:** Ingested source document into wiki index and hot cache.
 LOG_EOF
+    fi
+  fi
 
   # Update index.md
   if ! grep -q "${_s_slug}\.md" "$_wiki_path/index.md"; then
@@ -356,9 +316,9 @@ LOG_EOF
     fi
   fi
 
-  # Update hot.md Section 2 (Recent Ingests)
+  # Update hot.md Section 2 (Recent Ingests) with direct wiki links
   if ! grep -q "${_s_slug}\.md" "$_wiki_path/hot.md" 2>/dev/null && ! grep -q "${_src_rel}" "$_wiki_path/hot.md" 2>/dev/null; then
-    _hot_line="* **${_s_title} (\`${_src_rel}\`):** ${_s_summary}"
+    _hot_line="* **[${_s_title}](./${_s_slug}.md)** (\`${_src_rel}\`): ${_s_summary}"
     _tmp_hot="$(mktemp)"
     if LINE="$_hot_line" awk '
       /^## 2\. Current Focus & Recent Ingests/ {
@@ -374,7 +334,7 @@ LOG_EOF
     fi
   fi
 
-  [ "$_quiet" -eq 1 ] || printf '[WIKI] Ingested source: %s -> %s.md\n' "$_src_rel" "$_s_slug"
+  [ "$_quiet" -eq 1 ] || [ "${_KL_LAST_INGESTED:-0}" -eq 0 ] || printf '[WIKI] Ingested source: %s -> %s.md\n' "$_src_rel" "$_s_slug"
 }
 
 # -----------------------------------------------------------------------------
@@ -416,8 +376,12 @@ ingest_target_file() {
         case "$_f_rel" in
           "${_clean_repos}"/*/"$_readme_fname")
             _repo_part="${_f_rel#"${_clean_repos}"/}"
-            _r_target_name="${_repo_part%%/*}"
-            _is_repo_readme=1
+            # Verify _repo_part contains exactly one directory level (e.g. repos/<repo>/README.md)
+            # and not nested subdirectories (e.g. repos/<repo>/apps/<app>/README.md)
+            if [ "${_repo_part#*/}" = "$_readme_fname" ]; then
+              _r_target_name="${_repo_part%%/*}"
+              _is_repo_readme=1
+            fi
             ;;
         esac
       fi
@@ -427,11 +391,10 @@ ingest_target_file() {
   if [ "$_is_repo_readme" -eq 1 ] && [ -n "$_r_target_name" ]; then
     kl_resolve_repo_paths "$_r_target_name"
     ingest_repo_readme "$_r_target_name" "$_kl_repo_path" "$_readme_fname" "$_kl_repo_rel"
-    _ingested_count=$((_ingested_count + 1))
-    _ingested_paths="${_ingested_paths:+$_ingested_paths
-}$_f_rel"
   else
     ingest_source_file "$_abs_file"
+  fi
+  if [ "${_KL_LAST_INGESTED:-0}" -eq 1 ]; then
     _ingested_count=$((_ingested_count + 1))
     _ingested_paths="${_ingested_paths:+$_ingested_paths
 }$_f_rel"
@@ -456,9 +419,11 @@ if [ -n "$_repo_targets" ]; then
     for _rm in README.md readme.md README.markdown README; do
       if [ -f "$_kl_repo_path/$_rm" ]; then
         ingest_repo_readme "$_rt" "$_kl_repo_path" "$_rm" "$_kl_repo_rel"
-        _ingested_count=$((_ingested_count + 1))
-        _ingested_paths="${_ingested_paths:+$_ingested_paths
+        if [ "${_KL_LAST_INGESTED:-0}" -eq 1 ]; then
+          _ingested_count=$((_ingested_count + 1))
+          _ingested_paths="${_ingested_paths:+$_ingested_paths
 }${_kl_repo_rel}/${_rm}"
+        fi
         _found_readme=1
         break
       fi

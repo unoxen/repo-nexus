@@ -437,8 +437,8 @@ render_ai_instructions() {
   printf 'Execute these steps in strict order:\n'
   _rai_n=1
   if [ "$_rai_kp" -eq 1 ]; then
-    printf "1. **Step 1 — Read Wiki Hot Cache**: Read \`%s/hot.md\` first for workspace architecture, repository boundaries, and active contracts.\n" "$_rai_wiki"
-    printf "2. **Step 2 — Lookup Topic in Wiki Index**: If task details are not fully covered in \`%s/hot.md\`, read \`%s/index.md\` and read only the relevant atomic page(s) in \`%s/\`. Do NOT read raw intake sources%s or \`%s/\` before completing Steps 1–2.\n" "$_rai_wiki" "$_rai_wiki" "$_rai_wiki" "${_rai_src_dirs:+ ($_rai_src_dirs)}" "$_rai_rd"
+    printf "1. **Step 1 — Read Wiki Hot Cache**: Read \`%s/hot.md\` first for workspace architecture, repository boundaries, and direct links to curated \`%s/*.md\` pages. If \`%s/hot.md\` links the needed page, read that page directly and skip \`%s/index.md\`.\n" "$_rai_wiki" "$_rai_wiki" "$_rai_wiki" "$_rai_wiki"
+    printf "2. **Step 2 — Fallback to Wiki Index**: Read \`%s/index.md\` only if the needed topic or page is not listed in \`%s/hot.md\` (e.g. when condensed in large workspaces), and read only the relevant atomic page(s) in \`%s/\`. Do NOT read raw intake sources%s or \`%s/\` before completing Steps 1–2.\n" "$_rai_wiki" "$_rai_wiki" "$_rai_wiki" "${_rai_src_dirs:+ ($_rai_src_dirs)}" "$_rai_rd"
     _rai_n=3
   fi
   printf "%s. **Step %s — Targeted Repository Access**: Inspect or modify only the specific files in active \`%s/<name>/\` required for the task. Never modify or commit inside \`READ-ONLY\` repositories.\n" "$_rai_n" "$_rai_n" "$_rai_rd"
@@ -655,6 +655,7 @@ sync_rnex_base_assets() {
   fi
 
   # Purge any plugin-declared skills that may have been placed in core .rnex/skills/
+  _active_prov_skill_dirs="$(get_active_provider_skill_dirs 2>/dev/null || true)"
   for _pdir in $(list_all_available_plugin_dirs 2>/dev/null || true); do
     if [ -d "$_pdir/skills" ]; then
       for _psk in "$_pdir/skills"/*.md; do
@@ -662,7 +663,7 @@ sync_rnex_base_assets() {
         _sbase="$(basename "$_psk")"
         _sname="$(basename "$_psk" .md)"
         rm -f "$NEXUS_DIR/.rnex/skills/$_sbase" "$NEXUS_DIR/.rnex/skills/rnex-$_sbase" 2>/dev/null || true
-        for _p_dir in $(get_active_provider_skill_dirs 2>/dev/null || true); do
+        for _p_dir in $_active_prov_skill_dirs; do
           rm -f "$NEXUS_DIR/$_p_dir/rnex-$_sbase" 2>/dev/null || true
           rm -rf "$NEXUS_DIR/$_p_dir/rnex-$_sname" 2>/dev/null || true
         done

@@ -175,6 +175,61 @@ _is_valid_source_file() {
   return 0
 }
 
+# -----------------------------------------------------------------------------
+# kl_source_to_slug
+# Summary: Converts a workspace-relative source document path into a canonical,
+#          deterministic, collision-free wiki page slug.
+# Architectural Layer: Plugin Domain Helper / Knowledge Graph Normalizer
+# Design Pattern: Information Expert / Pure Function
+#
+# Transformation Rules:
+#   1. Strip leading './' if present.
+#   2. Strip '.markdown' or '.md' file extension.
+#   3. Lowercase all characters; replace any non-alphanumeric character with a hyphen;
+#      collapse consecutive hyphens into a single hyphen; trim leading/trailing hyphens.
+#   4. Prefix with 'root-' ONLY if a root-level workspace file without directory
+#      prefix normalizes to a reserved wiki control filename ('index', 'hot', 'log', '_log').
+#
+# Examples:
+#   - docs/overview.md              -> docs-overview
+#   - docs/api/README.md            -> docs-api-readme
+#   - docs/nested/deep/spec [v1].md -> docs-nested-deep-spec-v1
+#   - repos/app/apps/web/README.md  -> repos-app-apps-web-readme
+#   - index.md                      -> root-index
+#
+# @param $1: src_rel - Workspace-relative source document path.
+# @returns: Outputs normalized slug on stdout (without .md extension).
+# @pure: Pure string transformation; zero side effects.
+# -----------------------------------------------------------------------------
+kl_source_to_slug() {
+  _kss_src="$1"
+  # Strip leading ./ if present
+  while [ "${_kss_src#./}" != "$_kss_src" ]; do _kss_src="${_kss_src#./}"; done
+
+  # Strip .markdown or .md extension
+  case "$_kss_src" in
+    *.markdown) _kss_base="${_kss_src%.markdown}" ;;
+    *.md)       _kss_base="${_kss_src%.md}" ;;
+    *)          _kss_base="$_kss_src" ;;
+  esac
+
+  # Normalize to lowercase alphanumeric separated by single hyphens
+  _kss_slug="$(printf '%s' "$_kss_base" | tr '[:upper:]' '[:lower:]' | sed -e 's/[^a-z0-9]/-/g' -e 's/--*/-/g' -e 's/^-//' -e 's/-$//')"
+
+  # Root-level files without directory prefix normalizing to reserved wiki control file names are prefixed with "root-"
+  case "$_kss_slug" in
+    index|hot|_log|log)
+      case "$_kss_src" in
+        */*) ;; # Has directory prefix (e.g. docs/index.md -> docs-index), not a reserved collision
+        *)   _kss_slug="root-${_kss_slug}" ;;
+      esac
+      ;;
+  esac
+
+  [ -n "$_kss_slug" ] || _kss_slug="unnamed-doc"
+  printf '%s' "$_kss_slug"
+}
+
 # Recursively expand source targets (directories, files, globs) into a deterministic,
 # newline-delimited stream of absolute file paths.
 karpathy_expand_source_files() {
@@ -182,6 +237,18 @@ karpathy_expand_source_files() {
   _kesf_wiki_dir="$(karpathy_get_wiki_dir)"
   _kesf_wiki_abs="${NEXUS_DIR:-${RNEX_ROOT:-.}}/$_kesf_wiki_dir"
   _kesf_root="${NEXUS_DIR:-${RNEX_ROOT:-.}}"
+
+  # Precompute disabled repository directory prefixes once to avoid per-file YAML lookups
+  _kesf_disabled_repos=""
+  if command -v yaml_list_repos >/dev/null 2>&1 && command -v yaml_repo_enabled >/dev/null 2>&1; then
+    for _r_chk in $(yaml_list_repos 2>/dev/null || true); do
+      [ -n "$_r_chk" ] || continue
+      if ! yaml_repo_enabled "$_r_chk" 2>/dev/null; then
+        kl_resolve_repo_paths "$_r_chk"
+        _kesf_disabled_repos="${_kesf_disabled_repos:+$_kesf_disabled_repos }$_kl_repo_path"
+      fi
+    done
+  fi
 
   _kesf_stream() {
     if [ -n "$_kesf_override" ]; then
@@ -204,8 +271,8 @@ karpathy_expand_source_files() {
       esac
 
       if [ -d "$_src_abs" ]; then
-        # Case A: Directory — recursively discover non-hidden files
-        find "$_src_abs" -type f ! -name '.*' ! -path '*/.*' 2>/dev/null
+        # Case A: Directory — recursively discover non-hidden files, pruning metadata dirs
+        find "$_src_abs" \( -name .git -o -name .rnex -o -name node_modules \) -prune -o -type f ! -name '.*' ! -path '*/.*' -print 2>/dev/null
       elif [ -f "$_src_abs" ]; then
         # Case B: Regular file — emit directly
         printf '%s\n' "$_src_abs"
@@ -215,20 +282,20 @@ karpathy_expand_source_files() {
           *'**'*)
             case "$_src" in
               '**')
-                find "$_kesf_root" -type f ! -name '.*' ! -path '*/.*' 2>/dev/null
+                find "$_kesf_root" \( -name .git -o -name .rnex -o -name node_modules \) -prune -o -type f ! -name '.*' ! -path '*/.*' -print 2>/dev/null
                 ;;
               */'**')
                 _sub="${_src%/\*\*}"
-                [ -d "$_kesf_root/$_sub" ] && find "$_kesf_root/$_sub" -type f ! -name '.*' ! -path '*/.*' 2>/dev/null
+                [ -d "$_kesf_root/$_sub" ] && find "$_kesf_root/$_sub" \( -name .git -o -name .rnex -o -name node_modules \) -prune -o -type f ! -name '.*' ! -path '*/.*' -print 2>/dev/null
                 ;;
               '**/'*)
                 _pat="${_src#\*\*/}"
-                find "$_kesf_root" -type f -name "$_pat" ! -name '.*' ! -path '*/.*' 2>/dev/null
+                find "$_kesf_root" \( -name .git -o -name .rnex -o -name node_modules \) -prune -o -type f -name "$_pat" ! -name '.*' ! -path '*/.*' -print 2>/dev/null
                 ;;
               *'/**/'*)
                 _sub="${_src%%/\*\*/*}"
                 _pat="${_src#*/\*\*/}"
-                [ -d "$_kesf_root/$_sub" ] && find "$_kesf_root/$_sub" -type f -name "$_pat" ! -name '.*' ! -path '*/.*' 2>/dev/null
+                [ -d "$_kesf_root/$_sub" ] && find "$_kesf_root/$_sub" \( -name .git -o -name .rnex -o -name node_modules \) -prune -o -type f -name "$_pat" ! -name '.*' ! -path '*/.*' -print 2>/dev/null
                 ;;
               *)
                 _sub="${_src%%\*\**}"
@@ -236,7 +303,7 @@ karpathy_expand_source_files() {
                 _pat="${_src#*\*\*}"
                 _pat="${_pat#/}"
                 if [ -d "$_kesf_root/$_sub" ]; then
-                  find "$_kesf_root/$_sub" -type f -path "*$_pat" ! -name '.*' ! -path '*/.*' 2>/dev/null
+                  find "$_kesf_root/$_sub" \( -name .git -o -name .rnex -o -name node_modules \) -prune -o -type f -path "*$_pat" ! -name '.*' ! -path '*/.*' -print 2>/dev/null
                 fi
                 ;;
             esac
@@ -247,7 +314,7 @@ karpathy_expand_source_files() {
               for _m in $_src; do
                 [ -e "$_m" ] || continue
                 if [ -d "$_m" ]; then
-                  find "$_kesf_root/$_m" -type f ! -name '.*' ! -path '*/.*' 2>/dev/null
+                  find "$_kesf_root/$_m" \( -name .git -o -name .rnex -o -name node_modules \) -prune -o -type f ! -name '.*' ! -path '*/.*' -print 2>/dev/null
                 elif [ -f "$_m" ]; then
                   printf '%s/%s\n' "$_kesf_root" "$_m"
                 fi
@@ -259,19 +326,13 @@ karpathy_expand_source_files() {
     done
   ) | while IFS= read -r _cand_file || [ -n "$_cand_file" ]; do
     [ -n "$_cand_file" ] || continue
-    # Exclude files belonging to disabled repositories
+    # Exclude files belonging to precomputed disabled repositories
     _in_disabled=0
-    if command -v yaml_list_repos >/dev/null 2>&1; then
-      for _r_chk in $(yaml_list_repos 2>/dev/null || true); do
-        [ -n "$_r_chk" ] || continue
-        if command -v yaml_repo_enabled >/dev/null 2>&1; then
-          if ! yaml_repo_enabled "$_r_chk" 2>/dev/null; then
-            kl_resolve_repo_paths "$_r_chk"
-            case "$_cand_file" in
-              "$_kl_repo_path"/*|"$_kl_repo_path") _in_disabled=1; break ;;
-            esac
-          fi
-        fi
+    if [ -n "$_kesf_disabled_repos" ]; then
+      for _d_repo in $_kesf_disabled_repos; do
+        case "$_cand_file" in
+          "$_d_repo"/*|"$_d_repo") _in_disabled=1; break ;;
+        esac
       done
     fi
     [ "$_in_disabled" -eq 1 ] && continue
@@ -414,6 +475,7 @@ kl_ingest_member_readme() {
   _src_file="$_m_path/$_m_readme"
   _target_page="$_wiki_path/repo-${_m_repo}.md"
   _today="$(kl_today)"
+  _KL_LAST_INGESTED=0
 
   [ -f "$_src_file" ] || return 0
 
@@ -469,6 +531,7 @@ kl_ingest_member_readme() {
   fi
 
   if [ "$_needs_gen" -eq 1 ]; then
+    _KL_LAST_INGESTED=1
     cat > "$_target_page" <<PAGE_EOF
 ---
 title: "Member Repo: ${_m_repo}"
@@ -494,16 +557,17 @@ ${_m_summary}
 ## Contextual Links
 * See [${_nav_label}](./${_nav_target}) for workspace member repository catalog.
 PAGE_EOF
-  fi
 
-  if { [ "$_needs_gen" -eq 1 ] || [ "$_m_force_log" -eq 1 ]; } && [ -f "$_wiki_path/_log.md" ]; then
-    cat >> "$_wiki_path/_log.md" <<LOG_EOF
+    # Log operation only when newly ingested (strictly idempotent)
+    if [ -f "$_wiki_path/_log.md" ]; then
+      cat >> "$_wiki_path/_log.md" <<LOG_EOF
 
 ### Member Repo Ingest: ${_m_repo} — ${_today}
 * **Source:** \`${_rel_source}\`
 * **Ingested Page:** \`repo-${_m_repo}.md\`
 * **Status:** Ingested atomic member repository page into wiki index and hot cache.
 LOG_EOF
+    fi
   fi
 
   # 4. Register in navigation index (index.md) if not already present
@@ -545,9 +609,11 @@ LOG_EOF
     fi
   fi
 
-  # 5. Register in hot cache (hot.md) under Section 1 if not already present
+  # 5. Register in hot cache (hot.md) under Section 1 with direct wiki links if not already present
   _is_in_hot=0
-  if grep -q "${_rel_loc}" "$_wiki_path/hot.md" 2>/dev/null; then
+  if grep -q "repo-${_m_repo}\.md" "$_wiki_path/hot.md" 2>/dev/null; then
+    _is_in_hot=1
+  elif grep -q "${_rel_loc}" "$_wiki_path/hot.md" 2>/dev/null; then
     _is_in_hot=1
   elif grep -E -q "^\* \*\*Member Repositories \([0-9]+ repos\):.*[ :]${_m_repo}(,|\.|$)" "$_wiki_path/hot.md" 2>/dev/null; then
     _is_in_hot=1
@@ -563,7 +629,7 @@ LOG_EOF
       print out
     }')"
     [ -z "$_hot_summary" ] && _hot_summary="Member repository"
-    _hot_line="* **${_m_repo} (\`${_rel_loc}\`):** ${_hot_summary}."
+    _hot_line="* **[${_m_repo}](./repo-${_m_repo}.md)** (\`${_rel_loc}\`): ${_hot_summary}."
     _tmp_hot="$(mktemp)"
     if LINE="$_hot_line" awk '
       /^## 1\. Architecture & Member Repo Map/ {
@@ -590,25 +656,25 @@ kl_condense_hot_cache() {
 
   _hot_words="$(wc -w < "$_wiki_path/hot.md" 2>/dev/null || echo 0)"
   if [ "$_hot_words" -gt 480 ]; then
-    _num_repos="$(grep -cE '^\* \*\*[a-zA-Z0-9_.-]+ \(`?'"$_clean_repos"'/' "$_wiki_path/hot.md" 2>/dev/null || echo 0)"
-    if [ "$_khc_ingested_cnt" -gt 3 ]; then
+    _num_repos="$(grep -cE '^\* \*\*(\[[^]]+\]\(\./repo-[^)]+\)|[a-zA-Z0-9_.-]+)' "$_wiki_path/hot.md" 2>/dev/null || echo 0)"
+    if [ "$_khc_ingested_cnt" -gt 15 ]; then
       _condense_count="$_khc_ingested_cnt"
       _repo_names="$_khc_ingested_repos"
-    elif [ "$_num_repos" -gt 3 ]; then
+    elif [ "$_num_repos" -gt 15 ]; then
       _condense_count="$_num_repos"
-      _repo_names="$(grep -E '^\* \*\*[a-zA-Z0-9_.-]+ \(`?'"$_clean_repos"'/' "$_wiki_path/hot.md" | sed -e 's/^\* \*\*//' -e 's/ .*//' | tr '\n' ', ' | sed -e 's/, $//')"
+      _repo_names="$(grep -E '^\* \*\*(\[[^]]+\]\(\./repo-[^)]+\)|[a-zA-Z0-9_.-]+)' "$_wiki_path/hot.md" | sed -e 's/^\* \*\*\[//' -e 's/\].*//' -e 's/^\* \*\*//' -e 's/ .*//' | tr '\n' ', ' | sed -e 's/, $//')"
     else
       _condense_count=0
       _repo_names=""
     fi
 
-    if [ "$_condense_count" -gt 3 ]; then
+    if [ "$_condense_count" -gt 15 ]; then
       _tmp_b="$(mktemp)"
       if awk -v rnames="$_repo_names" -v nrepos="$_condense_count" -v rdir="$_clean_repos" '
         BEGIN { in_s1=0; replaced=0 }
         /^## 1\. Architecture & Member Repo Map/ { in_s1=1; print; next }
         in_s1 && /^## / { in_s1=0 }
-        in_s1 && (/^\* \*\*[a-zA-Z0-9_.-]+ \(`?[^\/]+\// || /^\* \*\*Member Repositories \([0-9]+ repos\):/) {
+        in_s1 && (/^\* \*\*(\[[^]]+\]|[a-zA-Z0-9_.-]+)/ || /^\* \*\*Member Repositories \([0-9]+ repos\):/) {
           if (!replaced) {
             print "* **Member Repositories (" nrepos " repos):** Autonomous repositories under `" rdir "/`: " rnames ". See [Wiki Index](./index.md#member-repositories) for individual architecture pages."
             replaced=1

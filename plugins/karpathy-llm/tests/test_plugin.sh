@@ -214,6 +214,7 @@ grep -q "Authentication and authorization microservice" "$TEST_KARPATHY_WS/wiki/
 # Verify index.md and hot.md registration
 grep -q "repo-auth-svc\.md" "$TEST_KARPATHY_WS/wiki/index.md" || { fail "repo-auth-svc.md not in index.md"; exit 1; }
 grep -q "auth-svc" "$TEST_KARPATHY_WS/wiki/hot.md" || { fail "auth-svc missing from hot.md"; exit 1; }
+grep -q '\[auth-svc\](\./repo-auth-svc\.md)' "$TEST_KARPATHY_WS/wiki/hot.md" || { fail "auth-svc direct link missing from hot.md"; exit 1; }
 grep -q "Member Repo Ingest: auth-svc" "$TEST_KARPATHY_WS/wiki/_log.md" || { fail "Ingest log missing from _log.md"; exit 1; }
 
 # Curate repo-auth-svc.md with custom fields and body
@@ -331,10 +332,10 @@ EOF_DOC
 
 (cd "$TEST_INTAKE_WS" && ./rnex plugin karpathy-llm ingest >/dev/null)
 
-[ -f "$TEST_INTAKE_WS/wiki/overview.md" ] || { fail "overview.md missing after ingest"; exit 1; }
-[ -f "$TEST_INTAKE_WS/wiki/doc-docs-api-readme.md" ] || { fail "doc-docs-api-readme.md missing (API README collision)"; exit 1; }
-[ -f "$TEST_INTAKE_WS/wiki/doc-docs-guide-readme.md" ] || { fail "doc-docs-guide-readme.md missing (Guide README collision)"; exit 1; }
-[ -f "$TEST_INTAKE_WS/wiki/doc-docs-nested-deep-spec-v1.md" ] || { fail "doc-docs-nested-deep-spec-v1.md missing (spaces/brackets)"; exit 1; }
+[ -f "$TEST_INTAKE_WS/wiki/docs-overview.md" ] || { fail "docs-overview.md missing after ingest"; exit 1; }
+[ -f "$TEST_INTAKE_WS/wiki/docs-api-readme.md" ] || { fail "docs-api-readme.md missing (API README collision)"; exit 1; }
+[ -f "$TEST_INTAKE_WS/wiki/docs-guide-readme.md" ] || { fail "docs-guide-readme.md missing (Guide README collision)"; exit 1; }
+[ -f "$TEST_INTAKE_WS/wiki/docs-nested-deep-spec-v1.md" ] || { fail "docs-nested-deep-spec-v1.md missing (spaces/brackets)"; exit 1; }
 [ ! -f "$TEST_INTAKE_WS/wiki/hidden.md" ] || { fail "Hidden file was ingested"; exit 1; }
 [ ! -f "$TEST_INTAKE_WS/wiki/note.md" ] || { fail "Hidden directory file was ingested"; exit 1; }
 
@@ -362,7 +363,7 @@ run_test "Karpathy-llm: CLI commands ingest and lint with options and strict val
 # Test ingest with --source option
 printf '# Roadmap\nFuture project roadmap.\n' > "$TEST_INTAKE_WS/docs/roadmap.md"
 (cd "$TEST_INTAKE_WS" && ./rnex plugin karpathy-llm ingest --source docs/roadmap.md >/dev/null)
-[ -f "$TEST_INTAKE_WS/wiki/roadmap.md" ] || { fail "wiki/roadmap.md not created by ingest --source"; exit 1; }
+[ -f "$TEST_INTAKE_WS/wiki/docs-roadmap.md" ] || { fail "wiki/docs-roadmap.md not created by ingest --source"; exit 1; }
 
 # Test lint passing
 _lint_ok="$(cd "$TEST_INTAKE_WS" && ./rnex plugin karpathy-llm lint 2>&1)" || { fail "lint failed: $_lint_ok"; exit 1; }
@@ -414,14 +415,14 @@ printf '# Document C\nSingle file C content.\n' > "$TEST_SF_WS/raw/doc-c.md"
 
 # Test Case 1: Positional single file ingestion
 (cd "$TEST_SF_WS" && ./rnex plugin karpathy-llm ingest raw/doc-a.md >/dev/null)
-[ -f "$TEST_SF_WS/wiki/doc-a.md" ] || { fail "wiki/doc-a.md missing after single-file positional ingest"; exit 1; }
-[ ! -f "$TEST_SF_WS/wiki/doc-b.md" ] || { fail "wiki/doc-b.md should not have been ingested during single-file ingest"; exit 1; }
-[ ! -f "$TEST_SF_WS/wiki/doc-c.md" ] || { fail "wiki/doc-c.md should not have been ingested during single-file ingest"; exit 1; }
+[ -f "$TEST_SF_WS/wiki/raw-doc-a.md" ] || { fail "wiki/raw-doc-a.md missing after single-file positional ingest"; exit 1; }
+[ ! -f "$TEST_SF_WS/wiki/raw-doc-b.md" ] || { fail "wiki/raw-doc-b.md should not have been ingested during single-file ingest"; exit 1; }
+[ ! -f "$TEST_SF_WS/wiki/raw-doc-c.md" ] || { fail "wiki/raw-doc-c.md should not have been ingested during single-file ingest"; exit 1; }
 
 # Test Case 2: --file / -f flag single file ingestion
 (cd "$TEST_SF_WS" && ./rnex plugin karpathy-llm ingest --file raw/doc-b.md >/dev/null)
-[ -f "$TEST_SF_WS/wiki/doc-b.md" ] || { fail "wiki/doc-b.md missing after --file ingest"; exit 1; }
-[ ! -f "$TEST_SF_WS/wiki/doc-c.md" ] || { fail "wiki/doc-c.md should not have been ingested during --file ingest"; exit 1; }
+[ -f "$TEST_SF_WS/wiki/raw-doc-b.md" ] || { fail "wiki/raw-doc-b.md missing after --file ingest"; exit 1; }
+[ ! -f "$TEST_SF_WS/wiki/raw-doc-c.md" ] || { fail "wiki/raw-doc-c.md should not have been ingested during --file ingest"; exit 1; }
 
 # Test Case 3: Missing file error and exit code non-zero
 _missing_err=0
@@ -437,7 +438,43 @@ echo "$_dir_out" | grep -q 'Expected a file path, but "raw" is a directory' || {
 
 # Test Case 4: Batch fallback when no file argument is passed
 (cd "$TEST_SF_WS" && ./rnex plugin karpathy-llm ingest >/dev/null)
-[ -f "$TEST_SF_WS/wiki/doc-c.md" ] || { fail "wiki/doc-c.md missing after batch fallback ingest"; exit 1; }
+[ -f "$TEST_SF_WS/wiki/raw-doc-c.md" ] || { fail "wiki/raw-doc-c.md missing after batch fallback ingest"; exit 1; }
+pass
+
+# --------------------------------------------------------------------------
+run_test "Karpathy-llm: nested repos/**/README.md slug routing, _log.md idempotency, and hot.md direct links"
+TEST_NESTED_WS="$TEST_TMP/karpathy-nested-ws"
+mkdir -p "$TEST_NESTED_WS"
+setup_plugin_test_workspace karpathy-llm "$TEST_NESTED_WS"
+cd "$TEST_NESTED_WS"
+"$TEST_NESTED_WS/rnex" init -y --karpathy "$TEST_NESTED_WS" >/dev/null
+
+# 1. Nested repository README under repos/app-repo/apps/web/README.md
+mkdir -p "$TEST_NESTED_WS/repos/app-repo/apps/web"
+printf '# Root App\nRoot repo architecture.\n' > "$TEST_NESTED_WS/repos/app-repo/README.md"
+printf '# Web App\nNested sub-application architecture.\n' > "$TEST_NESTED_WS/repos/app-repo/apps/web/README.md"
+cat <<'EOF_NESTED_CFG' >> "$TEST_NESTED_WS/rnex.yaml"
+  app-repo:
+EOF_NESTED_CFG
+
+(cd "$TEST_NESTED_WS" && ./rnex sync -y >/dev/null)
+(cd "$TEST_NESTED_WS" && ./rnex plugin karpathy-llm ingest >/dev/null)
+
+# Verify root member repo README routes to repo-app-repo.md
+[ -f "$TEST_NESTED_WS/wiki/repo-app-repo.md" ] || { fail "repo-app-repo.md missing for root member repo"; exit 1; }
+
+# Verify nested README routes to repos-app-repo-apps-web-readme.md (not repo-app-repo.md)
+[ -f "$TEST_NESTED_WS/wiki/repos-app-repo-apps-web-readme.md" ] || { fail "repos-app-repo-apps-web-readme.md missing for nested repo README"; exit 1; }
+
+# Verify hot.md contains direct wiki links to both root member repo and nested source pages
+grep -q '\[app-repo\](\./repo-app-repo\.md)' "$TEST_NESTED_WS/wiki/hot.md" || { fail "Direct link to repo-app-repo.md missing from hot.md"; exit 1; }
+grep -q '\[Web App\](\./repos-app-repo-apps-web-readme\.md)' "$TEST_NESTED_WS/wiki/hot.md" || { fail "Direct link to nested source missing from hot.md Section 2"; exit 1; }
+
+# 2. _log.md idempotency test
+_log_bytes_before="$(wc -c < "$TEST_NESTED_WS/wiki/_log.md" | tr -d ' ')"
+(cd "$TEST_NESTED_WS" && ./rnex plugin karpathy-llm ingest >/dev/null)
+_log_bytes_after="$(wc -c < "$TEST_NESTED_WS/wiki/_log.md" | tr -d ' ')"
+[ "$_log_bytes_before" = "$_log_bytes_after" ] || { fail "_log.md changed on repeated ingest with 0 new files (before=$_log_bytes_before, after=$_log_bytes_after)"; exit 1; }
 pass
 
 if [ "${_STANDALONE_RUN:-0}" -eq 1 ]; then

@@ -564,11 +564,14 @@ sync_plugins() {
     rmdir "$NEXUS_DIR/.rnex/plugins" 2>/dev/null || true
   fi
 
-  # Also run cleanup hook for any available plugin that is disabled
+  # Run cleanup hook for any available plugin that is disabled but still has artifacts on disk
   for _pdir in $(list_all_available_plugin_dirs 2>/dev/null || true); do
     _pname="$(basename "$_pdir")"
     if ! yaml_plugin_enabled "$_pname" 2>/dev/null; then
-      run_plugin_hook "$_pname" "before_plugin_disable"
+      _p_out="$(plugin_manifest_get "$_pdir" "output_file" 2>/dev/null || true)"
+      if [ -d "$NEXUS_DIR/.rnex/plugins/$_pname" ] || { [ -n "$_p_out" ] && [ -e "$NEXUS_DIR/$_p_out" ]; }; then
+        run_plugin_hook "$_pname" "before_plugin_disable"
+      fi
     fi
   done
 

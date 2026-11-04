@@ -49,3 +49,8 @@ In a Repo Nexus workspace, independent repositories are organized into `./repos/
 4. **Read-Only Intake & Source Directories:**
    - Intake sources (`plugins.karpathy-llm.sources`, default: `docs`, `repos/**/README.md`) and member repositories (`./<repos_dir>/`, default: `./repos/`) are strictly read-only inputs during wiki operations. Never create, copy, or modify files inside configured sources; write generated output exclusively inside `wiki_dir` (`wiki/`).
 
+5. **Wiki Navigation Order:**
+   - Always read `<wiki_dir>/hot.md` first for workspace architecture, repository boundaries, and direct links to curated `<wiki_dir>/*.md` pages.
+   - If `<wiki_dir>/hot.md` links the relevant `<wiki_dir>/<page>.md`, read that page directly and **skip `<wiki_dir>/index.md`**.
+   - Read `<wiki_dir>/index.md` **only if** the needed topic or page is not listed in `<wiki_dir>/hot.md` (e.g., when `hot.md` is condensed in large workspaces).
+

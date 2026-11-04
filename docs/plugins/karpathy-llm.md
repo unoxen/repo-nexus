@@ -54,9 +54,9 @@ A self-healing, agent-maintained knowledge graph structured as:
 
 ### 4. Standardized Agent Workflows
 - **`wiki-ingest.md` (8-Step Ingestion Protocol)**:
-  - Decomposes raw source documents from `./docs/` into 5–25 atomic wiki pages.
+  - Scaffolds deterministic 1-to-1 wiki pages (`repo-<name>.md` for root repo READMEs; `<normalized-relative-path>.md` for all other sources) and enriches them in-place.
   - Formulates bi-directional frontmatter relations (`sources`, `related`, `extends`, `contradicts`).
-  - Appends operations to `wiki/_log.md` and rebuilds `wiki/index.md`.
+  - Idempotently updates `wiki/_log.md` and direct links in `wiki/index.md` and `wiki/hot.md`.
 - **`wiki-lint.md` (10-Step Integrity Audit Protocol)**:
   - Validates inter-page link paths and file existence.
   - Recomputes reverse backlinks (`mentioned_in`).
