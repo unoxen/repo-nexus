@@ -9,6 +9,8 @@ The **`karpathy-llm`** plugin packages Andrej Karpathy's agent behavioral princi
 
 It requires **zero external vector databases, embedding pipelines, or heavy MCP infrastructure** — knowledge is represented as interlinked, version-controlled markdown pages with typed YAML frontmatter that AI agents navigate natively.
 
+![Karpathy LLM Wiki](/karpathy-llm.jpeg)
+
 ---
 
 ## What It Provides
