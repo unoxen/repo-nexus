@@ -584,13 +584,9 @@ write_rnex_env_script() {
   _src_env=""
   for _cand in \
     "${RNEX_LIB_DIR:-}/rnex-env.sh" \
-    "${RNEX_TEMPLATES_DIR:-}/rnex-env.sh" \
     "$SCRIPT_LOCATION/lib/rnex-env.sh" \
-    "$SCRIPT_LOCATION/templates/rnex-env.sh" \
     "$(dirname "$SCRIPT_LOCATION")/lib/rnex-env.sh" \
-    "$(dirname "$SCRIPT_LOCATION")/templates/rnex-env.sh" \
     "$_dir/lib/rnex-env.sh" \
-    "$_dir/templates/rnex-env.sh" \
     "${RNEX_LIB_DIR:-}/sdk.sh" \
     "$SCRIPT_LOCATION/lib/sdk.sh" \
     "$(dirname "$SCRIPT_LOCATION")/lib/sdk.sh" \
@@ -643,12 +639,6 @@ sync_rnex_base_assets() {
     _src_skills="$NEXUS_DIR/skills"
   elif [ -d "${RNEX_ROOT:-}/skills" ]; then
     _src_skills="${RNEX_ROOT:-}/skills"
-  elif [ -d "$SCRIPT_LOCATION/toolkit/skills" ]; then
-    _src_skills="$SCRIPT_LOCATION/toolkit/skills"
-  elif [ -d "$(dirname "$SCRIPT_LOCATION")/toolkit/skills" ]; then
-    _src_skills="$(dirname "$SCRIPT_LOCATION")/toolkit/skills"
-  elif [ -d "$NEXUS_DIR/toolkit/skills" ]; then
-    _src_skills="$NEXUS_DIR/toolkit/skills"
   fi
 
   # Purge obsolete .rnex/prompts/ and .rnex/workflows/

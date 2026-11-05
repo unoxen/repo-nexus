@@ -52,7 +52,6 @@ pass
 run_test "Cursor plugin: manifest metadata, version parity, and plugin info"
 _cli_ver="$("$TEST_CURSOR_WS/rnex" --version | awk '{print $2}')"
 _cursor_manifest="$TEST_CURSOR_WS/plugins/cursor/plugin.yaml"
-[ -f "$_cursor_manifest" ] || _cursor_manifest="$TEST_CURSOR_WS/toolkit/plugins/cursor/plugin.yaml"
 _m_ver="$(awk '/^version:[ ]*/ { sub(/^version:[ ]*/, ""); sub(/[ ]*#.*/, ""); print; exit }' "$_cursor_manifest")"
 [ "$_m_ver" = "$_cli_ver" ] || { fail "Cursor plugin version ($_m_ver) does not match CLI version ($_cli_ver)"; exit 1; }
 

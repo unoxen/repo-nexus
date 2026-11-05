@@ -23,7 +23,7 @@ if [ -z "$VERSION" ]; then
   exit 1
 fi
 
-for manifest in "$REPO_ROOT"/plugins/*/plugin.yaml "$REPO_ROOT"/toolkit/plugins/*/plugin.yaml; do
+for manifest in "$REPO_ROOT"/plugins/*/plugin.yaml; do
   [ -f "$manifest" ] || continue
   tmp="$manifest.tmp.$$"
   sed "s/^version:[ ].*/version: $VERSION/" "$manifest" > "$tmp" && mv "$tmp" "$manifest"

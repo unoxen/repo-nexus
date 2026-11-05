@@ -1,10 +1,8 @@
 import { defineConfig } from 'vitepress'
-import { withMermaid } from 'vitepress-plugin-mermaid'
 
 const base = (process.env.BASE_URL as `/${string}/`) || '/repo-nexus/'
 
-export default withMermaid(
-  defineConfig({
+export default defineConfig({
     title: 'Repo Nexus (rnex)',
     titleTemplate: ':title | rnex',
     description: 'Lightweight Virtual Meta Repository (meta repo) and Nexus Repository (nexus repo) manager for multi-repo workspaces and shared AI context',
@@ -223,4 +221,3 @@ export default withMermaid(
       }
     }
   })
-)

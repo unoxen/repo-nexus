@@ -155,7 +155,6 @@ repo-nexus/
 ├── plugins/                        # Built-in scoped workspace plugins with independent tests
 ├── skills/                         # Core workspace agentic skills
 ├── templates/
-│   ├── ai-instructions.sample.md   # Base template for .rnex/ai-instructions.md
 │   └── rnex.example.yaml           # Full config reference with examples
 ├── AGENTS.md                       # Routing-only universal AI instructions
 ├── CHANGELOG.md                    # Release history and migration notes

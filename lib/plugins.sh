@@ -13,8 +13,8 @@
 #     1. Explicit per-plugin path override (`plugins.<name>.path` in
 #        .local.rnex.yaml > rnex.yaml). Normalizes trailing `/plugin.yaml`
 #        to its parent directory.
-#     2. Built-in embedded plugin in `$TOOLKIT_DIR/plugins/<name>`.
-#     3. Standard candidate toolkit directory search.
+#     2. Built-in embedded plugin in `$RNEX_PLUGINS_DIR/<name>`.
+#     3. Standard candidate plugin directory search.
 #
 # Arguments:
 #   $1 - Plugin name (e.g. "karpathy-llm", "claude", "custom-plugin")
@@ -69,10 +69,6 @@ plugin_resolve_dir() {
     resolve_path "$RNEX_PLUGINS_DIR/$_prd_name" 2>/dev/null || printf '%s' "$RNEX_PLUGINS_DIR/$_prd_name"
     return 0
   fi
-  if [ -n "${TOOLKIT_DIR:-}" ] && [ -d "$TOOLKIT_DIR/plugins/$_prd_name" ] && [ -f "$TOOLKIT_DIR/plugins/$_prd_name/plugin.yaml" ]; then
-    resolve_path "$TOOLKIT_DIR/plugins/$_prd_name" 2>/dev/null || printf '%s' "$TOOLKIT_DIR/plugins/$_prd_name"
-    return 0
-  fi
 
   # Priority 3: Candidate plugin locations fallback
   _sdir="$(dirname "$SCRIPT_LOCATION")"
@@ -83,14 +79,7 @@ plugin_resolve_dir() {
     "$SCRIPT_LOCATION/plugins/$_prd_name" \
     "$_sdir/plugins/$_prd_name" \
     "$NEXUS_DIR/plugins/$_prd_name" \
-    "${RNEX_ROOT:-}/toolkit/plugins/$_prd_name" \
-    "${TOOLKIT_DIR:-}/plugins/$_prd_name" \
-    "${RNEX_TOOLKIT_DIR:-}/plugins/$_prd_name" \
-    "$NEXUS_DIR/toolkit/plugins/$_prd_name" \
-    "$SCRIPT_LOCATION/toolkit/plugins/$_prd_name" \
-    "$_sdir/toolkit/plugins/$_prd_name" \
-    "$NEXUS_DIR/.rnex/plugins/$_prd_name" \
-    "$NEXUS_DIR/.nexus/plugins/$_prd_name"; do
+    "$NEXUS_DIR/.rnex/plugins/$_prd_name"; do
     [ -n "$_cand" ] || continue
     if [ -f "$_cand/plugin.yaml" ]; then
       resolve_path "$_cand" 2>/dev/null || printf '%s' "$_cand"
@@ -120,14 +109,7 @@ find_plugin_dir() {
     "$SCRIPT_LOCATION/plugins/$_query" \
     "$_sdir/plugins/$_query" \
     "$NEXUS_DIR/plugins/$_query" \
-    "${RNEX_ROOT:-}/toolkit/plugins/$_query" \
-    "${TOOLKIT_DIR:-}/plugins/$_query" \
-    "${RNEX_TOOLKIT_DIR:-}/plugins/$_query" \
-    "$NEXUS_DIR/toolkit/plugins/$_query" \
-    "$SCRIPT_LOCATION/toolkit/plugins/$_query" \
-    "$_sdir/toolkit/plugins/$_query" \
-    "$NEXUS_DIR/.rnex/plugins/$_query" \
-    "$NEXUS_DIR/.nexus/plugins/$_query"; do
+    "$NEXUS_DIR/.rnex/plugins/$_query"; do
     [ -n "$_cand" ] || continue
     if [ -f "$_cand/plugin.yaml" ]; then
       printf '%s' "$_cand"
@@ -145,7 +127,7 @@ find_plugin_dir() {
 #   the resolution hierarchy:
 #     1. Path-mapped external plugins declared via `plugins.<name>.path` in
 #        .local.rnex.yaml or rnex.yaml.
-#     2. Built-in embedded plugins shipped with rnex ($TOOLKIT_DIR/plugins/*).
+#     2. Built-in embedded plugins shipped with rnex ($RNEX_PLUGINS_DIR/*).
 #
 # Arguments:
 #   None
@@ -183,13 +165,7 @@ plugin_list_available() {
     "${RNEX_ROOT:-}/plugins" \
     "$SCRIPT_LOCATION/plugins" \
     "$(dirname "$SCRIPT_LOCATION")/plugins" \
-    "$NEXUS_DIR/plugins" \
-    "${TOOLKIT_DIR:-}/plugins" \
-    "${RNEX_ROOT:-}/toolkit/plugins" \
-    "${RNEX_TOOLKIT_DIR:-}/plugins" \
-    "$NEXUS_DIR/toolkit/plugins" \
-    "$SCRIPT_LOCATION/toolkit/plugins" \
-    "$(dirname "$SCRIPT_LOCATION")/toolkit/plugins"; do
+    "$NEXUS_DIR/plugins"; do
     [ -n "$_parent" ] || continue
     if [ -d "$_parent" ]; then
       for _sub in "$_parent"/*; do
@@ -209,7 +185,7 @@ plugin_list_available() {
   done
 }
 
-# Scan and list all unique plugin directories across workspace and toolkit locations.
+# Scan and list all unique plugin directories across workspace and built-in plugin locations.
 list_all_available_plugin_dirs() {
   plugin_list_available
 }
@@ -232,7 +208,7 @@ plugin_get_field() {
 #
 # Summary:
 #   Retrieve the effective version of a plugin. Built-in embedded plugins
-#   located in $TOOLKIT_DIR/plugins/<name> have version parity with rnex and
+#   located in $RNEX_PLUGINS_DIR/<name> have version parity with rnex and
 #   always report $RNEX_VERSION. External or custom plugins report the
 #   'version' field from their plugin.yaml, defaulting to 'custom' if unset.
 #
@@ -263,8 +239,6 @@ plugin_get_version() {
   _tk_plugin_dir=""
   if [ -n "$RNEX_PLUGINS_DIR" ] && [ -d "$RNEX_PLUGINS_DIR/$_pgv_name" ]; then
     _tk_plugin_dir="$(resolve_path "$RNEX_PLUGINS_DIR/$_pgv_name" 2>/dev/null || true)"
-  elif [ -n "$TOOLKIT_DIR" ] && [ -d "$TOOLKIT_DIR/plugins/$_pgv_name" ]; then
-    _tk_plugin_dir="$(resolve_path "$TOOLKIT_DIR/plugins/$_pgv_name" 2>/dev/null || true)"
   fi
 
   # Resolve canonical path for the candidate plugin directory
@@ -273,16 +247,16 @@ plugin_get_version() {
     _res_plugin_dir="$(resolve_path "$_pgv_dir" 2>/dev/null || true)"
   fi
 
-  # Case 1: The resolved directory directly matches the built-in toolkit plugin
+  # Case 1: The resolved directory directly matches the built-in plugin
   if [ -n "$_tk_plugin_dir" ] && [ -n "$_res_plugin_dir" ] && [ "$_tk_plugin_dir" = "$_res_plugin_dir" ]; then
     printf '%s' "${RNEX_VERSION:-0.8.16}"
     return 0
   fi
 
-  # Case 2: The directory is a scoped copy inside .rnex/plugins/<name> or .nexus/plugins/<name>
+  # Case 2: The directory is a scoped copy inside .rnex/plugins/<name>
   # originating from a built-in embedded plugin
   case "$_res_plugin_dir" in
-    */.rnex/plugins/$_pgv_name|*/.nexus/plugins/$_pgv_name)
+    */.rnex/plugins/$_pgv_name)
       if [ -n "$_tk_plugin_dir" ] && [ -d "$_tk_plugin_dir" ]; then
         printf '%s' "${RNEX_VERSION:-0.8.16}"
         return 0
@@ -874,7 +848,7 @@ resolve_plugin_sources() {
 
 # ---- Plugin Command Engine (discovery, execution, and listings) -------------
 
-# Check if a plugin exists either in workspace, toolkit, or config.
+# Check if a plugin exists either in workspace, built-in plugins, or config.
 plugin_exists() {
   _pe_name="$1"
   [ -n "$_pe_name" ] || return 1
@@ -886,7 +860,7 @@ plugin_exists() {
 
 # Locate a custom command executable for a plugin.
 # Checks .rnex/plugins/<name>/commands/<command>.sh or <command>,
-# falling back to candidate toolkit directories (e.g. toolkit/plugins/<name>/commands/).
+# falling back to candidate plugin directories (e.g. plugins/<name>/commands/).
 plugin_find_command() {
   _pfc_pname="$1"
   _pfc_cmd="$2"

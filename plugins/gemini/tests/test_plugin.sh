@@ -55,7 +55,6 @@ pass
 run_test "Gemini plugin: manifest metadata, version parity, and plugin info"
 _cli_ver="$("$TEST_GEMINI_WS/rnex" --version | awk '{print $2}')"
 _gemini_manifest="$TEST_GEMINI_WS/plugins/gemini/plugin.yaml"
-[ -f "$_gemini_manifest" ] || _gemini_manifest="$TEST_GEMINI_WS/toolkit/plugins/gemini/plugin.yaml"
 _m_ver="$(awk '/^version:[ ]*/ { sub(/^version:[ ]*/, ""); sub(/[ ]*#.*/, ""); print; exit }' "$_gemini_manifest")"
 [ "$_m_ver" = "$_cli_ver" ] || { fail "Gemini plugin version ($_m_ver) does not match CLI version ($_cli_ver)"; exit 1; }
 

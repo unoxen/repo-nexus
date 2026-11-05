@@ -2,6 +2,5 @@
 /docs/
 docs/.vitepress/
 plugins/*/tests/
-toolkit/plugins/*/tests/
 .DS_Store
 **/.DS_Store

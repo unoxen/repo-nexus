@@ -93,7 +93,7 @@ rnex plugin <name> <command> [options...]
 
 ## Connecting External Plugins (`plugins.<name>.path`)
 
-Repo Nexus supports external and custom plugins located anywhere on the filesystem, enabling enterprise teams to share centralized engineering plugins and developers to test local extensions without modifying the built-in toolkit.
+Repo Nexus supports external and custom plugins located anywhere on the filesystem, enabling enterprise teams to share centralized engineering plugins and developers to test local extensions without modifying the built-in plugins.
 
 External plugins are configured canonicalizing the location via the per-plugin **`plugins.<name>.path`** setting in `rnex.yaml` or workstation-specific `.local.rnex.yaml`.
 

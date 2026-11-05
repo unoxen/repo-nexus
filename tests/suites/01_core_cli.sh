@@ -279,6 +279,19 @@ RNEX_REPO_URL="$DIR" RNEX_INSTALL_DIR="$TEST_SCRIPT_INST_SHARE" RNEX_BIN_DIR="$T
 [ -d "$TEST_SCRIPT_INST_SHARE/skills" ] || { fail "scripts/install.sh did not copy skills/ to install dir"; exit 1; }
 [ ! -d "$TEST_SCRIPT_INST_SHARE/docs" ] || { fail "scripts/install.sh leaked docs/ into install dir"; exit 1; }
 [ ! -d "$TEST_SCRIPT_INST_SHARE/plugins/claude/tests" ] || { fail "scripts/install.sh leaked tests into install dir"; exit 1; }
+
+# 6. Verify scripts/install.sh auto-detects local repository checkout without RNEX_REPO_URL
+TEST_LOCAL_INST_BIN="$TEST_TMP/test-local-inst-bin"
+TEST_LOCAL_INST_SHARE="$TEST_TMP/test-local-inst-share"
+mkdir -p "$TEST_LOCAL_INST_BIN" "$TEST_LOCAL_INST_SHARE"
+RNEX_INSTALL_DIR="$TEST_LOCAL_INST_SHARE" RNEX_BIN_DIR="$TEST_LOCAL_INST_BIN" sh "$DIR/scripts/install.sh" >/dev/null
+[ -x "$TEST_LOCAL_INST_BIN/rnex" ] || { fail "scripts/install.sh local checkout mode did not create executable"; exit 1; }
+[ -d "$TEST_LOCAL_INST_SHARE/plugins" ] || { fail "scripts/install.sh local checkout mode did not copy plugins/"; exit 1; }
+
+# 7. Verify zero obsolete toolkit/ path references remain in core scripts, lib, plugins, and tests
+if grep -rnE '(^|[^a-zA-Z0-9_-])toolkit/' "$DIR/rnex" "$DIR/lib" "$DIR/scripts" "$DIR/plugins" "$DIR/tests/test_cli.sh" "$DIR/tests/test_helper.sh" "$DIR/.npmignore" >/dev/null 2>&1; then
+  fail "Obsolete 'toolkit/' path reference found in scripts, lib, or tests"; exit 1
+fi
 pass
 
 # --------------------------------------------------------------------------

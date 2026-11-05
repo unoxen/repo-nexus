@@ -15,7 +15,6 @@ setup_plugin_test_workspace karpathy-llm "$TEST_KARPATHY_WS"
 cd "$TEST_KARPATHY_WS"
 
 _kl_pdir="$TEST_KARPATHY_WS/plugins/karpathy-llm"
-[ -d "$_kl_pdir" ] || _kl_pdir="$TEST_KARPATHY_WS/toolkit/plugins/karpathy-llm"
 
 # --------------------------------------------------------------------------
 run_test "Karpathy-llm: manifest integrity, version parity, and documentation accuracy"

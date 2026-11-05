@@ -50,7 +50,6 @@ pass
 run_test "Claude plugin: manifest metadata, version parity, and plugin info"
 _cli_ver="$("$TEST_CLAUDE_WS/rnex" --version | awk '{print $2}')"
 _claude_manifest="$TEST_CLAUDE_WS/plugins/claude/plugin.yaml"
-[ -f "$_claude_manifest" ] || _claude_manifest="$TEST_CLAUDE_WS/toolkit/plugins/claude/plugin.yaml"
 _m_ver="$(awk '/^version:[ ]*/ { sub(/^version:[ ]*/, ""); sub(/[ ]*#.*/, ""); print; exit }' "$_claude_manifest")"
 [ "$_m_ver" = "$_cli_ver" ] || { fail "Claude plugin version ($_m_ver) does not match CLI version ($_cli_ver)"; exit 1; }
 

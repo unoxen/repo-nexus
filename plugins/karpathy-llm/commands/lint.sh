@@ -12,8 +12,7 @@ for _kl_common in \
   "${RNEX_PLUGIN_DIR:-}/hooks/_common.sh" \
   "$(dirname "$0")/../hooks/_common.sh" \
   "$_root/.rnex/plugins/karpathy-llm/hooks/_common.sh" \
-  "$_root/plugins/karpathy-llm/hooks/_common.sh" \
-  "$_root/toolkit/plugins/karpathy-llm/hooks/_common.sh"; do
+  "$_root/plugins/karpathy-llm/hooks/_common.sh"; do
   # shellcheck source=/dev/null
   [ -f "$_kl_common" ] && { . "$_kl_common"; break; }
 done

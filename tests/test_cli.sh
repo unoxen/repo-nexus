@@ -21,7 +21,6 @@ export DIR
 
 SUITES_DIR="$DIR/tests/suites"
 PLUGINS_DIR="$DIR/plugins"
-[ -d "$PLUGINS_DIR" ] || PLUGINS_DIR="$DIR/toolkit/plugins"
 
 CORE_SUITES="$SUITES_DIR/01_core_cli.sh $SUITES_DIR/02_plugins_basic.sh $SUITES_DIR/03_config_workspace.sh $SUITES_DIR/04_git_hooks.sh"
 

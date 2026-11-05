@@ -49,7 +49,6 @@ pass
 run_test "Codex plugin: manifest metadata, version parity, and plugin info"
 _cli_ver="$("$TEST_CODEX_WS/rnex" --version | awk '{print $2}')"
 _codex_manifest="$TEST_CODEX_WS/plugins/codex/plugin.yaml"
-[ -f "$_codex_manifest" ] || _codex_manifest="$TEST_CODEX_WS/toolkit/plugins/codex/plugin.yaml"
 _m_ver="$(awk '/^version:[ ]*/ { sub(/^version:[ ]*/, ""); sub(/[ ]*#.*/, ""); print; exit }' "$_codex_manifest")"
 [ "$_m_ver" = "$_cli_ver" ] || { fail "Codex plugin version ($_m_ver) does not match CLI version ($_cli_ver)"; exit 1; }
 

@@ -1358,7 +1358,7 @@ _yaml_plugin_list_from_file() {
 # strict two-level source-of-truth hierarchy and plugin defaults fallback:
 #   1. .local.rnex.yaml ($NEXUS_LOCAL_CONFIG or $WORKSPACE_LOCAL_YAML)
 #   2. rnex.yaml        ($NEXUS_CONFIG or $WORKSPACE_YAML)
-#   3. toolkit/plugins/<plugin_name>/plugin.yaml (config_defaults.<key>)
+#   3. plugins/<plugin_name>/plugin.yaml (config_defaults.<key>)
 #
 # Evaluates sources in priority order and emits the first non-empty list of items.
 #
@@ -1402,10 +1402,9 @@ yaml_get_plugin_list() {
   fi
   if [ -z "$_ygpl_pdir" ]; then
     for _cand in \
-      "${NEXUS_DIR:-${RNEX_ROOT:-.}}/toolkit/plugins/$_ygpl_plugin" \
-      "${RNEX_ROOT:-}/toolkit/plugins/$_ygpl_plugin" \
-      "toolkit/plugins/$_ygpl_plugin" \
       "${NEXUS_DIR:-${RNEX_ROOT:-.}}/plugins/$_ygpl_plugin" \
+      "${RNEX_ROOT:-}/plugins/$_ygpl_plugin" \
+      "plugins/$_ygpl_plugin" \
       "${NEXUS_DIR:-${RNEX_ROOT:-.}}/.rnex/plugins/$_ygpl_plugin"; do
       if [ -f "$_cand/plugin.yaml" ]; then
         _ygpl_pdir="$_cand"

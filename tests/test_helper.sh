@@ -100,9 +100,6 @@ setup_test_workspace() {
   if [ -d "$DIR/skills" ] && [ ! -d "$TEST_WORKSPACE/skills" ]; then
     link_dir_contents "$DIR/skills" "$TEST_WORKSPACE/skills"
   fi
-  if [ -d "$DIR/toolkit" ] && [ ! -d "$TEST_WORKSPACE/toolkit" ]; then
-    link_dir_contents "$DIR/toolkit" "$TEST_WORKSPACE/toolkit"
-  fi
   if [ -d "$DIR/templates" ] && [ ! -d "$TEST_WORKSPACE/templates" ]; then
     link_dir_contents "$DIR/templates" "$TEST_WORKSPACE/templates"
   fi
@@ -129,17 +126,11 @@ setup_plugin_test_workspace() {
   fi
   if [ -d "$DIR/skills" ] && [ ! -d "$_ws/skills" ]; then
     link_dir_contents "$DIR/skills" "$_ws/skills"
-  elif [ -d "$DIR/toolkit/skills" ] && [ ! -d "$_ws/toolkit/skills" ]; then
-    link_dir_contents "$DIR/toolkit/skills" "$_ws/toolkit/skills"
   fi
   if [ -n "$_plugin_name" ]; then
     if [ -d "$DIR/plugins/$_plugin_name" ] && [ ! -d "$_ws/plugins/$_plugin_name" ]; then
       mkdir -p "$_ws/plugins"
       ln -s "$DIR/plugins/$_plugin_name" "$_ws/plugins/$_plugin_name" 2>/dev/null || cp -R "$DIR/plugins/$_plugin_name" "$_ws/plugins/$_plugin_name"
-    fi
-    if [ -d "$DIR/toolkit/plugins/$_plugin_name" ] && [ ! -d "$_ws/toolkit/plugins/$_plugin_name" ]; then
-      mkdir -p "$_ws/toolkit/plugins"
-      ln -s "$DIR/toolkit/plugins/$_plugin_name" "$_ws/toolkit/plugins/$_plugin_name" 2>/dev/null || cp -R "$DIR/toolkit/plugins/$_plugin_name" "$_ws/toolkit/plugins/$_plugin_name"
     fi
   fi
 }

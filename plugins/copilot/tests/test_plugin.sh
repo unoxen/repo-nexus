@@ -15,7 +15,6 @@ setup_plugin_test_workspace copilot "$TEST_COPILOT_WS"
 cd "$TEST_COPILOT_WS"
 
 _copilot_pdir="$TEST_COPILOT_WS/plugins/copilot"
-[ -d "$_copilot_pdir" ] || _copilot_pdir="$TEST_COPILOT_WS/toolkit/plugins/copilot"
 
 # --------------------------------------------------------------------------
 run_test "Copilot plugin: init --copilot provisions instructions and User Skills without AGENTS.md"

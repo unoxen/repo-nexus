@@ -50,7 +50,7 @@ _resolve_hook_workspace() {
 }
 
 # Locate a hook script for a plugin (checks scoped .rnex/plugins/<name>/hooks first,
-# then toolkit source directory). Accepts multiple candidate filenames in priority order.
+# then built-in plugin source directory). Accepts multiple candidate filenames in priority order.
 _resolve_plugin_hook_script() {
   _rphs_root="$1"; _rphs_plugin="$2"
   shift 2
