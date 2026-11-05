@@ -23,6 +23,7 @@ git:
     - "repos/"
     - "**/.rnex*/"
     - "**/rnex*/"
+    - "wiki/hot.md"
     - "*.log"
     - ".env.local"
   hooks:

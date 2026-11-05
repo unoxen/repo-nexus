@@ -4,13 +4,14 @@
 # lib/commands/sync.sh — Workspace reconciliation and compilation
 # ============================================================================
 
-# Write the standalone .rnex/bin/auto-sync.sh helper used by hooks and subshells
+# Write the standalone .rnex/bin/rnex-auto-sync.sh helper used by hooks and subshells
 # to rapidly verify workspace stamp checksum and trigger rnex sync on config changes.
 _write_auto_sync_script() {
   _dir="${1:-$NEXUS_DIR}"
   _bin_dir="$_dir/.rnex/bin"
   mkdir -p "$_bin_dir"
-  _script="$_bin_dir/auto-sync.sh"
+  rm -f "$_bin_dir/auto-sync.sh" 2>/dev/null || true
+  _script="$_bin_dir/rnex-auto-sync.sh"
   cat > "$_script" <<'EOF'
 #!/bin/sh
 set -e
@@ -24,9 +25,9 @@ _saved_sum=""
 
 if [ ! -f "$_stamp" ] || [ "$_cur_sum" != "$_saved_sum" ]; then
   if [ -x "$_ws/rnex" ]; then
-    "$_ws/rnex" sync -y --quiet
+    "$_ws/rnex" --ignore-hooks sync -y --quiet
   elif command -v rnex >/dev/null 2>&1; then
-    (cd "$_ws" && rnex sync -y --quiet)
+    (cd "$_ws" && rnex --ignore-hooks sync -y --quiet)
   fi
 fi
 EOF

@@ -84,6 +84,7 @@ cmd_help() {
 
   OPTIONS
     -c, --config <file>     Path to $RNEX_CONFIG_FILE (executes in the directory where config lives)
+    -H, --ignore-hooks      Skip lifecycle and Git hooks execution (prevents hook recursion)
     -h, --help              Show help information
     -v, --version           Show version
 

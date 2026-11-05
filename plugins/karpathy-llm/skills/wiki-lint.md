@@ -61,9 +61,9 @@ rnex plugin karpathy-llm lint [--strict] [--quiet]
    - Rebuild `<wiki_dir>/index.md` to reflect current pages and categories.
    - Ensure every page entry maintains a concise 1-line descriptive annotation.
 
-7. **Refresh Hot Cache (Bounded ~500-Word Ceiling):**
-   - Refresh `<wiki_dir>/hot.md`, verifying the 3 structured sections (Architecture & Repo Map, Current Focus, Key Contracts).
-   - Ensure total length remains strictly under ~500 words by pruning superseded entries.
+7. **Refresh Hot Cache (Optional Local Cache, Bounded ~500-Word Ceiling):**
+   - When `hot_file: true` (default), refresh `<wiki_dir>/hot.md`, verifying the 3 structured sections (Architecture & Repo Map, Current Focus, Key Contracts).
+   - Ensure total length remains strictly compact (`< 2 KB` / under ~500 words) by bounding summaries and recent ingests. `hot.md` is an individual git-ignored file and must never be referenced in `_log.md` or `mentioned_in`.
 
 8. **Append Operation Log:**
-   - Append a maintenance summary to `<wiki_dir>/_log.md` detailing fixed links, `mentioned_in` updates, resolved orphans, and gaps.
+   - Append a maintenance summary of tracked wiki pages to `<wiki_dir>/_log.md` detailing fixed links, `mentioned_in` updates, resolved orphans, and gaps (with zero mention of `hot.md`).

@@ -57,41 +57,56 @@ _m_ver="$(awk '/^version:[ ]*/ { sub(/^version:[ ]*/, ""); sub(/[ ]*#.*/, ""); p
 _pinfo_out="$(cd "$TEST_CLAUDE_WS" && ./rnex plugin info claude 2>&1)"
 echo "$_pinfo_out" | grep -q "claude" || { fail "Claude missing from plugin info: $_pinfo_out"; exit 1; }
 echo "$_pinfo_out" | grep -q "\.claude/skills/" || { fail "skill_dir .claude/skills missing from plugin info: $_pinfo_out"; exit 1; }
-echo "$_pinfo_out" | grep -q "auto_sync_on" || { fail "auto_sync_on missing from plugin info: $_pinfo_out"; exit 1; }
+echo "$_pinfo_out" | grep -q "hooks" || { fail "hooks missing from plugin info: $_pinfo_out"; exit 1; }
 echo "$_pinfo_out" | grep -q "skills" || { fail "skills option missing from plugin info: $_pinfo_out"; exit 1; }
 pass
 
 # --------------------------------------------------------------------------
-run_test "Claude plugin: auto_sync_on hook configuration in .claude/settings.json"
+run_test "Claude plugin: hooks configuration in .claude/hooks/rnex-hook-*.sh, .rnex/plugins/claude/hooks/, and .claude/settings.json"
 [ -f "$TEST_CLAUDE_WS/.claude/settings.json" ] || { fail ".claude/settings.json missing"; exit 1; }
+[ -x "$TEST_CLAUDE_WS/.claude/hooks/rnex-hook-session-start.sh" ] || { fail ".claude/hooks/rnex-hook-session-start.sh missing or not executable"; exit 1; }
+[ -x "$TEST_CLAUDE_WS/.rnex/plugins/claude/hooks/rnex-hook-session-start.sh" ] || { fail ".rnex/plugins/claude/hooks/rnex-hook-session-start.sh missing or not executable"; exit 1; }
+grep -q "\.rnex/plugins/claude/hooks/rnex-hook-session-start\.sh" "$TEST_CLAUDE_WS/.claude/hooks/rnex-hook-session-start.sh" || {
+  fail ".claude/hooks/rnex-hook-session-start.sh does not reference .rnex working script"; exit 1;
+}
 grep -q '"SessionStart"' "$TEST_CLAUDE_WS/.claude/settings.json" || { fail "SessionStart hook missing in settings.json"; exit 1; }
-grep -q '"command"[ ]*:[ ]*"\.rnex/bin/auto-sync\.sh"' "$TEST_CLAUDE_WS/.claude/settings.json" || {
-  fail "auto-sync command missing in settings.json"; exit 1;
+grep -q '"command"[ ]*:[ ]*"\.claude/hooks/rnex-hook-session-start\.sh"' "$TEST_CLAUDE_WS/.claude/settings.json" || {
+  fail "rnex-hook-session-start.sh command missing in settings.json"; exit 1;
 }
 
-# Disable auto_sync_on: false in rnex.yaml
+# Disable hooks: false in rnex.yaml
 cat <<'EOF_CFG' > "$TEST_CLAUDE_WS/rnex.yaml"
 version: 1.0.0
 plugins:
   claude:
     skills: true
-    auto_sync_on: false
+    hooks: false
 repos:
 EOF_CFG
 (cd "$TEST_CLAUDE_WS" && ./rnex sync -y >/dev/null)
 [ ! -f "$TEST_CLAUDE_WS/.claude/settings.json" ] || { fail ".claude/settings.json should be removed when empty"; exit 1; }
+[ ! -f "$TEST_CLAUDE_WS/.claude/hooks/rnex-hook-session-start.sh" ] || { fail ".claude/hooks/rnex-hook-session-start.sh should be removed when hooks: false"; exit 1; }
 
-# Re-enable with camelCase autoSyncOn: SessionStart
+# Re-enable with custom hooks map (SessionStart + Stop)
 cat <<'EOF_CFG2' > "$TEST_CLAUDE_WS/rnex.yaml"
 version: 1.0.0
 plugins:
   claude:
     skills: true
-    autoSyncOn: SessionStart
+    hooks:
+      SessionStart:
+        - "rnex sync --quiet"
+      Stop:
+        - "echo 'CLAUDE_STOP_HOOK' > stop_marker"
 repos:
 EOF_CFG2
 (cd "$TEST_CLAUDE_WS" && ./rnex sync -y >/dev/null)
-[ -f "$TEST_CLAUDE_WS/.claude/settings.json" ] || { fail ".claude/settings.json not restored with autoSyncOn"; exit 1; }
+[ -f "$TEST_CLAUDE_WS/.claude/settings.json" ] || { fail ".claude/settings.json not restored with hooks map"; exit 1; }
+[ -x "$TEST_CLAUDE_WS/.claude/hooks/rnex-hook-stop.sh" ] || { fail "rnex-hook-stop.sh not generated for Stop event"; exit 1; }
+grep -q '"Stop"' "$TEST_CLAUDE_WS/.claude/settings.json" || { fail "Stop hook missing in settings.json"; exit 1; }
+(cd "$TEST_CLAUDE_WS" && ./.claude/hooks/rnex-hook-stop.sh)
+[ -f "$TEST_CLAUDE_WS/stop_marker" ] || { fail "Executing .claude/hooks/rnex-hook-stop.sh did not run working script"; exit 1; }
+rm -f "$TEST_CLAUDE_WS/stop_marker"
 pass
 
 # --------------------------------------------------------------------------

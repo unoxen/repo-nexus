@@ -1,11 +1,10 @@
 # Wiki Index
 
-Master navigation index for the Karpathy LLM Wiki. Agents query this index on demand when searching for specific domain concepts not covered in `hot.md`.
+Master navigation index for the Karpathy LLM Wiki. Agents query this index on demand when searching for domain concepts and repository documentation.
 
 > **Convention**: Every page entry must maintain a 1-line annotation (e.g. `- [Topic](path.md): Brief description`) so agents can target the exact page without exploratory reading.
 
 ## Overview & Status
-* **Rolling Cache:** [`hot.md`](./hot.md) — Fast ~500-word orientation cache (read first on startup).
 * **Operation Log:** [`_log.md`](./_log.md) — Timestamped ingest & maintenance history.
 
 ## Member Repositories

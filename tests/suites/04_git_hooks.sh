@@ -574,6 +574,105 @@ grep -q "USER_HOOK_EXECUTED" "$TEST_USER_HOOKS_WS/.git/hooks/pre-commit" || {
 }
 pass
 
+# --------------------------------------------------------------------------
+run_test "Lifecycle hooks: after_clone with bare 'rnex plugin karpathy-llm ingest' and top-level / hooks: blocks"
+TEST_AFTER_CLONE_WS="$TEST_TMP/after-clone-hook-ws"
+mkdir -p "$TEST_AFTER_CLONE_WS"
+cp "$CLI" "$TEST_AFTER_CLONE_WS/rnex"
+chmod +x "$TEST_AFTER_CLONE_WS/rnex"
+link_dir_contents "$DIR/plugins" "$TEST_AFTER_CLONE_WS/plugins"
+link_dir_contents "$DIR/skills" "$TEST_AFTER_CLONE_WS/skills"
+cp "$DIR/package.json" "$TEST_AFTER_CLONE_WS/package.json"
+git -C "$TEST_AFTER_CLONE_WS" init -q
+
+"$TEST_AFTER_CLONE_WS/rnex" init -y --karpathy "$TEST_AFTER_CLONE_WS" >/dev/null
+
+# Top-level after_clone configuration (even when rnex_hooks: after_clone: [] also exists)
+cat <<AFTER_CLONE_YAML > "$TEST_AFTER_CLONE_WS/rnex.yaml"
+version: 1.0.0
+git:
+  hooks:
+    post-merge: []
+rnex_hooks:
+  after_clone: []
+after_clone:
+  - "rnex plugin karpathy-llm ingest --quiet"
+  - "echo 'AFTER_CLONE_INGEST_RAN' >> clone_hook_marker"
+plugins:
+  karpathy-llm:
+repos:
+  dummy-svc:
+    url: $TEST_DUMMY_REMOTE
+    branch: master
+AFTER_CLONE_YAML
+
+# 1. Test rnex clone triggers after_clone with bare 'rnex' command
+(cd "$TEST_AFTER_CLONE_WS" && ./rnex clone >/dev/null)
+[ -f "$TEST_AFTER_CLONE_WS/clone_hook_marker" ] || { fail "after_clone did not run on rnex clone"; exit 1; }
+[ -f "$TEST_AFTER_CLONE_WS/wiki/repo-dummy-svc.md" ] || { fail "rnex plugin karpathy-llm ingest did not run on after_clone"; exit 1; }
+
+# 2. Test rnex repo add also triggers after_clone when cloning a new repository
+rm -f "$TEST_AFTER_CLONE_WS/clone_hook_marker"
+(cd "$TEST_AFTER_CLONE_WS" && ./rnex repo add "$TEST_DUMMY_REMOTE" --name added-svc --branch master >/dev/null)
+[ -f "$TEST_AFTER_CLONE_WS/clone_hook_marker" ] || { fail "after_clone did not run on rnex repo add"; exit 1; }
+[ -f "$TEST_AFTER_CLONE_WS/wiki/repo-added-svc.md" ] || { fail "rnex plugin karpathy-llm ingest did not ingest added-svc on after_clone"; exit 1; }
+pass
+
+# --------------------------------------------------------------------------
+run_test "Hook recursion prevention: --ignore-hooks (-H) flag and transitive hook suppression"
+TEST_IGNORE_HOOKS_WS="$TEST_TMP/ignore-hooks-ws"
+mkdir -p "$TEST_IGNORE_HOOKS_WS"
+cp "$CLI" "$TEST_IGNORE_HOOKS_WS/rnex"
+chmod +x "$TEST_IGNORE_HOOKS_WS/rnex"
+link_dir_contents "$DIR/plugins" "$TEST_IGNORE_HOOKS_WS/plugins"
+link_dir_contents "$DIR/skills" "$TEST_IGNORE_HOOKS_WS/skills"
+cp "$DIR/package.json" "$TEST_IGNORE_HOOKS_WS/package.json"
+git -C "$TEST_IGNORE_HOOKS_WS" init -q
+
+"$TEST_IGNORE_HOOKS_WS/rnex" init -y --karpathy "$TEST_IGNORE_HOOKS_WS" >/dev/null
+
+cat <<'IGNORE_HOOKS_YAML' > "$TEST_IGNORE_HOOKS_WS/rnex.yaml"
+version: 1.0.0
+git:
+  hooks:
+    post-merge: []
+rnex_hooks:
+  before_sync:
+    - "echo 'BEFORE_SYNC_FIRED' >> ignore_hook_log"
+  after_sync:
+    - "echo 'AFTER_SYNC_FIRED' >> ignore_hook_log"
+    - "rnex plugin karpathy-llm ingest --quiet"
+  before_plugin_command:
+    - "echo 'BEFORE_PLUGIN_CMD_FIRED' >> ignore_hook_log"
+    - "rnex sync --quiet"
+  after_plugin_command:
+    - "echo 'AFTER_PLUGIN_CMD_FIRED' >> ignore_hook_log"
+plugins:
+  karpathy-llm:
+repos:
+IGNORE_HOOKS_YAML
+
+# 1. Explicit --ignore-hooks and -H must skip all user hooks
+rm -f "$TEST_IGNORE_HOOKS_WS/ignore_hook_log"
+(cd "$TEST_IGNORE_HOOKS_WS" && ./rnex sync --ignore-hooks --quiet)
+[ ! -f "$TEST_IGNORE_HOOKS_WS/ignore_hook_log" ] || { fail "--ignore-hooks did not suppress hooks"; exit 1; }
+
+(cd "$TEST_IGNORE_HOOKS_WS" && ./rnex -H sync --quiet)
+[ ! -f "$TEST_IGNORE_HOOKS_WS/ignore_hook_log" ] || { fail "-H did not suppress hooks"; exit 1; }
+
+# 2. Normal sync runs before_sync and after_sync, which calls 'rnex plugin karpathy-llm ingest',
+#    which must receive --ignore-hooks / RNEX_IGNORE_HOOKS=1 and NOT fire before_plugin_command or recurse into rnex sync!
+(cd "$TEST_IGNORE_HOOKS_WS" && ./rnex sync --quiet)
+[ -f "$TEST_IGNORE_HOOKS_WS/ignore_hook_log" ] || { fail "Normal sync did not fire hooks"; exit 1; }
+grep -q "BEFORE_SYNC_FIRED" "$TEST_IGNORE_HOOKS_WS/ignore_hook_log" || { fail "before_sync missing from log"; exit 1; }
+grep -q "AFTER_SYNC_FIRED" "$TEST_IGNORE_HOOKS_WS/ignore_hook_log" || { fail "after_sync missing from log"; exit 1; }
+! grep -q "BEFORE_PLUGIN_CMD_FIRED" "$TEST_IGNORE_HOOKS_WS/ignore_hook_log" || {
+  fail "Consequential command triggered by after_sync fired before_plugin_command (hook recursion!)"; exit 1;
+}
+_sync_cnt="$(grep -c "AFTER_SYNC_FIRED" "$TEST_IGNORE_HOOKS_WS/ignore_hook_log" || true)"
+[ "$_sync_cnt" -eq 1 ] || { fail "after_sync fired $_sync_cnt times instead of 1"; exit 1; }
+pass
+
 if [ "${_STANDALONE_RUN:-0}" -eq 1 ]; then
   report_results
 fi

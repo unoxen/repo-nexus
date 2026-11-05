@@ -62,17 +62,22 @@ _m_ver="$(awk '/^version:[ ]*/ { sub(/^version:[ ]*/, ""); sub(/[ ]*#.*/, ""); p
 _pinfo_out="$(cd "$TEST_GEMINI_WS" && ./rnex plugin info gemini 2>&1)"
 echo "$_pinfo_out" | grep -q "gemini" || { fail "Gemini missing from plugin info: $_pinfo_out"; exit 1; }
 echo "$_pinfo_out" | grep -q "\.agents/skills/" || { fail "skill_dir .agents/skills missing from plugin info: $_pinfo_out"; exit 1; }
-echo "$_pinfo_out" | grep -q "auto_sync_on" || { fail "auto_sync_on missing from plugin info: $_pinfo_out"; exit 1; }
+echo "$_pinfo_out" | grep -q "hooks" || { fail "hooks missing from plugin info: $_pinfo_out"; exit 1; }
 echo "$_pinfo_out" | grep -q "skills" || { fail "skills option missing from plugin info: $_pinfo_out"; exit 1; }
 pass
 
 # --------------------------------------------------------------------------
-run_test "Gemini plugin: auto_sync_on hook configuration in .agents/hooks.json and rnex-env.sh check"
+run_test "Gemini plugin: hooks configuration in .agents/hooks/rnex-hook-*.sh, .agents/hooks.json, and rnex-env.sh check"
 [ -f "$TEST_GEMINI_WS/.agents/hooks.json" ] || { fail ".agents/hooks.json missing"; exit 1; }
-grep -q '"rnex-auto-sync"' "$TEST_GEMINI_WS/.agents/hooks.json" || { fail "rnex-auto-sync missing in hooks.json"; exit 1; }
+[ -x "$TEST_GEMINI_WS/.agents/hooks/rnex-hook-session-start.sh" ] || { fail ".agents/hooks/rnex-hook-session-start.sh missing or not executable"; exit 1; }
+[ -x "$TEST_GEMINI_WS/.rnex/plugins/gemini/hooks/rnex-hook-session-start.sh" ] || { fail ".rnex/plugins/gemini/hooks/rnex-hook-session-start.sh missing or not executable"; exit 1; }
+grep -q "\.rnex/plugins/gemini/hooks/rnex-hook-session-start\.sh" "$TEST_GEMINI_WS/.agents/hooks/rnex-hook-session-start.sh" || {
+  fail ".agents/hooks/rnex-hook-session-start.sh does not reference .rnex working script"; exit 1;
+}
+grep -q '"rnex-hook-session-start"' "$TEST_GEMINI_WS/.agents/hooks.json" || { fail "rnex-hook-session-start missing in hooks.json"; exit 1; }
 grep -q '"SessionStart"' "$TEST_GEMINI_WS/.agents/hooks.json" || { fail "SessionStart hook missing in hooks.json"; exit 1; }
-grep -q '"command"[ ]*:[ ]*"\.rnex/bin/auto-sync\.sh"' "$TEST_GEMINI_WS/.agents/hooks.json" || {
-  fail "auto-sync command missing in hooks.json"; exit 1;
+grep -q '"command"[ ]*:[ ]*"\.agents/hooks/rnex-hook-session-start\.sh"' "$TEST_GEMINI_WS/.agents/hooks.json" || {
+  fail "rnex-hook-session-start.sh command missing in hooks.json"; exit 1;
 }
 
 # Verify generated .rnex/bin/rnex-env.sh does not contain legacy .gemini check
@@ -81,29 +86,32 @@ grep -q '"command"[ ]*:[ ]*"\.rnex/bin/auto-sync\.sh"' "$TEST_GEMINI_WS/.agents/
   fail ".rnex/bin/rnex-env.sh still contains .gemini check"; exit 1;
 }
 
-# Disable auto_sync_on: false in rnex.yaml
+# Disable hooks: false in rnex.yaml
 cat <<'EOF_CFG' > "$TEST_GEMINI_WS/rnex.yaml"
 version: 1.0.0
 plugins:
   gemini:
     skills: true
-    auto_sync_on: false
+    hooks: false
 repos:
 EOF_CFG
 (cd "$TEST_GEMINI_WS" && ./rnex sync -y >/dev/null)
 [ ! -f "$TEST_GEMINI_WS/.agents/hooks.json" ] || { fail ".agents/hooks.json should be removed when empty"; exit 1; }
+[ ! -f "$TEST_GEMINI_WS/.agents/hooks/rnex-hook-session-start.sh" ] || { fail ".agents/hooks/rnex-hook-session-start.sh should be removed when hooks: false"; exit 1; }
 
-# Re-enable with camelCase autoSyncOn: SessionStart
+# Re-enable with hooks map
 cat <<'EOF_CFG2' > "$TEST_GEMINI_WS/rnex.yaml"
 version: 1.0.0
 plugins:
   gemini:
     skills: true
-    autoSyncOn: SessionStart
+    hooks:
+      SessionStart:
+        - "rnex sync --quiet"
 repos:
 EOF_CFG2
 (cd "$TEST_GEMINI_WS" && ./rnex sync -y >/dev/null)
-[ -f "$TEST_GEMINI_WS/.agents/hooks.json" ] || { fail ".agents/hooks.json not restored with autoSyncOn"; exit 1; }
+[ -f "$TEST_GEMINI_WS/.agents/hooks.json" ] || { fail ".agents/hooks.json not restored with hooks"; exit 1; }
 pass
 
 # --------------------------------------------------------------------------

@@ -79,6 +79,35 @@ _resolve_plugin_hook_script() {
 
 # ---- Action Command Hook Dispatcher -----------------------------------------
 
+# Inject --ignore-hooks into rnex invocations in a hook command string so
+# triggered commands and consequential rnex invocations receive --ignore-hooks.
+_inject_ignore_hooks_flag() {
+  printf '%s\n' "$1" | sed -e 's|^\([ \t]*\)\./rnex\([ \t]\)|\1./rnex --ignore-hooks\2|g' \
+                           -e 's|^\([ \t]*\)rnex\([ \t]\)|\1rnex --ignore-hooks\2|g' \
+                           -e 's|\([;&|][ \t]*\)\./rnex\([ \t]\)|\1./rnex --ignore-hooks\2|g' \
+                           -e 's|\([;&|][ \t]*\)rnex\([ \t]\)|\1rnex --ignore-hooks\2|g'
+}
+
+# Execute a hook command in a workspace subshell with PATH resolution,
+# RNEX_IGNORE_HOOKS=1 exported, and --ignore-hooks injected into rnex calls.
+_exec_hook_cmd() {
+  _ehc_root="$1"
+  _ehc_cmd="$(_inject_ignore_hooks_flag "$2")"
+  # shellcheck disable=SC2030
+  (
+    RNEX_IGNORE_HOOKS=1
+    export RNEX_IGNORE_HOOKS
+    if [ -n "${SCRIPT_LOCATION:-}" ] && [ -d "$SCRIPT_LOCATION" ]; then
+      PATH="$SCRIPT_LOCATION:$PATH"
+      export PATH
+      rnex() {
+        "$SCRIPT_LOCATION/rnex" --ignore-hooks "$@"
+      }
+    fi
+    cd "$_ehc_root" && eval "$_ehc_cmd"
+  )
+}
+
 _run_hook_internal() {
   _hook_target_plugin="$1"
   _hook_phase_cmd="$2"
@@ -90,6 +119,8 @@ _run_hook_internal() {
   _hook_file="${_hook_phase_cmd}.sh"
   _hook_args="$*"
   _hook_quiet="${_sync_quiet:-0}"
+  # shellcheck disable=SC2031
+  _ignore_hooks="${RNEX_IGNORE_HOOKS:-0}"
 
   _old_nexus="$NEXUS_DIR"
   _old_yaml="$WORKSPACE_YAML"
@@ -99,44 +130,57 @@ _run_hook_internal() {
   WORKSPACE_LOCAL_YAML="$_hook_root/$RNEX_LOCAL_CONFIG_FILE"
   _skill_dirs="$(get_active_provider_skill_dirs 2>/dev/null || true)"
 
-  if [ -n "$_hook_target_plugin" ]; then
-    _plugins="$_hook_target_plugin"
-  else
-    _plugins="$(yaml_list_plugins 2>/dev/null || true)"
+  # 1. Execute internal plugin hook scripts (when not suppressed, or when reconciling plugin state)
+  _run_plugin_scripts=1
+  if [ "$_ignore_hooks" = "1" ]; then
+    case "$_hook_phase_cmd" in
+      after_sync|after_init|before_plugin_disable|after_plugin_enable) _run_plugin_scripts=1 ;;
+      *) _run_plugin_scripts=0 ;;
+    esac
   fi
 
-  for _pname in $_plugins; do
-    [ -n "$_pname" ] || continue
-    if [ -z "$_hook_target_plugin" ]; then
-      yaml_plugin_enabled "$_pname" 2>/dev/null || continue
-    fi
-
-    RNEX_PLUGIN_DIR="$_hook_root/.rnex/plugins/$_pname"
-    if [ "$_hook_phase_cmd" = "after_init" ]; then
-      _hook_script="$(_resolve_plugin_hook_script "$_hook_root" "$_pname" "after_init.sh" "after_sync.sh" || true)"
+  if [ "$_run_plugin_scripts" -eq 1 ]; then
+    if [ -n "$_hook_target_plugin" ]; then
+      _plugins="$_hook_target_plugin"
     else
-      _hook_script="$(_resolve_plugin_hook_script "$_hook_root" "$_pname" "$_hook_file" || true)"
+      _plugins="$(yaml_list_plugins 2>/dev/null || true)"
     fi
 
-    if [ -n "$_hook_script" ] && [ -f "$_hook_script" ]; then
-      chmod +x "$_hook_script" 2>/dev/null || true
-      (
-        RNEX_ROOT="$_hook_root"
-        RNEX_CONFIG_MERGED="$_hook_config_merged"
-        RNEX_CMD="$_hook_cmd"
-        RNEX_ARGS="$_hook_args"
-        RNEX_QUIET="$_hook_quiet"
-        RNEX_PROVIDER_SKILL_DIRS="$_skill_dirs"
-        export RNEX_ROOT RNEX_CONFIG_MERGED RNEX_PLUGIN_DIR RNEX_CMD RNEX_ARGS RNEX_QUIET RNEX_PROVIDER_SKILL_DIRS RNEX_LIB_DIR
-        set -- "$@"
-        # shellcheck source=/dev/null
-        . "$_hook_script"
-      ) || true
-    fi
-  done
+    for _pname in $_plugins; do
+      [ -n "$_pname" ] || continue
+      if [ -z "$_hook_target_plugin" ]; then
+        yaml_plugin_enabled "$_pname" 2>/dev/null || continue
+      fi
 
-  # 2. Execute configured commands from rnex_hooks.<event_name>
-  if [ -z "$_hook_target_plugin" ]; then
+      RNEX_PLUGIN_DIR="$_hook_root/.rnex/plugins/$_pname"
+      if [ "$_hook_phase_cmd" = "after_init" ]; then
+        _hook_script="$(_resolve_plugin_hook_script "$_hook_root" "$_pname" "after_init.sh" "after_sync.sh" || true)"
+      else
+        _hook_script="$(_resolve_plugin_hook_script "$_hook_root" "$_pname" "$_hook_file" || true)"
+      fi
+
+      if [ -n "$_hook_script" ] && [ -f "$_hook_script" ]; then
+        chmod +x "$_hook_script" 2>/dev/null || true
+        # shellcheck disable=SC2030
+        (
+          RNEX_ROOT="$_hook_root"
+          RNEX_CONFIG_MERGED="$_hook_config_merged"
+          RNEX_CMD="$_hook_cmd"
+          RNEX_ARGS="$_hook_args"
+          RNEX_QUIET="$_hook_quiet"
+          RNEX_PROVIDER_SKILL_DIRS="$_skill_dirs"
+          RNEX_IGNORE_HOOKS=1
+          export RNEX_ROOT RNEX_CONFIG_MERGED RNEX_PLUGIN_DIR RNEX_CMD RNEX_ARGS RNEX_QUIET RNEX_PROVIDER_SKILL_DIRS RNEX_LIB_DIR RNEX_IGNORE_HOOKS
+          set -- "$@"
+          # shellcheck source=/dev/null
+          . "$_hook_script"
+        ) || true
+      fi
+    done
+  fi
+
+  # 2. Execute configured commands from rnex_hooks.<event_name> (skipped if --ignore-hooks / RNEX_IGNORE_HOOKS=1)
+  if [ -z "$_hook_target_plugin" ] && [ "${_RNEX_INTERNAL_PLUGIN_ONLY:-0}" != "1" ] && [ "$_ignore_hooks" != "1" ]; then
     _hook_norm="$(printf '%s' "$_hook_phase_cmd" | tr '-' '_')"
     case ":${RNEX_HOOK_ACTIVE:-}:" in
       *":${_hook_norm}:"*)
@@ -168,7 +212,7 @@ _run_hook_internal() {
                 RNEX_QUIET="$_hook_quiet"
                 RNEX_PROVIDER_SKILL_DIRS="$_skill_dirs"
                 export RNEX_ROOT RNEX_CONFIG_MERGED RNEX_CMD RNEX_ARGS RNEX_HOOK_EVENT RNEX_HOOK_ARGS RNEX_QUIET RNEX_PROVIDER_SKILL_DIRS RNEX_LIB_DIR NEXUS_DIR WORKSPACE_YAML WORKSPACE_LOCAL_YAML
-                cd "$_hook_root" && eval "$_rcmd"
+                _exec_hook_cmd "$_hook_root" "$_rcmd"
               ) || {
                 _cmd_rc=$?
                 export RNEX_HOOK_ACTIVE="$_prev_active"
@@ -188,7 +232,7 @@ _run_hook_internal() {
                 RNEX_QUIET="$_hook_quiet"
                 RNEX_PROVIDER_SKILL_DIRS="$_skill_dirs"
                 export RNEX_ROOT RNEX_CONFIG_MERGED RNEX_CMD RNEX_ARGS RNEX_HOOK_EVENT RNEX_HOOK_ARGS RNEX_QUIET RNEX_PROVIDER_SKILL_DIRS RNEX_LIB_DIR NEXUS_DIR WORKSPACE_YAML WORKSPACE_LOCAL_YAML
-                cd "$_hook_root" && eval "$_rcmd"
+                _exec_hook_cmd "$_hook_root" "$_rcmd"
               ) || true
             fi
           done
@@ -207,6 +251,12 @@ run_hook() {
   _hook_phase_cmd="$1"
   shift 2>/dev/null || true
   _run_hook_internal "" "$_hook_phase_cmd" "$@"
+}
+
+run_internal_plugin_hooks() {
+  _hook_phase_cmd="$1"
+  shift 2>/dev/null || true
+  _RNEX_INTERNAL_PLUGIN_ONLY=1 _run_hook_internal "" "$_hook_phase_cmd" "$@"
 }
 
 run_plugin_hook() {
@@ -515,6 +565,8 @@ _delegate_repo_githook() {
 run_git_hook() {
   _hook_name="$1"
   shift 2>/dev/null || true
+  # shellcheck disable=SC2031
+  [ "${RNEX_IGNORE_HOOKS:-0}" = "1" ] && return 0
   export _RNEX_INSIDE_HOOK=1
   require_workspace
 
@@ -541,9 +593,9 @@ run_git_hook() {
       IFS="$_old_ifs"
       [ -n "$_c" ] || continue
       if [ "$_is_blocking" -eq 1 ]; then
-        (cd "$NEXUS_DIR" && eval "$_c") || return $?
+        _exec_hook_cmd "$NEXUS_DIR" "$_c" || return $?
       else
-        (cd "$NEXUS_DIR" && eval "$_c") || true
+        _exec_hook_cmd "$NEXUS_DIR" "$_c" || true
       fi
     done
     IFS="$_old_ifs"

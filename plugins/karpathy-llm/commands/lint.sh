@@ -29,6 +29,8 @@ while [ $# -gt 0 ]; do
     -q|--quiet)
       _quiet=1
       ;;
+    -H|--ignore-hooks)
+      ;;
     -h|--help)
       cat <<'HELP_EOF'
 Usage: rnex plugin karpathy-llm lint [options]
@@ -52,28 +54,35 @@ done
 
 _errors=0
 _warnings=0
+_hot_errors=0
+_hot_warnings=0
 _pages_checked=0
 _today="$(kl_today 2>/dev/null || date -u +%Y-%m-%d 2>/dev/null || date +%Y-%m-%d 2>/dev/null || date +%F 2>/dev/null || echo "2026-10-15")"
 
-# Check 1: Wiki directory and core control files existence
+# Check 1: Wiki directory and shared core control files existence (index.md, _log.md)
 if [ ! -d "$_wiki_path" ]; then
   echo "Error: Wiki directory '$_wiki' does not exist." >&2
   exit 1
 fi
 
-for _core_file in "index.md" "hot.md" "_log.md"; do
+for _core_file in "index.md" "_log.md"; do
   if [ ! -f "$_wiki_path/$_core_file" ]; then
     echo "Error: Core wiki file '$_wiki/$_core_file' is missing." >&2
     _errors=$((_errors + 1))
   fi
 done
 
-# Check 2: hot.md word boundary (~500 words)
-if [ -f "$_wiki_path/hot.md" ]; then
-  _hot_words="$(wc -w < "$_wiki_path/hot.md" 2>/dev/null || echo 0)"
-  if [ "$_hot_words" -gt 500 ]; then
-    echo "Warning: '$_wiki/hot.md' word count (${_hot_words} words) exceeds ~500-word ceiling." >&2
-    _warnings=$((_warnings + 1))
+# Check 2: Optional local hot.md check (decoupled from shared _log.md audit counts)
+if kl_hot_enabled; then
+  if [ ! -f "$_wiki_path/hot.md" ]; then
+    echo "Error: Local wiki cache '$_wiki/hot.md' is missing." >&2
+    _hot_errors=$((_hot_errors + 1))
+  else
+    _hot_words="$(wc -w < "$_wiki_path/hot.md" 2>/dev/null || echo 0)"
+    if [ "$_hot_words" -gt 500 ]; then
+      echo "Warning: '$_wiki/hot.md' word count (${_hot_words} words) exceeds ~500-word ceiling." >&2
+      _hot_warnings=$((_hot_warnings + 1))
+    fi
   fi
 fi
 
@@ -82,8 +91,9 @@ for _page in "$_wiki_path"/*.md; do
   [ -f "$_page" ] || continue
   _pname="$(basename "$_page")"
 
-  # Skip log file
+  # Skip log file and local hot.md before counting shared wiki pages
   [ "$_pname" = "_log.md" ] && continue
+  [ "$_pname" = "hot.md" ] && continue
 
   _pages_checked=$((_pages_checked + 1))
 
@@ -95,9 +105,6 @@ for _page in "$_wiki_path"/*.md; do
     fi
     continue
   fi
-
-  # Skip hot.md from atomic page schema checks
-  [ "$_pname" = "hot.md" ] && continue
 
   # Verify frontmatter delimiter (---)
   _first_line="$(head -n 1 "$_page" 2>/dev/null || true)"
@@ -291,21 +298,24 @@ LOG_EOF
   fi
 fi
 
+_total_errors=$((_errors + _hot_errors))
+_total_warnings=$((_warnings + _hot_warnings))
+
 if [ "$_quiet" -eq 0 ]; then
-  if [ "$_errors" -eq 0 ] && [ "$_warnings" -eq 0 ]; then
+  if [ "$_total_errors" -eq 0 ] && [ "$_total_warnings" -eq 0 ]; then
     printf '[WIKI] Wiki lint passed: %s pages verified (0 errors, 0 warnings).\n' "$_pages_checked"
-  elif [ "$_errors" -eq 0 ]; then
-    printf '[WIKI] Wiki lint completed with %s warning(s) across %s pages.\n' "$_warnings" "$_pages_checked"
+  elif [ "$_total_errors" -eq 0 ]; then
+    printf '[WIKI] Wiki lint completed with %s warning(s) across %s pages.\n' "$_total_warnings" "$_pages_checked"
   else
-    printf '[WIKI] Wiki lint failed with %s error(s) and %s warning(s).\n' "$_errors" "$_warnings" >&2
+    printf '[WIKI] Wiki lint failed with %s error(s) and %s warning(s).\n' "$_total_errors" "$_total_warnings" >&2
   fi
 fi
 
-if [ "$_errors" -gt 0 ]; then
+if [ "$_total_errors" -gt 0 ]; then
   exit 1
 fi
 
-if [ "$_strict" -eq 1 ] && [ "$_warnings" -gt 0 ]; then
+if [ "$_strict" -eq 1 ] && [ "$_total_warnings" -gt 0 ]; then
   exit 1
 fi
 

@@ -23,6 +23,7 @@ git:
     - "repos/"  # Note: repos_dir is automatically managed in .gitignore alongside git.ignore
     - "**/.rnex*/"
     - "**/rnex*/"
+    - "wiki/hot.md"
     - "*.log"
     - ".env.local"
   hooks:

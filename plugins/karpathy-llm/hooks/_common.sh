@@ -365,7 +365,43 @@ _clean_repos="$(printf '%s' "$_clean_repos" | sed -e 's#^[[:space:]]*##' -e 's#[
 [ -n "$_clean_repos" ] || _clean_repos="repos"
 REPOS_DIR="${REPOS_DIR:-$_root/$_clean_repos}"
 
-# Ensure the configured wiki directory and baseline control files (index.md, hot.md, _log.md) exist.
+# Check whether the optional local git-ignored hot.md cache is enabled (default: true).
+kl_hot_enabled() {
+  _khe_val="$(get_cfg "hot_file" "")"
+  [ -n "$_khe_val" ] || _khe_val="$(get_cfg "hotFile" "")"
+  [ -n "$_khe_val" ] || _khe_val="$(get_cfg "hot" "true")"
+  case "$_khe_val" in
+    false|False|FALSE|no|No|NO|0|off|Off|OFF|none) return 1 ;;
+    *) return 0 ;;
+  esac
+}
+
+# Truncate a summary string to a strict word and character budget.
+# Usage: kl_truncate_summary "<text>" [max_words] [max_chars]
+kl_truncate_summary() {
+  _kts_text="$1"
+  _kts_words="${2:-10}"
+  _kts_chars="${3:-75}"
+  printf '%s\n' "$_kts_text" | sed -e 's/\[/ /g' -e 's/\]([^)]*)//g' -e 's/[`*_~<>]//g' -e 's/[.?!][[:space:]].*//' -e 's/[.?!]$//' | awk -v max_w="$_kts_words" -v max_c="$_kts_chars" '
+    NR == 1 {
+      out = ""
+      for (i = 1; i <= NF && i <= max_w; i++) {
+        cand = (out == "") ? $i : out " " $i
+        if (length(cand) > max_c) {
+          if (out == "") {
+            out = substr($i, 1, max_c - 3) "..."
+          }
+          break
+        }
+        out = cand
+      }
+      print out
+      exit
+    }
+  '
+}
+
+# Ensure the configured wiki directory and baseline control files (index.md, _log.md, and optional hot.md) exist.
 kl_ensure_wiki_files() {
   mkdir -p "$_wiki_path"
   _kew_pdir=""
@@ -382,6 +418,10 @@ kl_ensure_wiki_files() {
   fi
 
   for _kew_f in index.md hot.md _log.md; do
+    if [ "$_kew_f" = "hot.md" ] && ! kl_hot_enabled; then
+      rm -f "$_wiki_path/hot.md" 2>/dev/null || true
+      continue
+    fi
     if [ ! -f "$_wiki_path/$_kew_f" ]; then
       if [ -n "$_kew_pdir" ] && [ -f "$_kew_pdir/templates/$_kew_f" ] && command -v plugin_instantiate_template >/dev/null 2>&1; then
         plugin_instantiate_template "karpathy-llm" "$_kew_pdir" "$_kew_pdir/templates/$_kew_f" "$_wiki_path/$_kew_f"
@@ -399,7 +439,6 @@ kl_ensure_wiki_files() {
 Master navigation index for the Karpathy LLM Wiki.
 
 ## Overview & Status
-* **Rolling Cache:** [\`hot.md\`](./hot.md) — Fast ~500-word orientation cache.
 * **Operation Log:** [\`_log.md\`](./_log.md) — Timestamped ingest & maintenance history.
 
 ## Member Repositories
@@ -409,20 +448,20 @@ Master navigation index for the Karpathy LLM Wiki.
 INDEX_INIT
   fi
 
-  if [ ! -f "$_wiki_path/hot.md" ]; then
+  if kl_hot_enabled && [ ! -f "$_wiki_path/hot.md" ]; then
     cat > "$_wiki_path/hot.md" <<HOT_INIT
-# Hot Context (Rolling ~500-Word Cache)
+# Hot Context (Compact Local Orientation Cache)
 
-> Fast orientation cache for AI agents. Strictly bounded under ~500 words.
+> Local git-ignored orientation cache for AI agents (~250 words max). Read this file first on startup, then consult \`${_wiki}/index.md\` on demand.
 
 ## 1. Architecture & Member Repo Map
 * **Workspace Overview:** Karpathy LLM Wiki active.
 
 ## 2. Current Focus & Recent Ingests
-* **Active Tasks:** Ingest operations active.
+* **Recent Ingests:** None yet.
 
 ## 3. Key Contracts & Boundaries
-* **Atomic Pages:** Curated pages with typed frontmatter relations under \`${_wiki}/\`.
+* **Wiki Index:** Consult [\`${_wiki}/index.md\`](./index.md) for the complete catalog of compiled pages.
 HOT_INIT
   fi
 
@@ -499,8 +538,8 @@ kl_ingest_member_readme() {
   ' "$_src_file")"
   [ -z "$_m_title" ] && _m_title="Member Repo: ${_m_repo}"
 
-  # 2. Parse repository summary (first non-header, non-badge, non-comment line)
-  _m_summary="$(awk '
+  # 2. Parse repository summary (first non-header, non-badge, non-comment line), bounded to prevent huge lines
+  _m_raw_summary="$(awk '
     NR == 1 && /^#[^#]/ { next }
     /^[ ]*(\[!\[|<img|<!--|---|```)/ { next }
     /^#/ { next }
@@ -510,6 +549,7 @@ kl_ingest_member_readme() {
       exit
     }
   ' "$_src_file")"
+  _m_summary="$(kl_truncate_summary "$_m_raw_summary" 25 160)"
   [ -z "$_m_summary" ] && _m_summary="Core architecture, contracts, and implementation for member repository ${_m_repo}."
 
   # 3. Determine if target page needs generation (missing only — preserve curated pages)
@@ -541,7 +581,7 @@ sources: ["${_rel_source}"]
 related: ${_nav_related}
 extends: ${_nav_extends}
 contradicts: []
-mentioned_in: ["index.md", "hot.md"]
+mentioned_in: ["index.md"]
 ---
 
 # ${_m_title}
@@ -558,14 +598,14 @@ ${_m_summary}
 * See [${_nav_label}](./${_nav_target}) for workspace member repository catalog.
 PAGE_EOF
 
-    # Log operation only when newly ingested (strictly idempotent)
+    # Log operation only when newly ingested into shared wiki index (zero relation to hot.md)
     if [ -f "$_wiki_path/_log.md" ]; then
       cat >> "$_wiki_path/_log.md" <<LOG_EOF
 
 ### Member Repo Ingest: ${_m_repo} — ${_today}
 * **Source:** \`${_rel_source}\`
 * **Ingested Page:** \`repo-${_m_repo}.md\`
-* **Status:** Ingested atomic member repository page into wiki index and hot cache.
+* **Status:** Ingested atomic member repository page into wiki index.
 LOG_EOF
     fi
   fi
@@ -609,7 +649,12 @@ LOG_EOF
     fi
   fi
 
-  # 5. Register in hot cache (hot.md) under Section 1 with direct wiki links if not already present
+  # 5. Independently register in local hot cache (hot.md) if enabled
+  if ! kl_hot_enabled; then
+    rm -f "$_wiki_path/hot.md" 2>/dev/null || true
+    return 0
+  fi
+
   _is_in_hot=0
   if grep -q "repo-${_m_repo}\.md" "$_wiki_path/hot.md" 2>/dev/null; then
     _is_in_hot=1
@@ -620,14 +665,7 @@ LOG_EOF
   fi
 
   if [ -f "$_wiki_path/hot.md" ] && [ "$_is_in_hot" -eq 0 ]; then
-    # Ultra-concise summary for bounded hot cache (~500-word ceiling)
-    _hot_summary="$(printf '%s' "$_m_summary" | sed -e 's/[.?!][[:space:]].*//' -e 's/[.?!]$//' | awk '{
-      out=""
-      for (i=1; i<=NF && i<=7; i++) {
-        out = (out == "") ? $i : out " " $i
-      }
-      print out
-    }')"
+    _hot_summary="$(kl_truncate_summary "$_m_summary" 7 55)"
     [ -z "$_hot_summary" ] && _hot_summary="Member repository"
     _hot_line="* **[${_m_repo}](./repo-${_m_repo}.md)** (\`${_rel_loc}\`): ${_hot_summary}."
     _tmp_hot="$(mktemp)"
@@ -647,36 +685,94 @@ LOG_EOF
   fi
 }
 
-# Enforce strict ~500-word ceiling on hot.md by condensing Section 1 when needed.
+# Enforce strict compact size on hot.md by bounding Section 1 (repos) and Section 2 (recent ingests).
 # Usage: kl_condense_hot_cache [ingested_count] [ingested_repos_csv]
 kl_condense_hot_cache() {
   _khc_ingested_cnt="${1:-0}"
   _khc_ingested_repos="${2:-}"
+  if ! kl_hot_enabled; then
+    rm -f "$_wiki_path/hot.md" 2>/dev/null || true
+    return 0
+  fi
   [ -f "$_wiki_path/hot.md" ] || return 0
 
-  _hot_words="$(wc -w < "$_wiki_path/hot.md" 2>/dev/null || echo 0)"
-  if [ "$_hot_words" -gt 480 ]; then
-    _num_repos="$(grep -cE '^\* \*\*(\[[^]]+\]\(\./repo-[^)]+\)|[a-zA-Z0-9_.-]+)' "$_wiki_path/hot.md" 2>/dev/null || echo 0)"
-    if [ "$_khc_ingested_cnt" -gt 15 ]; then
+  # 1. Bound Section 2 (Current Focus & Recent Ingests) to at most 8 compact lines (<= 115 chars each)
+  _tmp_s2="$(mktemp)"
+  if awk '
+    BEGIN { in_s2 = 0; s2_cnt = 0; s2_overflow = 0 }
+    /^## 2\. Current Focus & Recent Ingests/ { in_s2 = 1; print; next }
+    in_s2 && /^## / {
+      if (s2_overflow > 0) {
+        print "* *(See [Wiki Index](./index.md) for all compiled pages)*"
+      }
+      in_s2 = 0
+      print
+      next
+    }
+    in_s2 {
+      if ($0 ~ /^\* \*\*\(See \[Wiki Index\]/) { next }
+      if ($0 ~ /^\* \*\*Active Tasks:\*\* Wiki initialization complete\./) { next }
+      if ($0 ~ /^\* \*\*\[/) {
+        s2_cnt++
+        if (s2_cnt == 1) {
+          has_real_ingest = 1
+        }
+        if (s2_cnt <= 8) {
+          line = $0
+          if (length(line) > 115) {
+            line = substr(line, 1, 112) "..."
+          }
+          print line
+        } else {
+          s2_overflow++
+        }
+        next
+      }
+      if ($0 ~ /^\* \*\*Recent Ingests:\*\* None yet/) {
+        if (s2_cnt > 0) next
+      }
+      print
+      next
+    }
+    { print }
+  ' "$_wiki_path/hot.md" > "$_tmp_s2"; then
+    # Strip "Recent Ingests: None yet" if any real ingest bullet exists in Section 2
+    if grep -q '^\* \*\*\[' "$_tmp_s2" 2>/dev/null; then
+      _tmp_s2b="$(mktemp)"
+      grep -v '^\* \*\*Recent Ingests:\*\* None yet' "$_tmp_s2" > "$_tmp_s2b" && mv "$_tmp_s2b" "$_tmp_s2"
+      rm -f "$_tmp_s2b"
+    fi
+    mv "$_tmp_s2" "$_wiki_path/hot.md"
+  else
+    rm -f "$_tmp_s2"
+  fi
+
+  # 2. Condense Section 1 (Member Repo Map) if > 10 repos or if total word count > 240 words
+  _hot_words="$(wc -w < "$_wiki_path/hot.md" 2>/dev/null | tr -d ' ')"
+  [ -n "$_hot_words" ] || _hot_words=0
+  _num_repos="$(grep -cE '^\* \*\*\[[^]]+\]\(\./repo-[^)]+\)' "$_wiki_path/hot.md" 2>/dev/null || true)"
+  [ -n "$_num_repos" ] || _num_repos=0
+  if [ "$_num_repos" -gt 10 ] || [ "$_khc_ingested_cnt" -gt 10 ] || [ "$_hot_words" -gt 240 ]; then
+    if [ "$_khc_ingested_cnt" -gt 10 ] && [ -n "$_khc_ingested_repos" ]; then
       _condense_count="$_khc_ingested_cnt"
       _repo_names="$_khc_ingested_repos"
-    elif [ "$_num_repos" -gt 15 ]; then
+    elif [ "$_num_repos" -gt 0 ]; then
       _condense_count="$_num_repos"
-      _repo_names="$(grep -E '^\* \*\*(\[[^]]+\]\(\./repo-[^)]+\)|[a-zA-Z0-9_.-]+)' "$_wiki_path/hot.md" | sed -e 's/^\* \*\*\[//' -e 's/\].*//' -e 's/^\* \*\*//' -e 's/ .*//' | tr '\n' ', ' | sed -e 's/, $//')"
+      _repo_names="$(grep -E '^\* \*\*\[[^]]+\]\(\./repo-[^)]+\)' "$_wiki_path/hot.md" | sed -e 's/^\* \*\*\[//' -e 's/\].*//' | head -n 10 | tr '\n' ', ' | sed -e 's/, $//')"
     else
       _condense_count=0
       _repo_names=""
     fi
 
-    if [ "$_condense_count" -gt 15 ]; then
+    if [ "$_condense_count" -gt 0 ]; then
       _tmp_b="$(mktemp)"
       if awk -v rnames="$_repo_names" -v nrepos="$_condense_count" -v rdir="$_clean_repos" '
         BEGIN { in_s1=0; replaced=0 }
         /^## 1\. Architecture & Member Repo Map/ { in_s1=1; print; next }
         in_s1 && /^## / { in_s1=0 }
-        in_s1 && (/^\* \*\*(\[[^]]+\]|[a-zA-Z0-9_.-]+)/ || /^\* \*\*Member Repositories \([0-9]+ repos\):/) {
+        in_s1 && (/^\* \*\*(\[[^]]+\]\(\.\/repo-|Member Repositories \([0-9]+ repos\):)/) {
           if (!replaced) {
-            print "* **Member Repositories (" nrepos " repos):** Autonomous repositories under `" rdir "/`: " rnames ". See [Wiki Index](./index.md#member-repositories) for individual architecture pages."
+            print "* **Member Repositories (" nrepos " repos):** Autonomous repositories under `" rdir "/`: " rnames ". See [Wiki Index](./index.md#member-repositories)."
             replaced=1
           }
           next
@@ -687,6 +783,26 @@ kl_condense_hot_cache() {
       else
         rm -f "$_tmp_b"
       fi
+    fi
+  fi
+
+  # 3. Final safety cap: if custom prose in hot.md pushes word count > 450 words, truncate trailing lines in custom sections
+  _hot_words="$(wc -w < "$_wiki_path/hot.md" 2>/dev/null || echo 0)"
+  if [ "$_hot_words" -gt 450 ]; then
+    _tmp_cap="$(mktemp)"
+    if awk '
+      BEGIN { words = 0 }
+      /^## [123]\./ { print; next }
+      {
+        if (words + NF <= 420) {
+          print
+          words += NF
+        }
+      }
+    ' "$_wiki_path/hot.md" > "$_tmp_cap"; then
+      mv "$_tmp_cap" "$_wiki_path/hot.md"
+    else
+      rm -f "$_tmp_cap"
     fi
   fi
 }

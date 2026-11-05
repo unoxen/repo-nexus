@@ -57,6 +57,12 @@ _pinfo_out="$(cd "$TEST_CODEX_WS" && ./rnex plugin info codex 2>&1)"
 echo "$_pinfo_out" | grep -q "codex" || { fail "Codex missing from plugin info: $_pinfo_out"; exit 1; }
 echo "$_pinfo_out" | grep -q "\.codex/skills/" || { fail "skill_dir .codex/skills missing from plugin info: $_pinfo_out"; exit 1; }
 echo "$_pinfo_out" | grep -q "skills" || { fail "skills option missing from plugin info: $_pinfo_out"; exit 1; }
+echo "$_pinfo_out" | grep -q "hooks" || { fail "hooks option missing from plugin info: $_pinfo_out"; exit 1; }
+[ -x "$TEST_CODEX_WS/.codex/hooks/rnex-hook-session-start.sh" ] || { fail ".codex/hooks/rnex-hook-session-start.sh missing"; exit 1; }
+[ -f "$TEST_CODEX_WS/.codex/hooks/rnex-hooks.json" ] || { fail ".codex/hooks/rnex-hooks.json missing"; exit 1; }
+grep -q "\.rnex/plugins/codex/hooks/rnex-hook-session-start\.sh" "$TEST_CODEX_WS/.codex/hooks/rnex-hook-session-start.sh" || {
+  fail ".codex/hooks/rnex-hook-session-start.sh does not reference .rnex working script"; exit 1;
+}
 pass
 
 # --------------------------------------------------------------------------

@@ -13,6 +13,7 @@ if ! command -v clean_provider_user_skills >/dev/null 2>&1; then
 fi
 
 clean_provider_user_skills "$_root/.windsurf/rules"
+clean_provider_hooks "windsurf" "$_root/.windsurf"
 clean_rnex_instructions "$_root/.windsurfrules"
 rm -rf "$_root/.windsurf/prompts" 2>/dev/null || true
 rmdir "$_root/.windsurf/rules" 2>/dev/null || true

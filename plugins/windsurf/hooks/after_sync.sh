@@ -17,3 +17,6 @@ merge_rnex_instructions "$_root/.windsurfrules"
 if ! provider_option_enabled "windsurf" "skills" 2>/dev/null; then
   clean_provider_user_skills "$_root/.windsurf/rules"
 fi
+
+sync_provider_hooks "windsurf" "$_root/.windsurf"
+rmdir "$_root/.windsurf" 2>/dev/null || true

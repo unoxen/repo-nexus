@@ -1,5 +1,5 @@
 name: windsurf
-version: 0.8.31
+version: 0.8.32
 description: Windsurf IDE integration (maintains .windsurfrules and generates user skills in .windsurf/rules/)
 author: unoxen
 homepage: https://github.com/unoxen/repo-nexus
@@ -7,9 +7,13 @@ skill_dir: .windsurf/rules
 
 config_defaults:
   skills: true
+  hooks:
+    SessionStart:
+      - "rnex sync --quiet"
 
 config_descriptions:
   skills: "true|false        (generate user skills in {skill_dir})"
+  hooks: "event map|false   (configure AI provider lifecycle hooks, e.g. SessionStart)"
 
 instructions:
   - instructions/rnex-windsurf-integration.md: .rnex/plugins/windsurf/instructions/rnex-windsurf-integration.md

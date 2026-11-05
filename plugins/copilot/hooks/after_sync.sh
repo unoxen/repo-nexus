@@ -18,3 +18,6 @@ merge_rnex_instructions "$_root/.github/copilot-instructions.md"
 if ! provider_option_enabled "copilot" "skills" 2>/dev/null; then
   clean_provider_user_skills "$_root/.github/skills"
 fi
+
+sync_provider_hooks "copilot" "$_root/.github"
+rmdir "$_root/.github" 2>/dev/null || true

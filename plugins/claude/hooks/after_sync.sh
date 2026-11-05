@@ -18,9 +18,5 @@ if ! provider_option_enabled "claude" "skills" 2>/dev/null; then
   clean_provider_user_skills "$_root/.claude/skills"
 fi
 
-if provider_auto_sync_enabled "claude"; then
-  sync_claude_auto_sync_hook "$_root/.claude/settings.json"
-else
-  clean_claude_auto_sync_hook "$_root/.claude/settings.json"
-  rmdir "$_root/.claude" 2>/dev/null || true
-fi
+sync_provider_hooks "claude" "$_root/.claude" "$_root/.claude/settings.json"
+rmdir "$_root/.claude" 2>/dev/null || true

@@ -155,6 +155,8 @@ while [ $# -gt 0 ]; do
     -q|--quiet)
       _quiet=1
       ;;
+    -H|--ignore-hooks)
+      ;;
     -h|--help)
       cat <<'HELP_EOF'
 Usage: rnex plugin karpathy-llm ingest [options] [<file_path>]
@@ -242,8 +244,8 @@ ingest_source_file() {
   ' "$_src_abs")"
   [ -z "$_s_title" ] && _s_title="$_s_base"
 
-  # Summary
-  _s_summary="$(awk '
+  # Summary (bounded to prevent huge single-line files from inflating wiki/index/hot cache)
+  _s_raw_summary="$(awk '
     NR == 1 && /^#[^#]/ { next }
     /^[ ]*(\[!\[|<img|<!--|---|```)/ { next }
     /^#/ { next }
@@ -253,6 +255,7 @@ ingest_source_file() {
       exit
     }
   ' "$_src_abs")"
+  _s_summary="$(kl_truncate_summary "$_s_raw_summary" 25 160)"
   [ -z "$_s_summary" ] && _s_summary="Intake document ${_s_base}."
 
   if [ ! -f "$_s_target" ]; then
@@ -266,7 +269,7 @@ sources: ["${_src_rel}"]
 related: ["index.md"]
 extends: []
 contradicts: []
-mentioned_in: ["index.md", "hot.md"]
+mentioned_in: ["index.md"]
 ---
 
 # ${_s_title}
@@ -282,14 +285,14 @@ ${_s_summary}
 * See [Wiki Index](./index.md) for master knowledge graph index.
 PAGE_EOF
 
-    # Log operation only when newly ingested (strictly idempotent)
+    # Log operation only when newly ingested into shared wiki index (zero relation to hot.md)
     if [ -f "$_wiki_path/_log.md" ]; then
       cat >> "$_wiki_path/_log.md" <<LOG_EOF
 
 ### Source Ingest: ${_src_rel} — ${_today}
 * **Source:** \`${_src_rel}\`
 * **Ingested Page:** \`${_s_slug}.md\`
-* **Status:** Ingested source document into wiki index and hot cache.
+* **Status:** Ingested source document into wiki index.
 LOG_EOF
     fi
   fi
@@ -316,21 +319,27 @@ LOG_EOF
     fi
   fi
 
-  # Update hot.md Section 2 (Recent Ingests) with direct wiki links
-  if ! grep -q "${_s_slug}\.md" "$_wiki_path/hot.md" 2>/dev/null && ! grep -q "${_src_rel}" "$_wiki_path/hot.md" 2>/dev/null; then
-    _hot_line="* **[${_s_title}](./${_s_slug}.md)** (\`${_src_rel}\`): ${_s_summary}"
-    _tmp_hot="$(mktemp)"
-    if LINE="$_hot_line" awk '
-      /^## 2\. Current Focus & Recent Ingests/ {
-        print
-        print ENVIRON["LINE"]
-        next
-      }
-      { print }
-    ' "$_wiki_path/hot.md" > "$_tmp_hot"; then
-      mv "$_tmp_hot" "$_wiki_path/hot.md"
-    else
-      rm -f "$_tmp_hot"
+  # Independently update local hot.md Section 2 (Recent Ingests) if hot_file is enabled
+  if kl_hot_enabled && [ -f "$_wiki_path/hot.md" ]; then
+    if ! grep -q "${_s_slug}\.md" "$_wiki_path/hot.md" 2>/dev/null && ! grep -q "${_src_rel}" "$_wiki_path/hot.md" 2>/dev/null; then
+      _hot_title="$(kl_truncate_summary "$_s_title" 6 40)"
+      [ -n "$_hot_title" ] || _hot_title="$_s_base"
+      _hot_sum="$(kl_truncate_summary "$_s_summary" 7 55)"
+      [ -n "$_hot_sum" ] || _hot_sum="Intake page"
+      _hot_line="* **[${_hot_title}](./${_s_slug}.md)** (\`${_src_rel}\`): ${_hot_sum}."
+      _tmp_hot="$(mktemp)"
+      if LINE="$_hot_line" awk '
+        /^## 2\. Current Focus & Recent Ingests/ {
+          print
+          print ENVIRON["LINE"]
+          next
+        }
+        { print }
+      ' "$_wiki_path/hot.md" > "$_tmp_hot"; then
+        mv "$_tmp_hot" "$_wiki_path/hot.md"
+      else
+        rm -f "$_tmp_hot"
+      fi
     fi
   fi
 

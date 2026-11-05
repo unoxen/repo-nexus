@@ -84,7 +84,12 @@ check_auto_sync() {
   [ -f "$_cfg_file" ] || return 0
   _stamp="$_ws/.rnex/sync_stamp"
   if [ ! -f "$_stamp" ] || [ "$(get_config_sum "$_ws")" != "$(cat "$_stamp" 2>/dev/null)" ]; then
+    _prev_ignore="${RNEX_IGNORE_HOOKS:-0}"
+    RNEX_IGNORE_HOOKS=1
+    export RNEX_IGNORE_HOOKS
     cmd_sync -y --quiet
+    RNEX_IGNORE_HOOKS="$_prev_ignore"
+    export RNEX_IGNORE_HOOKS
   fi
 }
 
@@ -341,12 +346,22 @@ upgrade_workspace_config() {
     ' "$_f" > "$_tmp" && mv "$_tmp" "$_f"
   fi
 
-  # 4. Remove legacy top-level git_hooks: or hooks: setting and add structured git: section if missing
-  if grep -qE '^(git_hooks|hooks):' "$_f" 2>/dev/null; then
+  # 4. Migrate legacy top-level hooks: to rnex_hooks:, remove legacy git_hooks: and obsolete auto_sync_on:, and add structured git: section if missing
+  if grep -qE '^(git_hooks|hooks):' "$_f" 2>/dev/null || grep -qE '^[ \t]*(auto_sync_on|autoSyncOn):' "$_f" 2>/dev/null; then
+    _has_rnex_hooks=0
+    grep -qE '^[ \t]*(rnex_hooks|rnex-hooks):' "$_f" 2>/dev/null && _has_rnex_hooks=1
     _tmp="$(mktemp)"
-    awk '
+    awk -v has_rh="$_has_rnex_hooks" '
       /^[ ]*#.*[aA]utomated workspace Git hooks/ { next }
-      /^(git_hooks|hooks):/ { next }
+      /^git_hooks:/ { next }
+      /^[ \t]*(auto_sync_on|autoSyncOn):/ { next }
+      /^hooks:[ \t]*(#.*)?$/ {
+        if (has_rh == 0) {
+          print "rnex_hooks:"
+          has_rh = 1
+        }
+        next
+      }
       { print }
     ' "$_f" > "$_tmp" && mv "$_tmp" "$_f"
   fi
@@ -364,6 +379,7 @@ upgrade_workspace_config() {
         print "    - \"" ard "/\""
         print "    - \"**/.rnex*/\""
         print "    - \"**/rnex*/\""
+        print "    - \"wiki/hot.md\""
         print "  hooks:"
         print "    post-merge:"
         print "      - \"rnex sync --quiet\""
@@ -391,6 +407,7 @@ upgrade_workspace_config() {
           print "    - \"" ard "/\""
           print "    - \"**/.rnex*/\""
           print "    - \"**/rnex*/\""
+          print "    - \"wiki/hot.md\""
           print "  hooks:"
           print "    post-merge:"
           print "      - \"rnex sync --quiet\""

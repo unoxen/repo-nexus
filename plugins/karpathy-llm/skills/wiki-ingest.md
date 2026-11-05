@@ -31,7 +31,7 @@ rnex plugin karpathy-llm ingest [--file <path> | <path>] [--source <path>] [--re
 
 2. **Step 1 — Deterministic CLI Scaffolding:**
    - Run `rnex plugin karpathy-llm ingest` (or `rnex plugin karpathy-llm ingest <path>`).
-   - The CLI deterministically scaffolds the exact 1-to-1 wiki file and registers it in `index.md`, `hot.md`, and `_log.md`:
+   - The CLI deterministically scaffolds the exact 1-to-1 wiki file and registers it in `index.md` and `_log.md` (and independently in the local git-ignored `hot.md` when `hot_file: true`):
      - **Root Member Repository READMEs:** Mapped strictly to `<wiki_dir>/repo-<repo_name>.md`.
      - **All Other Sources & Nested READMEs:** Mapped strictly to `<wiki_dir>/<slug>.md`, where `<slug>` is the normalized lowercase workspace-relative path (e.g., `docs/overview.md` becomes `<wiki_dir>/docs-overview.md`; `docs/api/README.md` becomes `<wiki_dir>/docs-api-readme.md`; `repos/app/apps/web/README.md` becomes `<wiki_dir>/repos-app-apps-web-readme.md`).
      - Root-level files without a directory prefix normalizing to reserved wiki control file names (`index`, `hot`, `_log`) are prefixed with `root-` (e.g., `index.md` becomes `root-index.md`).
@@ -65,12 +65,12 @@ rnex plugin karpathy-llm ingest [--file <path> | <path>] [--source <path>] [--re
 6. **Update Navigation Index (Annotated Links):**
    - Verify `<wiki_dir>/index.md` contains the link to the page with a concise 1-line summary next to each link (e.g. `- [Auth Flow](./auth-flow.md): JWT validation and token rotation`) so agents pinpoint target pages in a single read.
 
-7. **Update Hot Cache (Bounded ~500-Word Ceiling):**
-   - Update `<wiki_dir>/hot.md` with rolling orientation summaries across 3 sections:
+7. **Update Hot Cache (Optional Local Cache, Bounded ~500-Word Ceiling):**
+   - When `hot_file: true` (default), update `<wiki_dir>/hot.md` with compact rolling orientation summaries (`<= 55-75` chars per line, at most 8 recent ingests) across 3 sections:
      1. Architecture & Member Repo Map (with direct links: `- **[<repo>](./repo-<slug>.md)** (\`<rel_path>\`): <summary>`)
      2. Current Focus & Recent Ingests (with direct links: `- **[<title>](./<slug>.md)** (\`<src_rel>\`): <summary>`)
      3. Key Contracts & Boundaries
-   - Maintain the strict ~500-word ceiling. Condense or prune older focus items.
+   - `hot.md` is a local git-ignored file and has zero relation to `_log.md` (never reference `hot.md` in `_log.md` or `mentioned_in`).
 
 8. **Audit Verification:**
    - Run `rnex plugin karpathy-llm lint` to verify that link paths, frontmatter schema, and word boundaries conform to wiki invariants.

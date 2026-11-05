@@ -224,11 +224,12 @@ cmd_status() {
             if grep -q "skills:" "$_pdir/plugin.yaml" 2>/dev/null || [ -n "$(yaml_plugin_get "$_pname" "skills" 2>/dev/null)" ]; then
               _opts="${_opts:+$_opts, }skills=$(provider_option_enabled "$_pname" "skills" && echo "true" || echo "false")"
             fi
-            if grep -q "auto_sync_on:" "$_pdir/plugin.yaml" 2>/dev/null || grep -q "autoSyncOn:" "$_pdir/plugin.yaml" 2>/dev/null || [ -n "$(yaml_plugin_get "$_pname" "auto_sync_on" 2>/dev/null)" ] || [ -n "$(yaml_plugin_get "$_pname" "autoSyncOn" 2>/dev/null)" ]; then
-              _aso="$(yaml_plugin_get "$_pname" "auto_sync_on" 2>/dev/null || true)"
-              [ -z "$_aso" ] && _aso="$(yaml_plugin_get "$_pname" "autoSyncOn" 2>/dev/null || true)"
-              [ -z "$_aso" ] && _aso="SessionStart"
-              _opts="${_opts:+$_opts, }auto_sync_on=$_aso"
+            if grep -q "hooks:" "$_pdir/plugin.yaml" 2>/dev/null || [ -n "$(yaml_list_plugin_hooks "$_pname" 2>/dev/null)" ]; then
+              _phooks="$(yaml_list_plugin_hooks "$_pname" 2>/dev/null | awk '{ out = (NR == 1) ? $0 : out "+" $0 } END { if (NR) print out }')"
+              _opts="${_opts:+$_opts, }hooks=${_phooks:-none}"
+            fi
+            if grep -q "hot_file:" "$_pdir/plugin.yaml" 2>/dev/null || [ -n "$(yaml_plugin_get "$_pname" "hot_file" 2>/dev/null)" ]; then
+              _opts="${_opts:+$_opts, }hot_file=$(provider_option_enabled "$_pname" "hot_file" && echo "true" || echo "false")"
             fi
             if [ -n "$_opts" ]; then
               printf '    %b↳ Options: %s%b\n' "$_DIM" "$_opts" "$_NC"

@@ -108,7 +108,12 @@ cmd_plugin_info() {
         _desc="$(printf '%s' "$_desc" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//')"
         [ -n "$_skill_target" ] && _desc="$(printf '%s' "$_desc" | sed -e "s|{skill_dir}|$_skill_target|g")"
 
-        _cur="$(yaml_plugin_get "$_name" "$_opt" 2>/dev/null || true)"
+        if [ "$_opt" = "hooks" ]; then
+          _cur="$(yaml_list_plugin_hooks "$_name" 2>/dev/null | awk '{ out = (NR == 1) ? $0 : out ", " $0 } END { if (NR) print out }')"
+          [ -n "$_cur" ] || _cur="none"
+        else
+          _cur="$(yaml_plugin_get "$_name" "$_opt" 2>/dev/null || true)"
+        fi
         if [ -z "$_cur" ]; then
           # List-valued options (e.g. sources): show the effective list, comma-separated
           _cur="$(get_plugin_config_list "$_name" "$_opt" 2>/dev/null | awk '{ out = (NR == 1) ? $0 : out ", " $0 } END { if (NR) print out }')"

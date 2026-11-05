@@ -807,20 +807,12 @@ yaml_get_git_hook_commands() {
 
 # ---- Lifecycle Hooks Configuration Operations (rnex_hooks) -------------
 
-# Extract list of hook/event names defined under rnex_hooks from a YAML file.
+# Extract list of hook/event names defined under rnex_hooks (or legacy hooks / top-level lifecycle keys) from a YAML file.
 _yaml_rnex_hooks_list_from_file() {
   _yrhl_f="$1"
   [ -f "$_yrhl_f" ] || return 0
   awk '
-    /^[ \t]*(rnex_hooks|rnex-hooks):[ \t]*(#.*)?$/ {
-      in_hooks = 1
-      match($0, /^[ \t]*/)
-      hooks_indent = RLENGTH
-      hook_item_indent = -1
-      next
-    }
-    in_hooks && /^[^ \t#]/ { exit }
-    !in_hooks { next }
+    /^[ \t]*#/ || /^[ \t]*$/ { next }
     {
       match($0, /^[ \t]*/)
       indent = RLENGTH
@@ -828,13 +820,35 @@ _yaml_rnex_hooks_list_from_file() {
     }
     trimmed ~ /^([#]|$)/ { next }
 
-    in_hooks && (indent <= hooks_indent) { exit }
+    # Detect top-level section headers
+    indent == 0 && trimmed ~ /^(rnex_hooks|rnex-hooks|hooks):[ \t]*(#.*)?$/ {
+      in_hooks = 1
+      hooks_indent = indent
+      next
+    }
+    indent == 0 && trimmed ~ /^(before|after)_(init|sync|clone|repo|repo_add|repo_remove|repo_set|plugin|plugin_enable|plugin_disable|plugin_command|exec|status|list):/ {
+      in_hooks = 0
+      k = trimmed
+      sub(/:.*/, "", k)
+      gsub(/^["\047]|["\047]$/, "", k)
+      gsub(/[[:space:]]/, "", k)
+      gsub(/-/, "_", k)
+      if (length(k) > 0) print k
+      next
+    }
+    indent == 0 && trimmed ~ /^[a-zA-Z0-9_.-]+:/ {
+      in_hooks = 0
+      next
+    }
+
+    in_hooks && (indent <= hooks_indent) {
+      in_hooks = 0
+      next
+    }
 
     in_hooks {
-      if (hook_item_indent == -1) {
-        hook_item_indent = indent
-      }
-      if (indent == hook_item_indent) {
+      if (trimmed ~ /^-([ \t]|$)/) next
+      if (trimmed ~ /^[a-zA-Z0-9_.-]+:[ \t]*/) {
         k = trimmed
         sub(/:.*/, "", k)
         gsub(/^["\047]|["\047]$/, "", k)
@@ -843,7 +857,7 @@ _yaml_rnex_hooks_list_from_file() {
         if (length(k) > 0) print k
       }
     }
-  ' "$_yrhl_f"
+  ' "$_yrhl_f" | awk '!seen[$0]++'
 }
 
 # Enumerate configured hook names under rnex_hooks merged from rnex.yaml and .local.rnex.yaml.
@@ -856,7 +870,8 @@ yaml_list_rnex_hooks() {
 }
 
 # Extract command list for a specific hook under rnex_hooks.<event_name> from a YAML file.
-# Supports both underscore and hyphenated keys (e.g. after_sync or after-sync).
+# Supports both underscore and hyphenated keys (e.g. after_sync or after-sync),
+# as well as top-level before_*/after_* keys or multiple declarations in the same file.
 _yaml_rnex_hook_commands_from_file() {
   _yrhc_f="$1"; _yrhc_hook="$2"
   [ -f "$_yrhc_f" ] || return 0
@@ -878,15 +893,9 @@ _yaml_rnex_hook_commands_from_file() {
     BEGIN {
       target_norm = target_hook
       gsub(/-/, "_", target_norm)
+      in_hooks = 0
+      in_hook_cmds = 0
     }
-    /^[ \t]*(rnex_hooks|rnex-hooks):[ \t]*(#.*)?$/ {
-      in_hooks = 1
-      match($0, /^[ \t]*/)
-      hooks_indent = RLENGTH
-      next
-    }
-    in_hooks && /^[^ \t#]/ { exit }
-    !in_hooks { next }
     {
       match($0, /^[ \t]*/)
       indent = RLENGTH
@@ -902,10 +911,56 @@ _yaml_rnex_hook_commands_from_file() {
         }
         next
       }
-      exit
+      in_hook_cmds = 0
     }
 
-    in_hooks && (indent <= hooks_indent) { exit }
+    indent == 0 && trimmed ~ /^(rnex_hooks|rnex-hooks|hooks):[ \t]*(#.*)?$/ {
+      in_hooks = 1
+      hooks_indent = indent
+      next
+    }
+
+    indent == 0 && trimmed ~ /^(before|after)_(init|sync|clone|repo|repo_add|repo_remove|repo_set|plugin|plugin_enable|plugin_disable|plugin_command|exec|status|list):/ {
+      in_hooks = 0
+      k = trimmed
+      sub(/:.*/, "", k)
+      gsub(/^["\047]|["\047]$/, "", k)
+      gsub(/[[:space:]]/, "", k)
+      k_norm = k
+      gsub(/-/, "_", k_norm)
+      if (k_norm == target_norm) {
+        target_indent = indent
+        val = trimmed
+        sub(/^[^:]*:[ \t]*/, "", val)
+        if (val ~ /^(#.*)?$/) {
+          in_hook_cmds = 1
+          next
+        }
+        if (val ~ /^\[/) {
+          sub(/^\[/, "", val)
+          sub(/\][ \t]*(#.*)?$/, "", val)
+          n = split(val, parts, ",")
+          for (i = 1; i <= n; i++) {
+            item = unquote(parts[i])
+            if (length(item) > 0) print item
+          }
+          next
+        }
+        item = unquote(val)
+        if (length(item) > 0) print item
+      }
+      next
+    }
+
+    indent == 0 && trimmed ~ /^[a-zA-Z0-9_.-]+:/ {
+      in_hooks = 0
+      next
+    }
+
+    in_hooks && (indent <= hooks_indent) {
+      in_hooks = 0
+      next
+    }
 
     in_hooks {
       k = trimmed
@@ -930,11 +985,11 @@ _yaml_rnex_hook_commands_from_file() {
             item = unquote(parts[i])
             if (length(item) > 0) print item
           }
-          exit
+          next
         }
         item = unquote(val)
         if (length(item) > 0) print item
-        exit
+        next
       }
     }
   ' "$_yrhc_f"
@@ -999,17 +1054,29 @@ yaml_get_plugin_config() {
   _ygpc_local="${NEXUS_LOCAL_CONFIG:-$_wly}"
   _ygpc_main="${NEXUS_CONFIG:-$_wy}"
 
-  # Determine potential alias key (e.g. auto_sync_on <-> autoSyncOn)
+  # Determine potential alias keys (e.g. hot_file <-> hotFile <-> hot)
   _ygpc_alt=""
+  _ygpc_alt2=""
   case "$_ygpc_key" in
-    auto_sync_on) _ygpc_alt="autoSyncOn" ;;
-    autoSyncOn)   _ygpc_alt="auto_sync_on" ;;
+    hot_file)
+      _ygpc_alt="hotFile"
+      _ygpc_alt2="hot"
+      ;;
+    hotFile)
+      _ygpc_alt="hot_file"
+      _ygpc_alt2="hot"
+      ;;
+    hot)
+      _ygpc_alt="hot_file"
+      _ygpc_alt2="hotFile"
+      ;;
   esac
 
   # 1. Query .local.rnex.yaml first
   if [ -f "$_ygpc_local" ]; then
     _val="$(_yaml_plugin_get_from_file "$_ygpc_local" "$_ygpc_plugin" "$_ygpc_key")"
     [ -n "$_val" ] || [ -z "$_ygpc_alt" ] || _val="$(_yaml_plugin_get_from_file "$_ygpc_local" "$_ygpc_plugin" "$_ygpc_alt")"
+    [ -n "$_val" ] || [ -z "$_ygpc_alt2" ] || _val="$(_yaml_plugin_get_from_file "$_ygpc_local" "$_ygpc_plugin" "$_ygpc_alt2")"
     if [ -n "$_val" ]; then
       printf '%s' "$_val"
       return 0
@@ -1020,6 +1087,7 @@ yaml_get_plugin_config() {
   if [ -f "$_ygpc_main" ]; then
     _val="$(_yaml_plugin_get_from_file "$_ygpc_main" "$_ygpc_plugin" "$_ygpc_key")"
     [ -n "$_val" ] || [ -z "$_ygpc_alt" ] || _val="$(_yaml_plugin_get_from_file "$_ygpc_main" "$_ygpc_plugin" "$_ygpc_alt")"
+    [ -n "$_val" ] || [ -z "$_ygpc_alt2" ] || _val="$(_yaml_plugin_get_from_file "$_ygpc_main" "$_ygpc_plugin" "$_ygpc_alt2")"
     if [ -n "$_val" ]; then
       printf '%s' "$_val"
       return 0
@@ -1396,25 +1464,435 @@ plugin_legacy_raw_dir() {
 }
 
 # Emit a plugin's config_defaults block from plugin.yaml, re-indented for insertion
-# under plugins.<name> in rnex.yaml: keys at 4 spaces, list items at 6 spaces.
+# under plugins.<name> in rnex.yaml by shifting indentation +2 spaces.
 plugin_config_default_lines() {
   _pcd_file="$1"
   [ -f "$_pcd_file" ] || return 0
   awk '
     /^config_defaults:[ ]*$/ || /^config_defaults:[ ]*#/ { in_c=1; next }
     in_c && /^[^ #]/ { exit }
-    in_c && /^[ ]*[a-zA-Z0-9_.-]+:[ ]*/ {
-      line = $0
-      sub(/^[ ]*/, "    ", line)
-      print line
-      next
-    }
-    in_c && /^[ ]+-([ ]|$)/ {
-      line = $0
-      sub(/^[ ]*/, "      ", line)
-      print line
+    in_c && /^[ ]*#/ { next }
+    in_c && /^[ ]*$/ { next }
+    in_c {
+      print "  " $0
     }
   ' "$_pcd_file"
+}
+
+# Check whether plugins.<plugin>.hooks is explicitly defined in a YAML file.
+_yaml_plugin_hooks_defined_in_file() {
+  _yphd_f="$1"; _yphd_plugin="$2"
+  [ -f "$_yphd_f" ] || return 1
+  awk -v plugin="$_yphd_plugin" '
+    BEGIN { found = 0 }
+    /^[ \t]*plugins:[ \t]*(#.*)?$/ {
+      in_plugins = 1
+      in_plugin = 0
+      match($0, /^[ \t]*/)
+      plugins_indent = RLENGTH
+      next
+    }
+    in_plugins && /^[^ \t#]/ { in_plugins = 0; in_plugin = 0; next }
+    !in_plugins { next }
+    {
+      match($0, /^[ \t]*/)
+      indent = RLENGTH
+      trimmed = substr($0, indent + 1)
+    }
+    trimmed ~ /^([#]|$)/ { next }
+    in_plugin && (indent <= plugin_indent) { in_plugin = 0 }
+    !in_plugin {
+      k = trimmed
+      sub(/:.*/, "", k)
+      gsub(/^["\047]|["\047]$/, "", k)
+      gsub(/[[:space:]]/, "", k)
+      if (k == plugin && trimmed ~ /:[ \t]*(#.*)?$/) {
+        in_plugin = 1
+        plugin_indent = indent
+      }
+      next
+    }
+    in_plugin && (indent > plugin_indent) {
+      k = trimmed
+      sub(/:.*/, "", k)
+      gsub(/^["\047]|["\047]$/, "", k)
+      gsub(/[[:space:]]/, "", k)
+      if (k == "hooks" && trimmed ~ /:[ \t]*/) {
+        found = 1
+        exit
+      }
+    }
+    END { exit(found ? 0 : 1) }
+  ' "$_yphd_f"
+}
+
+# Extract list of hook event names under plugins.<plugin>.hooks from a YAML file.
+_yaml_plugin_hooks_list_from_file() {
+  _yphl_f="$1"; _yphl_plugin="$2"
+  [ -f "$_yphl_f" ] || return 0
+  awk -v plugin="$_yphl_plugin" '
+    /^[ \t]*plugins:[ \t]*(#.*)?$/ {
+      in_plugins = 1
+      in_plugin = 0
+      in_hooks = 0
+      next
+    }
+    in_plugins && /^[^ \t#]/ { in_plugins = 0; in_plugin = 0; in_hooks = 0; next }
+    !in_plugins { next }
+    {
+      match($0, /^[ \t]*/)
+      indent = RLENGTH
+      trimmed = substr($0, indent + 1)
+    }
+    trimmed ~ /^([#]|$)/ { next }
+    in_hooks && (indent <= hooks_indent) { in_hooks = 0 }
+    in_plugin && (indent <= plugin_indent) { in_plugin = 0; in_hooks = 0 }
+    !in_plugin {
+      k = trimmed
+      sub(/:.*/, "", k)
+      gsub(/^["\047]|["\047]$/, "", k)
+      gsub(/[[:space:]]/, "", k)
+      if (k == plugin && trimmed ~ /:[ \t]*(#.*)?$/) {
+        in_plugin = 1
+        plugin_indent = indent
+      }
+      next
+    }
+    in_plugin && !in_hooks && (indent > plugin_indent) {
+      k = trimmed
+      sub(/:.*/, "", k)
+      gsub(/^["\047]|["\047]$/, "", k)
+      gsub(/[[:space:]]/, "", k)
+      if (k == "hooks" && trimmed ~ /:[ \t]*(#.*)?$/) {
+        in_hooks = 1
+        hooks_indent = indent
+        hook_item_indent = -1
+      }
+      next
+    }
+    in_hooks && (indent > hooks_indent) {
+      if (trimmed ~ /^-([ \t]|$)/) next
+      if (hook_item_indent == -1 || indent <= hook_item_indent) {
+        hook_item_indent = indent
+        k = trimmed
+        sub(/:.*/, "", k)
+        gsub(/^["\047]|["\047]$/, "", k)
+        gsub(/[[:space:]]/, "", k)
+        if (length(k) > 0) print k
+      }
+    }
+  ' "$_yphl_f" | awk '!seen[$0]++'
+}
+
+# Extract list of hook event names under config_defaults.hooks from a plugin.yaml manifest.
+_yaml_plugin_manifest_hooks_list() {
+  _ypmhl_f="$1"
+  [ -f "$_ypmhl_f" ] || return 0
+  awk '
+    /^config_defaults:[ \t]*(#.*)?$/ { in_c = 1; in_hooks = 0; next }
+    in_c && /^[^ \t#]/ { exit }
+    !in_c { next }
+    {
+      match($0, /^[ \t]*/)
+      indent = RLENGTH
+      trimmed = substr($0, indent + 1)
+    }
+    trimmed ~ /^([#]|$)/ { next }
+    in_hooks && (indent <= hooks_indent) { in_hooks = 0 }
+    !in_hooks {
+      k = trimmed
+      sub(/:.*/, "", k)
+      gsub(/^["\047]|["\047]$/, "", k)
+      gsub(/[[:space:]]/, "", k)
+      if (k == "hooks" && trimmed ~ /:[ \t]*(#.*)?$/) {
+        in_hooks = 1
+        hooks_indent = indent
+        hook_item_indent = -1
+      }
+      next
+    }
+    in_hooks && (indent > hooks_indent) {
+      if (trimmed ~ /^-([ \t]|$)/) next
+      if (hook_item_indent == -1 || indent <= hook_item_indent) {
+        hook_item_indent = indent
+        k = trimmed
+        sub(/:.*/, "", k)
+        gsub(/^["\047]|["\047]$/, "", k)
+        gsub(/[[:space:]]/, "", k)
+        if (length(k) > 0) print k
+      }
+    }
+  ' "$_ypmhl_f" | awk '!seen[$0]++'
+}
+
+# Extract command list for plugins.<plugin>.hooks.<event> from a YAML file.
+_yaml_plugin_hook_commands_from_file() {
+  _yphc_f="$1"; _yphc_plugin="$2"; _yphc_event="$3"
+  [ -f "$_yphc_f" ] || return 0
+  awk -v plugin="$_yphc_plugin" -v target_event="$_yphc_event" '
+    function unquote(v) {
+      sub(/^[ \t]+/, "", v)
+      if (v ~ /^"/) {
+        sub(/^"/, "", v)
+        sub(/"[ \t]*(#.*)?$/, "", v)
+      } else if (v ~ /^\047/) {
+        sub(/^\047/, "", v)
+        sub(/\047[ \t]*(#.*)?$/, "", v)
+      } else {
+        sub(/[ \t]+#.*$/, "", v)
+        sub(/[ \t]+$/, "", v)
+      }
+      return v
+    }
+    /^[ \t]*plugins:[ \t]*(#.*)?$/ {
+      in_plugins = 1
+      in_plugin = 0
+      in_hooks = 0
+      in_cmds = 0
+      next
+    }
+    in_plugins && /^[^ \t#]/ { in_plugins = 0; in_plugin = 0; in_hooks = 0; in_cmds = 0; next }
+    !in_plugins { next }
+    {
+      match($0, /^[ \t]*/)
+      indent = RLENGTH
+      trimmed = substr($0, indent + 1)
+    }
+    trimmed ~ /^([#]|$)/ { next }
+    in_cmds {
+      if (indent > event_indent || (indent == event_indent && trimmed ~ /^-([ \t]|$)/)) {
+        if (trimmed ~ /^-([ \t]|$)/) {
+          item = unquote(substr(trimmed, 2))
+          if (length(item) > 0) print item
+        }
+        next
+      }
+      in_cmds = 0
+    }
+    in_hooks && (indent <= hooks_indent) { in_hooks = 0 }
+    in_plugin && (indent <= plugin_indent) { in_plugin = 0; in_hooks = 0 }
+    !in_plugin {
+      k = trimmed
+      sub(/:.*/, "", k)
+      gsub(/^["\047]|["\047]$/, "", k)
+      gsub(/[[:space:]]/, "", k)
+      if (k == plugin && trimmed ~ /:[ \t]*(#.*)?$/) {
+        in_plugin = 1
+        plugin_indent = indent
+      }
+      next
+    }
+    in_plugin && !in_hooks && (indent > plugin_indent) {
+      k = trimmed
+      sub(/:.*/, "", k)
+      gsub(/^["\047]|["\047]$/, "", k)
+      gsub(/[[:space:]]/, "", k)
+      if (k == "hooks" && trimmed ~ /:[ \t]*(#.*)?$/) {
+        in_hooks = 1
+        hooks_indent = indent
+      }
+      next
+    }
+    in_hooks && (indent > hooks_indent) {
+      k = trimmed
+      sub(/:.*/, "", k)
+      gsub(/^["\047]|["\047]$/, "", k)
+      gsub(/[[:space:]]/, "", k)
+      if (k == target_event && trimmed ~ /:[ \t]*/) {
+        event_indent = indent
+        val = trimmed
+        sub(/^[^:]*:[ \t]*/, "", val)
+        if (val ~ /^(#.*)?$/) {
+          in_cmds = 1
+          next
+        }
+        if (val ~ /^\[/) {
+          sub(/^\[/, "", val)
+          sub(/\][ \t]*(#.*)?$/, "", val)
+          n = split(val, parts, ",")
+          for (i = 1; i <= n; i++) {
+            item = unquote(parts[i])
+            if (length(item) > 0) print item
+          }
+          next
+        }
+        item = unquote(val)
+        if (length(item) > 0 && item != "false" && item != "none" && item != "off" && item != "0" && item != "{}") print item
+        next
+      }
+    }
+  ' "$_yphc_f"
+}
+
+# Extract command list for config_defaults.hooks.<event> from a plugin.yaml manifest.
+_yaml_plugin_manifest_hook_commands() {
+  _ypmhc_f="$1"; _ypmhc_event="$2"
+  [ -f "$_ypmhc_f" ] || return 0
+  awk -v target_event="$_ypmhc_event" '
+    function unquote(v) {
+      sub(/^[ \t]+/, "", v)
+      if (v ~ /^"/) {
+        sub(/^"/, "", v)
+        sub(/"[ \t]*(#.*)?$/, "", v)
+      } else if (v ~ /^\047/) {
+        sub(/^\047/, "", v)
+        sub(/\047[ \t]*(#.*)?$/, "", v)
+      } else {
+        sub(/[ \t]+#.*$/, "", v)
+        sub(/[ \t]+$/, "", v)
+      }
+      return v
+    }
+    /^config_defaults:[ \t]*(#.*)?$/ { in_c = 1; in_hooks = 0; in_cmds = 0; next }
+    in_c && /^[^ \t#]/ { exit }
+    !in_c { next }
+    {
+      match($0, /^[ \t]*/)
+      indent = RLENGTH
+      trimmed = substr($0, indent + 1)
+    }
+    trimmed ~ /^([#]|$)/ { next }
+    in_cmds {
+      if (indent > event_indent || (indent == event_indent && trimmed ~ /^-([ \t]|$)/)) {
+        if (trimmed ~ /^-([ \t]|$)/) {
+          item = unquote(substr(trimmed, 2))
+          if (length(item) > 0) print item
+        }
+        next
+      }
+      in_cmds = 0
+    }
+    in_hooks && (indent <= hooks_indent) { in_hooks = 0 }
+    !in_hooks {
+      k = trimmed
+      sub(/:.*/, "", k)
+      gsub(/^["\047]|["\047]$/, "", k)
+      gsub(/[[:space:]]/, "", k)
+      if (k == "hooks" && trimmed ~ /:[ \t]*(#.*)?$/) {
+        in_hooks = 1
+        hooks_indent = indent
+      }
+      next
+    }
+    in_hooks && (indent > hooks_indent) {
+      k = trimmed
+      sub(/:.*/, "", k)
+      gsub(/^["\047]|["\047]$/, "", k)
+      gsub(/[[:space:]]/, "", k)
+      if (k == target_event && trimmed ~ /:[ \t]*/) {
+        event_indent = indent
+        val = trimmed
+        sub(/^[^:]*:[ \t]*/, "", val)
+        if (val ~ /^(#.*)?$/) {
+          in_cmds = 1
+          next
+        }
+        if (val ~ /^\[/) {
+          sub(/^\[/, "", val)
+          sub(/\][ \t]*(#.*)?$/, "", val)
+          n = split(val, parts, ",")
+          for (i = 1; i <= n; i++) {
+            item = unquote(parts[i])
+            if (length(item) > 0) print item
+          }
+          next
+        }
+        item = unquote(val)
+        if (length(item) > 0 && item != "false" && item != "none" && item != "off" && item != "0" && item != "{}") print item
+        next
+      }
+    }
+  ' "$_ypmhc_f"
+}
+
+# Resolve plugin directory for manifest lookups.
+_yaml_resolve_plugin_manifest_path() {
+  _yrpm_p="$1"
+  _yrpm_dir=""
+  if command -v plugin_resolve_dir >/dev/null 2>&1; then
+    _yrpm_dir="$(plugin_resolve_dir "$_yrpm_p" 2>/dev/null || true)"
+  elif command -v find_plugin_dir >/dev/null 2>&1; then
+    _yrpm_dir="$(find_plugin_dir "$_yrpm_p" 2>/dev/null || true)"
+  fi
+  if [ -z "$_yrpm_dir" ]; then
+    for _cand in \
+      "${NEXUS_DIR:-${RNEX_ROOT:-.}}/plugins/$_yrpm_p" \
+      "${NEXUS_DIR:-${RNEX_ROOT:-.}}/.rnex/plugins/$_yrpm_p" \
+      "${SCRIPT_LOCATION:-.}/plugins/$_yrpm_p"; do
+      if [ -f "$_cand/plugin.yaml" ]; then
+        _yrpm_dir="$_cand"
+        break
+      fi
+    done
+  fi
+  if [ -n "$_yrpm_dir" ] && [ -f "$_yrpm_dir/plugin.yaml" ]; then
+    printf '%s' "$_yrpm_dir/plugin.yaml"
+    return 0
+  fi
+  return 1
+}
+
+# List configured hook events for a plugin (with .local.rnex.yaml > rnex.yaml > plugin.yaml precedence).
+yaml_list_plugin_hooks() {
+  _ylph_p="$1"
+  _yaml_resolve_files
+  _ylph_local="${NEXUS_LOCAL_CONFIG:-$_wly}"
+  _ylph_main="${NEXUS_CONFIG:-$_wy}"
+
+  # If hooks scalar is explicitly set to false/off/none/[]/{}, return empty
+  if [ -f "$_ylph_local" ] && _yaml_plugin_hooks_defined_in_file "$_ylph_local" "$_ylph_p"; then
+    _scalar_h="$(_yaml_plugin_get_from_file "$_ylph_local" "$_ylph_p" "hooks")"
+    case "$_scalar_h" in
+      false|off|none|0|"{}"|"[]") return 0 ;;
+    esac
+    _yaml_plugin_hooks_list_from_file "$_ylph_local" "$_ylph_p"
+    return 0
+  fi
+
+  if [ -f "$_ylph_main" ] && _yaml_plugin_hooks_defined_in_file "$_ylph_main" "$_ylph_p"; then
+    _scalar_h="$(_yaml_plugin_get_from_file "$_ylph_main" "$_ylph_p" "hooks")"
+    case "$_scalar_h" in
+      false|off|none|0|"{}"|"[]") return 0 ;;
+    esac
+    _yaml_plugin_hooks_list_from_file "$_ylph_main" "$_ylph_p"
+    return 0
+  fi
+
+  _ylph_manifest="$(_yaml_resolve_plugin_manifest_path "$_ylph_p" || true)"
+  if [ -n "$_ylph_manifest" ]; then
+    _yaml_plugin_manifest_hooks_list "$_ylph_manifest"
+  fi
+}
+
+# Get command list for a plugin hook event (with .local.rnex.yaml > rnex.yaml > plugin.yaml precedence).
+yaml_get_plugin_hook_commands() {
+  _ygphc_p="$1"; _ygphc_ev="$2"
+  _yaml_resolve_files
+  _ygphc_local="${NEXUS_LOCAL_CONFIG:-$_wly}"
+  _ygphc_main="${NEXUS_CONFIG:-$_wy}"
+
+  if [ -f "$_ygphc_local" ] && _yaml_plugin_hooks_defined_in_file "$_ygphc_local" "$_ygphc_p"; then
+    _scalar_h="$(_yaml_plugin_get_from_file "$_ygphc_local" "$_ygphc_p" "hooks")"
+    case "$_scalar_h" in
+      false|off|none|0|"{}"|"[]") return 0 ;;
+    esac
+    _yaml_plugin_hook_commands_from_file "$_ygphc_local" "$_ygphc_p" "$_ygphc_ev"
+    return 0
+  fi
+
+  if [ -f "$_ygphc_main" ] && _yaml_plugin_hooks_defined_in_file "$_ygphc_main" "$_ygphc_p"; then
+    _scalar_h="$(_yaml_plugin_get_from_file "$_ygphc_main" "$_ygphc_p" "hooks")"
+    case "$_scalar_h" in
+      false|off|none|0|"{}"|"[]") return 0 ;;
+    esac
+    _yaml_plugin_hook_commands_from_file "$_ygphc_main" "$_ygphc_p" "$_ygphc_ev"
+    return 0
+  fi
+
+  _ygphc_manifest="$(_yaml_resolve_plugin_manifest_path "$_ygphc_p" || true)"
+  if [ -n "$_ygphc_manifest" ]; then
+    _yaml_plugin_manifest_hook_commands "$_ygphc_manifest" "$_ygphc_ev"
+  fi
 }
 
 yaml_has_plugin() {
@@ -1435,15 +1913,6 @@ provider_option_enabled() {
   _p="$1"; _opt="$2"
   provider_plugin_enabled "$_p" || return 1
   is_enabled_val "$(yaml_plugin_get "$_p" "$_opt")"
-}
-
-provider_auto_sync_enabled() {
-  _p="$1"
-  provider_plugin_enabled "$_p" || return 1
-  _val="$(yaml_plugin_get "$_p" "auto_sync_on")"
-  [ -n "$_val" ] || _val="$(yaml_plugin_get "$_p" "autoSyncOn")"
-  [ -n "$_val" ] || _val="SessionStart"
-  is_enabled_val "$_val"
 }
 
 _yaml_plugin_set_in_file() {

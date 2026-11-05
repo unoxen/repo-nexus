@@ -17,3 +17,6 @@ merge_rnex_instructions "$_root/CODEX.md"
 if ! provider_option_enabled "codex" "skills" 2>/dev/null; then
   clean_provider_user_skills "$_root/.codex/skills"
 fi
+
+sync_provider_hooks "codex" "$_root/.codex"
+rmdir "$_root/.codex" 2>/dev/null || true

@@ -48,15 +48,15 @@ A self-healing, agent-maintained knowledge graph structured as:
 - **`wiki/index.md` Navigation Index**:
   - Master categorized catalog organizing all atomic concepts, architecture decisions, and cross-project knowledge.
 - **`wiki/hot.md` Rolling Context Cache**:
-  - High-density ~500-word orientation summary for rapid agent onboarding without full wiki scans. Agents read this once on startup.
+  - Compact, git-ignored orientation summary (`hot_file: true` by default) for rapid agent onboarding without full wiki scans. Completely independent of `wiki/_log.md`.
 - **`wiki/_log.md` Audit Trail**:
-  - Append-only log recording every ingest and lint operation with timestamped details and source attribution.
+  - Shared append-only log recording ingest and lint operations across tracked wiki pages with timestamped details and source attribution.
 
 ### 4. Standardized Agent Workflows
 - **`wiki-ingest.md` (8-Step Ingestion Protocol)**:
   - Scaffolds deterministic 1-to-1 wiki pages (`repo-<name>.md` for root repo READMEs; `<normalized-relative-path>.md` for all other sources) and enriches them in-place.
   - Formulates bi-directional frontmatter relations (`sources`, `related`, `extends`, `contradicts`).
-  - Idempotently updates `wiki/_log.md` and direct links in `wiki/index.md` and `wiki/hot.md`.
+  - Idempotently updates `wiki/_log.md` and direct links in `wiki/index.md` (and independently updates local git-ignored `wiki/hot.md` when `hot_file: true`).
 - **`wiki-lint.md` (10-Step Integrity Audit Protocol)**:
   - Validates inter-page link paths and file existence.
   - Recomputes reverse backlinks (`mentioned_in`).
@@ -93,6 +93,7 @@ plugins:
   karpathy-llm:
     # Directory paths relative to workspace root (defaults shown)
     wiki_dir: wiki              # Directory for curated atomic markdown pages (default: wiki)
+    hot_file: true              # Generate git-ignored <wiki_dir>/hot.md cache (default: true)
     sources:                    # Intake documents: directories and/or glob patterns
       - docs                    #   directory: all files (hidden dirs and node_modules pruned)
       - "repos/**/README.md"    #   recursive glob (quote it); disabled repos are excluded
@@ -105,6 +106,7 @@ plugins:
 | Option | Type | Default | Description |
 |:---|:---|:---|:---|
 | `wiki_dir` | string | `wiki` | Directory containing curated atomic markdown pages. |
+| `hot_file` | boolean | `true` | Enable or disable the optional git-ignored `<wiki_dir>/hot.md` orientation cache. |
 | `sources` | list | `[docs, "repos/**/README.md"]` | Intake directories and/or glob patterns relative to workspace root. Overridable in `.local.rnex.yaml`. |
 | `enabled` | boolean | `true` | Enable or disable the plugin. Overridable in `.local.rnex.yaml`. |
 

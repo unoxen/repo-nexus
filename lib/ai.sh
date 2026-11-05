@@ -23,6 +23,10 @@ fi
 _build_rnex_gitignore_section() {
   _active_repos_dir="$(yaml_get_repos_dir 2>/dev/null || printf 'repos')"
   [ -n "$_active_repos_dir" ] || _active_repos_dir="repos"
+  _active_wiki_dir="$(yaml_plugin_get "karpathy-llm" "wiki_dir" 2>/dev/null || printf 'wiki')"
+  _active_wiki_dir="${_active_wiki_dir#./}"
+  _active_wiki_dir="${_active_wiki_dir%/}"
+  [ -n "$_active_wiki_dir" ] || _active_wiki_dir="wiki"
   cat <<GI_SECTION_EOF
 $GITIGNORE_MARKER_START
 # Managed by Repo Nexus (rnex) — synced with git.ignore in workspace configuration
@@ -37,10 +41,14 @@ ${_active_repos_dir}/*
 .rnex*/
 rnex*/
 
-# Local machine-specific configuration
+# Local machine-specific configuration & rolling wiki cache
 $RNEX_LOCAL_CONFIG_FILE
 .rnex.local.yaml
+wiki/hot.md
 GI_SECTION_EOF
+  if [ "$_active_wiki_dir" != "wiki" ]; then
+    printf '%s/hot.md\n' "$_active_wiki_dir"
+  fi
 
   _custom_ignores="$(yaml_get_git_ignore 2>/dev/null || true)"
   if [ -n "$_custom_ignores" ]; then
@@ -49,7 +57,7 @@ GI_SECTION_EOF
     printf '%s\n' "$_custom_ignores" | while IFS= read -r _ci || [ -n "$_ci" ]; do
       [ -n "$_ci" ] || continue
       case "$_ci" in
-        "repos/"|"repos/*"|"!repos/.gitkeep"|"${_active_repos_dir}/"|"${_active_repos_dir}/*"|"!${_active_repos_dir}/.gitkeep"|"**/.rnex*/"|"**/rnex*/"|".rnex*/"|"rnex*/"|"$RNEX_LOCAL_CONFIG_FILE"|".rnex.local.yaml")
+        "repos/"|"repos/*"|"!repos/.gitkeep"|"${_active_repos_dir}/"|"${_active_repos_dir}/*"|"!${_active_repos_dir}/.gitkeep"|"**/.rnex*/"|"**/rnex*/"|".rnex*/"|"rnex*/"|"$RNEX_LOCAL_CONFIG_FILE"|".rnex.local.yaml"|"wiki/hot.md"|"${_active_wiki_dir}/hot.md")
           continue
           ;;
       esac
@@ -437,9 +445,15 @@ render_ai_instructions() {
   printf 'Execute these steps in strict order:\n'
   _rai_n=1
   if [ "$_rai_kp" -eq 1 ]; then
-    printf "1. **Step 1 — Read Wiki Hot Cache**: Read \`%s/hot.md\` first for workspace architecture, repository boundaries, and direct links to curated \`%s/*.md\` pages. If \`%s/hot.md\` links the needed page, read that page directly and skip \`%s/index.md\`.\n" "$_rai_wiki" "$_rai_wiki" "$_rai_wiki" "$_rai_wiki"
-    printf "2. **Step 2 — Fallback to Wiki Index**: Read \`%s/index.md\` only if the needed topic or page is not listed in \`%s/hot.md\` (e.g. when condensed in large workspaces), and read only the relevant atomic page(s) in \`%s/\`. Do NOT read raw intake sources%s or \`%s/\` before completing Steps 1–2.\n" "$_rai_wiki" "$_rai_wiki" "$_rai_wiki" "${_rai_src_dirs:+ ($_rai_src_dirs)}" "$_rai_rd"
-    _rai_n=3
+    _rai_hot_opt="$(yaml_plugin_get "karpathy-llm" "hot_file" 2>/dev/null || printf 'true')"
+    if is_enabled_val "$_rai_hot_opt"; then
+      printf "1. **Step 1 — Read Wiki Hot Cache**: Read \`%s/hot.md\` first for workspace architecture, repository boundaries, and direct links to curated \`%s/*.md\` pages. If \`%s/hot.md\` links the needed page, read that page directly and skip \`%s/index.md\`.\n" "$_rai_wiki" "$_rai_wiki" "$_rai_wiki" "$_rai_wiki"
+      printf "2. **Step 2 — Fallback to Wiki Index**: Read \`%s/index.md\` only if the needed topic or page is not listed in \`%s/hot.md\` (e.g. when condensed in large workspaces), and read only the relevant atomic page(s) in \`%s/\`. Do NOT read raw intake sources%s or \`%s/\` before completing Steps 1–2.\n" "$_rai_wiki" "$_rai_wiki" "$_rai_wiki" "${_rai_src_dirs:+ ($_rai_src_dirs)}" "$_rai_rd"
+      _rai_n=3
+    else
+      printf "1. **Step 1 — Read Wiki Index**: Read \`%s/index.md\` first and read only the relevant atomic page(s) in \`%s/\`. Do NOT read raw intake sources%s or \`%s/\` before completing Step 1.\n" "$_rai_wiki" "$_rai_wiki" "${_rai_src_dirs:+ ($_rai_src_dirs)}" "$_rai_rd"
+      _rai_n=2
+    fi
   fi
   printf "%s. **Step %s — Targeted Repository Access**: Inspect or modify only the specific files in active \`%s/<name>/\` required for the task. Never modify or commit inside \`READ-ONLY\` repositories.\n" "$_rai_n" "$_rai_n" "$_rai_rd"
   _rai_n=$((_rai_n + 1))

@@ -11,10 +11,15 @@ cmd_repo() {
   shift
   case "$_subcmd" in
     add)
+      _repo_add_cloned=0
       run_hook "before_repo_add" "$@"
       cmd_repo_add "$@"
       _rc=$?
-      [ "$_rc" -eq 0 ] && run_hook "after_repo_add" "$@"
+      if [ "$_rc" -eq 0 ]; then
+        run_hook "after_repo_add" "$@"
+        [ "${_repo_add_cloned:-0}" -eq 1 ] && run_hook "after_clone" "$@"
+        run_internal_plugin_hooks "after_sync" "$@"
+      fi
       return "$_rc"
       ;;
     remove|rm)
@@ -27,7 +32,10 @@ cmd_repo() {
       run_hook "before_repo_remove" "$@"
       cmd_repo_remove "$@"
       _rc=$?
-      [ "$_rc" -eq 0 ] && run_hook "after_repo_remove" "$@"
+      if [ "$_rc" -eq 0 ]; then
+        run_hook "after_repo_remove" "$@"
+        run_internal_plugin_hooks "after_sync" "$@"
+      fi
       return "$_rc"
       ;;
     set)
@@ -40,7 +48,10 @@ cmd_repo() {
       run_hook "before_repo_set" "$@"
       cmd_repo_set "$@"
       _rc=$?
-      [ "$_rc" -eq 0 ] && run_hook "after_repo_set" "$@"
+      if [ "$_rc" -eq 0 ]; then
+        run_hook "after_repo_set" "$@"
+        run_internal_plugin_hooks "after_sync" "$@"
+      fi
       return "$_rc"
       ;;
     clone)
@@ -48,7 +59,10 @@ cmd_repo() {
       run_hook "before_clone" "$@"
       cmd_repo_clone "$@"
       _rc=$?
-      [ "$_rc" -eq 0 ] && run_hook "after_clone" "$@"
+      if [ "$_rc" -eq 0 ]; then
+        run_hook "after_clone" "$@"
+        run_internal_plugin_hooks "after_sync" "$@"
+      fi
       return "$_rc"
       ;;
     status)
@@ -166,7 +180,9 @@ cmd_repo_add() {
   _target_dir="$(resolve_repo_path "$_name")"
 
   # Clone repo into destination if enabled and not already cloned
+  _repo_add_cloned=0
   if [ "$_enabled" = "true" ] && [ ! -d "$_target_dir" ]; then
+    run_hook "before_clone" "$_name"
     if [ -n "$_branch" ]; then
       log_info "Cloning $_name (branch: $_branch) from $_url into $_target_dir..."
       if ! git clone -b "$_branch" "$_url" "$_target_dir"; then
@@ -178,6 +194,7 @@ cmd_repo_add() {
         die "Failed to clone repository from $_url"
       fi
     fi
+    _repo_add_cloned=1
   fi
 
   if [ "$_is_local" -eq 1 ]; then
@@ -188,7 +205,7 @@ cmd_repo_add() {
     sync_repo_rnex "$_name"
     build_ai_instructions "$NEXUS_DIR"
     sync_code_workspace
-    run_hook "after_sync" "$@"
+    update_sync_stamp "$NEXUS_DIR"
     printf '\n'
     log_ok "Registered repo '${_name}' in $(basename "$WORKSPACE_LOCAL_YAML")"
     return 0
@@ -207,7 +224,7 @@ cmd_repo_add() {
       sync_repo_rnex "$_name"
       build_ai_instructions "$NEXUS_DIR"
       sync_code_workspace
-      run_hook "after_sync" "$@"
+      update_sync_stamp "$NEXUS_DIR"
       printf '\n'
       log_ok "Updated repo '${_name}' in $(basename "$WORKSPACE_YAML")"
       return 0
@@ -218,7 +235,7 @@ cmd_repo_add() {
   sync_repo_rnex "$_name"
   build_ai_instructions "$NEXUS_DIR"
   sync_code_workspace
-  run_hook "after_sync" "$@"
+  update_sync_stamp "$NEXUS_DIR"
   printf '\n'
   log_ok "Registered and added repo '${_name}'"
 }
@@ -275,7 +292,6 @@ cmd_repo_remove() {
   update_sync_stamp "$NEXUS_DIR"
   build_ai_instructions "$NEXUS_DIR"
   sync_code_workspace
-  run_hook "after_sync" "$@"
 }
 
 # Modify repository configuration flags (--enable, --disable, --readonly, --readwrite).
@@ -358,7 +374,7 @@ cmd_repo_set() {
   fi
   build_ai_instructions "$NEXUS_DIR"
   sync_code_workspace
-  run_hook "after_sync" "$@"
+  update_sync_stamp "$NEXUS_DIR"
 }
 
 # Clone a single member repository declared in configuration.
@@ -390,7 +406,7 @@ cmd_repo_clone() {
       log_ok "Successfully cloned '$_name'"
       sync_repo_rnex "$_name"
       sync_code_workspace
-      run_hook "after_sync" "$@"
+      update_sync_stamp "$NEXUS_DIR"
     else
       die "Failed to clone '$_name' from $_url"
     fi
@@ -400,7 +416,7 @@ cmd_repo_clone() {
       log_ok "Successfully cloned '$_name'"
       sync_repo_rnex "$_name"
       sync_code_workspace
-      run_hook "after_sync" "$@"
+      update_sync_stamp "$NEXUS_DIR"
     else
       die "Failed to clone '$_name' from $_url"
     fi
@@ -523,7 +539,7 @@ cmd_clone() {
     fi
   done
   sync_code_workspace
-  run_hook "after_sync" "$@"
+  update_sync_stamp "$NEXUS_DIR"
   printf '\n'
 }
 

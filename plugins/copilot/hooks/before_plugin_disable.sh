@@ -13,6 +13,7 @@ if ! command -v clean_provider_user_skills >/dev/null 2>&1; then
 fi
 
 clean_provider_user_skills "$_root/.github/skills"
+clean_provider_hooks "copilot" "$_root/.github"
 clean_provider_agents "$_root/.github/agents" ".agent.md"
 clean_rnex_instructions "$_root/.github/copilot-instructions.md"
 

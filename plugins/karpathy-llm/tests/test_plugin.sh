@@ -477,6 +477,64 @@ _log_bytes_after="$(wc -c < "$TEST_NESTED_WS/wiki/_log.md" | tr -d ' ')"
 [ "$_log_bytes_before" = "$_log_bytes_after" ] || { fail "_log.md changed on repeated ingest with 0 new files (before=$_log_bytes_before, after=$_log_bytes_after)"; exit 1; }
 pass
 
+# --------------------------------------------------------------------------
+run_test "Karpathy-llm: compact hot.md (<2KB on huge 10KB lines & 15+ files), decoupling from _log.md, gitignore default, and hot_file: false"
+TEST_HOT_WS="$TEST_TMP/karpathy-hot-ws"
+mkdir -p "$TEST_HOT_WS"
+setup_plugin_test_workspace karpathy-llm "$TEST_HOT_WS"
+cd "$TEST_HOT_WS"
+"$TEST_HOT_WS/rnex" init -y --karpathy "$TEST_HOT_WS" >/dev/null
+
+# 1. Verify wiki/hot.md is in default git.ignore and .gitignore
+grep -q "wiki/hot.md" "$TEST_HOT_WS/rnex.yaml" || { fail "wiki/hot.md missing from default git.ignore in rnex.yaml"; exit 1; }
+grep -q "wiki/hot.md" "$TEST_HOT_WS/.gitignore" || { fail "wiki/hot.md missing from .gitignore"; exit 1; }
+
+# 2. Create 15 source files, including one with a massive 10,000-character single-line paragraph
+_huge_line="$(awk 'BEGIN { for (i=0; i<200; i++) printf "MassiveUnbrokenContextPayloadSegment_%d_WithVerboseDetails ", i }')"
+for _fidx in $(seq 1 15); do
+  printf '# Source Doc %s\n%s\n' "$_fidx" "$_huge_line" > "$TEST_HOT_WS/docs/doc-$_fidx.md"
+done
+
+(cd "$TEST_HOT_WS" && ./rnex plugin karpathy-llm ingest >/dev/null)
+
+# Verify hot.md is compact (< 2048 bytes) and Section 2 is capped at <= 8 entries
+_hot_bytes="$(wc -c < "$TEST_HOT_WS/wiki/hot.md" | tr -d ' ')"
+[ "$_hot_bytes" -lt 2048 ] || { fail "hot.md size ($_hot_bytes bytes) exceeded 2048-byte compact budget"; exit 1; }
+_sec2_cnt="$(awk '/^## 2\./ { in_s2=1; next } /^## 3\./ { in_s2=0 } in_s2 && /^\* \*\*\[/ { c++ } END { print c+0 }' "$TEST_HOT_WS/wiki/hot.md")"
+[ "$_sec2_cnt" -le 8 ] || { fail "hot.md Section 2 has $_sec2_cnt entries (expected <= 8)"; exit 1; }
+
+# 3. Verify complete decoupling between hot.md and _log.md / tracked wiki pages
+! grep -qi "hot\.md" "$TEST_HOT_WS/wiki/_log.md" || { fail "_log.md must not mention hot.md"; exit 1; }
+! grep -qi "hot cache" "$TEST_HOT_WS/wiki/_log.md" || { fail "_log.md must not mention hot cache"; exit 1; }
+! grep -q "hot\.md" "$TEST_HOT_WS/wiki/docs-doc-1.md" || { fail "tracked wiki page frontmatter must not reference hot.md in mentioned_in"; exit 1; }
+
+# Deleting hot.md and re-running sync/ingest regenerates hot.md without modifying _log.md
+_log_snap_before="$(cat "$TEST_HOT_WS/wiki/_log.md")"
+rm -f "$TEST_HOT_WS/wiki/hot.md"
+(cd "$TEST_HOT_WS" && ./rnex sync -y >/dev/null)
+(cd "$TEST_HOT_WS" && ./rnex plugin karpathy-llm ingest >/dev/null)
+[ -f "$TEST_HOT_WS/wiki/hot.md" ] || { fail "hot.md was not regenerated on sync/ingest"; exit 1; }
+_log_snap_after="$(cat "$TEST_HOT_WS/wiki/_log.md")"
+[ "$_log_snap_before" = "$_log_snap_after" ] || { fail "Regenerating hot.md modified shared _log.md"; exit 1; }
+
+# 4. Test hot_file: false disables hot.md and omits Step 1 from .rnex/ai-instructions.md
+cat <<'EOF_NO_HOT' > "$TEST_HOT_WS/rnex.yaml"
+version: 1.0.0
+plugins:
+  karpathy-llm:
+    wiki_dir: wiki
+    hot_file: false
+repos:
+EOF_NO_HOT
+(cd "$TEST_HOT_WS" && ./rnex sync -y >/dev/null)
+[ ! -f "$TEST_HOT_WS/wiki/hot.md" ] || { fail "hot.md was not removed when hot_file: false"; exit 1; }
+! grep -q "Read Wiki Hot Cache" "$TEST_HOT_WS/.rnex/ai-instructions.md" || {
+  fail ".rnex/ai-instructions.md still instructs reading hot.md when hot_file: false"; exit 1;
+}
+(cd "$TEST_HOT_WS" && ./rnex plugin karpathy-llm lint >/dev/null)
+[ ! -f "$TEST_HOT_WS/wiki/hot.md" ] || { fail "lint recreated hot.md when hot_file: false"; exit 1; }
+pass
+
 if [ "${_STANDALONE_RUN:-0}" -eq 1 ]; then
   report_results
 fi

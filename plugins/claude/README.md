@@ -19,7 +19,9 @@ Or configure options in `rnex.yaml` or `.local.rnex.yaml`:
 plugins:
   claude:
     skills: true
-    auto_sync_on: SessionStart
+    hooks:
+      SessionStart:
+        - "rnex sync --quiet"
 ```
 
 ## Options
@@ -27,5 +29,5 @@ plugins:
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `skills` | boolean | `true` | Generate user skills in `.claude/skills/` |
-| `auto_sync_on` | string/boolean | `SessionStart` | Lifecycle event triggering auto-sync in `.claude/settings.json` (or `false` to disable) |
+| `hooks` | map/boolean | `SessionStart: ["rnex sync --quiet"]` | AI provider lifecycle hooks generated in `.claude/hooks/rnex-hook-<event>.sh` and `.claude/settings.json` (or `false` to disable) |
 | `enabled` | boolean | `true` | Set to `false` in `.local.rnex.yaml` to override team config |

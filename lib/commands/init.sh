@@ -191,6 +191,7 @@ git:
     - "$_init_repos_dir/"
     - "**/.rnex*/"
     - "**/rnex*/"
+    - "wiki/hot.md"
   hooks:
 $_hooks_block
 

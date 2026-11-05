@@ -625,6 +625,14 @@ sync_plugins() {
       _src_path="$_pdir/$_s"
       _dest_path="$NEXUS_DIR/$_d"
 
+      if [ "$_pname" = "karpathy-llm" ] && [ "$_s" = "templates/hot.md" ]; then
+        _hot_opt="$(yaml_plugin_get "karpathy-llm" "hot_file" 2>/dev/null || printf 'true')"
+        if ! is_enabled_val "$_hot_opt"; then
+          rm -f "$_dest_path" 2>/dev/null || true
+          continue
+        fi
+      fi
+
       if [ -f "$_src_path" ] && [ ! -f "$_dest_path" ]; then
         mkdir -p "$(dirname "$_dest_path")"
         plugin_instantiate_template "$_pname" "$_pdir" "$_src_path" "$_dest_path"

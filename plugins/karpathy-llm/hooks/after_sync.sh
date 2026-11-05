@@ -160,7 +160,49 @@ if [ "$_skip_all_readmes" -ne 1 ]; then
   done
 fi
 
-# 3. Enforce strict ~500-word ceiling on hot.md (condense Section 1 if needed)
+# 2b. Populate Section 2 of local hot.md from existing wiki concept pages if hot_file is enabled (zero relation to _log.md)
+if kl_hot_enabled && [ -f "$_wiki_path/hot.md" ]; then
+  _s2_added=0
+  for _wpage in "$_wiki_path"/*.md; do
+    [ -f "$_wpage" ] || continue
+    _wb="$(basename "$_wpage")"
+    case "$_wb" in
+      index.md|_log.md|hot.md|repo-*.md) continue ;;
+    esac
+    [ "$_s2_added" -lt 8 ] || break
+    if ! grep -q "$_wb" "$_wiki_path/hot.md" 2>/dev/null; then
+      _wp_title="$(awk '/^title:[ ]*/ { sub(/^title:[ ]*/, ""); gsub(/^["\047]|["\047]$/, ""); print; exit }' "$_wpage")"
+      [ -n "$_wp_title" ] || _wp_title="${_wb%.md}"
+      _wp_src="$(awk '/^sources:[ ]*\[/ { sub(/^sources:[ ]*\[/, ""); sub(/\].*$/, ""); gsub(/^["\047]|["\047]$/, ""); print; exit }' "$_wpage")"
+      _wp_sum="$(awk '/^## Summary/ { in_s=1; next } in_s && NF>0 { print; exit }' "$_wpage")"
+      _wp_title_t="$(kl_truncate_summary "$_wp_title" 6 40)"
+      [ -n "$_wp_title_t" ] || _wp_title_t="${_wb%.md}"
+      _wp_sum_t="$(kl_truncate_summary "$_wp_sum" 7 55)"
+      [ -n "$_wp_sum_t" ] || _wp_sum_t="Compiled wiki page"
+      if [ -n "$_wp_src" ]; then
+        _hot_line="* **[${_wp_title_t}](./${_wb})** (\`${_wp_src}\`): ${_wp_sum_t}."
+      else
+        _hot_line="* **[${_wp_title_t}](./${_wb})**: ${_wp_sum_t}."
+      fi
+      _tmp_hot="$(mktemp)"
+      if LINE="$_hot_line" awk '
+        /^## 2\. Current Focus & Recent Ingests/ {
+          print
+          print ENVIRON["LINE"]
+          next
+        }
+        { print }
+      ' "$_wiki_path/hot.md" > "$_tmp_hot"; then
+        mv "$_tmp_hot" "$_wiki_path/hot.md"
+        _s2_added=$((_s2_added + 1))
+      else
+        rm -f "$_tmp_hot"
+      fi
+    fi
+  done
+fi
+
+# 3. Enforce strict compact ceiling on hot.md (condense Section 1 & bound Section 2)
 kl_condense_hot_cache "$_ALL_INGESTED_COUNT" "$_ALL_INGESTED_REPOS"
 
 # 4. Ensure sync stamp is updated

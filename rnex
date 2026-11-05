@@ -66,24 +66,69 @@ fi
 CUSTOM_CONFIG=""
 [ -n "$RNEX_CONFIG" ] && CUSTOM_CONFIG="$RNEX_CONFIG"
 
-# Parse global options (--config / -c) while preserving all other arguments in order
+# Global lifecycle hook suppression flag (set via --ignore-hooks, -H, or RNEX_IGNORE_HOOKS env var)
+RNEX_IGNORE_HOOKS="${RNEX_IGNORE_HOOKS:-0}"
+export RNEX_IGNORE_HOOKS
+
+# Parse global options (--config / -c, --ignore-hooks / -H) while preserving all other arguments in order
 ORIG_COUNT=$#
 i=0
+_seen_double_dash=0
+_in_exec_cmd=0
+_first_pos=""
+_second_pos=""
 while [ "$i" -lt "$ORIG_COUNT" ]; do
   i=$((i + 1))
+  if [ "$_seen_double_dash" -eq 1 ]; then
+    _arg="$1"
+    shift
+    set -- "$@" "$_arg"
+    continue
+  fi
   case "$1" in
+    --)
+      _seen_double_dash=1
+      _arg="$1"
+      shift
+      set -- "$@" "$_arg"
+      ;;
     --config=*)
       CUSTOM_CONFIG="${1#*=}"
       shift
       ;;
     --config|-c)
-      [ -n "$2" ] || die "Option $1 requires a file path argument"
+      [ -n "${2:-}" ] || die "Option $1 requires a file path argument"
       CUSTOM_CONFIG="$2"
       shift 2
       i=$((i + 1))
       ;;
+    --ignore-hooks)
+      RNEX_IGNORE_HOOKS=1
+      export RNEX_IGNORE_HOOKS
+      shift
+      ;;
+    -H)
+      if [ "$_in_exec_cmd" -eq 0 ]; then
+        RNEX_IGNORE_HOOKS=1
+        export RNEX_IGNORE_HOOKS
+        shift
+      else
+        _arg="$1"
+        shift
+        set -- "$@" "$_arg"
+      fi
+      ;;
     *)
       _arg="$1"
+      if [ -z "$_first_pos" ]; then
+        _first_pos="$_arg"
+        [ "$_first_pos" = "exec" ] && _in_exec_cmd=1
+      elif [ -z "$_second_pos" ]; then
+        _second_pos="$_arg"
+        if [ "$_first_pos" = "repo" ] && [ "$_second_pos" = "exec" ]; then
+          _in_exec_cmd=1
+        fi
+      fi
       shift
       set -- "$@" "$_arg"
       ;;
@@ -136,6 +181,9 @@ dispatch_action() {
   _rc=$?
   set -e
   run_hook "after_$_action" "$@"
+  if [ "$_action" = "clone" ] && [ "$_rc" -eq 0 ]; then
+    run_internal_plugin_hooks "after_sync" "$@"
+  fi
   return $_rc
 }
 

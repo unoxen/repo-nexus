@@ -77,5 +77,7 @@ Hooks execute within a standard subshell (`/bin/sh -e`) inside the workspace roo
 * `RNEX_PLUGIN_NAME`: Name of the affected plugin (for `plugin` events).
 * `RNEX_PLUGIN_COMMAND`: Name of the executed subcommand (for `plugin_command` events).
 
-### Re-Entrancy Guard
-To prevent recursive loops (e.g. `after_sync` executing `rnex sync`), the dispatcher exports `RNEX_HOOK_ACTIVE="<event_name>"` and skips subsequent invocations of the same event until the initial call unwinds.
+### Recursion Prevention (`--ignore-hooks` / `-H`)
+To prevent recursive hook execution across nested or consequential commands:
+* Pass `--ignore-hooks` or `-H` to any `rnex` command (or set `RNEX_IGNORE_HOOKS=1`) to skip all user-configured `rnex_hooks` and `git.hooks`.
+* Whenever `rnex` executes a command from a lifecycle hook or Git hook, it automatically injects `--ignore-hooks` into `rnex` invocations and exports `RNEX_IGNORE_HOOKS=1` in the hook subshell so triggered commands and any consequential subcommands never recurse into user hooks.

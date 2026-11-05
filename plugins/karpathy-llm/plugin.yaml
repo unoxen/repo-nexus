@@ -1,5 +1,5 @@
 name: karpathy-llm
-version: 0.8.31
+version: 0.8.32
 description: Andréj Karpathy's verification frameworks & wiki patterns for AI coding agents.
 author: unoxen
 homepage: https://github.com/unoxen/repo-nexus
@@ -9,10 +9,12 @@ config_defaults:
     - docs
     - "repos/**/README.md"
   wiki_dir: "wiki"
+  hot_file: true
 
 config_descriptions:
   sources: "<list>  (intake directories and/or glob patterns; .local.rnex.yaml list replaces rnex.yaml list)"
   wiki_dir: "<dir>  (directory for curated markdown pages)"
+  hot_file: "true|false  (maintain local git-ignored hot.md orientation cache, default: true)"
 
 commands:
   ingest: "Ingest intake sources and repo docs into the wiki [--source <path>] [--repo <name>] [--quiet]"

@@ -59,14 +59,16 @@ Configure options under `plugins.claude` in `rnex.yaml` or `.local.rnex.yaml`:
 plugins:
   claude:
     skills: true         # Generate user skills in .claude/skills/ (default: true)
-    auto_sync_on: SessionStart # Trigger auto-sync on lifecycle event (default: SessionStart, or false)
+    hooks:               # Configure AI provider lifecycle hooks (or false to disable)
+      SessionStart:
+        - "rnex sync --quiet"
     enabled: true        # Set to false to disable
 ```
 
 | Option | Type | Default | Description |
 |:---|:---|:---|:---|
 | `skills` | boolean | `true` | Generate user skill pointers in `.claude/skills/rnex-*/SKILL.md`. |
-| `auto_sync_on` | string/boolean | `SessionStart` | Lifecycle event triggering auto-sync in `.claude/settings.json` (or `false` to disable). |
+| `hooks` | map/boolean | `SessionStart: ["rnex sync --quiet"]` | Lifecycle hooks generated in `.claude/hooks/rnex-hook-<event>.sh` (pointing to `.rnex/plugins/claude/hooks/rnex-hook-<event>.sh`) and registered in `.claude/settings.json` (or `false` to disable). |
 | `enabled` | boolean | `true` | Enable or disable the plugin. Overridable in `.local.rnex.yaml`. |
 
 ---

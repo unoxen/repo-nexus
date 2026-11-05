@@ -23,19 +23,19 @@ _rnex_completions() {
 
   case "$prev" in
     rnex)
-      COMPREPLY=( $(compgen -W "$commands" -- "$cur") )
+      COMPREPLY=( $(compgen -W "$commands -c --config -H --ignore-hooks -h --help -v --version" -- "$cur") )
       return 0
       ;;
     repo)
-      COMPREPLY=( $(compgen -W "$repo_subcommands" -- "$cur") )
+      COMPREPLY=( $(compgen -W "$repo_subcommands -H --ignore-hooks" -- "$cur") )
       return 0
       ;;
     init)
-      COMPREPLY=( $(compgen -W "-y --yes --repos-dir --code-workspace --hooks --no-hooks --copilot --claude --gemini --codex --cursor --windsurf --karpathy" -- "$cur") )
+      COMPREPLY=( $(compgen -W "-y --yes --repos-dir --code-workspace --hooks --no-hooks -H --ignore-hooks --copilot --claude --gemini --codex --cursor --windsurf --karpathy" -- "$cur") )
       return 0
       ;;
     sync)
-      COMPREPLY=( $(compgen -W "-y --yes -q --quiet --upgrade" -- "$cur") )
+      COMPREPLY=( $(compgen -W "-y --yes -q --quiet --upgrade -H --ignore-hooks" -- "$cur") )
       return 0
       ;;
     status)
@@ -100,6 +100,7 @@ _rnex() {
 
   _arguments -C \
     '(-c --config)'{-c,--config}'[Specify config file]:file:_files' \
+    '(-H --ignore-hooks)'{-H,--ignore-hooks}'[Skip lifecycle and Git hooks execution]' \
     '(-v --version)'{-v,--version}'[Display version]' \
     '(-h --help)'{-h,--help}'[Display help]' \
     '1:command:->command' \
@@ -169,6 +170,7 @@ EOF
       ;;
     fish)
       cat <<'EOF'
+complete -c rnex -l ignore-hooks -s H -d "Skip lifecycle and Git hooks execution"
 complete -c rnex -n "__fish_use_subcommand" -a init -d "Initialize a new workspace"
 complete -c rnex -n "__fish_seen_subcommand_from init" -l repos-dir -d "Directory for member repository clones"
 complete -c rnex -n "__fish_seen_subcommand_from init" -l code-workspace -d "Configure multi-root workspace file"

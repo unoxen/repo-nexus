@@ -23,8 +23,8 @@ Reference specification: [setup-karpathy-wiki.md](https://github.com/unoxen/ai-t
 * **Intake Sources (`sources`, default: `["docs", "repos/**/README.md"]`):** Multi-value array of directory paths and glob patterns for unmodified source material (articles, transcripts, docs, meeting notes, repo READMEs). Legacy `raw_dir` (default: `./docs`) remains supported as a backward-compatible fallback.
 * **Curated Knowledge Base (`wiki_dir`, default: `wiki`):** Interlinked atomic markdown pages, each with typed frontmatter relations (`sources`, `related`, `extends`, `contradicts`, `mentioned_in`).
 * **Navigation Index (`<wiki_dir>/index.md`, default: `wiki/index.md`):** Master categorized catalog organizing atomic concepts, architecture decisions, and cross-project knowledge.
-* **Rolling Context Cache (`<wiki_dir>/hot.md`, default: `wiki/hot.md`):** High-density ~500-word orientation summary for rapid agent onboarding without full wiki scans (especially for codebase knowledge and second-brain wikis).
-* **Audit Trail (`<wiki_dir>/_log.md`, default: `wiki/_log.md`):** Append-only log recording every ingest and lint operation with timestamped details.
+* **Rolling Context Cache (`<wiki_dir>/hot.md`, default: `wiki/hot.md`):** Compact, git-ignored orientation summary (`hot_file: true` by default) for rapid agent onboarding without full wiki scans. Completely independent of `_log.md`.
+* **Audit Trail (`<wiki_dir>/_log.md`, default: `wiki/_log.md`):** Shared append-only log recording ingest and lint operations across tracked wiki pages.
 
 ### 4. Standardized Agent Skills (`skills/`)
 * **`wiki-ingest.md` (User Skill: `rnex-karpathy-llm-wiki-ingest`):** Guides deterministic CLI scaffolding and in-place AI enrichment for intake source documents with typed frontmatter relations.
@@ -130,6 +130,7 @@ plugins:
 
     # Directory paths relative to workspace root (defaults shown)
     wiki_dir: wiki              # Directory for curated atomic markdown pages
+    hot_file: true              # Generate git-ignored <wiki_dir>/hot.md cache (default: true)
 ```
 
 ### 2. Local Machine Configuration (`.local.rnex.yaml`)
@@ -174,6 +175,7 @@ rnex plugin karpathy-llm lint --strict
 |:---|:---|:---|:---|:---|
 | `sources` | Repo (`rnex.yaml`) | `list` | `[docs, "repos/**/README.md"]` | Directory paths and/or glob patterns for intake documents. |
 | `wiki_dir` | Repo (`rnex.yaml`) | `string` | `wiki` | Directory containing atomic domain pages. |
+| `hot_file` | Repo / Local | `boolean` | `true` | Enable or disable the optional git-ignored `<wiki_dir>/hot.md` orientation cache. |
 
 ---
 
