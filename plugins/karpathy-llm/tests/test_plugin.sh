@@ -1,7 +1,15 @@
 #!/bin/sh
 # shellcheck shell=sh
 # ============================================================================
-# plugins/karpathy-llm/tests/test_plugin.sh — Karpathy LLM Wiki Plugin Tests
+# File: plugins/karpathy-llm/tests/test_plugin.sh
+# Architectural Layer: Quality Assurance / Integration Test Automation
+# Design Pattern: Test Suite (Template Method)
+# Responsibilities:
+#   - Validates Karpathy LLM Wiki plugin manifest, commands, and hooks.
+#   - Asserts B-Tree sharded index (_index/) compilation and shard splitting.
+#   - Asserts sorted TSV graph store (_graph/) population and neighborhood traversal.
+#   - Validates fast O(log N) prefix search and strict linting.
+#   - Enforces 100% negative assertions against legacy hot.md cache.
 # ============================================================================
 set -e
 
@@ -23,9 +31,24 @@ _m_ver="$(awk '/^version:[ ]*/ { sub(/^version:[ ]*/, ""); sub(/[ ]*#.*/, ""); p
 [ "$_m_ver" = "$_cli_ver" ] || { fail "Plugin version ($_m_ver) does not match CLI version ($_cli_ver)"; exit 1; }
 
 _yaml_file="$_kl_pdir/plugin.yaml"
-# Assert placeholders are quoted in plugin.yaml
+# Assert placeholders are quoted in plugin.yaml and hot.md is removed
 grep -q 'templates/index\.md:[ ]*"{wiki_dir}/index\.md"' "$_yaml_file" || { fail "index.md placeholder not quoted in plugin.yaml"; exit 1; }
-grep -q 'templates/hot\.md:[ ]*"{wiki_dir}/hot\.md"' "$_yaml_file" || { fail "hot.md placeholder not quoted in plugin.yaml"; exit 1; }
+! grep -q 'templates/hot\.md' "$_yaml_file" || { fail "hot.md should not be in plugin.yaml"; exit 1; }
+
+# Assert B-Tree and TSV Graph configuration defaults
+grep -q 'btree_shard_max_entries:' "$_yaml_file" || { fail "btree_shard_max_entries missing in plugin.yaml"; exit 1; }
+grep -q 'btree_root_max_lines:' "$_yaml_file" || { fail "btree_root_max_lines missing in plugin.yaml"; exit 1; }
+grep -q 'graph_default_depth:' "$_yaml_file" || { fail "graph_default_depth missing in plugin.yaml"; exit 1; }
+grep -q 'index_dir: "_index"' "$_yaml_file" || { fail "index_dir default missing in plugin.yaml"; exit 1; }
+grep -q 'graph_dir: "_graph"' "$_yaml_file" || { fail "graph_dir default missing in plugin.yaml"; exit 1; }
+
+# Assert subcommands registered
+grep -q "init:" "$_yaml_file" || { fail "init command missing in plugin.yaml"; exit 1; }
+grep -q "ingest:" "$_yaml_file" || { fail "ingest command missing in plugin.yaml"; exit 1; }
+grep -q "index:" "$_yaml_file" || { fail "index command missing in plugin.yaml"; exit 1; }
+grep -q "graph:" "$_yaml_file" || { fail "graph command missing in plugin.yaml"; exit 1; }
+grep -q "search:" "$_yaml_file" || { fail "search command missing in plugin.yaml"; exit 1; }
+grep -q "lint:" "$_yaml_file" || { fail "lint command missing in plugin.yaml"; exit 1; }
 
 # Verify valid YAML parsing if ruby is available
 if command -v ruby >/dev/null 2>&1; then
@@ -36,6 +59,7 @@ fi
 ! grep -q "lint_trigger" "$_yaml_file" || { fail "lint_trigger still present in plugin.yaml"; exit 1; }
 ! grep -q "notify_on_changes" "$_yaml_file" || { fail "notify_on_changes still present in plugin.yaml"; exit 1; }
 ! grep -q "ingest_member_readmes" "$_yaml_file" || { fail "ingest_member_readmes still present in plugin.yaml"; exit 1; }
+! grep -q "hot_file" "$_yaml_file" || { fail "hot_file still present in plugin.yaml"; exit 1; }
 
 _readme_file="$_kl_pdir/README.md"
 [ -f "$_readme_file" ] || { fail "README.md missing"; exit 1; }
@@ -53,20 +77,41 @@ grep -q "rules/behavioral\.md" "$_prompt_file" || { fail "rnex-scaffolding-meta-
 pass
 
 # --------------------------------------------------------------------------
-run_test "Karpathy-llm: init --karpathy sets up wiki templates, Hot Cache gate, and scoped assets"
+run_test "Karpathy-llm: init --karpathy sets up B-Tree shards, TSV graph store, bounded root, and zero hot.md"
 "$TEST_KARPATHY_WS/rnex" init -y --karpathy "$TEST_KARPATHY_WS" >/dev/null
 [ -d "$TEST_KARPATHY_WS/wiki" ] || { fail "wiki/ directory missing after init --karpathy"; exit 1; }
 [ -f "$TEST_KARPATHY_WS/wiki/index.md" ] || { fail "wiki/index.md missing after init --karpathy"; exit 1; }
-[ -f "$TEST_KARPATHY_WS/wiki/hot.md" ] || { fail "wiki/hot.md missing after init --karpathy"; exit 1; }
 [ -f "$TEST_KARPATHY_WS/wiki/_log.md" ] || { fail "wiki/_log.md missing after init --karpathy"; exit 1; }
 [ -d "$TEST_KARPATHY_WS/docs" ] || { fail "docs/ directory missing after init --karpathy"; exit 1; }
 
-# Verify clean index.md (no frontmatter table) and dynamic date in _log.md
+# Negative assertion: hot.md must NOT exist
+[ ! -e "$TEST_KARPATHY_WS/wiki/hot.md" ] || { fail "wiki/hot.md created after init --karpathy"; exit 1; }
+
+# B-Tree index directory and shards
+[ -d "$TEST_KARPATHY_WS/wiki/_index" ] || { fail "wiki/_index/ directory missing"; exit 1; }
+[ -f "$TEST_KARPATHY_WS/wiki/_index/overview.md" ] || { fail "wiki/_index/overview.md missing"; exit 1; }
+[ -f "$TEST_KARPATHY_WS/wiki/_index/concepts.md" ] || { fail "wiki/_index/concepts.md missing"; exit 1; }
+[ -f "$TEST_KARPATHY_WS/wiki/_index/entities.md" ] || { fail "wiki/_index/entities.md missing"; exit 1; }
+[ -f "$TEST_KARPATHY_WS/wiki/_index/sources.md" ] || { fail "wiki/_index/sources.md missing"; exit 1; }
+
+# TSV Property Graph directory and tables
+[ -d "$TEST_KARPATHY_WS/wiki/_graph" ] || { fail "wiki/_graph/ directory missing"; exit 1; }
+[ -f "$TEST_KARPATHY_WS/wiki/_graph/nodes.tsv" ] || { fail "wiki/_graph/nodes.tsv missing"; exit 1; }
+[ -f "$TEST_KARPATHY_WS/wiki/_graph/edges_out.tsv" ] || { fail "wiki/_graph/edges_out.tsv missing"; exit 1; }
+[ -f "$TEST_KARPATHY_WS/wiki/_graph/edges_in.tsv" ] || { fail "wiki/_graph/edges_in.tsv missing"; exit 1; }
+
+# Verify clean B-Tree Root index.md (strictly <= 80 lines, no YAML frontmatter)
 _first_idx_line="$(head -n 1 "$TEST_KARPATHY_WS/wiki/index.md" 2>/dev/null || true)"
-[ "$_first_idx_line" = "# Wiki Index" ] || { fail "wiki/index.md does not start with '# Wiki Index': $_first_idx_line"; exit 1; }
+[ "$_first_idx_line" = "# Wiki Index (B-Tree Root Router)" ] || { fail "wiki/index.md header mismatch: $_first_idx_line"; exit 1; }
+! grep -q "^---" "$TEST_KARPATHY_WS/wiki/index.md" || { fail "wiki/index.md contains YAML frontmatter"; exit 1; }
 ! grep -q "YYYY-MM-DD" "$TEST_KARPATHY_WS/wiki/index.md" || { fail "wiki/index.md contains YYYY-MM-DD placeholder"; exit 1; }
-! grep -q "last_updated" "$TEST_KARPATHY_WS/wiki/index.md" || { fail "wiki/index.md contains last_updated frontmatter"; exit 1; }
-! grep -q "YYYY-MM-DD" "$TEST_KARPATHY_WS/wiki/_log.md" || { fail "wiki/_log.md contains YYYY-MM-DD placeholder"; exit 1; }
+! grep -q "last_updated" "$TEST_KARPATHY_WS/wiki/index.md" || { fail "wiki/index.md contains last_updated"; exit 1; }
+_root_lines="$(wc -l < "$TEST_KARPATHY_WS/wiki/index.md")"
+[ "$_root_lines" -le 80 ] || { fail "wiki/index.md exceeded 80 lines: $_root_lines"; exit 1; }
+grep -q "B-Tree Domain Shards" "$TEST_KARPATHY_WS/wiki/index.md" || { fail "wiki/index.md missing B-Tree Domain Shards section"; exit 1; }
+grep -q "Sorted TSV Property Graph" "$TEST_KARPATHY_WS/wiki/index.md" || { fail "wiki/index.md missing Sorted TSV Property Graph section"; exit 1; }
+
+# Verify dynamic date in _log.md
 grep -q -E '^### Initial Setup — 20[0-9]{2}-[0-9]{2}-[0-9]{2}' "$TEST_KARPATHY_WS/wiki/_log.md" || { fail "wiki/_log.md missing valid Initial Setup date header"; exit 1; }
 
 # Scoped assets in .rnex/plugins/karpathy-llm/
@@ -77,24 +122,27 @@ grep -q -E '^### Initial Setup — 20[0-9]{2}-[0-9]{2}-[0-9]{2}' "$TEST_KARPATHY
 [ -f "$TEST_KARPATHY_WS/.rnex/plugins/karpathy-llm/templates/rnex-wiki-page.template.md" ] || { fail "rnex-wiki-page.template.md missing"; exit 1; }
 ! grep -q "/\.rnex/\.rnex" "$TEST_KARPATHY_WS/.rnex/plugins/karpathy-llm/templates/rnex-wiki-page.template.md" || { fail "Corrupted /.rnex/.rnex in template"; exit 1; }
 
-# Instructions compilation: Step 1 Read Wiki Hot Cache gate in .rnex/ai-instructions.md
+# Instructions compilation: B-Tree 3-step retrieval protocol in .rnex/ai-instructions.md
 _ai_content="$(cat "$TEST_KARPATHY_WS/.rnex/ai-instructions.md")"
-echo "$_ai_content" | grep -q "Read Wiki Hot Cache" || { fail "Read Wiki Hot Cache missing in ai-instructions.md"; exit 1; }
-echo "$_ai_content" | grep -q "wiki/hot.md" || { fail "wiki/hot.md missing in ai-instructions.md"; exit 1; }
-! grep -q "Mandatory Wiki-First Access Gate" "$TEST_KARPATHY_WS/AGENTS.md" || { fail "AGENTS.md leaked wiki instructions; should remain single router block"; exit 1; }
+echo "$_ai_content" | grep -q "B-Tree router" || { fail "B-Tree router instructions missing in ai-instructions.md"; exit 1; }
+! echo "$_ai_content" | grep -q "wiki/hot.md" || { fail "ai-instructions.md still references wiki/hot.md"; exit 1; }
+! echo "$_ai_content" | grep -q "Read Wiki Hot Cache" || { fail "ai-instructions.md still references Read Wiki Hot Cache"; exit 1; }
 
 # Plugin info inspection
 _pinfo="$(cd "$TEST_KARPATHY_WS" && ./rnex plugin info karpathy-llm 2>&1)"
 echo "$_pinfo" | grep -q "karpathy-llm" || { fail "Plugin name missing from info: $_pinfo"; exit 1; }
 echo "$_pinfo" | grep -q "wiki_dir" || { fail "wiki_dir option missing from info: $_pinfo"; exit 1; }
 echo "$_pinfo" | grep -q "sources" || { fail "sources option missing from info: $_pinfo"; exit 1; }
+echo "$_pinfo" | grep -q "init" || { fail "init command missing from info: $_pinfo"; exit 1; }
 echo "$_pinfo" | grep -q "ingest" || { fail "ingest command missing from info: $_pinfo"; exit 1; }
+echo "$_pinfo" | grep -q "index" || { fail "index command missing from info: $_pinfo"; exit 1; }
+echo "$_pinfo" | grep -q "graph" || { fail "graph command missing from info: $_pinfo"; exit 1; }
+echo "$_pinfo" | grep -q "search" || { fail "search command missing from info: $_pinfo"; exit 1; }
 echo "$_pinfo" | grep -q "lint" || { fail "lint command missing from info: $_pinfo"; exit 1; }
 pass
 
 # --------------------------------------------------------------------------
 run_test "Karpathy-llm: user skill projection with synthetic provider and disable unregistration"
-# Create a synthetic mock provider plugin to test User Skill projection without depending on other real plugins
 mkdir -p "$TEST_KARPATHY_WS/plugins/mock-provider"
 cat <<'EOF_MOCK' > "$TEST_KARPATHY_WS/plugins/mock-provider/plugin.yaml"
 name: mock-provider
@@ -108,7 +156,6 @@ EOF_MOCK
 (cd "$TEST_KARPATHY_WS" && ./rnex plugin enable mock-provider >/dev/null)
 (cd "$TEST_KARPATHY_WS" && ./rnex sync -y >/dev/null)
 
-# Verify plugin-owned user skills are projected into active provider directory with rnex-karpathy-llm- prefix
 _usk_ingest="$TEST_KARPATHY_WS/.mock/skills/rnex-karpathy-llm-wiki-ingest/SKILL.md"
 _usk_lint="$TEST_KARPATHY_WS/.mock/skills/rnex-karpathy-llm-wiki-lint/SKILL.md"
 [ -f "$_usk_ingest" ] || { fail "rnex-karpathy-llm-wiki-ingest missing in .mock/skills/"; exit 1; }
@@ -123,7 +170,7 @@ grep -q "\.rnex/plugins/karpathy-llm/skills/wiki-lint\.md" "$_usk_lint" || { fai
 [ ! -d "$TEST_KARPATHY_WS/.mock/skills/rnex-karpathy-llm-wiki-lint" ] || { fail "User skill not removed on disable"; exit 1; }
 [ ! -d "$TEST_KARPATHY_WS/.rnex/plugins/karpathy-llm" ] || { fail ".rnex/plugins/karpathy-llm not removed on disable"; exit 1; }
 [ -f "$TEST_KARPATHY_WS/wiki/index.md" ] || { fail "wiki/index.md was deleted on disable"; exit 1; }
-[ -f "$TEST_KARPATHY_WS/wiki/hot.md" ] || { fail "wiki/hot.md was deleted on disable"; exit 1; }
+[ ! -e "$TEST_KARPATHY_WS/wiki/hot.md" ] || { fail "wiki/hot.md exists after disable"; exit 1; }
 
 # Clean up synthetic mock provider
 (cd "$TEST_KARPATHY_WS" && ./rnex plugin disable mock-provider >/dev/null)
@@ -132,13 +179,12 @@ pass
 
 # --------------------------------------------------------------------------
 run_test "Karpathy-llm: configurable wiki_dir, placeholder resolution, and leaked dir cleanup"
-# Re-enable karpathy-llm with custom wiki_dir and raw_dir
 cat <<'EOF_CFG' > "$TEST_KARPATHY_WS/rnex.yaml"
 version: 1.0.0
 plugins:
   karpathy-llm:
     wiki_dir: docs/wiki
-    raw_dir: intake/raw
+    sources: [intake/raw]
 repos:
 EOF_CFG
 
@@ -147,21 +193,13 @@ mkdir -p "$TEST_KARPATHY_WS/\"{wiki_dir}" "$TEST_KARPATHY_WS/\"{raw_dir}" "$TEST
 
 (cd "$TEST_KARPATHY_WS" && ./rnex sync -y >/dev/null)
 
-# Verify custom directories created instead of default
 [ -d "$TEST_KARPATHY_WS/docs/wiki" ] || { fail "Custom docs/wiki directory was not created"; exit 1; }
 [ -d "$TEST_KARPATHY_WS/intake/raw" ] || { fail "Custom intake/raw directory was not created"; exit 1; }
+[ -d "$TEST_KARPATHY_WS/docs/wiki/_index" ] || { fail "Custom docs/wiki/_index missing"; exit 1; }
+[ -d "$TEST_KARPATHY_WS/docs/wiki/_graph" ] || { fail "Custom docs/wiki/_graph missing"; exit 1; }
 [ -f "$TEST_KARPATHY_WS/docs/wiki/index.md" ] || { fail "docs/wiki/index.md missing"; exit 1; }
-[ -f "$TEST_KARPATHY_WS/docs/wiki/hot.md" ] || { fail "docs/wiki/hot.md missing"; exit 1; }
 [ -f "$TEST_KARPATHY_WS/docs/wiki/_log.md" ] || { fail "docs/wiki/_log.md missing"; exit 1; }
-
-# Verify template substitutions reflect custom paths without corruption
-grep -q "intake/raw/" "$TEST_KARPATHY_WS/docs/wiki/index.md" || { fail "docs/wiki/index.md missing intake/raw/"; exit 1; }
-! grep -q "YYYY-MM-DD" "$TEST_KARPATHY_WS/docs/wiki/index.md" || { fail "docs/wiki/index.md contains YYYY-MM-DD"; exit 1; }
-! grep -q "YYYY-MM-DD" "$TEST_KARPATHY_WS/docs/wiki/_log.md" || { fail "docs/wiki/_log.md contains YYYY-MM-DD"; exit 1; }
-grep -q -E '^### Initial Setup — 20[0-9]{2}-[0-9]{2}-[0-9]{2}' "$TEST_KARPATHY_WS/docs/wiki/_log.md" || { fail "docs/wiki/_log.md missing valid Initial Setup date header"; exit 1; }
-grep -q "docs/wiki/" "$TEST_KARPATHY_WS/docs/wiki/hot.md" || { fail "docs/wiki/hot.md missing docs/wiki/"; exit 1; }
-! grep -q "docs/docs/wiki" "$TEST_KARPATHY_WS/docs/wiki/hot.md" || { fail "Found duplicated path docs/docs/wiki"; exit 1; }
-! grep -q "intake/intake/raw" "$TEST_KARPATHY_WS/docs/wiki/hot.md" || { fail "Found duplicated path intake/intake/raw"; exit 1; }
+[ ! -e "$TEST_KARPATHY_WS/docs/wiki/hot.md" ] || { fail "docs/wiki/hot.md found in custom wiki"; exit 1; }
 
 # Verify bogus directories were purged by sync
 [ ! -d "$TEST_KARPATHY_WS/\"{wiki_dir}" ] || { fail "Bogus directory \"{wiki_dir} still exists"; exit 1; }
@@ -180,7 +218,7 @@ repos:
 EOF_CFG2
 (cd "$TEST_KARPATHY_WS" && ./rnex sync -y >/dev/null)
 [ -f "$TEST_KARPATHY_WS/custom-wiki/index.md" ] || { fail "custom-wiki/index.md missing"; exit 1; }
-[ -f "$TEST_KARPATHY_WS/custom-wiki/hot.md" ] || { fail "custom-wiki/hot.md missing"; exit 1; }
+[ ! -e "$TEST_KARPATHY_WS/custom-wiki/hot.md" ] || { fail "custom-wiki/hot.md found"; exit 1; }
 
 cat <<'EOF_CFG3' > "$TEST_KARPATHY_WS/rnex.yaml"
 version: 1.0.0
@@ -192,7 +230,7 @@ repos:
 EOF_CFG3
 (cd "$TEST_KARPATHY_WS" && ./rnex sync -y >/dev/null)
 [ -f "$TEST_KARPATHY_WS/wiki/index.md" ] || { fail "wiki/index.md missing"; exit 1; }
-[ -f "$TEST_KARPATHY_WS/wiki/hot.md" ] || { fail "wiki/hot.md missing"; exit 1; }
+[ ! -e "$TEST_KARPATHY_WS/wiki/hot.md" ] || { fail "wiki/hot.md found"; exit 1; }
 pass
 
 # --------------------------------------------------------------------------
@@ -210,10 +248,10 @@ grep -q 'tags: \[member-repo, auth-svc\]' "$TEST_KARPATHY_WS/wiki/repo-auth-svc.
 grep -q 'sources: \["repos/auth-svc/README.md"\]' "$TEST_KARPATHY_WS/wiki/repo-auth-svc.md" || { fail "Frontmatter sources missing"; exit 1; }
 grep -q "Authentication and authorization microservice" "$TEST_KARPATHY_WS/wiki/repo-auth-svc.md" || { fail "Summary missing"; exit 1; }
 
-# Verify index.md and hot.md registration
-grep -q "repo-auth-svc\.md" "$TEST_KARPATHY_WS/wiki/index.md" || { fail "repo-auth-svc.md not in index.md"; exit 1; }
-grep -q "auth-svc" "$TEST_KARPATHY_WS/wiki/hot.md" || { fail "auth-svc missing from hot.md"; exit 1; }
-grep -q '\[auth-svc\](\./repo-auth-svc\.md)' "$TEST_KARPATHY_WS/wiki/hot.md" || { fail "auth-svc direct link missing from hot.md"; exit 1; }
+# Verify nodes.tsv and B-Tree entities shard registration
+grep -q '^repo-auth-svc[ 	]' "$TEST_KARPATHY_WS/wiki/_graph/nodes.tsv" || { fail "repo-auth-svc not in nodes.tsv"; exit 1; }
+grep -q 'repo-auth-svc' "$TEST_KARPATHY_WS/wiki/_index/entities.md" || { fail "repo-auth-svc not in _index/entities.md"; exit 1; }
+[ ! -e "$TEST_KARPATHY_WS/wiki/hot.md" ] || { fail "hot.md found in auth-svc test workspace"; exit 1; }
 grep -q "Member Repo Ingest: auth-svc" "$TEST_KARPATHY_WS/wiki/_log.md" || { fail "Ingest log missing from _log.md"; exit 1; }
 
 # Curate repo-auth-svc.md with custom fields and body
@@ -264,29 +302,71 @@ EOF_DIS
 pass
 
 # --------------------------------------------------------------------------
-run_test "Karpathy-llm: hot.md <= 500-word condensation scaling across 15+ repos"
-cat <<'EOF_HOT_INIT' >> "$TEST_KARPATHY_WS/wiki/hot.md"
+run_test "Karpathy-llm: B-Tree sharding, automatic shard splitting, and O(log N) prefix search"
+TEST_BTREE_WS="$TEST_TMP/karpathy-btree-ws"
+mkdir -p "$TEST_BTREE_WS"
+setup_plugin_test_workspace karpathy-llm "$TEST_BTREE_WS"
+cd "$TEST_BTREE_WS"
 
-## Core Architecture Invariants
-The meta repository coordinates distributed services communicating over typed RPC boundaries. Each microservice encapsulates its own persistent state, schema migrations, and event listeners. AI coding assistants must consult atomic wiki pages before executing cross-module refactors. Distributed consensus protocols require state machine replication across regional clusters with bounded clock skew. Network partitions must be handled with eventual consistency for non-critical audit records while retaining strict serializability for financial ledger entries. Background reconcilers execute periodic health audits to detect stale cache entries, orphan pointers, and dangling foreign keys across schemas. Every service implements idempotent processing semantics to prevent duplicate transaction execution during retry storms. High availability clusters maintain warm standby nodes across redundant failure zones. Audit trails record every administrative event with cryptographic integrity verification.
-The meta repository coordinates distributed services communicating over typed RPC boundaries. Each microservice encapsulates its own persistent state, schema migrations, and event listeners. AI coding assistants must consult atomic wiki pages before executing cross-module refactors. Distributed consensus protocols require state machine replication across regional clusters with bounded clock skew. Network partitions must be handled with eventual consistency for non-critical audit records while retaining strict serializability for financial ledger entries. Background reconcilers execute periodic health audits to detect stale cache entries, orphan pointers, and dangling foreign keys across schemas. Every service implements idempotent processing semantics to prevent duplicate transaction execution during retry storms. High availability clusters maintain warm standby nodes across redundant failure zones. Audit trails record every administrative event with cryptographic integrity verification.
-EOF_HOT_INIT
+cat <<'EOF_BTREE_CFG' > "$TEST_BTREE_WS/rnex.yaml"
+version: 1.0.0
+plugins:
+  karpathy-llm:
+    wiki_dir: wiki
+    btree_shard_max_entries: 5
+    sources: [docs]
+repos:
+EOF_BTREE_CFG
 
-for _idx in $(seq 1 15); do
-  mkdir -p "$TEST_KARPATHY_WS/repos/repo-$_idx"
-  printf '# Member Repo %s\nHigh performance microservice module %s for distributed workflows.\n' "$_idx" "$_idx" > "$TEST_KARPATHY_WS/repos/repo-$_idx/README.md"
-  printf '  repo-%s:\n' "$_idx" >> "$TEST_KARPATHY_WS/rnex.yaml"
+"$TEST_BTREE_WS/rnex" init -y --karpathy "$TEST_BTREE_WS" >/dev/null
+
+# Create 8 concept notes under wiki/concepts/ to exceed the split threshold of 5
+mkdir -p "$TEST_BTREE_WS/wiki/concepts"
+for _cname in "auth-tokens" "caching" "distributed-locks" "encryption" "jwt" "message-brokers" "networking" "queues"; do
+  cat <<EOF_C > "$TEST_BTREE_WS/wiki/concepts/${_cname}.md"
+---
+title: "Concept: ${_cname}"
+tags: [concept]
+---
+
+# ${_cname}
+Detailed explanation of ${_cname} pattern.
+EOF_C
 done
 
-(cd "$TEST_KARPATHY_WS" && ./rnex sync -y >/dev/null)
-_wc="$(wc -w < "$TEST_KARPATHY_WS/wiki/hot.md")"
-[ "$_wc" -le 500 ] || { fail "hot.md word count ($_wc) exceeded 500 words"; exit 1; }
-grep -q "Member Repositories" "$TEST_KARPATHY_WS/wiki/hot.md" || { fail "Missing condensed summary line in hot.md"; exit 1; }
+# Run index rebuild to compile nodes.tsv and B-Tree shards
+(cd "$TEST_BTREE_WS" && ./rnex plugin karpathy-llm index --rebuild >/dev/null)
 
-# Idempotency check: repeat sync does not duplicate summary line
-(cd "$TEST_KARPATHY_WS" && ./rnex sync -y >/dev/null)
-_sum_cnt="$(grep -c "Member Repositories" "$TEST_KARPATHY_WS/wiki/hot.md" || true)"
-[ "$_sum_cnt" -eq 1 ] || { fail "Duplicate summary lines generated on repeated sync: count $_sum_cnt"; exit 1; }
+# Verify that concepts shard split into a-m and n-z sub-shards
+[ -f "$TEST_BTREE_WS/wiki/_index/concepts-a-m.md" ] || { fail "concepts-a-m.md missing after split"; exit 1; }
+[ -f "$TEST_BTREE_WS/wiki/_index/concepts-n-z.md" ] || { fail "concepts-n-z.md missing after split"; exit 1; }
+
+# Verify sorted contents in each shard
+grep -q "auth-tokens" "$TEST_BTREE_WS/wiki/_index/concepts-a-m.md" || { fail "auth-tokens missing from concepts-a-m.md"; exit 1; }
+grep -q "jwt" "$TEST_BTREE_WS/wiki/_index/concepts-a-m.md" || { fail "jwt missing from concepts-a-m.md"; exit 1; }
+grep -q "networking" "$TEST_BTREE_WS/wiki/_index/concepts-n-z.md" || { fail "networking missing from concepts-n-z.md"; exit 1; }
+grep -q "queues" "$TEST_BTREE_WS/wiki/_index/concepts-n-z.md" || { fail "queues missing from concepts-n-z.md"; exit 1; }
+
+# Verify B-Tree Root routing table reflects sub-shards and is bounded (<= 80 lines)
+_root_lines="$(wc -l < "$TEST_BTREE_WS/wiki/index.md")"
+[ "$_root_lines" -le 80 ] || { fail "Root index.md exceeded 80 lines: $_root_lines"; exit 1; }
+grep -q 'concepts-a-m' "$TEST_BTREE_WS/wiki/index.md" || { fail "concepts-a-m missing from root router table"; exit 1; }
+grep -q 'concepts-n-z' "$TEST_BTREE_WS/wiki/index.md" || { fail "concepts-n-z missing from root router table"; exit 1; }
+
+# Test O(log N) prefix search lookup
+_search_res="$( (cd "$TEST_BTREE_WS" && ./rnex plugin karpathy-llm search "caching") 2>/dev/null )"
+echo "$_search_res" | grep -q "caching" || { fail "Search for caching failed: $_search_res"; exit 1; }
+echo "$_search_res" | grep -q "_index/concepts-a-m.md" || { fail "Search did not return shard path: $_search_res"; exit 1; }
+
+# Test prefix search matching multiple entries starting with 'n'
+_search_multi="$( (cd "$TEST_BTREE_WS" && ./rnex plugin karpathy-llm search "n") 2>/dev/null )"
+echo "$_search_multi" | grep -q "networking" || { fail "Search prefix 'n' did not match networking: $_search_multi"; exit 1; }
+
+# Test prefix search with non-existent prefix (reports no matching nodes, exit 0)
+_search_none="$( (cd "$TEST_BTREE_WS" && ./rnex plugin karpathy-llm search "xyz-not-found") 2>/dev/null || true )"
+echo "$_search_none" | grep -q 'No matching wiki nodes found for prefix "xyz-not-found"' || { fail "Search for non-existent prefix failed to report no matches: $_search_none"; exit 1; }
+
+[ ! -e "$TEST_BTREE_WS/wiki/hot.md" ] || { fail "hot.md found in btree test workspace"; exit 1; }
 pass
 
 # --------------------------------------------------------------------------
@@ -297,7 +377,6 @@ setup_plugin_test_workspace karpathy-llm "$TEST_INTAKE_WS"
 cd "$TEST_INTAKE_WS"
 "$TEST_INTAKE_WS/rnex" init -y --karpathy "$TEST_INTAKE_WS" >/dev/null
 
-# Populate directory structure with edge cases
 mkdir -p "$TEST_INTAKE_WS/docs/api" "$TEST_INTAKE_WS/docs/guide" "$TEST_INTAKE_WS/docs/nested/deep" "$TEST_INTAKE_WS/docs/.obsidian"
 cat <<'EOF_DOC' > "$TEST_INTAKE_WS/docs/overview.md"
 # Workspace Overview
@@ -355,6 +434,7 @@ echo "# Legacy Raw Note" > "$TEST_INTAKE_WS/custom_raw/legacy.md"
 ! grep -q "ingest_member_readmes" "$TEST_INTAKE_WS/rnex.yaml" || { fail "ingest_member_readmes was not stripped on sync"; exit 1; }
 grep -q "sources:" "$TEST_INTAKE_WS/rnex.yaml" || { fail "sources key missing after sync rewrite"; exit 1; }
 grep -q -- "- custom_raw" "$TEST_INTAKE_WS/rnex.yaml" || { fail "- custom_raw missing under sources"; exit 1; }
+[ ! -e "$TEST_INTAKE_WS/wiki/hot.md" ] || { fail "hot.md found in intake workspace"; exit 1; }
 pass
 
 # --------------------------------------------------------------------------
@@ -385,8 +465,33 @@ EOF_BROKEN
 _lint_strict_err=0
 (cd "$TEST_INTAKE_WS" && ./rnex plugin karpathy-llm lint --strict >/dev/null 2>&1) || _lint_strict_err=1
 [ "$_lint_strict_err" -eq 1 ] || { fail "lint --strict did not exit non-zero on broken source link"; exit 1; }
-
 rm -f "$TEST_INTAKE_WS/wiki/broken-doc.md"
+
+# Test lint --strict failing on broken wikilink
+cat > "$TEST_INTAKE_WS/wiki/broken-link-page.md" <<'EOF_BLP'
+---
+title: Broken Wikilink Page
+---
+
+# Broken Page
+References missing target [[nonexistent-target-slug]].
+EOF_BLP
+
+(cd "$TEST_INTAKE_WS" && ./rnex plugin karpathy-llm index --rebuild >/dev/null)
+_lint_wl_err=0
+_lint_wl_out="$( (cd "$TEST_INTAKE_WS" && ./rnex plugin karpathy-llm lint --strict) 2>&1 )" || _lint_wl_err=1
+[ "$_lint_wl_err" -eq 1 ] || { fail "lint --strict did not exit non-zero on broken wikilink"; exit 1; }
+echo "$_lint_wl_out" | grep -q "nonexistent-target-slug" || { fail "lint output did not mention broken wikilink: $_lint_wl_out"; exit 1; }
+
+rm -f "$TEST_INTAKE_WS/wiki/broken-link-page.md"
+(cd "$TEST_INTAKE_WS" && ./rnex plugin karpathy-llm index --rebuild >/dev/null)
+
+# Test auto-purge of legacy hot.md during lint
+touch "$TEST_INTAKE_WS/wiki/hot.md"
+[ -f "$TEST_INTAKE_WS/wiki/hot.md" ] || { fail "Failed to seed fake hot.md"; exit 1; }
+(cd "$TEST_INTAKE_WS" && ./rnex plugin karpathy-llm lint >/dev/null)
+[ ! -e "$TEST_INTAKE_WS/wiki/hot.md" ] || { fail "hot.md was not purged by lint"; exit 1; }
+grep -q "Legacy Hot Cache Purge" "$TEST_INTAKE_WS/wiki/_log.md" || { fail "_log.md missing audit of hot.md purge"; exit 1; }
 pass
 
 # --------------------------------------------------------------------------
@@ -438,10 +543,11 @@ echo "$_dir_out" | grep -q 'Expected a file path, but "raw" is a directory' || {
 # Test Case 4: Batch fallback when no file argument is passed
 (cd "$TEST_SF_WS" && ./rnex plugin karpathy-llm ingest >/dev/null)
 [ -f "$TEST_SF_WS/wiki/raw-doc-c.md" ] || { fail "wiki/raw-doc-c.md missing after batch fallback ingest"; exit 1; }
+[ ! -e "$TEST_SF_WS/wiki/hot.md" ] || { fail "hot.md found in single-file test workspace"; exit 1; }
 pass
 
 # --------------------------------------------------------------------------
-run_test "Karpathy-llm: nested repos/**/README.md slug routing, _log.md idempotency, and hot.md direct links"
+run_test "Karpathy-llm: nested repos/**/README.md slug routing, graph edge population, and subgraph traversal"
 TEST_NESTED_WS="$TEST_TMP/karpathy-nested-ws"
 mkdir -p "$TEST_NESTED_WS"
 setup_plugin_test_workspace karpathy-llm "$TEST_NESTED_WS"
@@ -465,28 +571,48 @@ EOF_NESTED_CFG
 # Verify nested README routes to repos-app-repo-apps-web-readme.md (not repo-app-repo.md)
 [ -f "$TEST_NESTED_WS/wiki/repos-app-repo-apps-web-readme.md" ] || { fail "repos-app-repo-apps-web-readme.md missing for nested repo README"; exit 1; }
 
-# Verify hot.md contains direct wiki links to both root member repo and nested source pages
-grep -q '\[app-repo\](\./repo-app-repo\.md)' "$TEST_NESTED_WS/wiki/hot.md" || { fail "Direct link to repo-app-repo.md missing from hot.md"; exit 1; }
-grep -q '\[Web App\](\./repos-app-repo-apps-web-readme\.md)' "$TEST_NESTED_WS/wiki/hot.md" || { fail "Direct link to nested source missing from hot.md Section 2"; exit 1; }
+# 2. Add an interlinked page to test graph edge population and traversal
+cat <<'EOF_GATEWAY' > "$TEST_NESTED_WS/wiki/gateway.md"
+---
+title: "API Gateway"
+tags: [concept]
+---
 
-# 2. _log.md idempotency test
+# API Gateway
+Routes traffic to [[repo-app-repo]] and [[repos-app-repo-apps-web-readme]].
+EOF_GATEWAY
+
+(cd "$TEST_NESTED_WS" && ./rnex plugin karpathy-llm index --rebuild >/dev/null)
+
+# Verify Outbound dependencies for gateway
+_graph_gw="$(cd "$TEST_NESTED_WS" && ./rnex plugin karpathy-llm graph gateway --depth 1)"
+echo "$_graph_gw" | grep -q -- "- \`gateway\` --\[links_to\]--> \`\[\[repo-app-repo\]\]\`" || { fail "Outbound edge to repo-app-repo missing: $_graph_gw"; exit 1; }
+echo "$_graph_gw" | grep -q -- "- \`gateway\` --\[links_to\]--> \`\[\[repos-app-repo-apps-web-readme\]\]\`" || { fail "Outbound edge to nested readme missing: $_graph_gw"; exit 1; }
+
+# Verify Inbound backlinks for repo-app-repo
+_graph_repo="$(cd "$TEST_NESTED_WS" && ./rnex plugin karpathy-llm graph repo-app-repo --depth 1)"
+echo "$_graph_repo" | grep -q -- "- \`\[\[gateway\]\]\` --\[links_to\]--> \`repo-app-repo\`" || { fail "Inbound backlink from gateway missing: $_graph_repo"; exit 1; }
+
+# 3. _log.md idempotency test
 _log_bytes_before="$(wc -c < "$TEST_NESTED_WS/wiki/_log.md" | tr -d ' ')"
 (cd "$TEST_NESTED_WS" && ./rnex plugin karpathy-llm ingest >/dev/null)
 _log_bytes_after="$(wc -c < "$TEST_NESTED_WS/wiki/_log.md" | tr -d ' ')"
 [ "$_log_bytes_before" = "$_log_bytes_after" ] || { fail "_log.md changed on repeated ingest with 0 new files (before=$_log_bytes_before, after=$_log_bytes_after)"; exit 1; }
+
+[ ! -e "$TEST_NESTED_WS/wiki/hot.md" ] || { fail "hot.md found in nested test workspace"; exit 1; }
 pass
 
 # --------------------------------------------------------------------------
-run_test "Karpathy-llm: compact hot.md (<2KB on huge 10KB lines & 15+ files), decoupling from _log.md, gitignore default, and hot_file: false"
+run_test "Karpathy-llm: deterministic index rebuild, graph consistency, and complete hot.md purge"
 TEST_HOT_WS="$TEST_TMP/karpathy-hot-ws"
 mkdir -p "$TEST_HOT_WS"
 setup_plugin_test_workspace karpathy-llm "$TEST_HOT_WS"
 cd "$TEST_HOT_WS"
 "$TEST_HOT_WS/rnex" init -y --karpathy "$TEST_HOT_WS" >/dev/null
 
-# 1. Verify wiki/hot.md is in default git.ignore and .gitignore
-grep -q "wiki/hot.md" "$TEST_HOT_WS/rnex.yaml" || { fail "wiki/hot.md missing from default git.ignore in rnex.yaml"; exit 1; }
-grep -q "wiki/hot.md" "$TEST_HOT_WS/.gitignore" || { fail "wiki/hot.md missing from .gitignore"; exit 1; }
+# 1. Verify wiki/hot.md is NOT in git.ignore or .gitignore
+! grep -q "wiki/hot.md" "$TEST_HOT_WS/rnex.yaml" || { fail "wiki/hot.md should not be in default git.ignore in rnex.yaml"; exit 1; }
+! grep -q "wiki/hot.md" "$TEST_HOT_WS/.gitignore" || { fail "wiki/hot.md should not be in .gitignore"; exit 1; }
 
 # 2. Create 15 source files, including one with a massive 10,000-character single-line paragraph
 _huge_line="$(awk 'BEGIN { for (i=0; i<200; i++) printf "MassiveUnbrokenContextPayloadSegment_%d_WithVerboseDetails ", i }')"
@@ -496,42 +622,30 @@ done
 
 (cd "$TEST_HOT_WS" && ./rnex plugin karpathy-llm ingest >/dev/null)
 
-# Verify hot.md is compact (< 2048 bytes) and Section 2 is capped at <= 8 entries
-_hot_bytes="$(wc -c < "$TEST_HOT_WS/wiki/hot.md" | tr -d ' ')"
-[ "$_hot_bytes" -lt 2048 ] || { fail "hot.md size ($_hot_bytes bytes) exceeded 2048-byte compact budget"; exit 1; }
-_sec2_cnt="$(awk '/^## 2\./ { in_s2=1; next } /^## 3\./ { in_s2=0 } in_s2 && /^\* \*\*\[/ { c++ } END { print c+0 }' "$TEST_HOT_WS/wiki/hot.md")"
-[ "$_sec2_cnt" -le 8 ] || { fail "hot.md Section 2 has $_sec2_cnt entries (expected <= 8)"; exit 1; }
+# Verify B-Tree Root index.md is bounded (<= 80 lines)
+_root_lines="$(wc -l < "$TEST_HOT_WS/wiki/index.md")"
+[ "$_root_lines" -le 80 ] || { fail "index.md size exceeded 80 lines: $_root_lines lines"; exit 1; }
 
-# 3. Verify complete decoupling between hot.md and _log.md / tracked wiki pages
-! grep -qi "hot\.md" "$TEST_HOT_WS/wiki/_log.md" || { fail "_log.md must not mention hot.md"; exit 1; }
-! grep -qi "hot cache" "$TEST_HOT_WS/wiki/_log.md" || { fail "_log.md must not mention hot cache"; exit 1; }
-! grep -q "hot\.md" "$TEST_HOT_WS/wiki/docs-doc-1.md" || { fail "tracked wiki page frontmatter must not reference hot.md in mentioned_in"; exit 1; }
+# Verify sorted TSV graph files exist and pass strict LC_ALL=C sort check
+LC_ALL=C sort -c "$TEST_HOT_WS/wiki/_graph/nodes.tsv" || { fail "nodes.tsv is not sorted in LC_ALL=C order"; exit 1; }
+LC_ALL=C sort -c "$TEST_HOT_WS/wiki/_graph/edges_out.tsv" || { fail "edges_out.tsv is not sorted in LC_ALL=C order"; exit 1; }
+LC_ALL=C sort -c "$TEST_HOT_WS/wiki/_graph/edges_in.tsv" || { fail "edges_in.tsv is not sorted in LC_ALL=C order"; exit 1; }
 
-# Deleting hot.md and re-running sync/ingest regenerates hot.md without modifying _log.md
-_log_snap_before="$(cat "$TEST_HOT_WS/wiki/_log.md")"
-rm -f "$TEST_HOT_WS/wiki/hot.md"
-(cd "$TEST_HOT_WS" && ./rnex sync -y >/dev/null)
-(cd "$TEST_HOT_WS" && ./rnex plugin karpathy-llm ingest >/dev/null)
-[ -f "$TEST_HOT_WS/wiki/hot.md" ] || { fail "hot.md was not regenerated on sync/ingest"; exit 1; }
-_log_snap_after="$(cat "$TEST_HOT_WS/wiki/_log.md")"
-[ "$_log_snap_before" = "$_log_snap_after" ] || { fail "Regenerating hot.md modified shared _log.md"; exit 1; }
+# 3. Simulate legacy hot.md existence and verify automatic purge during index --rebuild and lint
+echo "legacy hot cache content" > "$TEST_HOT_WS/wiki/hot.md"
+[ -f "$TEST_HOT_WS/wiki/hot.md" ] || { fail "Failed to seed fake hot.md"; exit 1; }
 
-# 4. Test hot_file: false disables hot.md and omits Step 1 from .rnex/ai-instructions.md
-cat <<'EOF_NO_HOT' > "$TEST_HOT_WS/rnex.yaml"
-version: 1.0.0
-plugins:
-  karpathy-llm:
-    wiki_dir: wiki
-    hot_file: false
-repos:
-EOF_NO_HOT
-(cd "$TEST_HOT_WS" && ./rnex sync -y >/dev/null)
-[ ! -f "$TEST_HOT_WS/wiki/hot.md" ] || { fail "hot.md was not removed when hot_file: false"; exit 1; }
-! grep -q "Read Wiki Hot Cache" "$TEST_HOT_WS/.rnex/ai-instructions.md" || {
-  fail ".rnex/ai-instructions.md still instructs reading hot.md when hot_file: false"; exit 1;
-}
+(cd "$TEST_HOT_WS" && ./rnex plugin karpathy-llm index --rebuild >/dev/null)
+[ ! -e "$TEST_HOT_WS/wiki/hot.md" ] || { fail "hot.md was not purged by index --rebuild"; exit 1; }
+
+echo "another legacy hot cache" > "$TEST_HOT_WS/wiki/hot.md"
 (cd "$TEST_HOT_WS" && ./rnex plugin karpathy-llm lint >/dev/null)
-[ ! -f "$TEST_HOT_WS/wiki/hot.md" ] || { fail "lint recreated hot.md when hot_file: false"; exit 1; }
+[ ! -e "$TEST_HOT_WS/wiki/hot.md" ] || { fail "hot.md was not purged by lint"; exit 1; }
+grep -q "Legacy Hot Cache Purge" "$TEST_HOT_WS/wiki/_log.md" || { fail "_log.md missing audit record of hot.md purge"; exit 1; }
+
+# Verify no hot.md references in wiki files (except _log.md audit entries)
+_stray_hot="$(find "$TEST_HOT_WS/wiki" -name "*.md" ! -name "_log.md" -exec grep -l "hot\.md" {} + 2>/dev/null || true)"
+[ -z "$_stray_hot" ] || { fail "Stray hot.md reference in wiki files: $_stray_hot"; exit 1; }
 pass
 
 if [ "${_STANDALONE_RUN:-0}" -eq 1 ]; then

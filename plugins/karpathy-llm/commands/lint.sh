@@ -1,10 +1,19 @@
 #!/bin/sh
 # shellcheck shell=sh disable=SC2154
-# ============================================================================
-# plugins/karpathy-llm/commands/lint.sh — Karpathy LLM Wiki Linter
-#
+# =============================================================================
+# File: plugins/karpathy-llm/commands/lint.sh
+# Architectural Layer: Plugin CLI Subcommand (karpathy-llm lint)
+# Single Responsibility: Validate Karpathy LLM Wiki B-Tree root bound (<= 80 lines),
+#   sorted TSV graph byte-order invariants (LC_ALL=C), wikilink integrity,
+#   frontmatter schemas, un-ingested sources, and purge legacy hot.md.
+# Invariants Enforced:
+#   - Zero hot.md existence; automatically removes legacy hot.md if present.
+#   - nodes.tsv, edges_out.tsv, edges_in.tsv are strictly sorted in LC_ALL=C order.
+#   - B-Tree root index.md is <= RNEX_WIKI_BTREE_MAX_ROOT_LINES (80 lines).
+#   - Detects broken [[wikilinks]] referencing un-indexed nodes.
+# Security (OWASP A03): Validates all paths and rejects path traversal.
 # Syntax: rnex plugin karpathy-llm lint [--strict] [--quiet]
-# ============================================================================
+# =============================================================================
 set -e
 
 _root="${RNEX_ROOT:-${NEXUS_DIR:-$PWD}}"
@@ -34,7 +43,7 @@ while [ $# -gt 0 ]; do
       cat <<'HELP_EOF'
 Usage: rnex plugin karpathy-llm lint [options]
 
-Validate Karpathy LLM Wiki graph integrity, schema conformance, and word boundaries.
+Validate Karpathy LLM Wiki graph integrity, B-Tree root bounds, and frontmatter schemas.
 
 Options:
   --strict    Treat warnings as errors and exit with non-zero code
@@ -44,62 +53,121 @@ HELP_EOF
       exit 0
       ;;
     *)
-      echo "Error: Unknown option '$1'. Use --help for usage." >&2
+      printf 'Error: Unknown option "%s". Use --help for usage.\n' "$1" >&2
       exit 1
       ;;
   esac
   shift
 done
 
-_errors=0
-_warnings=0
-_hot_errors=0
-_hot_warnings=0
-_pages_checked=0
-_today="$(kl_today 2>/dev/null || date -u +%Y-%m-%d 2>/dev/null || date +%Y-%m-%d 2>/dev/null || date +%F 2>/dev/null || echo "2026-10-15")"
-
-# Check 1: Wiki directory and shared core control files existence (index.md, _log.md)
-if [ ! -d "$_wiki_path" ]; then
-  echo "Error: Wiki directory '$_wiki' does not exist." >&2
+# Fail-fast: ensure configuration contract is loaded
+if ! command -v load_wiki_config_contract >/dev/null 2>&1; then
+  printf 'Error [lint]: load_wiki_config_contract helper not found.\n' >&2
   exit 1
 fi
 
-for _core_file in "index.md" "_log.md"; do
-  if [ ! -f "$_wiki_path/$_core_file" ]; then
-    echo "Error: Core wiki file '$_wiki/$_core_file' is missing." >&2
+load_wiki_config_contract "$_root" || exit 1
+
+_errors=0
+_warnings=0
+_pages_checked=0
+_today="$(kl_today)"
+
+# Check 1: Wiki directory and shared core control files existence
+if [ ! -d "$RNEX_WIKI_ROOT" ]; then
+  printf 'Error: Wiki directory "%s" does not exist.\n' "$_wiki" >&2
+  exit 1
+fi
+
+for _core_file in "$RNEX_WIKI_INDEX_FILE" "$RNEX_WIKI_LOG_FILE"; do
+  if [ ! -f "$_core_file" ]; then
+    printf 'Error: Core wiki file "%s" is missing.\n' "$_core_file" >&2
     _errors=$((_errors + 1))
   fi
 done
 
-# Check 2: Optional local hot.md check (decoupled from shared _log.md audit counts)
-if kl_hot_enabled; then
-  if [ ! -f "$_wiki_path/hot.md" ]; then
-    echo "Error: Local wiki cache '$_wiki/hot.md' is missing." >&2
-    _hot_errors=$((_hot_errors + 1))
-  else
-    _hot_words="$(wc -w < "$_wiki_path/hot.md" 2>/dev/null || echo 0)"
-    if [ "$_hot_words" -gt 500 ]; then
-      echo "Warning: '$_wiki/hot.md' word count (${_hot_words} words) exceeds ~500-word ceiling." >&2
-      _hot_warnings=$((_hot_warnings + 1))
-    fi
+# Check 2: Total eradication of legacy hot.md (auto-cleanup with audit logging)
+if [ -f "${RNEX_WIKI_ROOT}/hot.md" ]; then
+  rm -f "${RNEX_WIKI_ROOT}/hot.md" 2>/dev/null || true
+  if [ "$_quiet" -eq 0 ]; then
+    printf '[WIKI] Purged legacy hot.md cache from wiki directory.\n'
+  fi
+  if [ -f "$RNEX_WIKI_LOG_FILE" ]; then
+    cat >> "$RNEX_WIKI_LOG_FILE" <<HOT_PURGE_LOG
+
+### Legacy Hot Cache Purge — ${_today}
+* **Action:** Purged legacy \`hot.md\` orientation cache during lint maintenance.
+HOT_PURGE_LOG
   fi
 fi
 
-# Check 3: Frontmatter validation, broken sources, and orphaned pages
-for _page in "$_wiki_path"/*.md; do
+# Check 3: B-Tree Root bounded line count invariant (<= 80 lines)
+if [ -f "$RNEX_WIKI_INDEX_FILE" ]; then
+  _root_lines="$(LC_ALL=C awk 'END { print NR+0 }' "$RNEX_WIKI_INDEX_FILE")"
+  if [ "$_root_lines" -gt "$RNEX_WIKI_BTREE_MAX_ROOT_LINES" ]; then
+    printf 'Error: B-Tree root index "%s" has %s lines, exceeding the %s line ceiling.\n' \
+      "$RNEX_WIKI_INDEX_FILE" "$_root_lines" "$RNEX_WIKI_BTREE_MAX_ROOT_LINES" >&2
+    _errors=$((_errors + 1))
+  fi
+fi
+
+# Check 4: TSV property graph LC_ALL=C sorted invariants
+for _tsv in "$RNEX_WIKI_NODES_TSV" "$RNEX_WIKI_EDGES_OUT_TSV" "$RNEX_WIKI_EDGES_IN_TSV"; do
+  if [ -f "$_tsv" ]; then
+    if ! LC_ALL=C sort -c "$_tsv" 2>/dev/null; then
+      printf 'Error: Graph file "%s" is not in strict LC_ALL=C byte order.\n' "$_tsv" >&2
+      _errors=$((_errors + 1))
+    fi
+  fi
+done
+
+# Check 5: Wikilink integrity in TSV property graph (detect broken [[wikilinks]])
+if [ -f "$RNEX_WIKI_EDGES_OUT_TSV" ] && [ -f "$RNEX_WIKI_NODES_TSV" ]; then
+  _broken_links="$(awk -F '\t' '
+    NR == FNR { nodes[$1] = 1; next }
+    NF >= 3 {
+      target = $3
+      if (!(target in nodes)) {
+        print $1 "\t" target
+      }
+    }
+  ' "$RNEX_WIKI_NODES_TSV" "$RNEX_WIKI_EDGES_OUT_TSV")"
+
+  if [ -n "$_broken_links" ]; then
+    while IFS= read -r _b_row || [ -n "$_b_row" ]; do
+      [ -n "$_b_row" ] || continue
+      _b_src="$(printf '%s' "$_b_row" | cut -f 1)"
+      _b_tgt="$(printf '%s' "$_b_row" | cut -f 2)"
+      printf 'Warning: Page "%s" references broken wikilink [[%s]] (target node has no compiled page).\n' \
+        "$_b_src" "$_b_tgt" >&2
+      _warnings=$((_warnings + 1))
+    done <<EOF_BROKEN
+$_broken_links
+EOF_BROKEN
+  fi
+fi
+
+# Check 6: Frontmatter validation, broken sources, and orphaned pages
+_tmp_pages="$(mktemp)"
+find "$RNEX_WIKI_ROOT" -type f -name '*.md' 2>/dev/null | LC_ALL=C sort > "$_tmp_pages"
+while IFS= read -r _page || [ -n "$_page" ]; do
   [ -f "$_page" ] || continue
   _pname="$(basename "$_page")"
 
-  # Skip log file and local hot.md before counting shared wiki pages
+  # Skip core log file and shard directory
   [ "$_pname" = "_log.md" ] && continue
   [ "$_pname" = "hot.md" ] && continue
+  case "$_page" in
+    */"${RNEX_CFG_WIKI_INDEX_DIR:-_index}"/*) continue ;;
+    */"${RNEX_CFG_WIKI_GRAPH_DIR:-_graph}"/*) continue ;;
+  esac
 
   _pages_checked=$((_pages_checked + 1))
 
-  # Special check for index.md (content-oriented catalog without mandatory frontmatter)
-  if [ "$_pname" = "index.md" ]; then
+  # Special check for root index.md (content router without mandatory frontmatter)
+  if [ "$_page" = "$RNEX_WIKI_INDEX_FILE" ]; then
     if grep -q 'YYYY-MM-DD' "$_page" 2>/dev/null; then
-      echo "Warning: '$_wiki/index.md' contains an unfilled 'YYYY-MM-DD' placeholder." >&2
+      printf 'Warning: "%s" contains an unfilled YYYY-MM-DD placeholder.\n' "$RNEX_WIKI_INDEX_FILE" >&2
       _warnings=$((_warnings + 1))
     fi
     continue
@@ -108,22 +176,22 @@ for _page in "$_wiki_path"/*.md; do
   # Verify frontmatter delimiter (---)
   _first_line="$(head -n 1 "$_page" 2>/dev/null || true)"
   if [ "$_first_line" != "---" ]; then
-    echo "Error: '$_wiki/$_pname' is missing YAML frontmatter header ('---')." >&2
+    printf 'Error: "%s" is missing YAML frontmatter header ("---").\n' "$_page" >&2
     _errors=$((_errors + 1))
     continue
   fi
 
   _fm="$(awk 'NR==1 && /^---$/ {in_fm=1; next} in_fm && /^---$/ {exit} in_fm {print}' "$_page")"
   if [ -z "$_fm" ]; then
-    echo "Error: '$_wiki/$_pname' has unclosed or empty YAML frontmatter." >&2
+    printf 'Error: "%s" has unclosed or empty YAML frontmatter.\n' "$_page" >&2
     _errors=$((_errors + 1))
     continue
   fi
 
   # Validate required keys
   for _req_key in title last_updated sources related extends; do
-    if ! echo "$_fm" | grep -E -q "^[ ]*${_req_key}:" 2>/dev/null; then
-      echo "Error: '$_wiki/$_pname' is missing required frontmatter key '${_req_key}'." >&2
+    if ! printf '%s\n' "$_fm" | grep -E -q "^[ ]*${_req_key}:" 2>/dev/null; then
+      printf 'Error: "%s" is missing required frontmatter key "%s".\n' "$_page" "$_req_key" >&2
       _errors=$((_errors + 1))
     fi
   done
@@ -175,8 +243,8 @@ for _page in "$_wiki_path"/*.md; do
       case "$_sitem" in
         http://*|https://*) continue ;;
       esac
-      if [ ! -f "$_root/$_sitem" ] && [ ! -f "$_wiki_path/$_sitem" ]; then
-        echo "Warning: '$_wiki/$_pname' references broken source file '$_sitem'." >&2
+      if [ ! -f "$_root/$_sitem" ] && [ ! -f "$RNEX_WIKI_ROOT/$_sitem" ]; then
+        printf 'Warning: "%s" references broken source file "%s".\n' "$_page" "$_sitem" >&2
         _warnings=$((_warnings + 1))
       fi
     done <<EOF_SLINKS
@@ -184,27 +252,35 @@ $_src_links
 EOF_SLINKS
   fi
 
-  # Check orphaned page (must be referenced in index.md)
-  if [ -f "$_wiki_path/index.md" ]; then
-    if ! grep -F -q "$_pname" "$_wiki_path/index.md" 2>/dev/null; then
-      echo "Warning: Orphaned wiki page '$_wiki/$_pname' is not referenced in '$_wiki/index.md'." >&2
+  # Check orphaned page: verify slug is registered in nodes.tsv
+  _slug="${_pname%.md}"
+  _slug="$(normalize_slug_id "$_slug" 2>/dev/null || true)"
+  if [ -n "$_slug" ] && [ -f "$RNEX_WIKI_NODES_TSV" ]; then
+    _tab="$(printf '\t')"
+    if ! grep -q "^${_slug}${_tab}" "$RNEX_WIKI_NODES_TSV" 2>/dev/null; then
+      printf 'Warning: Orphaned wiki page "%s" is not registered in nodes.tsv (run "rnex plugin karpathy-llm index").\n' "$_page" >&2
       _warnings=$((_warnings + 1))
     fi
   fi
-done
+done < "$_tmp_pages"
+rm -f "$_tmp_pages"
 
-# Check 4: Un-ingested source files detection
+# Check 7: Un-ingested source files detection
 if command -v karpathy_expand_source_files >/dev/null 2>&1; then
   _tmp_exp="$(mktemp)"
   karpathy_expand_source_files 2>/dev/null > "$_tmp_exp" || true
 
   _tmp_seen="$(mktemp)"
-  for _wpage in "$_wiki_path"/*.md; do
+  find "$RNEX_WIKI_ROOT" -type f -name '*.md' 2>/dev/null | while IFS= read -r _wpage; do
     [ -f "$_wpage" ] || continue
     _wpname="$(basename "$_wpage")"
     [ "$_wpname" = "_log.md" ] && continue
     [ "$_wpname" = "hot.md" ] && continue
     [ "$_wpname" = "index.md" ] && continue
+    case "$_wpage" in
+      */"${RNEX_CFG_WIKI_INDEX_DIR:-_index}"/*) continue ;;
+      */"${RNEX_CFG_WIKI_GRAPH_DIR:-_graph}"/*) continue ;;
+    esac
 
     awk '
       NR==1 && /^---$/ {in_fm=1; next}
@@ -265,8 +341,8 @@ if command -v karpathy_expand_source_files >/dev/null 2>&1; then
   rm -f "$_tmp_exp" "$_tmp_seen"
 fi
 
-# Append lint summary to _log.md (avoid duplicate identical consecutive lint run entries)
-if [ -f "$_wiki_path/_log.md" ]; then
+# Append lint summary to _log.md
+if [ -f "$RNEX_WIKI_LOG_FILE" ]; then
   _status_text="Passed"
   if [ "$_errors" -gt 0 ] || { [ "$_strict" -eq 1 ] && [ "$_warnings" -gt 0 ]; }; then
     _status_text="Failed"
@@ -278,7 +354,7 @@ if [ -f "$_wiki_path/_log.md" ]; then
   _expected_line3="* **Pages Checked:** ${_pages_checked}"
 
   _is_duplicate_lint=0
-  _tail_log="$(tail -n 10 "$_wiki_path/_log.md" 2>/dev/null || true)"
+  _tail_log="$(tail -n 10 "$RNEX_WIKI_LOG_FILE" 2>/dev/null || true)"
   if printf '%s\n' "$_tail_log" | grep -F -q "$_expected_header" && \
      printf '%s\n' "$_tail_log" | grep -F -q "$_expected_line1" && \
      printf '%s\n' "$_tail_log" | grep -F -q "$_expected_line2" && \
@@ -287,7 +363,7 @@ if [ -f "$_wiki_path/_log.md" ]; then
   fi
 
   if [ "$_is_duplicate_lint" -eq 0 ]; then
-    cat >> "$_wiki_path/_log.md" <<LOG_EOF
+    cat >> "$RNEX_WIKI_LOG_FILE" <<LOG_EOF
 
 ${_expected_header}
 ${_expected_line1}
@@ -297,8 +373,8 @@ LOG_EOF
   fi
 fi
 
-_total_errors=$((_errors + _hot_errors))
-_total_warnings=$((_warnings + _hot_warnings))
+_total_errors=$_errors
+_total_warnings=$_warnings
 
 if [ "$_quiet" -eq 0 ]; then
   if [ "$_total_errors" -eq 0 ] && [ "$_total_warnings" -eq 0 ]; then

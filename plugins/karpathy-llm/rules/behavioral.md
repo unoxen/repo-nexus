@@ -50,7 +50,7 @@ In a Repo Nexus workspace, independent repositories are organized into `./repos/
    - Intake sources (`plugins.karpathy-llm.sources`, default: `docs`, `repos/**/README.md`) and member repositories (`./<repos_dir>/`, default: `./repos/`) are strictly read-only inputs during wiki operations. Never create, copy, or modify files inside configured sources; write generated output exclusively inside `wiki_dir` (`wiki/`).
 
 5. **Wiki Navigation Order:**
-   - Always read `<wiki_dir>/hot.md` first for workspace architecture, repository boundaries, and direct links to curated `<wiki_dir>/*.md` pages.
-   - If `<wiki_dir>/hot.md` links the relevant `<wiki_dir>/<page>.md`, read that page directly and **skip `<wiki_dir>/index.md`**.
-   - Read `<wiki_dir>/index.md` **only if** the needed topic or page is not listed in `<wiki_dir>/hot.md` (e.g., when `hot.md` is condensed in large workspaces).
+   - **Step 1 — B-Tree Root Index & Graph Search**: Consult `<wiki_dir>/index.md` (bounded root routing table <= 80 lines) or run `rnex plugin karpathy-llm search <keyword>` to locate the appropriate domain shard or node identifier. Use `rnex plugin karpathy-llm graph <node_id>` to explore inbound backlinks and outbound dependencies.
+   - **Step 2 — Domain Shard Pinpointing**: Read only the specific B-Tree leaf shard `<wiki_dir>/_index/<shard>.md` identified in Step 1 to select the exact leaf page.
+   - **Step 3 — Leaf Page Retrieval**: Read only the 1–3 target atomic page(s) in `<wiki_dir>/`. Never browse raw intake directories before completing Steps 1–2.
 

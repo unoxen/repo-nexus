@@ -23,7 +23,6 @@ git:
     - "repos/"
     - "**/.rnex*/"
     - "**/rnex*/"
-    - "wiki/hot.md"
     - "*.log"
     - ".env.local"
   hooks:
@@ -110,6 +109,11 @@ plugins:
   karpathy-llm:
     enabled: true
     wiki_dir: "wiki"
+    index_dir: "_index"
+    graph_dir: "_graph"
+    btree_root_max_lines: 80
+    btree_shard_max_entries: 100
+    graph_default_depth: 1
     sources:
       - "docs"
       - "adr"

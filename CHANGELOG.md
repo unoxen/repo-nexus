@@ -5,6 +5,21 @@ All notable changes to Repo Nexus (`rnex`) are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.34] - 2026-11-06
+
+### Added
+- **Karpathy LLM Wiki B-Tree & Sorted TSV Property Graph Architecture**:
+  - Implemented 2-level B-Tree sharded index (`_index/*.md`) and plain-text sorted TSV property graph (`_graph/nodes.tsv`, `edges_out.tsv`, `edges_in.tsv`) maintaining strict `LC_ALL=C` collation order.
+  - Implemented \(O(\log N)\) binary search prefix query engine (`rnex plugin karpathy-llm search <prefix>`) using BSD `look` with POSIX `awk` early-exit fallback.
+  - Added ego-subgraph traversal CLI command (`rnex plugin karpathy-llm graph <node_id> [--depth 1|2]`) displaying node metadata, 1-hop outbound dependencies, and 1-hop inbound backlinks.
+  - Added deterministic full graph and index compilation command (`rnex plugin karpathy-llm index --rebuild`) maintaining a bounded \(\le 80\) line ceiling on `wiki/index.md`.
+  - Added automatic B-Tree shard splitting when domain partitions exceed `btree_shard_max_entries` (e.g. splitting `concepts.md` into `concepts-a-m.md` and `concepts-n-z.md`).
+
+### Removed
+- **Total Eradication of Legacy `hot.md`**:
+  - Permanently removed `hot.md` orientation cache across templates, commands, lifecycle hooks, and AI instruction generators in favor of deterministic B-Tree routing and `tail -n 20 _log.md`.
+  - Added automatic legacy `hot.md` cleanup with audit trail entries recorded in `wiki/_log.md` during `init`, `ingest`, `index`, and `lint` operations.
+
 ## [0.8.1] - 2026-10-25
 
 ### Added

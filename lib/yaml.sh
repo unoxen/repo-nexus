@@ -1054,23 +1054,8 @@ yaml_get_plugin_config() {
   _ygpc_local="${NEXUS_LOCAL_CONFIG:-$_wly}"
   _ygpc_main="${NEXUS_CONFIG:-$_wy}"
 
-  # Determine potential alias keys (e.g. hot_file <-> hotFile <-> hot)
   _ygpc_alt=""
   _ygpc_alt2=""
-  case "$_ygpc_key" in
-    hot_file)
-      _ygpc_alt="hotFile"
-      _ygpc_alt2="hot"
-      ;;
-    hotFile)
-      _ygpc_alt="hot_file"
-      _ygpc_alt2="hot"
-      ;;
-    hot)
-      _ygpc_alt="hot_file"
-      _ygpc_alt2="hotFile"
-      ;;
-  esac
 
   # 1. Query .local.rnex.yaml first
   if [ -f "$_ygpc_local" ]; then

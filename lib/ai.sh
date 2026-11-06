@@ -41,14 +41,10 @@ ${_active_repos_dir}/*
 .rnex*/
 rnex*/
 
-# Local machine-specific configuration & rolling wiki cache
+# Local machine-specific configuration
 $RNEX_LOCAL_CONFIG_FILE
 .rnex.local.yaml
-wiki/hot.md
 GI_SECTION_EOF
-  if [ "$_active_wiki_dir" != "wiki" ]; then
-    printf '%s/hot.md\n' "$_active_wiki_dir"
-  fi
 
   _custom_ignores="$(yaml_get_git_ignore 2>/dev/null || true)"
   if [ -n "$_custom_ignores" ]; then
@@ -57,7 +53,7 @@ GI_SECTION_EOF
     printf '%s\n' "$_custom_ignores" | while IFS= read -r _ci || [ -n "$_ci" ]; do
       [ -n "$_ci" ] || continue
       case "$_ci" in
-        "repos/"|"repos/*"|"!repos/.gitkeep"|"${_active_repos_dir}/"|"${_active_repos_dir}/*"|"!${_active_repos_dir}/.gitkeep"|"**/.rnex*/"|"**/rnex*/"|".rnex*/"|"rnex*/"|"$RNEX_LOCAL_CONFIG_FILE"|".rnex.local.yaml"|"wiki/hot.md"|"${_active_wiki_dir}/hot.md")
+        "repos/"|"repos/*"|"!repos/.gitkeep"|"${_active_repos_dir}/"|"${_active_repos_dir}/*"|"!${_active_repos_dir}/.gitkeep"|"**/.rnex*/"|"**/rnex*/"|".rnex*/"|"rnex*/"|"$RNEX_LOCAL_CONFIG_FILE"|".rnex.local.yaml")
           continue
           ;;
       esac
@@ -445,15 +441,10 @@ render_ai_instructions() {
   printf 'Execute these steps in strict order:\n'
   _rai_n=1
   if [ "$_rai_kp" -eq 1 ]; then
-    _rai_hot_opt="$(yaml_plugin_get "karpathy-llm" "hot_file" 2>/dev/null || printf 'true')"
-    if is_enabled_val "$_rai_hot_opt"; then
-      printf "1. **Step 1 — Read Wiki Hot Cache**: Read \`%s/hot.md\` first for workspace architecture, repository boundaries, and direct links to curated \`%s/*.md\` pages. If \`%s/hot.md\` links the needed page, read that page directly and skip \`%s/index.md\`.\n" "$_rai_wiki" "$_rai_wiki" "$_rai_wiki" "$_rai_wiki"
-      printf "2. **Step 2 — Fallback to Wiki Index**: Read \`%s/index.md\` only if the needed topic or page is not listed in \`%s/hot.md\` (e.g. when condensed in large workspaces), and read only the relevant atomic page(s) in \`%s/\`. Do NOT read raw intake sources%s or \`%s/\` before completing Steps 1–2.\n" "$_rai_wiki" "$_rai_wiki" "$_rai_wiki" "${_rai_src_dirs:+ ($_rai_src_dirs)}" "$_rai_rd"
-      _rai_n=3
-    else
-      printf "1. **Step 1 — Read Wiki Index**: Read \`%s/index.md\` first and read only the relevant atomic page(s) in \`%s/\`. Do NOT read raw intake sources%s or \`%s/\` before completing Step 1.\n" "$_rai_wiki" "$_rai_wiki" "${_rai_src_dirs:+ ($_rai_src_dirs)}" "$_rai_rd"
-      _rai_n=2
-    fi
+    printf "1. **Step 1 — Query B-Tree Root Index & Graph**: Read \`%s/index.md\` (compact B-Tree router <= 80 lines) or run \`rnex plugin karpathy-llm search <keyword>\` to locate matching shard or node identifiers. For node dependency exploration, run \`rnex plugin karpathy-llm graph <node_id>\`.\n" "$_rai_wiki"
+    printf "2. **Step 2 — Inspect Targeted Domain Shard**: Read only the relevant shard in \`%s/_index/<shard>.md\` identified in Step 1. Pinpoint the specific leaf page needed without exhaustive reading.\n" "$_rai_wiki"
+    printf "3. **Step 3 — Read Curated Wiki Leaf Page**: Read only the 1–3 target atomic page(s) in \`%s/\`. Do NOT read raw intake sources%s or \`%s/\` before completing Steps 1–2.\n" "$_rai_wiki" "${_rai_src_dirs:+ ($_rai_src_dirs)}" "$_rai_rd"
+    _rai_n=4
   fi
   printf "%s. **Step %s — Targeted Repository Access**: Inspect or modify only the specific files in active \`%s/<name>/\` required for the task. Never modify or commit inside \`READ-ONLY\` repositories.\n" "$_rai_n" "$_rai_n" "$_rai_rd"
   _rai_n=$((_rai_n + 1))
