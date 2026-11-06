@@ -38,6 +38,31 @@ if ! command -v yaml_plugin_get >/dev/null 2>&1 || ! command -v plugin_primary_s
   fi
 fi
 
+_kl_plugin_lib=""
+for _kl_cand in \
+  "${RNEX_PLUGIN_DIR:-}/lib" \
+  "$(dirname "${_kl_common:-$0}")/../lib" \
+  "$(dirname "${_kl_common:-$0}")/lib" \
+  "$_root/.rnex/plugins/karpathy-llm/lib" \
+  "$_root/plugins/karpathy-llm/lib"; do
+  if [ -f "$_kl_cand/config.sh" ]; then
+    _kl_plugin_lib="$(cd "$_kl_cand" 2>/dev/null && pwd -P)"
+    break
+  fi
+done
+
+if [ -n "$_kl_plugin_lib" ]; then
+  # shellcheck source=/dev/null
+  . "$_kl_plugin_lib/config.sh" 2>/dev/null || true
+  # shellcheck source=/dev/null
+  . "$_kl_plugin_lib/utils.sh" 2>/dev/null || true
+  # shellcheck source=/dev/null
+  . "$_kl_plugin_lib/graph_helpers.sh" 2>/dev/null || true
+  # shellcheck source=/dev/null
+  . "$_kl_plugin_lib/btree_helpers.sh" 2>/dev/null || true
+  load_wiki_config_contract "$_root" 2>/dev/null || true
+fi
+
 get_cfg() {
   _gc_key="$1"; _gc_def="${2:-}"
   _gc_val=""
@@ -55,7 +80,11 @@ get_cfg() {
 # @returns: Outputs 10-character ISO-8601 date string to stdout.
 # -----------------------------------------------------------------------------
 kl_today() {
-  date -u +%Y-%m-%d 2>/dev/null || date +%Y-%m-%d 2>/dev/null || date +%F 2>/dev/null || echo "2026-10-15"
+  if command -v get_iso_utc_date >/dev/null 2>&1; then
+    get_iso_utc_date
+  else
+    date -u +%Y-%m-%d 2>/dev/null || date +%Y-%m-%d 2>/dev/null || date +%F 2>/dev/null || echo "2026-10-15"
+  fi
 }
 
 # Resolve configured wiki directory path, normalized without leading/trailing slashes.
@@ -188,7 +217,7 @@ _is_valid_source_file() {
 #   3. Lowercase all characters; replace any non-alphanumeric character with a hyphen;
 #      collapse consecutive hyphens into a single hyphen; trim leading/trailing hyphens.
 #   4. Prefix with 'root-' ONLY if a root-level workspace file without directory
-#      prefix normalizes to a reserved wiki control filename ('index', 'hot', 'log', '_log').
+#      prefix normalizes to a reserved wiki control filename ('index', 'log', '_log').
 #
 # Examples:
 #   - docs/overview.md              -> docs-overview
@@ -218,7 +247,7 @@ kl_source_to_slug() {
 
   # Root-level files without directory prefix normalizing to reserved wiki control file names are prefixed with "root-"
   case "$_kss_slug" in
-    index|hot|_log|log)
+    index|_log|log)
       case "$_kss_src" in
         */*) ;; # Has directory prefix (e.g. docs/index.md -> docs-index), not a reserved collision
         *)   _kss_slug="root-${_kss_slug}" ;;
@@ -365,17 +394,6 @@ _clean_repos="$(printf '%s' "$_clean_repos" | sed -e 's#^[[:space:]]*##' -e 's#[
 [ -n "$_clean_repos" ] || _clean_repos="repos"
 REPOS_DIR="${REPOS_DIR:-$_root/$_clean_repos}"
 
-# Check whether the optional local git-ignored hot.md cache is enabled (default: true).
-kl_hot_enabled() {
-  _khe_val="$(get_cfg "hot_file" "")"
-  [ -n "$_khe_val" ] || _khe_val="$(get_cfg "hotFile" "")"
-  [ -n "$_khe_val" ] || _khe_val="$(get_cfg "hot" "true")"
-  case "$_khe_val" in
-    false|False|FALSE|no|No|NO|0|off|Off|OFF|none) return 1 ;;
-    *) return 0 ;;
-  esac
-}
-
 # Truncate a summary string to a strict word and character budget.
 # Usage: kl_truncate_summary "<text>" [max_words] [max_chars]
 kl_truncate_summary() {
@@ -401,70 +419,38 @@ kl_truncate_summary() {
   '
 }
 
-# Ensure the configured wiki directory and baseline control files (index.md, _log.md, and optional hot.md) exist.
+# Ensure the configured wiki directory, B-Tree shards, TSV graph, index.md, and _log.md exist.
 kl_ensure_wiki_files() {
-  mkdir -p "$_wiki_path"
-  _kew_pdir=""
-  if command -v find_plugin_dir >/dev/null 2>&1; then
-    _kew_pdir="$(find_plugin_dir "karpathy-llm" 2>/dev/null || true)"
+  if command -v load_wiki_config_contract >/dev/null 2>&1; then
+    load_wiki_config_contract "$_root" 2>/dev/null || true
   fi
-  if [ -z "$_kew_pdir" ]; then
+  _wiki_path="${RNEX_WIKI_ROOT:-$_root/$_wiki}"
+  mkdir -p "$_wiki_path"
+
+  # Clean up legacy hot.md if present
+  rm -f "$_wiki_path/hot.md" 2>/dev/null || true
+
+  # Ensure B-Tree and Graph stores are initialized
+  if command -v init_wiki_btree_store >/dev/null 2>&1; then
+    init_wiki_btree_store || true
+  elif [ ! -f "$_wiki_path/index.md" ]; then
+    _kew_pdir=""
     for _kew_cand in "$_root/.rnex/plugins/karpathy-llm" "$_root/plugins/karpathy-llm"; do
       if [ -d "$_kew_cand/templates" ]; then
         _kew_pdir="$_kew_cand"
         break
       fi
     done
+    if [ -n "$_kew_pdir" ] && [ -f "$_kew_pdir/templates/index.md" ]; then
+      cp "$_kew_pdir/templates/index.md" "$_wiki_path/index.md"
+    fi
   fi
 
-  for _kew_f in index.md hot.md _log.md; do
-    if [ "$_kew_f" = "hot.md" ] && ! kl_hot_enabled; then
-      rm -f "$_wiki_path/hot.md" 2>/dev/null || true
-      continue
-    fi
-    if [ ! -f "$_wiki_path/$_kew_f" ]; then
-      if [ -n "$_kew_pdir" ] && [ -f "$_kew_pdir/templates/$_kew_f" ] && command -v plugin_instantiate_template >/dev/null 2>&1; then
-        plugin_instantiate_template "karpathy-llm" "$_kew_pdir" "$_kew_pdir/templates/$_kew_f" "$_wiki_path/$_kew_f"
-      elif [ -n "$_kew_pdir" ] && [ -f "$_kew_pdir/templates/$_kew_f" ]; then
-        sed -e "s|{wiki_dir}|$_wiki|g" -e "s|{raw_dir}|$_raw|g" -e "s|{sources}|\`$_raw/\`|g" -e "s|{today}|$(kl_today)|g" "$_kew_pdir/templates/$_kew_f" > "$_wiki_path/$_kew_f"
-      fi
-    fi
-  done
+  if command -v init_wiki_graph_store >/dev/null 2>&1; then
+    init_wiki_graph_store || true
+  fi
 
   _kew_today="$(kl_today)"
-  if [ ! -f "$_wiki_path/index.md" ]; then
-    cat > "$_wiki_path/index.md" <<INDEX_INIT
-# Wiki Index
-
-Master navigation index for the Karpathy LLM Wiki.
-
-## Overview & Status
-* **Operation Log:** [\`_log.md\`](./_log.md) — Timestamped ingest & maintenance history.
-
-## Member Repositories
-
-## Architecture & Concepts
-
-INDEX_INIT
-  fi
-
-  if kl_hot_enabled && [ ! -f "$_wiki_path/hot.md" ]; then
-    cat > "$_wiki_path/hot.md" <<HOT_INIT
-# Hot Context (Compact Local Orientation Cache)
-
-> Local git-ignored orientation cache for AI agents (~250 words max). Read this file first on startup, then consult \`${_wiki}/index.md\` on demand.
-
-## 1. Architecture & Member Repo Map
-* **Workspace Overview:** Karpathy LLM Wiki active.
-
-## 2. Current Focus & Recent Ingests
-* **Recent Ingests:** None yet.
-
-## 3. Key Contracts & Boundaries
-* **Wiki Index:** Consult [\`${_wiki}/index.md\`](./index.md) for the complete catalog of compiled pages.
-HOT_INIT
-  fi
-
   if [ ! -f "$_wiki_path/_log.md" ]; then
     cat > "$_wiki_path/_log.md" <<LOG_INIT
 # Karpathy Wiki Operation Log
@@ -503,7 +489,7 @@ kl_resolve_repo_paths() {
   fi
 }
 
-# Ingest member repository README into atomic wiki page, index.md, and hot.md.
+# Ingest member repository README into atomic wiki page, B-Tree shards, and TSV graph.
 # Usage: kl_ingest_member_readme <repo_name> <repo_path> <readme_filename> <repo_rel> [force_log]
 kl_ingest_member_readme() {
   _m_repo="$1"
@@ -598,7 +584,7 @@ ${_m_summary}
 * See [${_nav_label}](./${_nav_target}) for workspace member repository catalog.
 PAGE_EOF
 
-    # Log operation only when newly ingested into shared wiki index (zero relation to hot.md)
+    # Log operation only when newly ingested into shared wiki index
     if [ -f "$_wiki_path/_log.md" ]; then
       cat >> "$_wiki_path/_log.md" <<LOG_EOF
 
@@ -610,199 +596,14 @@ LOG_EOF
     fi
   fi
 
-  # 4. Register in navigation index (index.md) if not already present
-  if [ -f "$_wiki_path/index.md" ] && ! grep -q "repo-${_m_repo}\.md" "$_wiki_path/index.md"; then
-    _tmp_idx="$(mktemp)"
-    _idx_line="* [Member Repo: ${_m_repo}](./repo-${_m_repo}.md): ${_m_summary}"
-    if grep -q "^## Member Repositories" "$_wiki_path/index.md"; then
-      if LINE="$_idx_line" awk '
-        /^## Member Repositories/ {
-          print
-          print ENVIRON["LINE"]
-          next
-        }
-        /\* \*\([Aa]ctive member repositories/ { next }
-        { print }
-      ' "$_wiki_path/index.md" > "$_tmp_idx"; then
-        mv "$_tmp_idx" "$_wiki_path/index.md"
-      else
-        rm -f "$_tmp_idx"
-      fi
-    elif grep -q "^## Architecture & Concepts" "$_wiki_path/index.md"; then
-      if LINE="$_idx_line" awk '
-        /^## Architecture & Concepts/ {
-          print "## Member Repositories"
-          print ENVIRON["LINE"]
-          print ""
-          print
-          next
-        }
-        { print }
-      ' "$_wiki_path/index.md" > "$_tmp_idx"; then
-        mv "$_tmp_idx" "$_wiki_path/index.md"
-      else
-        rm -f "$_tmp_idx"
-      fi
-    else
-      rm -f "$_tmp_idx"
-      printf '\n## Member Repositories\n* [Member Repo: %s](./repo-%s.md): %s\n' "$_m_repo" "$_m_repo" "$_m_summary" >> "$_wiki_path/index.md"
-    fi
+  # 4. Register in TSV graph and B-Tree shards
+  if command -v upsert_graph_node_and_edges >/dev/null 2>&1; then
+    upsert_graph_node_and_edges "repo-${_m_repo}" "entities" "repo-${_m_repo}.md" "Member Repo: ${_m_repo}" "${_m_summary}" "$_target_page" "$_src_file"
+  fi
+  if command -v rebalance_btree_shards_and_compile_root >/dev/null 2>&1; then
+    rebalance_btree_shards_and_compile_root
   fi
 
-  # 5. Independently register in local hot cache (hot.md) if enabled
-  if ! kl_hot_enabled; then
-    rm -f "$_wiki_path/hot.md" 2>/dev/null || true
-    return 0
-  fi
-
-  _is_in_hot=0
-  if grep -q "repo-${_m_repo}\.md" "$_wiki_path/hot.md" 2>/dev/null; then
-    _is_in_hot=1
-  elif grep -q "${_rel_loc}" "$_wiki_path/hot.md" 2>/dev/null; then
-    _is_in_hot=1
-  elif grep -E -q "^\* \*\*Member Repositories \([0-9]+ repos\):.*[ :]${_m_repo}(,|\.|$)" "$_wiki_path/hot.md" 2>/dev/null; then
-    _is_in_hot=1
-  fi
-
-  if [ -f "$_wiki_path/hot.md" ] && [ "$_is_in_hot" -eq 0 ]; then
-    _hot_summary="$(kl_truncate_summary "$_m_summary" 7 55)"
-    [ -z "$_hot_summary" ] && _hot_summary="Member repository"
-    _hot_line="* **[${_m_repo}](./repo-${_m_repo}.md)** (\`${_rel_loc}\`): ${_hot_summary}."
-    _tmp_hot="$(mktemp)"
-    if LINE="$_hot_line" awk '
-      /^## 1\. Architecture & Member Repo Map/ {
-        print
-        print ENVIRON["LINE"]
-        next
-      }
-      /\* \*\*Member Repositories:\*\* Map each member repo/ { next }
-      { print }
-    ' "$_wiki_path/hot.md" > "$_tmp_hot"; then
-      mv "$_tmp_hot" "$_wiki_path/hot.md"
-    else
-      rm -f "$_tmp_hot"
-    fi
-  fi
-}
-
-# Enforce strict compact size on hot.md by bounding Section 1 (repos) and Section 2 (recent ingests).
-# Usage: kl_condense_hot_cache [ingested_count] [ingested_repos_csv]
-kl_condense_hot_cache() {
-  _khc_ingested_cnt="${1:-0}"
-  _khc_ingested_repos="${2:-}"
-  if ! kl_hot_enabled; then
-    rm -f "$_wiki_path/hot.md" 2>/dev/null || true
-    return 0
-  fi
-  [ -f "$_wiki_path/hot.md" ] || return 0
-
-  # 1. Bound Section 2 (Current Focus & Recent Ingests) to at most 8 compact lines (<= 115 chars each)
-  _tmp_s2="$(mktemp)"
-  if awk '
-    BEGIN { in_s2 = 0; s2_cnt = 0; s2_overflow = 0 }
-    /^## 2\. Current Focus & Recent Ingests/ { in_s2 = 1; print; next }
-    in_s2 && /^## / {
-      if (s2_overflow > 0) {
-        print "* *(See [Wiki Index](./index.md) for all compiled pages)*"
-      }
-      in_s2 = 0
-      print
-      next
-    }
-    in_s2 {
-      if ($0 ~ /^\* \*\*\(See \[Wiki Index\]/) { next }
-      if ($0 ~ /^\* \*\*Active Tasks:\*\* Wiki initialization complete\./) { next }
-      if ($0 ~ /^\* \*\*\[/) {
-        s2_cnt++
-        if (s2_cnt == 1) {
-          has_real_ingest = 1
-        }
-        if (s2_cnt <= 8) {
-          line = $0
-          if (length(line) > 115) {
-            line = substr(line, 1, 112) "..."
-          }
-          print line
-        } else {
-          s2_overflow++
-        }
-        next
-      }
-      if ($0 ~ /^\* \*\*Recent Ingests:\*\* None yet/) {
-        if (s2_cnt > 0) next
-      }
-      print
-      next
-    }
-    { print }
-  ' "$_wiki_path/hot.md" > "$_tmp_s2"; then
-    # Strip "Recent Ingests: None yet" if any real ingest bullet exists in Section 2
-    if grep -q '^\* \*\*\[' "$_tmp_s2" 2>/dev/null; then
-      _tmp_s2b="$(mktemp)"
-      grep -v '^\* \*\*Recent Ingests:\*\* None yet' "$_tmp_s2" > "$_tmp_s2b" && mv "$_tmp_s2b" "$_tmp_s2"
-      rm -f "$_tmp_s2b"
-    fi
-    mv "$_tmp_s2" "$_wiki_path/hot.md"
-  else
-    rm -f "$_tmp_s2"
-  fi
-
-  # 2. Condense Section 1 (Member Repo Map) if > 10 repos or if total word count > 240 words
-  _hot_words="$(wc -w < "$_wiki_path/hot.md" 2>/dev/null | tr -d ' ')"
-  [ -n "$_hot_words" ] || _hot_words=0
-  _num_repos="$(grep -cE '^\* \*\*\[[^]]+\]\(\./repo-[^)]+\)' "$_wiki_path/hot.md" 2>/dev/null || true)"
-  [ -n "$_num_repos" ] || _num_repos=0
-  if [ "$_num_repos" -gt 10 ] || [ "$_khc_ingested_cnt" -gt 10 ] || [ "$_hot_words" -gt 240 ]; then
-    if [ "$_khc_ingested_cnt" -gt 10 ] && [ -n "$_khc_ingested_repos" ]; then
-      _condense_count="$_khc_ingested_cnt"
-      _repo_names="$_khc_ingested_repos"
-    elif [ "$_num_repos" -gt 0 ]; then
-      _condense_count="$_num_repos"
-      _repo_names="$(grep -E '^\* \*\*\[[^]]+\]\(\./repo-[^)]+\)' "$_wiki_path/hot.md" | sed -e 's/^\* \*\*\[//' -e 's/\].*//' | head -n 10 | tr '\n' ', ' | sed -e 's/, $//')"
-    else
-      _condense_count=0
-      _repo_names=""
-    fi
-
-    if [ "$_condense_count" -gt 0 ]; then
-      _tmp_b="$(mktemp)"
-      if awk -v rnames="$_repo_names" -v nrepos="$_condense_count" -v rdir="$_clean_repos" '
-        BEGIN { in_s1=0; replaced=0 }
-        /^## 1\. Architecture & Member Repo Map/ { in_s1=1; print; next }
-        in_s1 && /^## / { in_s1=0 }
-        in_s1 && (/^\* \*\*(\[[^]]+\]\(\.\/repo-|Member Repositories \([0-9]+ repos\):)/) {
-          if (!replaced) {
-            print "* **Member Repositories (" nrepos " repos):** Autonomous repositories under `" rdir "/`: " rnames ". See [Wiki Index](./index.md#member-repositories)."
-            replaced=1
-          }
-          next
-        }
-        { print }
-      ' "$_wiki_path/hot.md" > "$_tmp_b"; then
-        mv "$_tmp_b" "$_wiki_path/hot.md"
-      else
-        rm -f "$_tmp_b"
-      fi
-    fi
-  fi
-
-  # 3. Final safety cap: if custom prose in hot.md pushes word count > 450 words, truncate trailing lines in custom sections
-  _hot_words="$(wc -w < "$_wiki_path/hot.md" 2>/dev/null || echo 0)"
-  if [ "$_hot_words" -gt 450 ]; then
-    _tmp_cap="$(mktemp)"
-    if awk '
-      BEGIN { words = 0 }
-      /^## [123]\./ { print; next }
-      {
-        if (words + NF <= 420) {
-          print
-          words += NF
-        }
-      }
-    ' "$_wiki_path/hot.md" > "$_tmp_cap"; then
-      mv "$_tmp_cap" "$_wiki_path/hot.md"
-    else
-      rm -f "$_tmp_cap"
-    fi
-  fi
+  # Clean up legacy hot.md if present
+  rm -f "$_wiki_path/hot.md" 2>/dev/null || true
 }

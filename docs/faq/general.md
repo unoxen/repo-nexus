@@ -126,13 +126,20 @@ Traditional Retrieval-Augmented Generation (RAG) splits raw documents into arbit
 In contrast, the **Karpathy LLM Wiki** architecture:
 - **Synthesizes Once on Ingest**: Source documents and member repository documentation are compiled into atomic, structured Markdown pages under your configured wiki directory (default `wiki/`).
 - **Knowledge Compounding**: Curated pages link to related concepts using standard Markdown links (`[Title](./page.md)`) and typed frontmatter graphs (`sources`, `related`, `extends`), allowing knowledge quality to compound over time as the codebase evolves.
-- **Deterministic Navigation**: Agents navigate compiled domain knowledge systematically via `hot.md` and `index.md` without exploratory trial-and-error searches.
+- **Deterministic Navigation**: Agents navigate compiled domain knowledge systematically via the B-Tree root table (`index.md`), domain shards (`_index/*.md`), and sorted TSV graph (`_graph/*.tsv`) without exploratory trial-and-error searches.
 
-### What is the difference between `index.md`, `hot.md`, and `_log.md`?
-Each core wiki control file has a distinct architectural responsibility:
-- **`hot.md` (Rolling Orientation Cache)**: Strictly bounded under ~500 words. Agents read this file first on startup to gain immediate domain orientation, member repository entry points, and active focus areas without loading the entire knowledge graph.
-- **`index.md` (Content Navigation Catalog)**: A clean catalog starting with `# Wiki Index` that organizes all compiled wiki pages into categorized sections. Every entry includes a 1-line annotation so agents can pinpoint exact target documents.
-- **`_log.md` (Operational Audit Trail)**: An append-only, timestamped log recording every initialization, source ingestion, query synthesis, and lint validation run.
+### What is the difference between `index.md`, `_index/`, `_graph/`, and `_log.md`?
+Each core wiki control asset has a distinct architectural responsibility:
+- **`index.md` (B-Tree Root Router)**: Strictly bounded under 80 lines with zero YAML frontmatter. Contains a compact routing table mapping domain key ranges to leaf shard files in `_index/` alongside summary property graph statistics.
+- **`_index/<shard>.md` (Sorted B-Tree Leaf Shards)**: Domain-partitioned catalogs (`overview.md`, `concepts.md`, `entities.md`, `sources.md`) sorted in strict `LC_ALL=C` order. Automatically splits into alphabetical sub-shards (e.g. `concepts-a-m.md`, `concepts-n-z.md`) when entry thresholds are exceeded.
+- **`_graph/*.tsv` (Sorted TSV Property Graph)**: Plain-text tab-separated property tables (`nodes.tsv`, `edges_out.tsv`, `edges_in.tsv`) queried via binary search in \(O(\log N)\) time using BSD `look` or early-exit POSIX `awk`.
+- **`_log.md` (Operational Audit Trail)**: An append-only, timestamped log recording every initialization, source ingestion, graph update, and lint validation run. Recent activity is checked with `tail -n 20 _log.md`.
+
+### Why was `hot.md` replaced by the B-Tree and TSV Graph architecture?
+A single rolling orientation cache (`hot.md`) suffered from prompt bloat, non-deterministic summarization, and race conditions across multi-agent sessions. Replacing it with a 2-level B-Tree index and sorted TSV adjacency graph provides:
+1. **Strictly Bounded Context**: `index.md` is guaranteed to remain \(\le 80\) lines regardless of repository size.
+2. **Predictable Token Consumption**: Agents navigate via a 3-step retrieval protocol (Root Router \(\to\) Leaf Shard \(\to\) Target Page) loading only the exact knowledge required.
+3. **Zero Dependencies**: Graph traversal and prefix search rely purely on POSIX utilities (`awk`, `sort`, `look`) with \(O(\log N)\) lookup latency under 1 ms.
 
 ### Can I ingest a single document or specific repository?
 Yes. The `ingest` command supports granular targeting:

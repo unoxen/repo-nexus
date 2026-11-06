@@ -428,12 +428,12 @@ sync_plugin_bundle() {
 
   mkdir -p "$_spb_dest"
   rm -rf "${_spb_dest:?}/prompts" 2>/dev/null || true
-  for _sub in rules workflows instructions skills agents templates hooks commands; do
+  for _sub in rules workflows instructions skills agents templates hooks commands lib bin; do
     if [ -d "$_spb_src/$_sub" ]; then
       rm -rf "${_spb_dest:?}/$_sub"
       mkdir -p "$_spb_dest/$_sub"
       cp -R "$_spb_src/$_sub"/. "$_spb_dest/$_sub"/ 2>/dev/null || true
-      if [ "$_sub" = "hooks" ] || [ "$_sub" = "commands" ]; then
+      if [ "$_sub" = "hooks" ] || [ "$_sub" = "commands" ] || [ "$_sub" = "bin" ]; then
         chmod +x "$_spb_dest/$_sub"/* 2>/dev/null || true
       fi
     else
@@ -483,7 +483,7 @@ _clean_leaked_plugin_dirs() {
         [ -e "$_f" ] || continue
         _b="$(basename "$_f")"
         case "$_b" in
-          index.md|_log.md|hot.md|.gitkeep) continue ;;
+          index.md|_log.md|.gitkeep) continue ;;
           *)
             [ -f "$_cld_root/$_cld_wiki/$_b" ] && cmp -s "$_f" "$_cld_root/$_cld_wiki/$_b" && continue
             _can_clean=0
@@ -598,14 +598,6 @@ sync_plugins() {
 
       _src_path="$_pdir/$_s"
       _dest_path="$NEXUS_DIR/$_d"
-
-      if [ "$_pname" = "karpathy-llm" ] && [ "$_s" = "templates/hot.md" ]; then
-        _hot_opt="$(yaml_plugin_get "karpathy-llm" "hot_file" 2>/dev/null || printf 'true')"
-        if ! is_enabled_val "$_hot_opt"; then
-          rm -f "$_dest_path" 2>/dev/null || true
-          continue
-        fi
-      fi
 
       if [ -f "$_src_path" ] && [ ! -f "$_dest_path" ]; then
         mkdir -p "$(dirname "$_dest_path")"

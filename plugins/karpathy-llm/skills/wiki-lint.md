@@ -6,7 +6,7 @@ Universal agentic skill protocol for maintaining Karpathy LLM Wiki graph integri
 
 ## Capabilities & Context
 
-Use this skill to perform health checks and maintenance on the curated wiki knowledge graph, resolve broken links, recompute bidirectional relations, and preserve the ~500-word hot cache boundary.
+Use this skill to perform health checks and maintenance on the curated wiki knowledge graph, resolve broken links, recompute bidirectional relations, and ensure B-Tree shards and TSV graph tables remain consistent.
 
 ## CLI Helper
 
@@ -46,24 +46,22 @@ rnex plugin karpathy-llm lint [--strict] [--quiet]
    - Update frontmatter accordingly.
 
 3. **Find Orphaned Pages:**
-   - Detect pages under `<wiki_dir>/` not reachable from `<wiki_dir>/index.md` or any `mentioned_in` field.
-   - Add them to `<wiki_dir>/index.md` under their appropriate category.
+   - Detect pages under `<wiki_dir>/` not registered in `<wiki_dir>/_graph/nodes.tsv` or leaf shards.
+   - Run `rnex plugin karpathy-llm index` to compile them into their designated shard.
 
 4. **Detect Duplicate or Overlapping Pages:**
    - Detect duplicate or heavily overlapping concepts across pages.
    - Consolidate concepts and update relation fields across the wiki graph.
 
 5. **Identify & Address Knowledge Gaps:**
-   - Identify concepts referenced in relation fields or prose that lack their own atomic page.
+   - Identify concepts referenced in relation fields, wikilinks, or prose that lack their own atomic page.
    - Create stub pages or flag them for future intake in `_log.md`.
 
-6. **Rebuild Navigation Index (Annotated Links):**
-   - Rebuild `<wiki_dir>/index.md` to reflect current pages and categories.
-   - Ensure every page entry maintains a concise 1-line descriptive annotation.
+6. **Rebuild B-Tree Shards & TSV Adjacency Graph:**
+   - Run `rnex plugin karpathy-llm index` to synchronize `<wiki_dir>/_graph/*.tsv`, rebalance shards in `<wiki_dir>/_index/`, and recompile the bounded `<wiki_dir>/index.md` router.
 
-7. **Refresh Hot Cache (Optional Local Cache, Bounded ~500-Word Ceiling):**
-   - When `hot_file: true` (default), refresh `<wiki_dir>/hot.md`, verifying the 3 structured sections (Architecture & Repo Map, Current Focus, Key Contracts).
-   - Ensure total length remains strictly compact (`< 2 KB` / under ~500 words) by bounding summaries and recent ingests. `hot.md` is an individual git-ignored file and must never be referenced in `_log.md` or `mentioned_in`.
+7. **Verify Graph & B-Tree Invariants:**
+   - Run `rnex plugin karpathy-llm lint` to verify that `nodes.tsv`, `edges_out.tsv`, and `edges_in.tsv` maintain strict `LC_ALL=C` sorting and that root `index.md` remains `<= 80` lines.
 
 8. **Append Operation Log:**
-   - Append a maintenance summary of tracked wiki pages to `<wiki_dir>/_log.md` detailing fixed links, `mentioned_in` updates, resolved orphans, and gaps (with zero mention of `hot.md`).
+   - Append a maintenance summary of tracked wiki pages to `<wiki_dir>/_log.md` detailing fixed links, `mentioned_in` updates, resolved orphans, and gaps.

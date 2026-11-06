@@ -243,7 +243,7 @@ ingest_source_file() {
   ' "$_src_abs")"
   [ -z "$_s_title" ] && _s_title="$_s_base"
 
-  # Summary (bounded to prevent huge single-line files from inflating wiki/index/hot cache)
+  # Summary (bounded to prevent huge single-line files from inflating wiki/index cache)
   _s_raw_summary="$(awk '
     NR == 1 && /^#[^#]/ { next }
     /^[ ]*(\[!\[|<img|<!--|---|```)/ { next }
@@ -259,6 +259,11 @@ ingest_source_file() {
 
   if [ ! -f "$_s_target" ]; then
     _KL_LAST_INGESTED=1
+    _raw_wikilinks=""
+    if command -v extract_wikilinks_from_markdown >/dev/null 2>&1; then
+      _raw_wikilinks="$(extract_wikilinks_from_markdown "$_src_abs" 2>/dev/null || true)"
+    fi
+
     cat > "$_s_target" <<PAGE_EOF
 ---
 title: "${_s_title}"
@@ -284,7 +289,15 @@ ${_s_summary}
 * See [Wiki Index](./index.md) for master knowledge graph index.
 PAGE_EOF
 
-    # Log operation only when newly ingested into shared wiki index (zero relation to hot.md)
+    if [ -n "$_raw_wikilinks" ]; then
+      printf '\n## Key References & Wikilinks\n' >> "$_s_target"
+      printf '%s\n' "$_raw_wikilinks" | while IFS= read -r _wl || [ -n "$_wl" ]; do
+        [ -n "$_wl" ] || continue
+        printf '* [[%s]]\n' "$_wl" >> "$_s_target"
+      done
+    fi
+
+    # Log operation only when newly ingested into shared wiki index
     if [ -f "$_wiki_path/_log.md" ]; then
       cat >> "$_wiki_path/_log.md" <<LOG_EOF
 
@@ -296,51 +309,16 @@ LOG_EOF
     fi
   fi
 
-  # Update index.md
-  if ! grep -q "${_s_slug}\.md" "$_wiki_path/index.md"; then
-    _tmp_idx="$(mktemp)"
-    _idx_line="* [${_s_title}](./${_s_slug}.md): ${_s_summary}"
-    if grep -q "^## Architecture & Concepts" "$_wiki_path/index.md"; then
-      if LINE="$_idx_line" awk '
-        /^## Architecture & Concepts/ {
-          print
-          print ENVIRON["LINE"]
-          next
-        }
-        { print }
-      ' "$_wiki_path/index.md" > "$_tmp_idx"; then
-        mv "$_tmp_idx" "$_wiki_path/index.md"
-      else
-        rm -f "$_tmp_idx"
-      fi
-    else
-      printf '\n## Architecture & Concepts\n%s\n' "$_idx_line" >> "$_wiki_path/index.md"
-    fi
+  # Register in TSV graph store and rebalance B-Tree leaf shards
+  if command -v upsert_graph_node_and_edges >/dev/null 2>&1; then
+    upsert_graph_node_and_edges "$_s_slug" "sources" "${_s_slug}.md" "$_s_title" "$_s_summary" "$_s_target" "$_src_abs"
+  fi
+  if command -v rebalance_btree_shards_and_compile_root >/dev/null 2>&1; then
+    rebalance_btree_shards_and_compile_root
   fi
 
-  # Independently update local hot.md Section 2 (Recent Ingests) if hot_file is enabled
-  if kl_hot_enabled && [ -f "$_wiki_path/hot.md" ]; then
-    if ! grep -q "${_s_slug}\.md" "$_wiki_path/hot.md" 2>/dev/null && ! grep -q "${_src_rel}" "$_wiki_path/hot.md" 2>/dev/null; then
-      _hot_title="$(kl_truncate_summary "$_s_title" 6 40)"
-      [ -n "$_hot_title" ] || _hot_title="$_s_base"
-      _hot_sum="$(kl_truncate_summary "$_s_summary" 7 55)"
-      [ -n "$_hot_sum" ] || _hot_sum="Intake page"
-      _hot_line="* **[${_hot_title}](./${_s_slug}.md)** (\`${_src_rel}\`): ${_hot_sum}."
-      _tmp_hot="$(mktemp)"
-      if LINE="$_hot_line" awk '
-        /^## 2\. Current Focus & Recent Ingests/ {
-          print
-          print ENVIRON["LINE"]
-          next
-        }
-        { print }
-      ' "$_wiki_path/hot.md" > "$_tmp_hot"; then
-        mv "$_tmp_hot" "$_wiki_path/hot.md"
-      else
-        rm -f "$_tmp_hot"
-      fi
-    fi
-  fi
+  # Purge any legacy hot.md
+  rm -f "$_wiki_path/hot.md" 2>/dev/null || true
 
   [ "$_quiet" -eq 1 ] || [ "${_KL_LAST_INGESTED:-0}" -eq 0 ] || printf '[WIKI] Ingested source: %s -> %s.md\n' "$_src_rel" "$_s_slug"
 }
@@ -477,8 +455,8 @@ BATCH_LOG_EOF
   done >> "$_wiki_path/_log.md"
 fi
 
-# Enforce ~500-word ceiling on hot.md
-kl_condense_hot_cache "$_ingested_count"
+# Clean up legacy hot.md if present
+rm -f "$_wiki_path/hot.md" 2>/dev/null || true
 
 [ "$_quiet" -eq 1 ] || printf '[WIKI] Ingest complete.\n'
 exit 0

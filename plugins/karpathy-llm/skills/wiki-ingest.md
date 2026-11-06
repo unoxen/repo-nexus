@@ -31,10 +31,10 @@ rnex plugin karpathy-llm ingest [--file <path> | <path>] [--source <path>] [--re
 
 2. **Step 1 — Deterministic CLI Scaffolding:**
    - Run `rnex plugin karpathy-llm ingest` (or `rnex plugin karpathy-llm ingest <path>`).
-   - The CLI deterministically scaffolds the exact 1-to-1 wiki file and registers it in `index.md` and `_log.md` (and independently in the local git-ignored `hot.md` when `hot_file: true`):
+   - The CLI deterministically scaffolds the exact 1-to-1 wiki file, synchronizes the sorted TSV graph (`_graph/*.tsv`), updates the B-Tree leaf shard (`_index/<shard>.md`), updates root `index.md`, and records an entry in `_log.md`:
      - **Root Member Repository READMEs:** Mapped strictly to `<wiki_dir>/repo-<repo_name>.md`.
      - **All Other Sources & Nested READMEs:** Mapped strictly to `<wiki_dir>/<slug>.md`, where `<slug>` is the normalized lowercase workspace-relative path (e.g., `docs/overview.md` becomes `<wiki_dir>/docs-overview.md`; `docs/api/README.md` becomes `<wiki_dir>/docs-api-readme.md`; `repos/app/apps/web/README.md` becomes `<wiki_dir>/repos-app-apps-web-readme.md`).
-     - Root-level files without a directory prefix normalizing to reserved wiki control file names (`index`, `hot`, `_log`) are prefixed with `root-` (e.g., `index.md` becomes `root-index.md`).
+     - Root-level files without a directory prefix normalizing to reserved wiki control file names (`index`, `log`, `_log`) are prefixed with `root-` (e.g., `index.md` becomes `root-index.md`).
 
 3. **Step 2 — In-Place Synthesis & Enrichment:**
    - Read the source document(s) thoroughly in-place.
@@ -62,15 +62,9 @@ rnex plugin karpathy-llm ingest [--file <path> | <path>] [--source <path>] [--re
    - Write a concise body with summary, architectural responsibilities, and key insights.
    - Include standard Markdown links (`[Label](./page.md)`) inline where helpful.
 
-6. **Update Navigation Index (Annotated Links):**
-   - Verify `<wiki_dir>/index.md` contains the link to the page with a concise 1-line summary next to each link (e.g. `- [Auth Flow](./auth-flow.md): JWT validation and token rotation`) so agents pinpoint target pages in a single read.
+6. **Update B-Tree Shards & TSV Graph:**
+   - Verify that the target domain shard `<wiki_dir>/_index/<shard>.md` indexes the new page with its annotated link and summary.
+   - Run `rnex plugin karpathy-llm index` to automatically synchronize `<wiki_dir>/_graph/*.tsv`, rebalance shards in `<wiki_dir>/_index/`, and recompile the bounded `<wiki_dir>/index.md` router.
 
-7. **Update Hot Cache (Optional Local Cache, Bounded ~500-Word Ceiling):**
-   - When `hot_file: true` (default), update `<wiki_dir>/hot.md` with compact rolling orientation summaries (`<= 55-75` chars per line, at most 8 recent ingests) across 3 sections:
-     1. Architecture & Member Repo Map (with direct links: `- **[<repo>](./repo-<slug>.md)** (\`<rel_path>\`): <summary>`)
-     2. Current Focus & Recent Ingests (with direct links: `- **[<title>](./<slug>.md)** (\`<src_rel>\`): <summary>`)
-     3. Key Contracts & Boundaries
-   - `hot.md` is a local git-ignored file and has zero relation to `_log.md` (never reference `hot.md` in `_log.md` or `mentioned_in`).
-
-8. **Audit Verification:**
-   - Run `rnex plugin karpathy-llm lint` to verify that link paths, frontmatter schema, and word boundaries conform to wiki invariants.
+7. **Audit Verification:**
+   - Run `rnex plugin karpathy-llm lint` to verify that link paths, frontmatter schema, B-Tree root bounds, and TSV graph sort order conform to wiki invariants.

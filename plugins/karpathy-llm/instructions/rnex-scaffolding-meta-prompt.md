@@ -17,8 +17,9 @@ Do not hard-code any specific AI tool or harness into the wiki structure itself.
 Initialize the fixed baseline directories and control files:
 
 - **`./docs/`** — Append-only intake directory. Add `.gitkeep`. All original source material goes here unmodified.
-- **`wiki/index.md`** — Master navigation index organizing links to atomic pages.
-- **`wiki/hot.md`** — Rolling ~500-word orientation cache for quick agent onboarding.
+- **`wiki/index.md`** — B-Tree Root routing table (bounded <= 80 lines) organizing domain shards.
+- **`wiki/_index/`** — B-Tree leaf shards (`overview.md`, `concepts.md`, `entities.md`, `sources.md`).
+- **`wiki/_graph/`** — Sorted TSV property graph (`nodes.tsv`, `edges_out.tsv`, `edges_in.tsv`).
 - **`wiki/_log.md`** — Append-only operation log recording all ingest and lint runs.
 
 Do not create arbitrary or speculative subdirectories during initialization. Scaffolding is 100% deterministic. Domain subfolders and categories emerge organically during the source ingestion phase (`wiki-ingest`).
@@ -72,9 +73,9 @@ In standalone repositories (outside Repo Nexus), append:
 ## Karpathy Wiki Rules
 
 - **Intake**: All source material (articles, transcripts, docs, notes) is resolved from configured `sources` (or legacy `raw_dir`, default: `./docs`) unmodified. Never write directly to `wiki/` without ingesting.
-- **Orientation**: Before answering domain questions, read `wiki/hot.md` for rolling context. If `wiki/hot.md` directly links the target page, read it directly and skip `wiki/index.md`. Consult `wiki/index.md` on demand when a topic is not in `hot.md`.
+- **Orientation**: Follow the 3-step B-Tree retrieval protocol: (1) Read `wiki/index.md` (bounded root router <= 80 lines) or run `rnex plugin karpathy-llm search <keyword>`; (2) Read the target shard `wiki/_index/<shard>.md` or run `rnex plugin karpathy-llm graph <node_id>`; (3) Open only the 1–3 target leaf pages in `wiki/`.
 - **Ingestion**: When files appear in configured sources, run `rnex plugin karpathy-llm ingest` to scaffold deterministic 1-to-1 wiki pages (`repo-<name>.md` for root member repo READMEs; `<normalized-relative-path>.md` for all other sources), then enrich each page in-place.
-- **Maintenance**: Run `rnex plugin karpathy-llm lint` to validate paths, update `mentioned_in`, and preserve graph integrity.
+- **Maintenance**: Run `rnex plugin karpathy-llm lint` to validate paths, update relations, verify B-Tree bounds, and preserve graph integrity.
 ```
 
 ---
@@ -89,21 +90,20 @@ Create workflow instruction files at `.agent/workflows/` (or `.agent/skills/` de
 3. Read each source fully and enrich the corresponding `<wiki_dir>/<slug>.md` page in-place (capturing architecture concepts, contracts, and patterns).
 4. For each page, maintain typed frontmatter (`sources`, `related`, `extends`, `contradicts`, `mentioned_in`).
 5. Write a concise body with inline links where contextually helpful.
-6. Verify `wiki/index.md` contains annotated links to all curated pages.
-7. Verify `wiki/hot.md` contains direct links to new pages within the ~500-word ceiling.
+6. Verify the corresponding domain shard in `wiki/_index/` contains the annotated link.
+7. Run `rnex plugin karpathy-llm index` to synchronize the graph and recompile the root router.
 8. Verify graph integrity using `rnex plugin karpathy-llm lint`.
 
 **`wiki-lint.md`**:
 1. For every page, verify that all paths in frontmatter relation fields (`related`, `extends`, `contradicts`, `sources`) resolve to existing files. Fix or flag broken paths.
 2. Recompute `mentioned_in` for every page by scanning all other pages' relation fields and inline links. Update the field.
-3. Find orphaned pages (not reachable from `index.md` or any `mentioned_in` field). Add them to the index.
+3. Find orphaned pages (not reachable from `nodes.tsv` or any `mentioned_in` field). Add them to the appropriate shard.
 4. Detect duplicate or heavily overlapping pages. Consolidate and update relations.
 5. Check for factual inconsistencies between pages in `contradicts` relations or covering the same topic.
 6. Identify knowledge gaps: concepts referenced in relation fields but lacking their own page. Create stub pages or flag for future ingest.
 7. Suggest source candidates from configured `sources` (or `<raw_dir>/`) or external searches to fill gaps.
-8. Rebuild `wiki/index.md` to reflect the current set of pages.
-9. Update `wiki/hot.md` if it exists.
-10. Append a lint summary to `wiki/_log.md`.
+8. Rebuild `wiki/_graph/*.tsv`, `wiki/_index/*.md`, and `wiki/index.md` via `rnex plugin karpathy-llm index`.
+9. Append a lint summary to `wiki/_log.md`.
 
 ---
 

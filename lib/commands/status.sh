@@ -228,9 +228,6 @@ cmd_status() {
               _phooks="$(yaml_list_plugin_hooks "$_pname" 2>/dev/null | awk '{ out = (NR == 1) ? $0 : out "+" $0 } END { if (NR) print out }')"
               _opts="${_opts:+$_opts, }hooks=${_phooks:-none}"
             fi
-            if grep -q "hot_file:" "$_pdir/plugin.yaml" 2>/dev/null || [ -n "$(yaml_plugin_get "$_pname" "hot_file" 2>/dev/null)" ]; then
-              _opts="${_opts:+$_opts, }hot_file=$(provider_option_enabled "$_pname" "hot_file" && echo "true" || echo "false")"
-            fi
             if [ -n "$_opts" ]; then
               printf '    %b↳ Options: %s%b\n' "$_DIM" "$_opts" "$_NC"
             fi

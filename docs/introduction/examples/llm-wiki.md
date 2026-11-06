@@ -63,7 +63,7 @@ rnex plugin enable karpathy-llm
 rnex sync
 ```
 
-## Wiki Ingest & Lint Operations
+## Wiki Ingest, Index & Graph Operations
 
 ```bash
 # Ingest all intake sources and member repository READMEs
@@ -72,7 +72,16 @@ rnex plugin karpathy-llm ingest
 # Ingest a specific research document or design spec
 rnex plugin karpathy-llm ingest --source specs/architecture.md
 
-# Validate wiki schema, link integrity, and bounded word counts
+# Rebuild sorted TSV property graph and B-Tree index shards
+rnex plugin karpathy-llm index --rebuild
+
+# Fast O(log N) binary search prefix lookup
+rnex plugin karpathy-llm search core
+
+# Explore node dependencies and backlinks
+rnex plugin karpathy-llm graph core-engine --depth 1
+
+# Validate wiki schema, sort invariants, and wikilink integrity
 rnex plugin karpathy-llm lint
 
 # Run strict verification before release

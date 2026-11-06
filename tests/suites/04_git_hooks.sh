@@ -610,12 +610,14 @@ AFTER_CLONE_YAML
 (cd "$TEST_AFTER_CLONE_WS" && ./rnex clone >/dev/null)
 [ -f "$TEST_AFTER_CLONE_WS/clone_hook_marker" ] || { fail "after_clone did not run on rnex clone"; exit 1; }
 [ -f "$TEST_AFTER_CLONE_WS/wiki/repo-dummy-svc.md" ] || { fail "rnex plugin karpathy-llm ingest did not run on after_clone"; exit 1; }
+[ ! -e "$TEST_AFTER_CLONE_WS/wiki/hot.md" ] || { fail "hot.md was created in after_clone test"; exit 1; }
 
 # 2. Test rnex repo add also triggers after_clone when cloning a new repository
 rm -f "$TEST_AFTER_CLONE_WS/clone_hook_marker"
 (cd "$TEST_AFTER_CLONE_WS" && ./rnex repo add "$TEST_DUMMY_REMOTE" --name added-svc --branch master >/dev/null)
 [ -f "$TEST_AFTER_CLONE_WS/clone_hook_marker" ] || { fail "after_clone did not run on rnex repo add"; exit 1; }
 [ -f "$TEST_AFTER_CLONE_WS/wiki/repo-added-svc.md" ] || { fail "rnex plugin karpathy-llm ingest did not ingest added-svc on after_clone"; exit 1; }
+[ ! -e "$TEST_AFTER_CLONE_WS/wiki/hot.md" ] || { fail "hot.md was created after repo add in after_clone test"; exit 1; }
 pass
 
 # --------------------------------------------------------------------------
@@ -671,6 +673,7 @@ grep -q "AFTER_SYNC_FIRED" "$TEST_IGNORE_HOOKS_WS/ignore_hook_log" || { fail "af
 }
 _sync_cnt="$(grep -c "AFTER_SYNC_FIRED" "$TEST_IGNORE_HOOKS_WS/ignore_hook_log" || true)"
 [ "$_sync_cnt" -eq 1 ] || { fail "after_sync fired $_sync_cnt times instead of 1"; exit 1; }
+[ ! -e "$TEST_IGNORE_HOOKS_WS/wiki/hot.md" ] || { fail "hot.md was created in ignore_hooks test"; exit 1; }
 pass
 
 if [ "${_STANDALONE_RUN:-0}" -eq 1 ]; then

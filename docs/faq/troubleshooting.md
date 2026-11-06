@@ -43,8 +43,8 @@ Practical diagnostic guidance and step-by-step solutions for everyday multi-repo
 * **Solution**: Pass an existing file path (e.g. `rnex plugin karpathy-llm ingest docs/spec.md`). If you want to ingest an entire directory of documents, pass `--source <dir>` (e.g. `rnex plugin karpathy-llm ingest --source docs`) or run `rnex plugin karpathy-llm ingest` with no arguments to batch-ingest all configured sources.
 
 ### 9. Legacy `index.md` displays a `title` / `last_updated: YYYY-MM-DD` table at the top
-* **Cause**: The wiki was initialized using an older template version containing YAML frontmatter placeholders. Because Repo Nexus strictly respects curated files, `rnex sync` never overwrites existing `index.md`, `hot.md`, or `_log.md` files.
-* **Solution**: Open `wiki/index.md` and delete the top YAML frontmatter block (`---` through `---`) so the file begins directly with `# Wiki Index`. Then run `rnex plugin karpathy-llm lint` to verify that your wiki graph is clean.
+* **Cause**: The wiki was initialized using an older template version containing YAML frontmatter placeholders or legacy tables. Because Repo Nexus strictly respects curated files, `rnex sync` never overwrites existing curated wiki pages.
+* **Solution**: Run `rnex plugin karpathy-llm index --rebuild` to deterministically compile the bounded B-Tree Root `wiki/index.md` (\(\le 80\) lines) and leaf shards in `wiki/_index/`. Any legacy `wiki/hot.md` file will also be automatically removed and audited in `wiki/_log.md`. Then run `rnex plugin karpathy-llm lint` to verify that your wiki graph is clean.
 
 ### 10. Existing local Git hook was overwritten or not running
 * **Cause**: Repo Nexus manages Git hooks via non-destructive wrapper scripts in `.git/hooks/`. When installing wrappers, any pre-existing custom hook script is automatically backed up to `<hook>.user` (e.g. `.git/hooks/pre-commit.user`) and invoked by the wrapper during Git operations.

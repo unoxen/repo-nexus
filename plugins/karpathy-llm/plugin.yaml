@@ -1,5 +1,5 @@
 name: karpathy-llm
-version: 0.8.34
+version: 0.8.35
 description: Andréj Karpathy's verification frameworks & wiki patterns for AI coding agents.
 author: unoxen
 homepage: https://github.com/unoxen/repo-nexus
@@ -9,15 +9,27 @@ config_defaults:
     - docs
     - "repos/**/README.md"
   wiki_dir: "wiki"
-  hot_file: true
+  index_dir: "_index"
+  graph_dir: "_graph"
+  btree_root_max_lines: 80
+  btree_shard_max_entries: 100
+  graph_default_depth: 1
 
 config_descriptions:
   sources: "<list>  (intake directories and/or glob patterns; .local.rnex.yaml list replaces rnex.yaml list)"
   wiki_dir: "<dir>  (directory for curated markdown pages)"
-  hot_file: "true|false  (maintain local git-ignored hot.md orientation cache, default: true)"
+  index_dir: "<dir>  (subdirectory for sorted B-Tree leaf shards, default: _index)"
+  graph_dir: "<dir>  (subdirectory for sorted TSV property graph tables, default: _graph)"
+  btree_root_max_lines: "<int>  (maximum allowed lines in root wiki/index.md router, default: 80)"
+  btree_shard_max_entries: "<int>  (entry count threshold before splitting a B-Tree shard, default: 100)"
+  graph_default_depth: "<int>  (default ego-subgraph traversal depth in hops, default: 1)"
 
 commands:
-  ingest: "Ingest intake sources and repo docs into the wiki [--source <path>] [--repo <name>] [--quiet]"
+  init: "Initialize wiki directory, B-Tree index shards, and sorted TSV graph store"
+  ingest: "Ingest intake sources and repo docs into the wiki [--source <path>] [--repo <name>] [--quiet] [<file_path>]"
+  index: "Rebuild sorted TSV graph and compile B-Tree leaf shards and root router [--rebuild] [--quiet]"
+  graph: "Query ego-subgraph for a wiki node from sorted TSV tables [--depth 1|2]"
+  search: "Fast O(log N) prefix search over wiki nodes in C locale"
   lint: "Validate wiki schema, link integrity, and word limits [--strict] [--quiet]"
 
 rules:
@@ -30,6 +42,5 @@ instructions:
 templates:
   - templates/index.md: "{wiki_dir}/index.md"
   - templates/_log.md: "{wiki_dir}/_log.md"
-  - templates/hot.md: "{wiki_dir}/hot.md"
   - templates/rnex-wiki-page.sample.md: .rnex/plugins/karpathy-llm/templates/rnex-wiki-page.template.md
   - templates/rnex-llm-wiki.sample.md: .rnex/plugins/karpathy-llm/templates/rnex-llm-wiki.sample.md
