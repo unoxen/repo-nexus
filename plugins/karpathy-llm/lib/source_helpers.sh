@@ -57,9 +57,18 @@ match_globstar_path() {
     _candidate_path="$1"
     _target_pat="$2"
 
+    # Strip any enclosing quotes or whitespace
+    _candidate_path="$(printf '%s' "$_candidate_path" | tr -d '"'\''' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+    _target_pat="$(printf '%s' "$_target_pat" | tr -d '"'\''' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+
     # Strip leading ./ if present
-    _candidate_path="${_candidate_path#./}"
-    _target_pat="${_target_pat#./}"
+    while [ "${_candidate_path#./}" != "$_candidate_path" ]; do _candidate_path="${_candidate_path#./}"; done
+    while [ "${_target_pat#./}" != "$_target_pat" ]; do _target_pat="${_target_pat#./}"; done
+
+    # If candidate path was provided as an absolute path matching workspace root, strip it
+    if [ -n "${RNEX_WORKSPACE_ROOT:-}" ]; then
+        _candidate_path="${_candidate_path#"${RNEX_WORKSPACE_ROOT}/"}"
+    fi
 
     # Exact equality shortcut
     if [ "$_candidate_path" = "$_target_pat" ]; then
@@ -339,13 +348,12 @@ build_workspace_source_manifest() {
                         is_repo_enabled "$_member" || continue
                     fi
                     _rel_in_repo="${_rel_ws#"repos/${_member}/"}"
-                    _m_first="$(printf '%s' "$_rel_in_repo" | cut -d'/' -f1)"
-                    _m_second="$(printf '%s' "$_rel_in_repo" | cut -d'/' -f2)"
-                    if [ -n "$_m_second" ] && [ "$_m_first" != "$_rel_in_repo" ]; then
+                    _dir_in_repo="$(dirname "$_rel_in_repo")"
+                    if [ -n "$_dir_in_repo" ] && [ "$_dir_in_repo" != "." ]; then
                         if command -v normalize_slug_id >/dev/null 2>&1; then
-                            _m_sub="$(normalize_slug_id "$_m_first")"
+                            _m_sub="$(normalize_slug_id "$_dir_in_repo")"
                         else
-                            _m_sub="$_m_first"
+                            _m_sub="$(printf '%s' "$_dir_in_repo" | tr '/' '-')"
                         fi
                     else
                         _m_sub=""
@@ -358,16 +366,13 @@ build_workspace_source_manifest() {
                     ;;
                 *)
                     # Belongs to the Nexus repo
-                    _first_dir="$(printf '%s' "$_rel_ws" | cut -d'/' -f1)"
-                    _second_dir="$(printf '%s' "$_rel_ws" | cut -d'/' -f2)"
-                    if [ -n "$_second_dir" ] && [ "$_first_dir" != "$_rel_ws" ] && [ "$_first_dir" != "docs" ]; then
+                    _dir_in_nexus="$(dirname "$_rel_ws")"
+                    if [ -n "$_dir_in_nexus" ] && [ "$_dir_in_nexus" != "." ]; then
                         if command -v normalize_slug_id >/dev/null 2>&1; then
-                            _m_sub="$(normalize_slug_id "$_first_dir")"
+                            _m_sub="$(normalize_slug_id "$_dir_in_nexus")"
                         else
-                            _m_sub="$_first_dir"
+                            _m_sub="$(printf '%s' "$_dir_in_nexus" | tr '/' '-')"
                         fi
-                    elif [ "$_first_dir" = "docs" ]; then
-                        _m_sub="docs"
                     else
                         _m_sub=""
                     fi
@@ -401,13 +406,12 @@ build_workspace_source_manifest() {
                     [ -n "$_abs_mf" ] || continue
                     _rel_ws="${_abs_mf#"${RNEX_WORKSPACE_ROOT}/"}"
                     _rel_in_repo="${_abs_mf#"${_member_root}/"}"
-                    _m_first="$(printf '%s' "$_rel_in_repo" | cut -d'/' -f1)"
-                    _m_second="$(printf '%s' "$_rel_in_repo" | cut -d'/' -f2)"
-                    if [ -n "$_m_second" ] && [ "$_m_first" != "$_rel_in_repo" ]; then
+                    _dir_in_repo="$(dirname "$_rel_in_repo")"
+                    if [ -n "$_dir_in_repo" ] && [ "$_dir_in_repo" != "." ]; then
                         if command -v normalize_slug_id >/dev/null 2>&1; then
-                            _m_sub="$(normalize_slug_id "$_m_first")"
+                            _m_sub="$(normalize_slug_id "$_dir_in_repo")"
                         else
-                            _m_sub="$_m_first"
+                            _m_sub="$(printf '%s' "$_dir_in_repo" | tr '/' '-')"
                         fi
                     else
                         _m_sub=""
@@ -455,13 +459,12 @@ build_workspace_source_manifest() {
                     fi
                     if [ -n "$_s_repo" ]; then
                         _s_in_repo="${_s_after_repos#"${_s_repo}/"}"
-                        _s_first="$(printf '%s' "$_s_in_repo" | cut -d'/' -f1)"
-                        _s_second="$(printf '%s' "$_s_in_repo" | cut -d'/' -f2)"
-                        if [ -n "$_s_second" ] && [ "$_s_first" != "$_s_in_repo" ]; then
+                        _dir_in_repo="$(dirname "$_s_in_repo")"
+                        if [ -n "$_dir_in_repo" ] && [ "$_dir_in_repo" != "." ]; then
                             if command -v normalize_slug_id >/dev/null 2>&1; then
-                                _s_sub="$(normalize_slug_id "$_s_first")"
+                                _s_sub="$(normalize_slug_id "$_dir_in_repo")"
                             else
-                                _s_sub="$_s_first"
+                                _s_sub="$(printf '%s' "$_dir_in_repo" | tr '/' '-')"
                             fi
                         else
                             _s_sub=""
@@ -475,16 +478,13 @@ build_workspace_source_manifest() {
                     fi
                     ;;
                 *)
-                    _s_first="$(printf '%s' "$_s_rel" | cut -d'/' -f1)"
-                    _s_second="$(printf '%s' "$_s_rel" | cut -d'/' -f2)"
-                    if [ -n "$_s_second" ] && [ "$_s_first" != "$_s_rel" ] && [ "$_s_first" != "docs" ]; then
+                    _dir_in_nexus="$(dirname "$_s_rel")"
+                    if [ -n "$_dir_in_nexus" ] && [ "$_dir_in_nexus" != "." ]; then
                         if command -v normalize_slug_id >/dev/null 2>&1; then
-                            _s_sub="$(normalize_slug_id "$_s_first")"
+                            _s_sub="$(normalize_slug_id "$_dir_in_nexus")"
                         else
-                            _s_sub="$_s_first"
+                            _s_sub="$(printf '%s' "$_dir_in_nexus" | tr '/' '-')"
                         fi
-                    elif [ "$_s_first" = "docs" ]; then
-                        _s_sub="docs"
                     else
                         _s_sub=""
                     fi

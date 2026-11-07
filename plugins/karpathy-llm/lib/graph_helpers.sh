@@ -132,7 +132,8 @@ rebuild_full_wiki_graph() {
         [ -n "$_abs_path" ] && [ -f "$_abs_path" ] || continue
 
         if [ -n "$_sub_scope" ]; then
-            _shard_id="${_repo_scope}-${_sub_scope}"
+            _top_sub="$(printf '%s' "$_sub_scope" | cut -d'-' -f1)"
+            _shard_id="${_repo_scope}-${_top_sub}"
         else
             _shard_id="$_repo_scope"
         fi
@@ -141,7 +142,11 @@ rebuild_full_wiki_graph() {
         _scope_short="${_repo_scope#repos-}"
         _stem_slug="$(normalize_slug_id "$_stem")" || continue
         if [ "$_stem_slug" = "readme" ] || [ "$_stem_slug" = "index" ]; then
-            _node_id="$(normalize_slug_id "${_scope_short}-${_sub_scope:-${_stem_slug}}")"
+            if [ -n "$_sub_scope" ]; then
+                _node_id="$(normalize_slug_id "${_scope_short}-${_sub_scope}")"
+            else
+                _node_id="$(normalize_slug_id "${_scope_short}-${_stem_slug}")"
+            fi
         else
             _node_id="$(normalize_slug_id "${_scope_short}-${_stem_slug}")"
         fi

@@ -608,8 +608,11 @@ setup_plugin_test_workspace karpathy-llm "$TEST_GLOB_WS"
 cd "$TEST_GLOB_WS"
 
 mkdir -p "$TEST_GLOB_WS/repos/backend/docs" "$TEST_GLOB_WS/repos/frontend/docs"
+mkdir -p "$TEST_GLOB_WS/repos/backend/apps/test-app" "$TEST_GLOB_WS/repos/backend/apps/other-app"
 printf '# Backend Service\nBackend API service.\n' > "$TEST_GLOB_WS/repos/backend/README.md"
 printf '# Backend Architecture\nInternal architecture doc.\n' > "$TEST_GLOB_WS/repos/backend/docs/architecture.md"
+printf '# Test App\nNested test app component.\n' > "$TEST_GLOB_WS/repos/backend/apps/test-app/README.md"
+printf '# Other App\nNested other app component.\n' > "$TEST_GLOB_WS/repos/backend/apps/other-app/README.md"
 printf '# Frontend Client\nFrontend web client.\n' > "$TEST_GLOB_WS/repos/frontend/README.md"
 printf '# Frontend Setup\nInternal setup doc.\n' > "$TEST_GLOB_WS/repos/frontend/docs/setup.md"
 
@@ -634,6 +637,12 @@ grep -q '^backend-readme[ 	]repos-backend[ 	]repos/backend/README.md' "$TEST_GLO
 grep -q '^frontend-readme[ 	]repos-frontend[ 	]repos/frontend/README.md' "$TEST_GLOB_WS/wiki/_graph/nodes.tsv" || {
   fail "frontend-readme not registered properly in nodes.tsv: $(cat "$TEST_GLOB_WS/wiki/_graph/nodes.tsv")"; exit 1;
 }
+grep -q '^backend-apps-test-app[ 	]repos-backend-apps[ 	]repos/backend/apps/test-app/README.md' "$TEST_GLOB_WS/wiki/_graph/nodes.tsv" || {
+  fail "backend-apps-test-app not registered properly in nodes.tsv: $(cat "$TEST_GLOB_WS/wiki/_graph/nodes.tsv")"; exit 1;
+}
+grep -q '^backend-apps-other-app[ 	]repos-backend-apps[ 	]repos/backend/apps/other-app/README.md' "$TEST_GLOB_WS/wiki/_graph/nodes.tsv" || {
+  fail "backend-apps-other-app not registered properly in nodes.tsv: $(cat "$TEST_GLOB_WS/wiki/_graph/nodes.tsv")"; exit 1;
+}
 
 # Verify unconfigured member docs were NOT ingested
 ! grep -q 'architecture' "$TEST_GLOB_WS/wiki/_graph/nodes.tsv" || {
@@ -643,9 +652,16 @@ grep -q '^frontend-readme[ 	]repos-frontend[ 	]repos/frontend/README.md' "$TEST_
   fail "Unexpected member docs (setup.md) was ingested into wiki/_graph/nodes.tsv"; exit 1;
 }
 
-# Verify B-tree shards were compiled for backend and frontend
+# Verify B-tree shards were compiled for backend, frontend, and backend apps
 [ -f "$TEST_GLOB_WS/wiki/_index/repos-backend.md" ] || { fail "repos-backend.md shard missing"; exit 1; }
 [ -f "$TEST_GLOB_WS/wiki/_index/repos-frontend.md" ] || { fail "repos-frontend.md shard missing"; exit 1; }
+[ -f "$TEST_GLOB_WS/wiki/_index/repos-backend-apps.md" ] || { fail "repos-backend-apps.md shard missing"; exit 1; }
+grep -q '\[\[backend-apps-test-app\]\]' "$TEST_GLOB_WS/wiki/_index/repos-backend-apps.md" || {
+  fail "repos-backend-apps.md missing link to backend-apps-test-app"; exit 1;
+}
+grep -q '\[\[backend-apps-other-app\]\]' "$TEST_GLOB_WS/wiki/_index/repos-backend-apps.md" || {
+  fail "repos-backend-apps.md missing link to backend-apps-other-app"; exit 1;
+}
 pass
 
 if [ "${_STANDALONE_RUN:-0}" -eq 1 ]; then
