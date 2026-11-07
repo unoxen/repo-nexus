@@ -609,14 +609,14 @@ AFTER_CLONE_YAML
 # 1. Test rnex clone triggers after_clone with bare 'rnex' command
 (cd "$TEST_AFTER_CLONE_WS" && ./rnex clone >/dev/null)
 [ -f "$TEST_AFTER_CLONE_WS/clone_hook_marker" ] || { fail "after_clone did not run on rnex clone"; exit 1; }
-[ -f "$TEST_AFTER_CLONE_WS/wiki/repo-dummy-svc.md" ] || { fail "rnex plugin karpathy-llm ingest did not run on after_clone"; exit 1; }
+[ -f "$TEST_AFTER_CLONE_WS/wiki/_index/repos-dummy-svc.md" ] || [ -f "$TEST_AFTER_CLONE_WS/wiki/repo-dummy-svc.md" ] || { fail "rnex plugin karpathy-llm ingest did not run on after_clone"; exit 1; }
 [ ! -e "$TEST_AFTER_CLONE_WS/wiki/hot.md" ] || { fail "hot.md was created in after_clone test"; exit 1; }
 
 # 2. Test rnex repo add also triggers after_clone when cloning a new repository
 rm -f "$TEST_AFTER_CLONE_WS/clone_hook_marker"
 (cd "$TEST_AFTER_CLONE_WS" && ./rnex repo add "$TEST_DUMMY_REMOTE" --name added-svc --branch master >/dev/null)
 [ -f "$TEST_AFTER_CLONE_WS/clone_hook_marker" ] || { fail "after_clone did not run on rnex repo add"; exit 1; }
-[ -f "$TEST_AFTER_CLONE_WS/wiki/repo-added-svc.md" ] || { fail "rnex plugin karpathy-llm ingest did not ingest added-svc on after_clone"; exit 1; }
+[ -f "$TEST_AFTER_CLONE_WS/wiki/_index/repos-added-svc.md" ] || [ -f "$TEST_AFTER_CLONE_WS/wiki/repo-added-svc.md" ] || { fail "rnex plugin karpathy-llm ingest did not ingest added-svc on after_clone"; exit 1; }
 [ ! -e "$TEST_AFTER_CLONE_WS/wiki/hot.md" ] || { fail "hot.md was created after repo add in after_clone test"; exit 1; }
 pass
 

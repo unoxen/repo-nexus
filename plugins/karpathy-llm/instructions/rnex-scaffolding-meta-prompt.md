@@ -16,9 +16,9 @@ Do not hard-code any specific AI tool or harness into the wiki structure itself.
 
 Initialize the fixed baseline directories and control files:
 
-- **`./docs/`** — Append-only intake directory. Add `.gitkeep`. All original source material goes here unmodified.
-- **`wiki/index.md`** — B-Tree Root routing table (bounded <= 80 lines) organizing domain shards.
-- **`wiki/_index/`** — B-Tree leaf shards (`overview.md`, `concepts.md`, `entities.md`, `sources.md`).
+- **`./docs/`** — Workspace documentation directory.
+- **`wiki/_index.md`** — B-Tree Root routing table (bounded <= 80 lines) organizing domain shards.
+- **`wiki/_index/`** — B-Tree leaf shards (`repo-nexus.md`, `repos-<member>.md`).
 - **`wiki/_graph/`** — Sorted TSV property graph (`nodes.tsv`, `edges_out.tsv`, `edges_in.tsv`).
 - **`wiki/_log.md`** — Append-only operation log recording all ingest and lint runs.
 
