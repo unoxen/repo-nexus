@@ -598,6 +598,56 @@ EOF_DIS
 }
 pass
 
+# --------------------------------------------------------------------------
+# Test 14: Recursive Globstar Ingestion (repos/**/README.md) & Exclusion of Unmatched Docs
+# --------------------------------------------------------------------------
+run_test "Karpathy-llm: recursive globstar discovery (repos/**/README.md) and member docs exclusion"
+TEST_GLOB_WS="$TEST_TMP/karpathy-glob-ws"
+mkdir -p "$TEST_GLOB_WS"
+setup_plugin_test_workspace karpathy-llm "$TEST_GLOB_WS"
+cd "$TEST_GLOB_WS"
+
+mkdir -p "$TEST_GLOB_WS/repos/backend/docs" "$TEST_GLOB_WS/repos/frontend/docs"
+printf '# Backend Service\nBackend API service.\n' > "$TEST_GLOB_WS/repos/backend/README.md"
+printf '# Backend Architecture\nInternal architecture doc.\n' > "$TEST_GLOB_WS/repos/backend/docs/architecture.md"
+printf '# Frontend Client\nFrontend web client.\n' > "$TEST_GLOB_WS/repos/frontend/README.md"
+printf '# Frontend Setup\nInternal setup doc.\n' > "$TEST_GLOB_WS/repos/frontend/docs/setup.md"
+
+cat <<'EOF_GLOB_CFG' > "$TEST_GLOB_WS/rnex.yaml"
+version: 1.0.0
+sources:
+  - "repos/**/README.md"
+plugins:
+  karpathy-llm:
+repos:
+  backend:
+  frontend:
+EOF_GLOB_CFG
+
+"$TEST_GLOB_WS/rnex" init -y --karpathy "$TEST_GLOB_WS" >/dev/null
+(cd "$TEST_GLOB_WS" && ./rnex plugin karpathy-llm ingest >/dev/null)
+
+# Verify only matched nested README files are registered in nodes.tsv
+grep -q '^backend-readme[ 	]repos-backend[ 	]repos/backend/README.md' "$TEST_GLOB_WS/wiki/_graph/nodes.tsv" || {
+  fail "backend-readme not registered properly in nodes.tsv: $(cat "$TEST_GLOB_WS/wiki/_graph/nodes.tsv")"; exit 1;
+}
+grep -q '^frontend-readme[ 	]repos-frontend[ 	]repos/frontend/README.md' "$TEST_GLOB_WS/wiki/_graph/nodes.tsv" || {
+  fail "frontend-readme not registered properly in nodes.tsv: $(cat "$TEST_GLOB_WS/wiki/_graph/nodes.tsv")"; exit 1;
+}
+
+# Verify unconfigured member docs were NOT ingested
+! grep -q 'architecture' "$TEST_GLOB_WS/wiki/_graph/nodes.tsv" || {
+  fail "Unexpected member docs (architecture.md) was ingested into wiki/_graph/nodes.tsv"; exit 1;
+}
+! grep -q 'setup' "$TEST_GLOB_WS/wiki/_graph/nodes.tsv" || {
+  fail "Unexpected member docs (setup.md) was ingested into wiki/_graph/nodes.tsv"; exit 1;
+}
+
+# Verify B-tree shards were compiled for backend and frontend
+[ -f "$TEST_GLOB_WS/wiki/_index/repos-backend.md" ] || { fail "repos-backend.md shard missing"; exit 1; }
+[ -f "$TEST_GLOB_WS/wiki/_index/repos-frontend.md" ] || { fail "repos-frontend.md shard missing"; exit 1; }
+pass
+
 if [ "${_STANDALONE_RUN:-0}" -eq 1 ]; then
   report_results
 fi
