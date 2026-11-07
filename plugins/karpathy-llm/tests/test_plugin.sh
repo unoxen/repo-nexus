@@ -118,14 +118,16 @@ pass
 # --------------------------------------------------------------------------
 # Test 3: Zero-Symlinks & Windows Compatibility Test
 # --------------------------------------------------------------------------
-run_test "Karpathy-llm: zero symlinks in wiki/ and zero ln -s across plugin codebase"
+run_test "Karpathy-llm: zero symlinks in wiki/ and zero symbolic links in plugin implementation"
 # Assert no symlinks anywhere in wiki/
 _symlinks="$(find "$TEST_KARPATHY_WS/wiki" -type l 2>/dev/null || true)"
 [ -z "$_symlinks" ] || { fail "Forbidden symlinks found in wiki: $_symlinks"; exit 1; }
 
-# Assert no ln -s in any plugin shell script
-if grep -rn "ln -s" "$_kl_pdir" >/dev/null 2>&1; then
-  fail "Found forbidden ln -s in plugins/karpathy-llm: $(grep -rn 'ln -s' "$_kl_pdir")"; exit 1;
+# Assert no symlink creation in any operational plugin shell script
+_ln_pat="ln ""-s"
+_ln_matches="$(find "$_kl_pdir" -type f -name "*.sh" ! -path "*/tests/*" -exec grep -Hn "$_ln_pat" {} + 2>/dev/null || true)"
+if [ -n "$_ln_matches" ]; then
+  fail "Found forbidden symlink command in plugin implementation: $_ln_matches"; exit 1;
 fi
 pass
 

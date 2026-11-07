@@ -1,5 +1,5 @@
 name: karpathy-llm
-version: 0.9.3
+version: 0.9.4
 description: "Zero-dependency B-Tree (_index/) and Sorted TSV Graph (_graph/) LLM Wiki for Repo Nexus"
 author: unoxen
 homepage: https://github.com/unoxen/repo-nexus
