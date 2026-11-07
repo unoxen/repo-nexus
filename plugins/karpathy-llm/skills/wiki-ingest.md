@@ -21,26 +21,24 @@ Initialization and B-Tree / Graph synchronization execute automatically on inges
 ## Agent Context Traversal
 
 AI coding agents traverse wiki context via internal helpers:
-- **Root Router:** Read `wiki/_index.md` ($\le 80$ lines) to route into `_index/concepts*.md` or `_index/repos-*.md`.
+- **Root Router:** Read `wiki/_index.md` ($\le 80$ lines) to route into `_index/repo-nexus*.md` or `_index/repos-<member>*.md`.
 - **Prefix / Keyword Search (`_search`):** Query `nodes.tsv` via `agent_internal_search <slug>` in `plugins/karpathy-llm/lib/agent_query_helpers.sh`.
 - **Ego-Subgraph Traversal (`_graph`):** Query 1-hop outbound dependencies and inbound backlinks via `agent_internal_graph <node_id>` in `plugins/karpathy-llm/lib/agent_query_helpers.sh`.
 
 ## Ingestion Protocol
 
-1. **Resolve Configuration & Direct Source Paths:**
-   - Direct input scope resolves files matching configured sources and member repositories (read-only):
-     1. **Nexus Concepts & Architecture:** General cross-cutting architecture and design concepts map to `wiki/concepts/<slug>.md`.
-     2. **Repository-Scoped Documentation:** Scoped repository documentation maps to `wiki/repos/<repo_scope>/<slug>.md` (e.g., `wiki/repos/nexus/` or `wiki/repos/<member_repo>/`).
-   - Intake sources and member repositories (`./repos/`) are strictly read-only inputs during wiki operations. Generated output resides exclusively inside `wiki/` (`wiki/concepts/` and `wiki/repos/<repo_scope>/`).
+1. **Zero-Duplication In-Place Architecture:**
+   - Files are indexed directly in place from authoritative workspace paths (e.g., `README.md`, `docs/*.md`, `RFC/*.md`, and `repos/<member>/**/*.md`).
+   - Zero symbolic links (`ln -s`) and zero redundant content copies (`wiki/concepts/` and `wiki/repos/` are completely eradicated).
+   - Generated wiki artifacts reside exclusively in `wiki/_index/` (B-Tree leaf shards), `wiki/_graph/` (sorted TSV graph), `wiki/_index.md` (root router table), and `wiki/_log.md` (audit log).
 
 2. **Step 1 — Deterministic CLI Ingestion:**
-   - Run `rnex plugin karpathy-llm ingest <file_path>` (or batch-ingest with bare `rnex plugin karpathy-llm ingest`).
-   - The CLI automatically scaffolds the target page, rebuilds the two-pass property graph (`_graph/*.tsv`), updates B-Tree leaf shards (`_index/*.md`), compiles `wiki/_index.md`, and records an entry in `_log.md`.
+   - Run `rnex plugin karpathy-llm ingest [<file_path>]` (or batch-ingest with bare `rnex plugin karpathy-llm ingest`).
+   - The CLI inspects source documents in-place, updates the two-pass property graph (`_graph/*.tsv`), synchronizes B-Tree leaf shards (`_index/*.md`), compiles `wiki/_index.md`, and records an entry in `_log.md`.
 
 3. **Step 2 — In-Place Synthesis & Enrichment:**
-   - Read the source document(s) in-place.
-   - Synthesize architectural concepts, contracts, patterns, and trade-offs directly into the curated page.
-   - Ensure explicit `[[wikilink]]` and relative Markdown links are maintained for bidirectional graph connectivity.
+   - Read and enrich authoritative source documents directly where they live.
+   - Maintain explicit `[[wikilink]]` and Markdown links for bidirectional graph connectivity.
 
 4. **Audit Verification:**
-   - Run `rnex plugin karpathy-llm lint` to verify that link paths, B-Tree root bounds, and TSV graph sort and symmetry invariants are satisfied.
+   - Run `rnex plugin karpathy-llm lint` to verify zero symlinks, `LC_ALL=C` sorting, edge symmetry, and root bounds ($\le 80$ lines).

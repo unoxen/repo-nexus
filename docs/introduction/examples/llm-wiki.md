@@ -69,10 +69,10 @@ rnex sync
 # Ingest all intake sources and member repository READMEs (automatically builds index and graph)
 rnex plugin karpathy-llm ingest
 
-# Ingest a specific research document or design spec into wiki/concepts/
+# Ingest a specific research document or design spec in place
 rnex plugin karpathy-llm ingest --source specs/architecture.md
 
-# Ingest a specific member repository README into wiki/repos/core-engine/
+# Ingest a specific member repository README
 rnex plugin karpathy-llm ingest --repo core-engine
 
 # Validate wiki schema, sort invariants, and wikilink integrity
@@ -85,11 +85,10 @@ rnex plugin karpathy-llm lint --strict
 ## Knowledge Base Navigation Architecture
 
 The curated wiki maintains a deterministic 2-level B-Tree and graph structure:
-- **`wiki/_index.md`**: B-Tree Root Router ($\le 80$ lines) organizing domain shards.
-- **`wiki/_index/`**: Lexicographically sorted leaf shards (`concepts.md`, `repos-nexus.md`, `repos-core-engine.md`).
+- **`wiki/_index.md`**: B-Tree Root Router ($\le 80$ lines) organizing index shards.
+- **`wiki/_index/`**: Lexicographically sorted leaf shards (`repo-nexus.md`, `repos-core-engine.md`).
 - **`wiki/_graph/`**: Sorted TSV property graph (`nodes.tsv`, `edges_out.tsv`, `edges_in.tsv`) supporting fast $O(\log N)$ traversal.
-- **`wiki/concepts/`**: Architectural principles, cross-cutting patterns, and domain concepts.
-- **`wiki/repos/`**: Repository-scoped documentation (`repos/nexus/` for nexus-level docs and `repos/<member-repo>/` for member repos).
+- **In-Place Documentation**: Authoritative documents (`README.md`, `docs/*.md`, `repos/<member-repo>/**/*.md`) are indexed directly where they reside, with zero redundant copies and zero symbolic links.
 
 > [!NOTE]
 > Autonomous AI coding agents navigate this structure using internal binary search lookup (`_search`) and ego-subgraph traversal (`_graph`) helpers without requiring manual indexing commands.

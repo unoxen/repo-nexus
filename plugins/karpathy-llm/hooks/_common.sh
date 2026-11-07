@@ -57,9 +57,13 @@ if [ -n "$_kl_plugin_lib" ]; then
   # shellcheck source=/dev/null
   . "$_kl_plugin_lib/utils.sh" 2>/dev/null || true
   # shellcheck source=/dev/null
+  . "$_kl_plugin_lib/source_helpers.sh" 2>/dev/null || true
+  # shellcheck source=/dev/null
   . "$_kl_plugin_lib/graph_helpers.sh" 2>/dev/null || true
   # shellcheck source=/dev/null
   . "$_kl_plugin_lib/btree_helpers.sh" 2>/dev/null || true
+  # shellcheck source=/dev/null
+  . "$_kl_plugin_lib/agent_query_helpers.sh" 2>/dev/null || true
   load_wiki_config_contract "$_root" 2>/dev/null || true
 fi
 
@@ -443,8 +447,6 @@ kl_ensure_wiki_files() {
     done
     if [ -n "$_kew_pdir" ] && [ -f "$_kew_pdir/templates/_index.md" ]; then
       cp "$_kew_pdir/templates/_index.md" "$_wiki_path/_index.md"
-    elif [ -n "$_kew_pdir" ] && [ -f "$_kew_pdir/templates/index.md" ]; then
-      cp "$_kew_pdir/templates/index.md" "$_wiki_path/_index.md"
     fi
   fi
 

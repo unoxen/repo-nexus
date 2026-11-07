@@ -483,7 +483,7 @@ _clean_leaked_plugin_dirs() {
         [ -e "$_f" ] || continue
         _b="$(basename "$_f")"
         case "$_b" in
-          index.md|_log.md|.gitkeep) continue ;;
+          index.md|_index.md|_log.md|.gitkeep) continue ;;
           *)
             [ -f "$_cld_root/$_cld_wiki/$_b" ] && cmp -s "$_f" "$_cld_root/$_cld_wiki/$_b" && continue
             _can_clean=0

@@ -11,7 +11,8 @@
 # =============================================================================
 
 # Guard against multiple inclusion
-[ "${RNEX_KARPATHY_CONFIG_LOADED:-0}" = "1" ] && return 0
+[ "${RNEX_KARPATHY_CONFIG_SH_SOURCED:-0}" = "1" ] && return 0
+RNEX_KARPATHY_CONFIG_SH_SOURCED=1
 
 # -----------------------------------------------------------------------------
 # load_karpathy_wiki_config
@@ -21,7 +22,7 @@
 # @sideEffects: Exports read-only RNEX_WIKI_* environment contracts.
 # -----------------------------------------------------------------------------
 load_karpathy_wiki_config() {
-    _ws_root="${1:-${RNEX_WORKSPACE_ROOT:-$(pwd)}}"
+    _ws_root="${1:-${NEXUS_DIR:-${RNEX_ROOT:-${RNEX_WORKSPACE_ROOT:-$(pwd)}}}}"
 
     # Reject path traversal in workspace root (OWASP A03)
     case "$_ws_root" in
@@ -121,10 +122,6 @@ load_karpathy_wiki_config() {
     RNEX_WIKI_EDGES_OUT_TSV="${RNEX_WIKI_GRAPH_DIR}/edges_out.tsv"
     RNEX_WIKI_EDGES_IN_TSV="${RNEX_WIKI_GRAPH_DIR}/edges_in.tsv"
 
-    # Two-Pillar Curated Content Directories: concepts/ and repos/
-    RNEX_WIKI_CONCEPTS_DIR="${RNEX_WIKI_ROOT}/concepts"
-    RNEX_WIKI_REPOS_DIR="${RNEX_WIKI_ROOT}/repos"
-
     # Numeric capacity thresholds with positive integer validation
     RNEX_WIKI_BTREE_SHARD_MAX_ENTRIES="${RNEX_CFG_BTREE_SHARD_MAX_ENTRIES:-}"
     if [ -z "$RNEX_WIKI_BTREE_SHARD_MAX_ENTRIES" ]; then
@@ -159,7 +156,6 @@ load_karpathy_wiki_config() {
     export RNEX_WORKSPACE_ROOT RNEX_WIKI_ROOT RNEX_WIKI_INDEX_FILE RNEX_WIKI_LOG_FILE
     export RNEX_WIKI_BTREE_DIR RNEX_WIKI_GRAPH_DIR RNEX_WIKI_NODES_TSV
     export RNEX_WIKI_EDGES_OUT_TSV RNEX_WIKI_EDGES_IN_TSV
-    export RNEX_WIKI_CONCEPTS_DIR RNEX_WIKI_REPOS_DIR
     export RNEX_WIKI_BTREE_SHARD_MAX_ENTRIES RNEX_WIKI_BTREE_MAX_ROOT_LINES RNEX_WIKI_BTREE_ROOT_MAX_LINES
     export RNEX_WIKI_GRAPH_DEFAULT_DEPTH
 
@@ -217,12 +213,12 @@ is_repo_enabled() {
 # discover_enabled_member_repos
 # Summary: Discovers active member repository names from ./repos/* and/or
 #          rnex.yaml so the wiki maintains at least one repos-<member>.md shard
-#          per active member repository alongside repos-nexus.md.
+#          per active member repository alongside repo-nexus.md.
 # @returns: Newline-delimited list of canonical member repo names on stdout.
 # @sideEffects: Reads filesystem ./repos/ directory and rnex.yaml manifest.
 # -----------------------------------------------------------------------------
 discover_enabled_member_repos() {
-    _repos_base="${RNEX_WORKSPACE_ROOT}/repos"
+    _repos_base="${RNEX_WORKSPACE_ROOT}/${RNEX_CFG_REPOS_DIR:-repos}"
     _manifest="${RNEX_WORKSPACE_ROOT}/rnex.yaml"
 
     {
@@ -235,21 +231,12 @@ discover_enabled_member_repos() {
             done
         fi
 
-        # 2. Discover existing wiki/repos/<scope> directories (excluding nexus)
-        if [ -d "$RNEX_WIKI_REPOS_DIR" ]; then
-            for _wd in "$RNEX_WIKI_REPOS_DIR"/*; do
-                [ -d "$_wd" ] || continue
-                _wb="$(basename "$_wd")"
-                [ "$_wb" != "*" ] && [ "$_wb" != "nexus" ] && printf '%s\n' "$_wb"
-            done
-        fi
-
-        # 3. Query core yaml_list_repos if available in runtime
+        # 2. Query core yaml_list_repos if available in runtime
         if command -v yaml_list_repos >/dev/null 2>&1; then
             yaml_list_repos 2>/dev/null || true
         fi
 
-        # 4. Parse declared repo keys under `repos:` in rnex.yaml if present
+        # 3. Parse declared repo keys under `repos:` in rnex.yaml if present
         if [ -f "$_manifest" ]; then
             LC_ALL=C awk '
                 /^repos:[[:space:]]*$/ { in_repos=1; next }

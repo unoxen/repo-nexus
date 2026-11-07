@@ -3,13 +3,11 @@
 # =============================================================================
 # File: plugins/karpathy-llm/lib/agent_query_helpers.sh
 # Architectural Layer: Internal AI Agent Retrieval Helpers (helpers/)
-# Single Responsibility: Provide internal O(log N) prefix search (_search) and
-# ego-subgraph traversal (_graph) for AI coding agents without cluttering the
-# public user-facing CLI surface.
-# Patterns Applied: Facade Pattern, Pure Fabrication (GRASP).
-# Dependencies: config.sh, utils.sh, graph_helpers.sh, btree_helpers.sh
-# Security (OWASP A03): Input queries are normalized via normalize_slug_id;
-# audit log entries are sanitized before appending.
+# Single Responsibility: Internal O(log N) prefix search (_search) and
+# ego-subgraph traversal (_graph) for AI coding agents.
+# Dependencies: config.sh, utils.sh, source_helpers.sh, graph_helpers.sh, btree_helpers.sh
+# Security (OWASP A03): Input queries normalized via normalize_slug_id;
+# audit log entries sanitized before appending.
 # =============================================================================
 
 # -----------------------------------------------------------------------------
@@ -20,11 +18,9 @@
 # @returns: 0 on success; 1 on filesystem error.
 # @sideEffects: Creates missing wiki directories and baseline files.
 # -----------------------------------------------------------------------------
+# shellcheck disable=SC2016
 ensure_wiki_initialized() {
-    mkdir -p "$RNEX_WIKI_CONCEPTS_DIR" \
-             "${RNEX_WIKI_REPOS_DIR}/nexus" \
-             "$RNEX_WIKI_BTREE_DIR" \
-             "$RNEX_WIKI_GRAPH_DIR" || return 1
+    mkdir -p "$RNEX_WIKI_BTREE_DIR" "$RNEX_WIKI_GRAPH_DIR" || return 1
 
     for _tsv in "$RNEX_WIKI_NODES_TSV" "$RNEX_WIKI_EDGES_OUT_TSV" "$RNEX_WIKI_EDGES_IN_TSV"; do
         [ -f "$_tsv" ] || : > "$_tsv"
@@ -35,9 +31,9 @@ ensure_wiki_initialized() {
         cat <<EOF > "$RNEX_WIKI_LOG_FILE"
 # Wiki Operational Log (\`wiki/_log.md\`)
 
-Append-only chronological record of wiki ingestions and lint passes.
+Append-only record of wiki ingestions and lint passes.
 
-- **${_today}** | \`init\` | Initialized Karpathy LLM Wiki structure (\`_index.md\`, \`_index/\`, \`_graph/\`).
+- **${_today}** | \`init\` | Initialized Karpathy LLM Wiki structure.
 EOF
     fi
 
@@ -50,13 +46,15 @@ EOF
 # -----------------------------------------------------------------------------
 # sync_wiki_indexes_and_graph
 # Summary: Internal pipeline step that rebuilds the Two-Pass TSV Property Graph
-#          and rebalances all B-Tree shards and wiki/_index.md. Replaces the
-#          deprecated standalone `index` command.
+#          and rebalances all B-Tree shards and wiki/_index.md.
+# @param $1: single_file_opt - Optional file path to prioritize.
 # @returns: 0 on success; 1 on failure.
 # @sideEffects: Updates _graph/*.tsv, _index/*.md, and wiki/_index.md.
 # -----------------------------------------------------------------------------
 sync_wiki_indexes_and_graph() {
-    rebuild_full_wiki_graph || return 1
+    _single_opt="${1:-}"
+    purge_legacy_wiki_directories_and_symlinks
+    rebuild_full_wiki_graph "$_single_opt" || return 1
     rebalance_btree_shards_and_compile_root || return 1
     return 0
 }

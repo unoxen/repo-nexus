@@ -22,20 +22,20 @@ Initialization, legacy migration, graph compilation, and B-Tree shard rebalancin
 
 AI coding agents navigate wiki structure through:
 - **Root Router:** `wiki/_index.md` ($\le 80$ lines).
-- **Domain Shards:** `wiki/_index/concepts*.md` and `wiki/_index/repos-*.md`.
+- **Leaf Shards:** `wiki/_index/repo-nexus*.md` and `wiki/_index/repos-<member>*.md`.
 - **Property Graph Lookups:** `agent_internal_search <slug>` (`_search`) and `agent_internal_graph <node_id>` (`_graph`) in `plugins/karpathy-llm/lib/agent_query_helpers.sh`.
 
 ## Maintenance Protocol
 
-1. **Auto-Healing & Legacy Migration:**
-   - Moves legacy `wiki/overview/*.md` $\rightarrow$ `wiki/concepts/`.
-   - Moves legacy `wiki/entities/*.md` $\rightarrow$ `wiki/repos/nexus/`.
-   - Moves legacy `wiki/sources/<scope>/*` $\rightarrow$ `wiki/repos/<scope>/`.
+1. **Auto-Healing & Legacy Purge:**
+   - Purges obsolete directories `wiki/concepts/`, `wiki/repos/`, `wiki/overview/`, `wiki/entities/`, and `wiki/sources/`.
    - Purges deprecated `wiki/hot.md` and legacy `wiki/index.md`.
+   - Enforces zero symbolic links (`[ -f ] && [ ! -L ]`) across the entire `wiki/` tree.
 
 2. **Graph Compilation & B-Tree Rebalancing:**
-   - Rebuilds `wiki/_graph/{nodes,edges_out,edges_in}.tsv` via two-pass scanning.
-   - Rebalances leaf shards `wiki/_index/concepts*.md`, `wiki/_index/repos-nexus*.md`, and `wiki/_index/repos-<member_repo>*.md` ($\ge 1$ shard per repo).
+   - Scans authoritative documents in place and rebuilds `wiki/_graph/{nodes,edges_out,edges_in}.tsv` via two-pass scanning.
+   - Rebalances leaf shards `wiki/_index/repo-nexus*.md` and `wiki/_index/repos-<member_repo>*.md` ($\ge 1$ shard per enabled member repo).
+   - Automatically splits shards exceeding `btree_shard_max_entries` into lexicographical ranges (`a-m` and `n-z`).
    - Compiles bounded root router at `wiki/_index.md` ($\le 80$ lines).
 
 3. **Invariants Verification:**

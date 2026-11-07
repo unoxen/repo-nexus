@@ -44,7 +44,7 @@ Practical diagnostic guidance and step-by-step solutions for everyday multi-repo
 
 ### 9. Legacy `index.md` or `hot.md` in `wiki/`
 * **Cause**: The workspace was initialized using an older wiki layout version containing `wiki/index.md`, `wiki/hot.md`, or legacy directories (`overview/`, `entities/`, `sources/`). Because Repo Nexus strictly respects curated files, `rnex sync` never clobbers curated wiki pages.
-* **Solution**: Run `rnex plugin karpathy-llm lint` (or `rnex plugin karpathy-llm ingest`). The automated migration routine non-destructively moves legacy pages into `wiki/concepts/` and `wiki/repos/`, purges legacy `hot.md` and `index.md` files, compiles the bounded root router `wiki/_index.md` (\(\le 80\) lines), and rebuilds the B-Tree leaf shards and graph TSVs. Run `rnex plugin karpathy-llm lint --strict` to verify that your wiki graph is completely clean.
+* **Solution**: Run `rnex plugin karpathy-llm lint` (or `rnex plugin karpathy-llm ingest`). The automated routine purges obsolete legacy staging folders (`concepts/`, `repos/`, `overview/`, `entities/`, `sources/`), purges legacy `hot.md` and `index.md` files, asserts zero symbolic links, compiles the bounded root router `wiki/_index.md` (\(\le 80\) lines), and rebuilds the in-place B-Tree leaf shards and graph TSVs. Run `rnex plugin karpathy-llm lint --strict` to verify that your wiki graph is completely clean.
 
 ### 10. Existing local Git hook was overwritten or not running
 * **Cause**: Repo Nexus manages Git hooks via non-destructive wrapper scripts in `.git/hooks/`. When installing wrappers, any pre-existing custom hook script is automatically backed up to `<hook>.user` (e.g. `.git/hooks/pre-commit.user`) and invoked by the wrapper during Git operations.

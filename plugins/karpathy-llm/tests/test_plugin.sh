@@ -6,10 +6,12 @@
 # Design Pattern: Test Suite (Template Method)
 # Responsibilities:
 #   - Validates Karpathy LLM Wiki plugin manifest, version parity, and strict 2-command CLI.
+#   - Asserts zero symbolic links (find wiki -type l) and Windows compatibility.
+#   - Asserts zero redundant wiki/concepts and wiki/repos directories (in-place indexing).
+#   - Asserts 100% configured sources coverage across repo-nexus and member repos.
 #   - Asserts non-empty and strictly symmetric sorted TSV property graph edges.
-#   - Asserts 2-pillar B-Tree taxonomy (concepts/ & repos/) and multi-shard generation.
-#   - Validates root router bounds (wiki/_index.md <= 80 lines) and hot.md purge.
-#   - Verifies auto-healing directory migration and strict linting.
+#   - Validates root router bounds (wiki/_index.md <= 80 lines) and shard splitting.
+#   - Verifies auto-healing legacy purge and strict linting.
 #   - Tests internal agent query helpers (_search and _graph).
 # ============================================================================
 set -e
@@ -80,7 +82,7 @@ fi
 pass
 
 # --------------------------------------------------------------------------
-# Test 2: Plan Test 1 — Strict 2-Command Public CLI Surface
+# Test 2: Strict 2-Command Public CLI Surface
 # --------------------------------------------------------------------------
 run_test "Karpathy-llm: strict 2-command public CLI (ingest & lint succeed, init/index/search/graph rejected)"
 "$TEST_KARPATHY_WS/rnex" init -y --karpathy "$TEST_KARPATHY_WS" >/dev/null
@@ -114,139 +116,163 @@ _rc_graph=0
 pass
 
 # --------------------------------------------------------------------------
-# Test 3: Plan Test 2 — Non-Empty & Strictly Symmetric edges_out.tsv and edges_in.tsv
+# Test 3: Zero-Symlinks & Windows Compatibility Test
 # --------------------------------------------------------------------------
-run_test "Karpathy-llm: non-empty & strictly symmetric edges_out.tsv and edges_in.tsv via two-pass compiler"
-# Create concepts node: wiki/concepts/zero-trust.md
-mkdir -p "$TEST_KARPATHY_WS/wiki/concepts" "$TEST_KARPATHY_WS/wiki/repos/backend"
-cat <<'EOF_ZT' > "$TEST_KARPATHY_WS/wiki/concepts/zero-trust.md"
-# Zero Trust Architecture
+run_test "Karpathy-llm: zero symlinks in wiki/ and zero ln -s across plugin codebase"
+# Assert no symlinks anywhere in wiki/
+_symlinks="$(find "$TEST_KARPATHY_WS/wiki" -type l 2>/dev/null || true)"
+[ -z "$_symlinks" ] || { fail "Forbidden symlinks found in wiki: $_symlinks"; exit 1; }
 
-Strict verification security model where every request is authenticated and authorized.
-EOF_ZT
-
-# Create repo node referencing concepts: wiki/repos/backend/auth-service.md
-cat <<'EOF_AUTH' > "$TEST_KARPATHY_WS/wiki/repos/backend/auth-service.md"
-# Auth Service
-
-Authentication and authorization service implementing [[zero-trust]] verification.
-For details on architecture, see [Zero Trust](../../concepts/zero-trust.md).
-EOF_AUTH
-
-# Run ingest targeting the new document
-(cd "$TEST_KARPATHY_WS" && ./rnex plugin karpathy-llm ingest wiki/repos/backend/auth-service.md >/dev/null)
-
-# Assert edges_out.tsv and edges_in.tsv are strictly non-empty
-[ -s "$TEST_KARPATHY_WS/wiki/_graph/edges_out.tsv" ] || { fail "wiki/_graph/edges_out.tsv is empty"; exit 1; }
-[ -s "$TEST_KARPATHY_WS/wiki/_graph/edges_in.tsv" ] || { fail "wiki/_graph/edges_in.tsv is empty"; exit 1; }
-
-# Assert forward edge: auth-service links_to zero-trust
-grep -q '^auth-service[ 	]links_to[ 	]zero-trust$' "$TEST_KARPATHY_WS/wiki/_graph/edges_out.tsv" || {
-  fail "edges_out.tsv missing 'auth-service links_to zero-trust': $(cat "$TEST_KARPATHY_WS/wiki/_graph/edges_out.tsv")"; exit 1;
-}
-
-# Assert backward edge: zero-trust links_to auth-service
-grep -q '^zero-trust[ 	]links_to[ 	]auth-service$' "$TEST_KARPATHY_WS/wiki/_graph/edges_in.tsv" || {
-  fail "edges_in.tsv missing 'zero-trust links_to auth-service': $(cat "$TEST_KARPATHY_WS/wiki/_graph/edges_in.tsv")"; exit 1;
-}
-
-# Assert exact edge symmetry (line counts match)
-_out_cnt="$(LC_ALL=C awk 'END { print NR+0 }' "$TEST_KARPATHY_WS/wiki/_graph/edges_out.tsv")"
-_in_cnt="$(LC_ALL=C awk 'END { print NR+0 }' "$TEST_KARPATHY_WS/wiki/_graph/edges_in.tsv")"
-[ "$_out_cnt" -eq "$_in_cnt" ] || { fail "Asymmetric edge counts: edges_out=$_out_cnt, edges_in=$_in_cnt"; exit 1; }
-
-# Assert LC_ALL=C sorted order on all 3 tables
-LC_ALL=C sort -c "$TEST_KARPATHY_WS/wiki/_graph/nodes.tsv" || { fail "nodes.tsv is not sorted"; exit 1; }
-LC_ALL=C sort -c "$TEST_KARPATHY_WS/wiki/_graph/edges_out.tsv" || { fail "edges_out.tsv is not sorted"; exit 1; }
-LC_ALL=C sort -c "$TEST_KARPATHY_WS/wiki/_graph/edges_in.tsv" || { fail "edges_in.tsv is not sorted"; exit 1; }
-
-# Test internal agent query helpers (_search and _graph)
-# shellcheck source=/dev/null
-. "$_kl_pdir/lib/config.sh"
-# shellcheck source=/dev/null
-. "$_kl_pdir/lib/utils.sh"
-# shellcheck source=/dev/null
-. "$_kl_pdir/lib/agent_query_helpers.sh"
-load_karpathy_wiki_config "$TEST_KARPATHY_WS"
-
-_search_out="$(agent_internal_search "zero-trust")"
-echo "$_search_out" | grep -q "zero-trust" || { fail "agent_internal_search failed to find zero-trust: $_search_out"; exit 1; }
-
-_graph_out="$(agent_internal_graph "auth-service")"
-echo "$_graph_out" | grep -q "\[\[zero-trust\]\]" || { fail "agent_internal_graph failed for auth-service: $_graph_out"; exit 1; }
-
-_graph_in="$(agent_internal_graph "zero-trust")"
-echo "$_graph_in" | grep -q "auth-service" || { fail "agent_internal_graph failed for zero-trust backlink: $_graph_in"; exit 1; }
+# Assert no ln -s in any plugin shell script
+if grep -rn "ln -s" "$_kl_pdir" >/dev/null 2>&1; then
+  fail "Found forbidden ln -s in plugins/karpathy-llm: $(grep -rn 'ln -s' "$_kl_pdir")"; exit 1;
+fi
 pass
 
 # --------------------------------------------------------------------------
-# Test 4: Plan Test 3 — wiki/_index.md & Concepts + Multi-Shard repos-* Taxonomy
+# Test 4: 100% Configured sources Coverage Across Root and Member Repositories
 # --------------------------------------------------------------------------
-run_test "Karpathy-llm: wiki/_index.md & concepts + multi-shard repos-* taxonomy with shard splitting"
-# Assert root router is _index.md (bounded <= 80 lines)
-[ -f "$TEST_KARPATHY_WS/wiki/_index.md" ] || { fail "wiki/_index.md missing"; exit 1; }
-_root_lines="$(LC_ALL=C awk 'END { print NR+0 }' "$TEST_KARPATHY_WS/wiki/_index.md")"
-[ "$_root_lines" -le 80 ] || { fail "wiki/_index.md exceeded 80 lines: $_root_lines"; exit 1; }
+run_test "Karpathy-llm: 100% configured sources coverage (block sequence & inline arrays)"
+TEST_COV_WS="$TEST_TMP/karpathy-coverage-ws"
+mkdir -p "$TEST_COV_WS"
+setup_plugin_test_workspace karpathy-llm "$TEST_COV_WS"
+cd "$TEST_COV_WS"
 
-# Negative assertions: legacy files and folders must NOT exist
-[ ! -e "$TEST_KARPATHY_WS/wiki/index.md" ] || { fail "legacy wiki/index.md exists"; exit 1; }
-[ ! -e "$TEST_KARPATHY_WS/wiki/hot.md" ] || { fail "legacy wiki/hot.md exists"; exit 1; }
-[ ! -d "$TEST_KARPATHY_WS/wiki/overview" ] || { fail "legacy wiki/overview/ exists"; exit 1; }
-[ ! -d "$TEST_KARPATHY_WS/wiki/entities" ] || { fail "legacy wiki/entities/ exists"; exit 1; }
-[ ! -d "$TEST_KARPATHY_WS/wiki/sources" ] || { fail "legacy wiki/sources/ exists"; exit 1; }
+mkdir -p "$TEST_COV_WS/docs" "$TEST_COV_WS/repos/service-a/docs"
+printf '# Nexus Architecture\nRoot workspace design.\n' > "$TEST_COV_WS/docs/architecture.md"
+printf '# Root Readme\nRoot overview.\n' > "$TEST_COV_WS/README.md"
+printf '# Root Agents\nUniversal AI agent instructions.\n' > "$TEST_COV_WS/AGENTS.md"
 
-# Baseline shards must exist
-[ -f "$TEST_KARPATHY_WS/wiki/_index/concepts.md" ] || { fail "wiki/_index/concepts.md missing"; exit 1; }
-[ -f "$TEST_KARPATHY_WS/wiki/_index/repos-nexus.md" ] || { fail "wiki/_index/repos-nexus.md missing"; exit 1; }
+printf '# Service A\nService A overview.\n' > "$TEST_COV_WS/repos/service-a/README.md"
+printf '# Service A API\nService A REST endpoints.\n' > "$TEST_COV_WS/repos/service-a/docs/api.md"
 
-# Add member repository 'backend' to workspace config and verify shard generation
-cat <<'EOF_CFG_BE' > "$TEST_KARPATHY_WS/rnex.yaml"
+cat <<'EOF_COV_YAML' > "$TEST_COV_WS/rnex.yaml"
 version: 1.0.0
+sources: [README.md, AGENTS.md, docs]
 plugins:
   karpathy-llm:
 repos:
-  backend:
-EOF_CFG_BE
+  service-a:
+    sources:
+      - README.md
+      - docs/api.md
+EOF_COV_YAML
 
-(cd "$TEST_KARPATHY_WS" && ./rnex sync -y >/dev/null)
-(cd "$TEST_KARPATHY_WS" && ./rnex plugin karpathy-llm lint >/dev/null)
+"$TEST_COV_WS/rnex" init -y --karpathy "$TEST_COV_WS" >/dev/null
+(cd "$TEST_COV_WS" && ./rnex plugin karpathy-llm ingest >/dev/null)
 
-[ -f "$TEST_KARPATHY_WS/wiki/_index/repos-backend.md" ] || { fail "wiki/_index/repos-backend.md missing after lint"; exit 1; }
+# Verify all 5 files appear in wiki/_graph/nodes.tsv
+grep -q 'repo-nexus-readme' "$TEST_COV_WS/wiki/_graph/nodes.tsv" || { fail "repo-nexus-readme missing from nodes.tsv"; exit 1; }
+grep -q 'repo-nexus-agents' "$TEST_COV_WS/wiki/_graph/nodes.tsv" || { fail "repo-nexus-agents missing from nodes.tsv"; exit 1; }
+grep -q 'repo-nexus-architecture' "$TEST_COV_WS/wiki/_graph/nodes.tsv" || { fail "repo-nexus-architecture missing from nodes.tsv"; exit 1; }
+grep -q 'service-a-readme' "$TEST_COV_WS/wiki/_graph/nodes.tsv" || { fail "service-a-readme missing from nodes.tsv"; exit 1; }
+grep -q 'service-a-api' "$TEST_COV_WS/wiki/_graph/nodes.tsv" || { fail "service-a-api missing from nodes.tsv"; exit 1; }
 
-# Create sub-scoped pages for backend: api/routes.md and db/models.md
-mkdir -p "$TEST_KARPATHY_WS/wiki/repos/backend/api" "$TEST_KARPATHY_WS/wiki/repos/backend/db"
-cat <<'EOF_ROUTES' > "$TEST_KARPATHY_WS/wiki/repos/backend/api/routes.md"
-# Backend API Routes
-
-REST endpoints for authentication and user access.
-EOF_ROUTES
-
-cat <<'EOF_MODELS' > "$TEST_KARPATHY_WS/wiki/repos/backend/db/models.md"
-# Database Models
-
-Relational schemas for credentials and audit logs.
-EOF_MODELS
-
-# Run lint to trigger multi-shard compilation
-(cd "$TEST_KARPATHY_WS" && ./rnex plugin karpathy-llm lint >/dev/null)
-
-# Assert multiple shards exist for the backend repository
-[ -f "$TEST_KARPATHY_WS/wiki/_index/repos-backend-api.md" ] || { fail "wiki/_index/repos-backend-api.md missing"; exit 1; }
-[ -f "$TEST_KARPATHY_WS/wiki/_index/repos-backend-db.md" ] || { fail "wiki/_index/repos-backend-db.md missing"; exit 1; }
-
-# Assert sub-shards are registered in wiki/_index.md
-grep -q 'repos-backend-api' "$TEST_KARPATHY_WS/wiki/_index.md" || { fail "repos-backend-api missing from wiki/_index.md"; exit 1; }
-grep -q 'repos-backend-db' "$TEST_KARPATHY_WS/wiki/_index.md" || { fail "repos-backend-db missing from wiki/_index.md"; exit 1; }
+# Verify B-Tree shards were created for repo-nexus and repos-service-a
+[ -f "$TEST_COV_WS/wiki/_index/repo-nexus.md" ] || { fail "wiki/_index/repo-nexus.md missing"; exit 1; }
+[ -f "$TEST_COV_WS/wiki/_index/repo-nexus-docs.md" ] || { fail "wiki/_index/repo-nexus-docs.md missing"; exit 1; }
+[ -f "$TEST_COV_WS/wiki/_index/repos-service-a.md" ] || { fail "wiki/_index/repos-service-a.md missing"; exit 1; }
+[ -f "$TEST_COV_WS/wiki/_index/repos-service-a-docs.md" ] || { fail "wiki/_index/repos-service-a-docs.md missing"; exit 1; }
 pass
 
 # --------------------------------------------------------------------------
-# Test 5: B-Tree Sharding and Automatic Sub-Shard Splitting on Threshold
+# Test 5: Non-Empty & Strictly Symmetric edges_out.tsv and edges_in.tsv
+# --------------------------------------------------------------------------
+run_test "Karpathy-llm: non-empty & strictly symmetric edges_out.tsv and edges_in.tsv via two-pass compiler"
+# Add cross-link from root README to service-a-api
+cat <<'EOF_LINKED_README' >> "$TEST_COV_WS/README.md"
+
+## Architecture References
+- Uses [[service-a-api]] for external communication.
+EOF_LINKED_README
+
+(cd "$TEST_COV_WS" && ./rnex plugin karpathy-llm lint >/dev/null)
+
+# Assert edges_out.tsv and edges_in.tsv are strictly non-empty
+[ -s "$TEST_COV_WS/wiki/_graph/edges_out.tsv" ] || { fail "wiki/_graph/edges_out.tsv is empty"; exit 1; }
+[ -s "$TEST_COV_WS/wiki/_graph/edges_in.tsv" ] || { fail "wiki/_graph/edges_in.tsv is empty"; exit 1; }
+
+# Assert forward edge: repo-nexus-readme links_to service-a-api
+grep -q '^repo-nexus-readme[ 	]links_to[ 	]service-a-api$' "$TEST_COV_WS/wiki/_graph/edges_out.tsv" || {
+  fail "edges_out.tsv missing 'repo-nexus-readme links_to service-a-api': $(cat "$TEST_COV_WS/wiki/_graph/edges_out.tsv")"; exit 1;
+}
+
+# Assert backward edge: service-a-api links_to repo-nexus-readme
+grep -q '^service-a-api[ 	]links_to[ 	]repo-nexus-readme$' "$TEST_COV_WS/wiki/_graph/edges_in.tsv" || {
+  fail "edges_in.tsv missing 'service-a-api links_to repo-nexus-readme': $(cat "$TEST_COV_WS/wiki/_graph/edges_in.tsv")"; exit 1;
+}
+
+# Assert exact edge symmetry (line counts match)
+_out_cnt="$(LC_ALL=C awk 'END { print NR+0 }' "$TEST_COV_WS/wiki/_graph/edges_out.tsv")"
+_in_cnt="$(LC_ALL=C awk 'END { print NR+0 }' "$TEST_COV_WS/wiki/_graph/edges_in.tsv")"
+[ "$_out_cnt" -eq "$_in_cnt" ] || { fail "Asymmetric edge counts: edges_out=$_out_cnt, edges_in=$_in_cnt"; exit 1; }
+
+# Assert LC_ALL=C sorted order on all 3 tables
+LC_ALL=C sort -c "$TEST_COV_WS/wiki/_graph/nodes.tsv" || { fail "nodes.tsv is not sorted"; exit 1; }
+LC_ALL=C sort -c "$TEST_COV_WS/wiki/_graph/edges_out.tsv" || { fail "edges_out.tsv is not sorted"; exit 1; }
+LC_ALL=C sort -c "$TEST_COV_WS/wiki/_graph/edges_in.tsv" || { fail "edges_in.tsv is not sorted"; exit 1; }
+
+# Test internal agent query helpers (_search and _graph) inside subshell
+(
+  # shellcheck source=/dev/null
+  . "$_kl_pdir/lib/config.sh"
+  # shellcheck source=/dev/null
+  . "$_kl_pdir/lib/utils.sh"
+  # shellcheck source=/dev/null
+  . "$_kl_pdir/lib/source_helpers.sh"
+  # shellcheck source=/dev/null
+  . "$_kl_pdir/lib/graph_helpers.sh"
+  # shellcheck source=/dev/null
+  . "$_kl_pdir/lib/btree_helpers.sh"
+  # shellcheck source=/dev/null
+  . "$_kl_pdir/lib/agent_query_helpers.sh"
+  load_karpathy_wiki_config "$TEST_COV_WS"
+
+  _search_out="$(agent_internal_search "service-a-api")"
+  echo "$_search_out" | grep -q "service-a-api" || { fail "agent_internal_search failed to find service-a-api: $_search_out"; exit 1; }
+
+  _graph_out="$(agent_internal_graph "repo-nexus-readme")"
+  echo "$_graph_out" | grep -q "\[\[service-a-api\]\]" || { fail "agent_internal_graph failed for repo-nexus-readme: $_graph_out"; exit 1; }
+
+  _graph_in="$(agent_internal_graph "service-a-api")"
+  echo "$_graph_in" | grep -q "repo-nexus-readme" || { fail "agent_internal_graph failed for service-a-api backlink: $_graph_in"; exit 1; }
+)
+pass
+
+# --------------------------------------------------------------------------
+# Test 6: Zero wiki/concepts & wiki/repos Directories; repo-nexus Shard Naming
+# --------------------------------------------------------------------------
+run_test "Karpathy-llm: zero wiki/concepts & wiki/repos; primary shard is repo-nexus; _index.md <= 80 lines"
+[ ! -d "$TEST_COV_WS/wiki/concepts" ] || { fail "Redundant wiki/concepts directory exists"; exit 1; }
+[ ! -d "$TEST_COV_WS/wiki/repos" ] || { fail "Redundant wiki/repos directory exists"; exit 1; }
+[ ! -f "$TEST_COV_WS/wiki/_index/concepts.md" ] || { fail "Legacy concepts.md shard exists"; exit 1; }
+[ -f "$TEST_COV_WS/wiki/_index/repo-nexus.md" ] || { fail "wiki/_index/repo-nexus.md shard missing"; exit 1; }
+
+# Verify wiki/_index.md is <= 80 lines
+_root_lines="$(LC_ALL=C awk 'END { print NR+0 }' "$TEST_COV_WS/wiki/_index.md")"
+[ "$_root_lines" -le 80 ] || { fail "wiki/_index.md exceeded 80 lines: $_root_lines"; exit 1; }
+
+# Negative assertions: legacy files and folders must NOT exist
+[ ! -e "$TEST_COV_WS/wiki/index.md" ] || { fail "legacy wiki/index.md exists"; exit 1; }
+[ ! -e "$TEST_COV_WS/wiki/hot.md" ] || { fail "legacy wiki/hot.md exists"; exit 1; }
+[ ! -d "$TEST_COV_WS/wiki/overview" ] || { fail "legacy wiki/overview/ exists"; exit 1; }
+[ ! -d "$TEST_COV_WS/wiki/entities" ] || { fail "legacy wiki/entities/ exists"; exit 1; }
+[ ! -d "$TEST_COV_WS/wiki/sources" ] || { fail "legacy wiki/sources/ exists"; exit 1; }
+
+# Root router has Repo Nexus section and Member Repositories section
+grep -q 'Repo Nexus (Root Repository)' "$TEST_COV_WS/wiki/_index.md" || { fail "Repo Nexus section missing in _index.md"; exit 1; }
+grep -q 'Member Repositories' "$TEST_COV_WS/wiki/_index.md" || { fail "Member Repositories section missing in _index.md"; exit 1; }
+pass
+
+# --------------------------------------------------------------------------
+# Test 7: B-Tree Sharding and Automatic Sub-Shard Splitting on Threshold
 # --------------------------------------------------------------------------
 run_test "Karpathy-llm: B-Tree sharding, automatic shard splitting (a-m / n-z), and root line bounds"
 TEST_BTREE_WS="$TEST_TMP/karpathy-btree-ws"
 mkdir -p "$TEST_BTREE_WS"
 setup_plugin_test_workspace karpathy-llm "$TEST_BTREE_WS"
 cd "$TEST_BTREE_WS"
+"$TEST_BTREE_WS/rnex" init -y --karpathy "$TEST_BTREE_WS" >/dev/null
 
 cat <<'EOF_BTREE_CFG' > "$TEST_BTREE_WS/rnex.yaml"
 version: 1.0.0
@@ -258,39 +284,37 @@ plugins:
 repos:
 EOF_BTREE_CFG
 
-"$TEST_BTREE_WS/rnex" init -y --karpathy "$TEST_BTREE_WS" >/dev/null
-
-# Create 8 concept notes under wiki/concepts/ to exceed the split threshold of 5
-mkdir -p "$TEST_BTREE_WS/wiki/concepts"
+# Create 8 documentation notes under docs/ to exceed the split threshold of 5
+mkdir -p "$TEST_BTREE_WS/docs"
 for _cname in "auth-tokens" "caching" "distributed-locks" "encryption" "jwt" "message-brokers" "networking" "queues"; do
-  cat <<EOF_C > "$TEST_BTREE_WS/wiki/concepts/${_cname}.md"
+  cat <<EOF_C > "$TEST_BTREE_WS/docs/${_cname}.md"
 # ${_cname}
 Detailed explanation of ${_cname} architecture.
 EOF_C
 done
 
 # Run lint to rebalance B-Tree shards
-(cd "$TEST_BTREE_WS" && ./rnex plugin karpathy-llm lint >/dev/null)
+(cd "$TEST_BTREE_WS" && ./rnex plugin karpathy-llm lint)
 
-# Verify concepts shard split into a-m and n-z sub-shards
-[ -f "$TEST_BTREE_WS/wiki/_index/concepts-a-m.md" ] || { fail "concepts-a-m.md missing after split"; exit 1; }
-[ -f "$TEST_BTREE_WS/wiki/_index/concepts-n-z.md" ] || { fail "concepts-n-z.md missing after split"; exit 1; }
+# Verify repo-nexus-docs shard split into a-m and n-z sub-shards
+[ -f "$TEST_BTREE_WS/wiki/_index/repo-nexus-docs-a-m.md" ] || { fail "repo-nexus-docs-a-m.md missing after split"; exit 1; }
+[ -f "$TEST_BTREE_WS/wiki/_index/repo-nexus-docs-n-z.md" ] || { fail "repo-nexus-docs-n-z.md missing after split"; exit 1; }
 
 # Verify sorted contents in each shard
-grep -q "auth-tokens" "$TEST_BTREE_WS/wiki/_index/concepts-a-m.md" || { fail "auth-tokens missing from concepts-a-m.md"; exit 1; }
-grep -q "jwt" "$TEST_BTREE_WS/wiki/_index/concepts-a-m.md" || { fail "jwt missing from concepts-a-m.md"; exit 1; }
-grep -q "networking" "$TEST_BTREE_WS/wiki/_index/concepts-n-z.md" || { fail "networking missing from concepts-n-z.md"; exit 1; }
-grep -q "queues" "$TEST_BTREE_WS/wiki/_index/concepts-n-z.md" || { fail "queues missing from concepts-n-z.md"; exit 1; }
+grep -q "auth-tokens" "$TEST_BTREE_WS/wiki/_index/repo-nexus-docs-a-m.md" || { fail "auth-tokens missing from repo-nexus-docs-a-m.md"; exit 1; }
+grep -q "jwt" "$TEST_BTREE_WS/wiki/_index/repo-nexus-docs-a-m.md" || { fail "jwt missing from repo-nexus-docs-a-m.md"; exit 1; }
+grep -q "networking" "$TEST_BTREE_WS/wiki/_index/repo-nexus-docs-n-z.md" || { fail "networking missing from repo-nexus-docs-n-z.md"; exit 1; }
+grep -q "queues" "$TEST_BTREE_WS/wiki/_index/repo-nexus-docs-n-z.md" || { fail "queues missing from repo-nexus-docs-n-z.md"; exit 1; }
 
 # Verify B-Tree Root routing table reflects sub-shards and is bounded (<= 80 lines)
 _bt_root_lines="$(LC_ALL=C awk 'END { print NR+0 }' "$TEST_BTREE_WS/wiki/_index.md")"
 [ "$_bt_root_lines" -le 80 ] || { fail "Root _index.md exceeded 80 lines: $_bt_root_lines"; exit 1; }
-grep -q 'concepts-a-m' "$TEST_BTREE_WS/wiki/_index.md" || { fail "concepts-a-m missing from root router table"; exit 1; }
-grep -q 'concepts-n-z' "$TEST_BTREE_WS/wiki/_index.md" || { fail "concepts-n-z missing from root router table"; exit 1; }
+grep -q 'repo-nexus-docs-a-m' "$TEST_BTREE_WS/wiki/_index.md" || { fail "repo-nexus-docs-a-m missing from root router table"; exit 1; }
+grep -q 'repo-nexus-docs-n-z' "$TEST_BTREE_WS/wiki/_index.md" || { fail "repo-nexus-docs-n-z missing from root router table"; exit 1; }
 pass
 
 # --------------------------------------------------------------------------
-# Test 6: Single-File Ingestion, Options, Error Validation, and Batch Fallback
+# Test 8: Single-File Ingestion, Options, Error Validation, and Batch Fallback
 # --------------------------------------------------------------------------
 run_test "Karpathy-llm: single-file ingestion (--file/--source), error validation, and batch fallback"
 TEST_SF_WS="$TEST_TMP/karpathy-singlefile-ws"
@@ -316,14 +340,11 @@ printf '# Document C\nSingle file C architecture.\n' > "$TEST_SF_WS/raw/doc-c.md
 
 # Test Case 1: Positional single file ingestion
 (cd "$TEST_SF_WS" && ./rnex plugin karpathy-llm ingest raw/doc-a.md >/dev/null)
-[ -f "$TEST_SF_WS/wiki/repos/nexus/doc-a.md" ] || { fail "wiki/repos/nexus/doc-a.md missing after single-file positional ingest"; exit 1; }
-[ ! -f "$TEST_SF_WS/wiki/repos/nexus/doc-b.md" ] || { fail "doc-b should not have been ingested"; exit 1; }
-[ ! -f "$TEST_SF_WS/wiki/repos/nexus/doc-c.md" ] || { fail "doc-c should not have been ingested"; exit 1; }
+grep -q 'repo-nexus-doc-a' "$TEST_SF_WS/wiki/_graph/nodes.tsv" || { fail "doc-a missing in nodes.tsv after single file ingest"; exit 1; }
 
 # Test Case 2: --file / -f flag single file ingestion
 (cd "$TEST_SF_WS" && ./rnex plugin karpathy-llm ingest --file raw/doc-b.md >/dev/null)
-[ -f "$TEST_SF_WS/wiki/repos/nexus/doc-b.md" ] || { fail "wiki/repos/nexus/doc-b.md missing after --file ingest"; exit 1; }
-[ ! -f "$TEST_SF_WS/wiki/repos/nexus/doc-c.md" ] || { fail "doc-c should not have been ingested"; exit 1; }
+grep -q 'repo-nexus-doc-b' "$TEST_SF_WS/wiki/_graph/nodes.tsv" || { fail "doc-b missing in nodes.tsv after --file ingest"; exit 1; }
 
 # Test Case 3: Missing file error and exit code non-zero
 _missing_err=0
@@ -337,14 +358,15 @@ _dir_err=0
 
 # Test Case 4: Batch fallback when no file argument is passed
 (cd "$TEST_SF_WS" && ./rnex plugin karpathy-llm ingest >/dev/null)
-[ -f "$TEST_SF_WS/wiki/repos/nexus/doc-c.md" ] || { fail "wiki/repos/nexus/doc-c.md missing after batch fallback ingest"; exit 1; }
+grep -q 'repo-nexus-doc-c' "$TEST_SF_WS/wiki/_graph/nodes.tsv" || { fail "doc-c missing from nodes.tsv after batch ingest"; exit 1; }
 [ ! -e "$TEST_SF_WS/wiki/hot.md" ] || { fail "hot.md found in single-file test workspace"; exit 1; }
+[ -z "$(find "$TEST_SF_WS/wiki" -type l 2>/dev/null || true)" ] || { fail "symlinks found in single-file workspace"; exit 1; }
 pass
 
 # --------------------------------------------------------------------------
-# Test 7: Auto-healing Directory Migration and Purge during lint
+# Test 9: Auto-healing Directory Migration and Purge during lint
 # --------------------------------------------------------------------------
-run_test "Karpathy-llm: auto-healing directory migration (overview/entities/sources -> concepts/repos) and purge"
+run_test "Karpathy-llm: auto-healing legacy purge (overview/entities/sources/concepts/repos) during lint"
 TEST_MIG_WS="$TEST_TMP/karpathy-mig-ws"
 mkdir -p "$TEST_MIG_WS"
 setup_plugin_test_workspace karpathy-llm "$TEST_MIG_WS"
@@ -352,34 +374,37 @@ cd "$TEST_MIG_WS"
 "$TEST_MIG_WS/rnex" init -y --karpathy "$TEST_MIG_WS" >/dev/null
 
 # Plant legacy directories and deprecated files
-mkdir -p "$TEST_MIG_WS/wiki/overview" "$TEST_MIG_WS/wiki/entities" "$TEST_MIG_WS/wiki/sources/payment-svc"
+mkdir -p "$TEST_MIG_WS/wiki/overview" \
+         "$TEST_MIG_WS/wiki/entities" \
+         "$TEST_MIG_WS/wiki/sources/payment-svc" \
+         "$TEST_MIG_WS/wiki/concepts" \
+         "$TEST_MIG_WS/wiki/repos"
 echo "# Legacy Concept" > "$TEST_MIG_WS/wiki/overview/legacy-concept.md"
 echo "# Nexus Core Entity" > "$TEST_MIG_WS/wiki/entities/nexus-entity.md"
 echo "# Payment Invoice Service" > "$TEST_MIG_WS/wiki/sources/payment-svc/invoice.md"
+echo "# Old Concept" > "$TEST_MIG_WS/wiki/concepts/old.md"
+echo "# Old Repo" > "$TEST_MIG_WS/wiki/repos/old.md"
 echo "stale hot cache" > "$TEST_MIG_WS/wiki/hot.md"
 echo "stale root router" > "$TEST_MIG_WS/wiki/index.md"
 
-# Run lint to auto-heal and migrate
+# Run lint to auto-heal and purge
 (cd "$TEST_MIG_WS" && ./rnex plugin karpathy-llm lint >/dev/null)
 
-# Verify legacy directories are purged
+# Verify all legacy directories and files are purged
 [ ! -d "$TEST_MIG_WS/wiki/overview" ] || { fail "legacy overview/ was not deleted"; exit 1; }
 [ ! -d "$TEST_MIG_WS/wiki/entities" ] || { fail "legacy entities/ was not deleted"; exit 1; }
 [ ! -d "$TEST_MIG_WS/wiki/sources" ] || { fail "legacy sources/ was not deleted"; exit 1; }
+[ ! -d "$TEST_MIG_WS/wiki/concepts" ] || { fail "legacy concepts/ was not deleted"; exit 1; }
+[ ! -d "$TEST_MIG_WS/wiki/repos" ] || { fail "legacy repos/ was not deleted"; exit 1; }
 [ ! -e "$TEST_MIG_WS/wiki/hot.md" ] || { fail "legacy hot.md was not deleted"; exit 1; }
 [ ! -e "$TEST_MIG_WS/wiki/index.md" ] || { fail "legacy index.md was not deleted"; exit 1; }
-
-# Verify migrated destination files exist
-[ -f "$TEST_MIG_WS/wiki/concepts/legacy-concept.md" ] || { fail "legacy-concept.md not migrated to concepts/"; exit 1; }
-[ -f "$TEST_MIG_WS/wiki/repos/nexus/nexus-entity.md" ] || { fail "nexus-entity.md not migrated to repos/nexus/"; exit 1; }
-[ -f "$TEST_MIG_WS/wiki/repos/payment-svc/invoice.md" ] || { fail "invoice.md not migrated to repos/payment-svc/"; exit 1; }
 
 # Verify valid _index.md compiled
 [ -f "$TEST_MIG_WS/wiki/_index.md" ] || { fail "wiki/_index.md missing after migration"; exit 1; }
 pass
 
 # --------------------------------------------------------------------------
-# Test 8: Strict Linting on Broken Links & Sources
+# Test 10: Strict Linting on Broken Links & Sources
 # --------------------------------------------------------------------------
 run_test "Karpathy-llm: strict linting detects broken wikilinks and missing source references"
 TEST_STRICT_WS="$TEST_TMP/karpathy-strict-ws"
@@ -394,19 +419,21 @@ cd "$TEST_STRICT_WS"
 }
 
 # Test broken wikilink detection
-cat <<'EOF_BWL' > "$TEST_STRICT_WS/wiki/concepts/broken-link.md"
+cat <<'EOF_BWL' > "$TEST_STRICT_WS/docs/broken-link.md"
 # Broken Link Test
 References an unresolvable slug [[missing-concept-slug]].
 EOF_BWL
+
+(cd "$TEST_STRICT_WS" && ./rnex plugin karpathy-llm ingest docs/broken-link.md >/dev/null)
 
 _strict_wl_err=0
 (cd "$TEST_STRICT_WS" && ./rnex plugin karpathy-llm lint --strict >/dev/null 2>&1) || _strict_wl_err=1
 [ "$_strict_wl_err" -eq 1 ] || { fail "lint --strict did not exit non-zero on broken wikilink"; exit 1; }
 
-rm -f "$TEST_STRICT_WS/wiki/concepts/broken-link.md"
+rm -f "$TEST_STRICT_WS/docs/broken-link.md"
 
 # Test broken frontmatter sources detection
-cat <<'EOF_BSRC' > "$TEST_STRICT_WS/wiki/concepts/broken-source.md"
+cat <<'EOF_BSRC' > "$TEST_STRICT_WS/docs/broken-source.md"
 ---
 sources: ["docs/nonexistent-source.md"]
 ---
@@ -414,11 +441,13 @@ sources: ["docs/nonexistent-source.md"]
 Content here.
 EOF_BSRC
 
+(cd "$TEST_STRICT_WS" && ./rnex plugin karpathy-llm ingest docs/broken-source.md >/dev/null)
+
 _strict_src_err=0
 (cd "$TEST_STRICT_WS" && ./rnex plugin karpathy-llm lint --strict >/dev/null 2>&1) || _strict_src_err=1
 [ "$_strict_src_err" -eq 1 ] || { fail "lint --strict did not exit non-zero on broken source link"; exit 1; }
 
-rm -f "$TEST_STRICT_WS/wiki/concepts/broken-source.md"
+rm -f "$TEST_STRICT_WS/docs/broken-source.md"
 
 # Lint should pass again once broken files are removed
 (cd "$TEST_STRICT_WS" && ./rnex plugin karpathy-llm lint --strict >/dev/null) || {
@@ -427,7 +456,7 @@ rm -f "$TEST_STRICT_WS/wiki/concepts/broken-source.md"
 pass
 
 # --------------------------------------------------------------------------
-# Test 9: User Skill Projection and Disable Cleanup
+# Test 11: User Skill Projection and Disable Cleanup
 # --------------------------------------------------------------------------
 run_test "Karpathy-llm: user skill projection with synthetic provider and disable unregistration"
 mkdir -p "$TEST_KARPATHY_WS/plugins/mock-provider"
@@ -466,7 +495,7 @@ rm -rf "$TEST_KARPATHY_WS/plugins/mock-provider" "$TEST_KARPATHY_WS/.mock"
 pass
 
 # --------------------------------------------------------------------------
-# Test 10: Configurable wiki_dir and Leaked Placeholder Purge
+# Test 12: Configurable wiki_dir and Leaked Placeholder Purge
 # --------------------------------------------------------------------------
 run_test "Karpathy-llm: configurable wiki_dir and leaked placeholder directory cleanup"
 cat <<'EOF_CFG' > "$TEST_KARPATHY_WS/rnex.yaml"
@@ -510,9 +539,9 @@ EOF_CFG_RESET
 pass
 
 # --------------------------------------------------------------------------
-# Test 11: Member Repository Ingestion and Curation Preservation
+# Test 13: Member Repository In-Place Ingestion (Zero Copying into wiki/)
 # --------------------------------------------------------------------------
-run_test "Karpathy-llm: member repository ingestion and curation preservation"
+run_test "Karpathy-llm: member repository in-place ingestion (zero copying into wiki/)"
 TEST_REPO_WS="$TEST_TMP/karpathy-repo-ws"
 mkdir -p "$TEST_REPO_WS"
 setup_plugin_test_workspace karpathy-llm "$TEST_REPO_WS"
@@ -532,28 +561,25 @@ EOF_REPO_CFG
 "$TEST_REPO_WS/rnex" init -y --karpathy "$TEST_REPO_WS" >/dev/null
 (cd "$TEST_REPO_WS" && ./rnex plugin karpathy-llm ingest >/dev/null)
 
-# Verify member repo README was ingested into wiki/repos/auth-svc/readme.md
-[ -f "$TEST_REPO_WS/wiki/repos/auth-svc/readme.md" ] || { fail "wiki/repos/auth-svc/readme.md missing after ingest"; exit 1; }
-grep -q "Authentication and authorization microservice" "$TEST_REPO_WS/wiki/repos/auth-svc/readme.md" || {
-  fail "Member README content missing"; exit 1;
-}
-
-# Verify nodes.tsv registration
+# Verify member repo was indexed in place in nodes.tsv
 grep -q 'auth-svc-readme' "$TEST_REPO_WS/wiki/_graph/nodes.tsv" || {
   fail "auth-svc-readme not registered in nodes.tsv: $(cat "$TEST_REPO_WS/wiki/_graph/nodes.tsv")"; exit 1;
 }
 
-# Curate the member repo file with custom invariant
-cat <<'EOF_CURATED' >> "$TEST_REPO_WS/wiki/repos/auth-svc/readme.md"
+# Verify member repo shard was compiled
+[ -f "$TEST_REPO_WS/wiki/_index/repos-auth-svc.md" ] || {
+  fail "wiki/_index/repos-auth-svc.md missing after ingest"; exit 1;
+}
+grep -q 'auth-svc-readme' "$TEST_REPO_WS/wiki/_index/repos-auth-svc.md" || {
+  fail "auth-svc-readme missing from shard repos-auth-svc.md"; exit 1;
+}
 
-## Curated Invariant
-- Tokens must validate JWKS with exponential caching.
-EOF_CURATED
-
-# Re-run ingest to verify curation is preserved when source hasn't changed
-(cd "$TEST_REPO_WS" && ./rnex plugin karpathy-llm ingest >/dev/null)
-grep -q "Curated Invariant" "$TEST_REPO_WS/wiki/repos/auth-svc/readme.md" || {
-  fail "Curated invariant was overwritten on re-ingest"; exit 1;
+# Verify NO files were copied into wiki/
+[ ! -d "$TEST_REPO_WS/wiki/repos" ] || {
+  fail "Redundant wiki/repos directory created!"; exit 1;
+}
+[ ! -f "$TEST_REPO_WS/wiki/repo-auth-svc.md" ] || {
+  fail "Legacy wiki/repo-auth-svc.md created!"; exit 1;
 }
 
 # Verify disabled member repos are not ingested
@@ -565,7 +591,9 @@ cat <<'EOF_DIS' >> "$TEST_REPO_WS/rnex.yaml"
 EOF_DIS
 (cd "$TEST_REPO_WS" && ./rnex sync -y >/dev/null)
 (cd "$TEST_REPO_WS" && ./rnex plugin karpathy-llm ingest >/dev/null)
-[ ! -d "$TEST_REPO_WS/wiki/repos/disabled-repo" ] || { fail "Disabled repository was ingested into wiki"; exit 1; }
+! grep -q 'disabled-repo' "$TEST_REPO_WS/wiki/_graph/nodes.tsv" || {
+  fail "Disabled repository was ingested into wiki"; exit 1;
+}
 pass
 
 if [ "${_STANDALONE_RUN:-0}" -eq 1 ]; then

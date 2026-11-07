@@ -46,11 +46,11 @@ In a Repo Nexus workspace, independent repositories are organized into `./repos/
    - Do not redundantly read entire files or directory trees when targeted symbol lookups or line ranges suffice.
    - Rely on active workspace context, indexing, and compiled documentation rather than re-scanning raw files repeatedly.
 
-4. **Read-Only Intake & Source Directories:**
-   - Intake sources (`plugins.karpathy-llm.sources`, default: `docs`, `repos/**/README.md`) and member repositories (`./<repos_dir>/`, default: `./repos/`) are strictly read-only inputs during wiki operations. Never create, copy, or modify files inside configured sources; write generated output exclusively inside `wiki_dir` (`wiki/`).
+4. **In-Place Source Indexing & Encapsulated Metadata:**
+   - Source documents (`plugins.karpathy-llm.sources`, default: `docs`, `repos/**/README.md`) and member repositories (`./<repos_dir>/`, default: `./repos/`) are indexed directly in place without symlinks (`ln -s`) or redundant copies (`wiki/concepts/` and `wiki/repos/` do not exist). Generated wiki metadata (`_index.md`, `_log.md`, `_index/*.md`, `_graph/*.tsv`) resides exclusively inside `wiki_dir` (`wiki/`).
 
 5. **Wiki Navigation Order:**
-   - **Step 1 — B-Tree Root Index & Graph Search**: Consult `<wiki_dir>/index.md` (bounded root routing table <= 80 lines) or run `rnex plugin karpathy-llm search <keyword>` to locate the appropriate domain shard or node identifier. Use `rnex plugin karpathy-llm graph <node_id>` to explore inbound backlinks and outbound dependencies.
-   - **Step 2 — Domain Shard Pinpointing**: Read only the specific B-Tree leaf shard `<wiki_dir>/_index/<shard>.md` identified in Step 1 to select the exact leaf page.
-   - **Step 3 — Leaf Page Retrieval**: Read only the 1–3 target atomic page(s) in `<wiki_dir>/`. Never browse raw intake directories before completing Steps 1–2.
+   - **Step 1 — B-Tree Root Index**: Consult `<wiki_dir>/_index.md` (bounded root routing table <= 80 lines) to locate the appropriate shard (`_index/repo-nexus*.md` or `_index/repos-<member>*.md`).
+   - **Step 2 — Domain Shard Pinpointing**: Read only the specific B-Tree leaf shard `<wiki_dir>/_index/<shard>.md` identified in Step 1 (or query `_graph/nodes.tsv`, `edges_out.tsv`, and `edges_in.tsv` via internal agent query helpers) to locate the target source path.
+   - **Step 3 — Authoritative Source Retrieval**: Open only the 1–3 authoritative workspace source document(s) referenced in the shard.
 

@@ -117,54 +117,11 @@ if [ -n "$_reg_fn" ]; then
   done
 fi
 
-# 2. Automatically ingest README.md from registered/enabled member repositories when included in sources
-_skip_all_readmes=0
-if command -v get_plugin_config_list >/dev/null 2>&1; then
-  _src_list="$(get_plugin_config_list "karpathy-llm" "sources" 2>/dev/null || true)"
-  if [ -n "$_src_list" ]; then
-    _skip_all_readmes=1
-    while IFS= read -r _s_item || [ -n "$_s_item" ]; do
-      case "$_s_item" in
-        *README*|*readme*|repos/*|"./repos/"*|"$_clean_repos"/*|*"**"*)
-          _skip_all_readmes=0
-          break
-          ;;
-      esac
-    done <<EOF_SRC
-$_src_list
-EOF_SRC
-  fi
-fi
-
-_ALL_INGESTED_REPOS=""
-_ALL_INGESTED_COUNT=0
-
-if [ "$_skip_all_readmes" -ne 1 ]; then
-  for repo_name in $(yaml_list_repos); do
-    [ -n "$repo_name" ] || continue
-    yaml_repo_enabled "$repo_name" || continue
-    kl_resolve_repo_paths "$repo_name"
-
-    [ -d "$_kl_repo_path" ] || continue
-
-    # Read and ingest any README file directly in-place (no staging copy)
-    for readme_name in README.md readme.md README.markdown README; do
-      if [ -f "$_kl_repo_path/$readme_name" ]; then
-        kl_ingest_member_readme "$repo_name" "$_kl_repo_path" "$readme_name" "$_kl_repo_rel" 0
-        _ALL_INGESTED_REPOS="${_ALL_INGESTED_REPOS:+$_ALL_INGESTED_REPOS, }$repo_name"
-        _ALL_INGESTED_COUNT=$((_ALL_INGESTED_COUNT + 1))
-        break
-      fi
-    done
-  done
-fi
-
-# Clean up legacy hot.md if present
-rm -f "$_wiki_path/hot.md" 2>/dev/null || true
-
-# Rebalance B-Tree shards and compile root index if items were ingested
-if [ "$_ALL_INGESTED_COUNT" -gt 0 ] && command -v rebalance_btree_shards_and_compile_root >/dev/null 2>&1; then
-  rebalance_btree_shards_and_compile_root 2>/dev/null || true
+# 2. Synchronize in-place B-Tree shards, root router, and symmetric graph tables
+if [ -f "$_root/plugins/karpathy-llm/bin/lint.sh" ]; then
+  "$_root/plugins/karpathy-llm/bin/lint.sh" >/dev/null 2>&1 || true
+elif [ -f "$RNEX_PLUGIN_DIR/bin/lint.sh" ]; then
+  "$RNEX_PLUGIN_DIR/bin/lint.sh" >/dev/null 2>&1 || true
 fi
 
 # 3. Ensure sync stamp is updated

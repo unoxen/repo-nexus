@@ -131,7 +131,7 @@ In contrast, the **Karpathy LLM Wiki** architecture:
 ### What is the difference between `_index.md`, `_index/`, `_graph/`, and `_log.md`?
 Each core wiki control asset has a distinct architectural responsibility:
 - **`_index.md` (B-Tree Root Router)**: Strictly bounded under 80 lines with zero YAML frontmatter. Contains a compact routing table mapping domain key ranges to leaf shard files in `_index/` alongside summary property graph statistics.
-- **`_index/<shard>.md` (Sorted B-Tree Leaf Shards)**: Domain-partitioned catalogs (`concepts.md`, `repos-nexus.md`, `repos-<member-repo>.md`) sorted in strict `LC_ALL=C` order. Automatically splits into alphabetical sub-shards (e.g. `concepts-a-m.md`, `concepts-n-z.md`, `repos-backend-api-a-m.md`) when entry thresholds are exceeded.
+- **`_index/<shard>.md` (Sorted B-Tree Leaf Shards)**: Domain-partitioned catalogs (`repo-nexus.md`, `repo-nexus-<subscope>.md`, `repos-<member-repo>.md`) sorted in strict `LC_ALL=C` order. Automatically splits into alphabetical sub-shards (e.g. `repo-nexus-docs-a-m.md`, `repo-nexus-docs-n-z.md`) when entry thresholds are exceeded.
 - **`_graph/*.tsv` (Sorted TSV Property Graph)**: Plain-text tab-separated property tables (`nodes.tsv`, `edges_out.tsv`, `edges_in.tsv`) queried via binary search in \(O(\log N)\) time using BSD `look` or early-exit POSIX `awk`.
 - **`_log.md` (Operational Audit Trail)**: An append-only, timestamped log recording every initialization, source ingestion, graph update, and lint validation run. Recent activity is checked with `tail -n 20 _log.md`.
 

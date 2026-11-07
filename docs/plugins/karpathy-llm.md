@@ -31,44 +31,30 @@ It requires **zero external vector databases, embedding pipelines, or heavy MCP 
 ### 3. Autonomous LLM Wiki Architecture
 A self-healing, agent-maintained knowledge graph structured as:
 
-- **`./docs/` Intake Directory**:
-  - Append-only directory where unmodified source material (articles, transcripts, docs, API references, meeting notes) is deposited.
-  - Raw sources are immutable source-of-truth references for citations.
-- **`wiki/` Curated Knowledge Base**:
-  - Interlinked atomic markdown pages categorized into domain concepts and repository-scoped docs (default directory: `wiki/` at workspace root):
-    - `wiki/concepts/<slug>.md`: Universal architectural patterns, cross-cutting models, invariants, and design decisions.
-    - `wiki/repos/<repo_scope>/<slug>.md`: Repository-scoped documentation (`repos/nexus/` for nexus-level workspace docs; `repos/<member-repo>/` for member repositories).
-  - Each page contains structured YAML frontmatter defining typed relations:
-    ```yaml
-    ---
-    title: Workspace Configuration Protocol
-    sources: [docs/rnex-design-spec.md]
-    related: [wiki/repos/nexus/member-repos.md, wiki/concepts/ai-routing.md]
-    extends: [wiki/concepts/multi-repo-architecture.md]
-    contradicts: []
-    mentioned_in: []
-    ---
-    ```
+- **Authoritative Source Materials**:
+  - Unmodified source documents (`README.md`, `docs/*.md`, `RFC/*.md`, and member repositories `<repos_dir>/<name>/**/*.md`) are inspected and indexed directly in place.
+  - Zero duplicate file copies and zero symbolic links (`wiki/concepts/` and `wiki/repos/` are completely eradicated).
+  - Intake sources are fully configurable via `sources` under `plugins.karpathy-llm`.
 - **`wiki/_index.md` B-Tree Root Router**:
   - Compact, strictly bounded routing table ($\le 80$ lines, zero YAML frontmatter) organizing domain shards in `wiki/_index/` with key ranges and graph metrics.
 - **`wiki/_index/` Sorted B-Tree Leaf Shards**:
-  - Lexicographically sorted domain leaf pages (`concepts.md`, `repos-nexus.md`, `repos-<member-repo>.md`). Automatically split into alphabetical sub-shards (e.g. `concepts-a-m.md`, `concepts-n-z.md`, `repos-backend-api-a-m.md`) when exceeding capacity thresholds.
+  - Lexicographically sorted domain leaf pages (`repo-nexus.md`, `repo-nexus-<subscope>.md`, `repos-<member-repo>.md`). Automatically split into alphabetical sub-shards (e.g. `repo-nexus-docs-a-m.md`, `repo-nexus-docs-n-z.md`) when exceeding capacity thresholds.
 - **`wiki/_graph/` Sorted TSV Property Graph**:
   - Tab-separated tables (`nodes.tsv`, `edges_out.tsv`, `edges_in.tsv`) maintaining adjacency relationships queried via \(O(\log N)\) binary search.
 - **`wiki/_log.md` Audit Trail**:
-  - Shared append-only log recording ingest, graph update, and lint operations across tracked wiki pages with timestamped details and source attribution. Inspected with `tail -n 20 _log.md`.
+  - Shared append-only log recording ingest and lint operations across tracked wiki pages with timestamped details and source attribution. Inspected with `tail -n 20 _log.md`.
 
 ### 4. Standardized Agent Workflows
-- **`wiki-ingest.md` (8-Step Ingestion Protocol)**:
-  - Scaffolds deterministic 1-to-1 wiki pages (`wiki/repos/<scope>/<slug>.md` for repository documents and READMEs; `wiki/concepts/<slug>.md` for design concepts and specifications) and enriches them in-place.
-  - Formulates bi-directional frontmatter relations (`sources`, `related`, `extends`, `contradicts`).
-  - Idempotently updates `wiki/_log.md`, registers edges in `wiki/_graph/*.tsv`, and rebalances B-Tree shards in `wiki/_index/` and `wiki/_index.md`.
-- **`wiki-lint.md` (10-Step Integrity Audit Protocol)**:
-  - Non-destructively migrates legacy categories (`overview/`, `entities/`, `sources/`) to `concepts/` and `repos/`.
-  - Purges legacy caches (`hot.md`, `index.md`).
-  - Validates inter-page link paths and file existence.
+- **`wiki-ingest.md` (Ingestion Protocol)**:
+  - Scans and indexes authoritative workspace documentation in place.
+  - Rebuilds `wiki/_graph/*.tsv` via two-pass scanning, registers forward and reverse edges symmetrically, rebalances B-Tree shards in `wiki/_index/`, compiles `wiki/_index.md`, and updates `wiki/_log.md`.
+- **`wiki-lint.md` (Integrity Audit Protocol)**:
+  - Auto-heals directory structures and purges legacy categories (`concepts/`, `repos/`, `overview/`, `entities/`, `sources/`).
+  - Purges deprecated legacy files (`hot.md`, `index.md`).
+  - Enforces zero symbolic links across the `wiki/` directory.
   - Detects broken `[[wikilinks]]` across the property graph.
   - Verifies strict `LC_ALL=C` sorting across TSV tables.
+  - Enforces forward/reverse edge symmetry (`edges_out.tsv` count == `edges_in.tsv` count).
   - Enforces the $\le 80$ line budget on root `wiki/_index.md`.
   - Automatically records audit entries in `_log.md`.
 
@@ -147,7 +133,7 @@ The `karpathy-llm` plugin exposes a streamlined, focused 2-command CLI interface
 
 ### `rnex plugin karpathy-llm ingest`
 
-Ingests raw intake documents and member repository READMEs into atomic, interlinked markdown pages in `wiki/concepts/` and `wiki/repos/<repo_scope>/`, updates graph edges in `wiki/_graph/*.tsv`, and rebalances B-Tree shards in `wiki/_index/` and `wiki/_index.md`.
+Ingests and indexes authoritative workspace documents and member repository READMEs directly in place, updates graph edges in `wiki/_graph/*.tsv`, and rebalances B-Tree shards in `wiki/_index/` and `wiki/_index.md`.
 
 ```sh
 rnex plugin karpathy-llm ingest [options] [<file_path>]
@@ -214,26 +200,21 @@ When `karpathy-llm` is enabled, it scaffolds:
 
 ```text
 my-workspace/
-├── docs/
-│   └── .gitkeep                     # Deposit unmodified source files here
+├── docs/                            # Workspace documentation
+│   └── .gitkeep
+├── repos/                           # Member repositories (inspected in-place)
+│   └── <member-repo>/
+│       └── README.md
 ├── wiki/
 │   ├── _index.md                    # B-Tree Root Router (<= 80 lines)
 │   ├── _log.md                      # Append-only audit history
 │   ├── _index/                      # B-Tree Domain Shards (sorted LC_ALL=C)
-│   │   ├── concepts.md              # (or concepts-a-m.md, concepts-n-z.md)
-│   │   ├── repos-nexus.md           # Workspace-level nexus documentation shard
+│   │   ├── repo-nexus.md            # (or repo-nexus-<subscope>.md, e.g. -a-m.md)
 │   │   └── repos-<member-repo>.md   # Member repository documentation shards
-│   ├── _graph/                      # Sorted TSV Property Graph
-│   │   ├── nodes.tsv
-│   │   ├── edges_out.tsv
-│   │   └── edges_in.tsv
-│   ├── concepts/                    # Curated architecture & concept pages
-│   │   └── <concept-slug>.md
-│   └── repos/                       # Repository-scoped documentation pages
-│       ├── nexus/                   # Nexus-level documentation
-│       │   └── <doc-slug>.md
-│       └── <member-repo>/           # Member repository pages (e.g. README, guides)
-│           └── <doc-slug>.md
+│   └── _graph/                      # Sorted TSV Property Graph
+│       ├── nodes.tsv
+│       ├── edges_out.tsv
+│       └── edges_in.tsv
 ├── .rnex/
 │   └── plugins/
 │       └── karpathy-llm/
@@ -251,13 +232,13 @@ my-workspace/
 │           ├── lib/
 │           │   ├── config.sh
 │           │   ├── utils.sh
+│           │   ├── source_helpers.sh
 │           │   ├── graph_helpers.sh
 │           │   ├── btree_helpers.sh
 │           │   └── agent_query_helpers.sh
 │           └── templates/
 │               ├── _index.md
-│               ├── _log.md
-│               └── rnex-wiki-page.template.md
+│               └── _log.md
 └── rnex.yaml
 ```
 
