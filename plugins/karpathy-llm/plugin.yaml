@@ -1,36 +1,43 @@
 name: karpathy-llm
-version: 0.9.0
-description: Andréj Karpathy's verification frameworks & wiki patterns for AI coding agents.
+version: 0.9.1
+description: "Zero-dependency B-Tree (_index/) and Sorted TSV Graph (_graph/) LLM Wiki for Repo Nexus"
 author: unoxen
 homepage: https://github.com/unoxen/repo-nexus
 
+commands:
+  ingest: "Ingest a single file or batch-ingest workspace & member repository docs into the wiki, updating B-Tree shards and graph edges automatically"
+  lint: "Verify, auto-heal, and re-index wiki B-Tree shards (_index/*.md) and property graph tables (_graph/*.tsv)"
+
 config_defaults:
-  sources:
-    - docs
-    - "repos/**/README.md"
   wiki_dir: "wiki"
+  index_file: "_index.md"
   index_dir: "_index"
   graph_dir: "_graph"
-  btree_root_max_lines: 80
+  log_file: "_log.md"
   btree_shard_max_entries: 100
+  btree_max_root_lines: 80
+  btree_root_max_lines: 80
   graph_default_depth: 1
 
 config_descriptions:
-  sources: "<list>  (intake directories and/or glob patterns; .local.rnex.yaml list replaces rnex.yaml list)"
-  wiki_dir: "<dir>  (directory for curated markdown pages)"
-  index_dir: "<dir>  (subdirectory for sorted B-Tree leaf shards, default: _index)"
-  graph_dir: "<dir>  (subdirectory for sorted TSV property graph tables, default: _graph)"
-  btree_root_max_lines: "<int>  (maximum allowed lines in root wiki/index.md router, default: 80)"
+  wiki_dir: "<dir>  (directory for curated markdown pages, default: wiki)"
+  index_file: "<file> (root B-Tree router markdown file, default: _index.md)"
+  index_dir: "<dir>   (directory for B-Tree shards, default: _index)"
+  graph_dir: "<dir>   (directory for TSV property graph, default: _graph)"
+  log_file: "<file>   (append-only audit log file, default: _log.md)"
   btree_shard_max_entries: "<int>  (entry count threshold before splitting a B-Tree shard, default: 100)"
+  btree_max_root_lines: "<int>  (maximum allowed lines in root wiki/_index.md router, default: 80)"
   graph_default_depth: "<int>  (default ego-subgraph traversal depth in hops, default: 1)"
 
-commands:
-  init: "Initialize wiki directory, B-Tree index shards, and sorted TSV graph store"
-  ingest: "Ingest intake sources and repo docs into the wiki [--source <path>] [--repo <name>] [--quiet] [<file_path>]"
-  index: "Rebuild sorted TSV graph and compile B-Tree leaf shards and root router [--rebuild] [--quiet]"
-  graph: "Query ego-subgraph for a wiki node from sorted TSV tables [--depth 1|2]"
-  search: "Fast O(log N) prefix search over wiki nodes in C locale"
-  lint: "Validate wiki schema, link integrity, and word limits [--strict] [--quiet]"
+config:
+  wiki_dir: "wiki"
+  index_file: "_index.md"
+  index_dir: "_index"
+  graph_dir: "_graph"
+  log_file: "_log.md"
+  btree_shard_max_entries: 100
+  btree_max_root_lines: 80
+  graph_default_depth: 1
 
 rules:
   - rules/behavioral.md: .rnex/plugins/karpathy-llm/rules/behavioral.md
@@ -40,7 +47,7 @@ skills:
 instructions:
   - instructions/rnex-wiki-architecture.md: .rnex/plugins/karpathy-llm/instructions/rnex-wiki-architecture.md
 templates:
-  - templates/index.md: "{wiki_dir}/index.md"
+  - templates/_index.md: "{wiki_dir}/_index.md"
   - templates/_log.md: "{wiki_dir}/_log.md"
   - templates/rnex-wiki-page.sample.md: .rnex/plugins/karpathy-llm/templates/rnex-wiki-page.template.md
   - templates/rnex-llm-wiki.sample.md: .rnex/plugins/karpathy-llm/templates/rnex-llm-wiki.sample.md

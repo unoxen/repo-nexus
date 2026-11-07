@@ -433,7 +433,7 @@ kl_ensure_wiki_files() {
   # Ensure B-Tree and Graph stores are initialized
   if command -v init_wiki_btree_store >/dev/null 2>&1; then
     init_wiki_btree_store || true
-  elif [ ! -f "$_wiki_path/index.md" ]; then
+  elif [ ! -f "$_wiki_path/_index.md" ]; then
     _kew_pdir=""
     for _kew_cand in "$_root/.rnex/plugins/karpathy-llm" "$_root/plugins/karpathy-llm"; do
       if [ -d "$_kew_cand/templates" ]; then
@@ -441,8 +441,10 @@ kl_ensure_wiki_files() {
         break
       fi
     done
-    if [ -n "$_kew_pdir" ] && [ -f "$_kew_pdir/templates/index.md" ]; then
-      cp "$_kew_pdir/templates/index.md" "$_wiki_path/index.md"
+    if [ -n "$_kew_pdir" ] && [ -f "$_kew_pdir/templates/_index.md" ]; then
+      cp "$_kew_pdir/templates/_index.md" "$_wiki_path/_index.md"
+    elif [ -n "$_kew_pdir" ] && [ -f "$_kew_pdir/templates/index.md" ]; then
+      cp "$_kew_pdir/templates/index.md" "$_wiki_path/_index.md"
     fi
   fi
 

@@ -18,19 +18,21 @@ Reference specification: [setup-karpathy-wiki.md](https://github.com/unoxen/ai-t
 
 ### 2. Multi-Repo Context Engineering & Autonomy (`rules/behavioral.md`)
 * Guidelines tailored for Repo Nexus workspaces respecting member repository autonomy and physical repository boundaries.
-* Deterministic 3-step retrieval protocol: B-Tree Root Router (`index.md`) $\to$ Targeted Leaf Shard (`_index/<shard>.md`) $\to$ Target Leaf Markdown Page.
+* Deterministic 3-step retrieval protocol: B-Tree Root Router (`_index.md`) $\to$ Targeted Leaf Shard (`_index/<shard>.md`) $\to$ Target Leaf Markdown Page.
 
 ### 3. Zero-Dependency B-Tree & TSV Graph Architecture (`instructions/rnex-wiki-architecture.md`)
 * **Intake Sources (`sources`, default: `["docs", "repos/**/README.md"]`):** Multi-value array of directory paths and glob patterns for unmodified source material (articles, transcripts, docs, meeting notes, repo READMEs).
-* **Curated Knowledge Base (`wiki_dir`, default: `wiki`):** Interlinked atomic markdown pages, each with typed frontmatter relations (`sources`, `related`, `extends`, `contradicts`, `mentioned_in`).
-* **B-Tree Root Router (`<wiki_dir>/index.md`):** Compact, strictly bounded routing table ($\le 80$ lines, zero YAML frontmatter) mapping lexicographic key ranges to leaf shard files in `_index/`.
-* **B-Tree Leaf Shards (`<wiki_dir>/_index/*.md`):** Lexicographically sorted catalogs (`overview.md`, `concepts.md`, `entities.md`, `sources.md`). Automatically split into alphabetical sub-shards (`<shard>-a-m.md`, `<shard>-n-z.md`) when exceeding capacity thresholds.
+* **Curated Knowledge Base (`wiki_dir`, default: `wiki`):** Interlinked atomic markdown pages categorized into domain concepts and repository-scoped documentation:
+  * `wiki/concepts/<slug>.md`: Universal architecture patterns, cross-cutting models, invariants, and domain decisions.
+  * `wiki/repos/<repo_scope>/<slug>.md`: Repository-scoped pages (`repos/nexus/` for nexus-level workspace docs; `repos/<member-repo>/` for member repositories).
+* **B-Tree Root Router (`<wiki_dir>/_index.md`):** Compact, strictly bounded routing table ($\le 80$ lines, zero YAML frontmatter) mapping lexicographic key ranges to leaf shard files in `_index/`.
+* **B-Tree Leaf Shards (`<wiki_dir>/_index/*.md`):** Lexicographically sorted catalogs (`concepts.md`, `repos-nexus.md`, `repos-<member-repo>.md`). Automatically split into alphabetical sub-shards (`<shard>-a-m.md`, `<shard>-n-z.md`) when exceeding capacity thresholds.
 * **Sorted TSV Property Graph (`<wiki_dir>/_graph/*.tsv`):** Plain-text adjacency lists (`nodes.tsv`, `edges_out.tsv`, `edges_in.tsv`) maintaining graph topology and supporting $O(\log N)$ binary search traversal via BSD `look` or early-exit POSIX `awk`.
 * **Audit Trail (`<wiki_dir>/_log.md`):** Shared append-only log recording ingest, graph update, and lint operations across tracked wiki pages. Inspected via `tail -n 20 _log.md`.
 
 ### 4. Standardized Agent Skills (`skills/`)
 * **`wiki-ingest.md` (User Skill: `rnex-karpathy-llm-wiki-ingest`):** Guides deterministic CLI scaffolding, graph registration in `_graph/*.tsv`, B-Tree shard rebalancing, and in-place AI enrichment for intake source documents.
-* **`wiki-lint.md` (User Skill: `rnex-karpathy-llm-wiki-lint`):** Integrity audit protocol to validate paths, recompute graph edges, detect broken `[[wikilinks]]`, verify root line budget ($\le 80$ lines), purge legacy caches, and verify sort order.
+* **`wiki-lint.md` (User Skill: `rnex-karpathy-llm-wiki-lint`):** Integrity audit protocol to validate paths, auto-migrate legacy categories to `concepts/` and `repos/`, recompute graph edges, detect broken `[[wikilinks]]`, verify root line budget ($\le 80$ lines), purge legacy caches (`hot.md`, `index.md`), and verify sort order.
 
 ---
 
@@ -40,14 +42,14 @@ To ensure workspaces remain 100% predictable, understandable, and consistent acr
 
 ### Phase 1: 100% Deterministic Initialization
 Enabling the plugin (`rnex plugin enable karpathy-llm`) performs an exact, zero-interview scaffolding step:
-* **Predictable Baseline**: Standard baseline files are created (`docs/.gitkeep`, `wiki/index.md`, `wiki/_log.md`, `wiki/_index/*.md`, `wiki/_graph/*.tsv`).
+* **Predictable Baseline**: Standard baseline files are created (`docs/.gitkeep`, `wiki/_index.md`, `wiki/_log.md`, `wiki/_index/*.md`, `wiki/_graph/*.tsv`).
 * **Scoped Assets**: Behavioral rules, wiki architecture guides, skills, commands, and templates are cleanly isolated under `.rnex/plugins/karpathy-llm/`.
 * **Zero Guesswork**: No interactive interviews, no AI-generated folder variances, and no "agent decides" ambiguities at init time.
 * **Idempotent**: Safe to run repeatedly; existing curated wiki pages are never overwritten.
 
 ### Phase 2: Evolutionary Growth & Domain Specialization (Usage Phase)
 Once initialized, the workspace structure organically evolves according to actual domain needs and source materials:
-* **Source Ingestion (`rnex-karpathy-llm-wiki-ingest`)**: As raw source documents are deposited into `./docs` and ingested, atomic pages are generated, graph edges are registered in `_graph/*.tsv`, and B-Tree shards in `_index/*.md` are automatically rebalanced.
+* **Source Ingestion (`rnex-karpathy-llm-wiki-ingest`)**: As raw source documents are deposited into `./docs` and ingested, atomic pages are generated under `wiki/concepts/` or `wiki/repos/<scope>/`, graph edges are registered in `_graph/*.tsv`, and B-Tree shards in `_index/*.md` and `_index.md` are automatically rebalanced.
 * **Customizable Guidelines**: Teams can tailor `rules/behavioral.md` and `instructions/rnex-wiki-architecture.md` for their specific conventions.
 * **Graph Maintenance (`rnex-karpathy-llm-wiki-lint`)**: The periodic lint workflow validates relation paths, verifies sort invariants, and flags broken wikilinks.
 
@@ -62,37 +64,47 @@ my-workspace/
 ├── docs/
 │   └── .gitkeep                     # Intake for unmodified source documents
 ├── wiki/
-│   ├── index.md                     # B-Tree Root Router (<= 80 lines)
+│   ├── _index.md                    # B-Tree Root Router (<= 80 lines)
 │   ├── _log.md                      # Ingestion & lint audit history
 │   ├── _index/                      # B-Tree Domain Shards (sorted LC_ALL=C)
-│   │   ├── overview.md
-│   │   ├── concepts.md
-│   │   ├── entities.md
-│   │   └── sources.md
-│   └── _graph/                      # Sorted TSV Property Graph
-│       ├── nodes.tsv
-│       ├── edges_out.tsv
-│       └── edges_in.tsv
+│   │   ├── concepts.md              # (or concepts-a-m.md, concepts-n-z.md)
+│   │   ├── repos-nexus.md           # Workspace-level nexus documentation shard
+│   │   └── repos-<member-repo>.md   # Member repository documentation shards
+│   ├── _graph/                      # Sorted TSV Property Graph
+│   │   ├── nodes.tsv
+│   │   ├── edges_out.tsv
+│   │   └── edges_in.tsv
+│   ├── concepts/                    # Curated architecture & concept pages
+│   │   └── <concept-slug>.md
+│   └── repos/                       # Repository-scoped documentation pages
+│       ├── nexus/                   # Nexus-level documentation
+│       │   └── <doc-slug>.md
+│       └── <member-repo>/           # Member repository pages (e.g. README, guides)
+│           └── <doc-slug>.md
 ├── .rnex/
 │   └── plugins/
 │       └── karpathy-llm/
 │           ├── instructions/
-│           │   └── rnex-wiki-architecture.md# LLM Wiki architecture & relation schema
+│           │   ├── rnex-wiki-architecture.md# LLM Wiki architecture & relation schema
+│           │   └── rnex-scaffolding-meta-prompt.md# Scaffolding instructions
 │           ├── rules/
 │           │   └── behavioral.md         # Cardinal principles & context engineering
 │           ├── skills/
 │           │   ├── wiki-ingest.md        # 8-step decomposition & ingestion workflow
 │           │   └── wiki-lint.md          # 10-step graph validation & maintenance workflow
-│           ├── commands/
-│           │   ├── init.sh
-│           │   ├── ingest.sh
-│           │   ├── index.sh
-│           │   ├── graph.sh
-│           │   ├── search.sh
-│           │   └── lint.sh
+│           ├── bin/
+│           │   ├── ingest.sh             # User-facing ingest command
+│           │   └── lint.sh               # User-facing lint & migration command
+│           ├── lib/
+│           │   ├── config.sh             # Plugin configuration loader
+│           │   ├── utils.sh              # Pure slug and wikilink utilities
+│           │   ├── graph_helpers.sh      # Adjacency graph compiler & ego traversal
+│           │   ├── btree_helpers.sh      # B-Tree shard compiler & rebalancer
+│           │   └── agent_query_helpers.sh# Internal O(log N) search and ego graph query
 │           └── templates/
-│               ├── rnex-wiki-page.template.md# Atomic page template with typed relations
-│               └── rnex-llm-wiki.sample.md# Sample wiki walkthrough
+│               ├── _index.md             # Baseline root router template
+│               ├── _log.md               # Baseline audit log template
+│               └── rnex-wiki-page.template.md# Atomic page template with typed relations
 └── rnex.yaml                        # Plugin configuration
 ```
 
@@ -108,8 +120,8 @@ rnex plugin enable karpathy-llm
 
 This command:
 1. Adds `karpathy-llm` to `plugins:` in `rnex.yaml`.
-2. Copies initial templates (`wiki/index.md`, `wiki/_log.md`, `wiki/_index/*.md`, `wiki/_graph/*.tsv`).
-3. Scopes `rules/`, `instructions/`, `skills/`, `commands/`, `lib/`, `bin/`, `hooks/`, `agents/`, and `templates/` into `.rnex/plugins/karpathy-llm/`.
+2. Copies initial templates (`wiki/_index.md`, `wiki/_log.md`, `wiki/_index/*.md`, `wiki/_graph/*.tsv`).
+3. Scopes `rules/`, `instructions/`, `skills/`, `bin/`, `lib/`, `hooks/`, `agents/`, and `templates/` into `.rnex/plugins/karpathy-llm/`.
 4. Reconciles workspace state, member repositories, and plugin assets via `rnex sync`.
 
 ### Option 2: Declarative in `rnex.yaml`
@@ -149,7 +161,7 @@ plugins:
     wiki_dir: wiki              # Directory for curated atomic markdown pages
     index_dir: "_index"         # Subdirectory for sorted B-Tree leaf shards
     graph_dir: "_graph"         # Subdirectory for sorted TSV property graph tables
-    btree_root_max_lines: 80    # Maximum allowed lines in root wiki/index.md router
+    btree_root_max_lines: 80    # Maximum allowed lines in root wiki/_index.md router
     btree_shard_max_entries: 100# Threshold before splitting a B-Tree shard
     graph_default_depth: 1      # Default ego-subgraph traversal depth in hops
 ```
@@ -169,7 +181,7 @@ plugins:
 
 ### CLI Subcommands
 
-The `karpathy-llm` plugin provides native subcommands via the `rnex plugin` engine:
+The `karpathy-llm` plugin exposes a streamlined 2-command CLI:
 
 ```sh
 # Ingest all configured sources and enabled member repos
@@ -181,21 +193,19 @@ rnex plugin karpathy-llm ingest --file docs/architecture.md
 rnex plugin karpathy-llm ingest --source docs/architecture.md
 rnex plugin karpathy-llm ingest --repo backend-api --quiet
 
-# Rebuild sorted TSV graph and B-Tree leaf shards
-rnex plugin karpathy-llm index --rebuild
-
-# Fast O(log N) prefix search over wiki nodes
-rnex plugin karpathy-llm search <prefix>
-
-# Query ego-subgraph dependencies and backlinks
-rnex plugin karpathy-llm graph <node_id> [--depth 1|2]
-
 # Lint wiki schema, sort invariants, and wikilink integrity
 rnex plugin karpathy-llm lint
 
 # Strict linting (exits non-zero on warnings or errors)
 rnex plugin karpathy-llm lint --strict
 ```
+
+### Internal Agent Query Operations (`_search` & `_graph`)
+
+AI coding agents navigate the wiki during task execution using high-performance internal library helpers (`lib/agent_query_helpers.sh`):
+
+* **Prefix Search (`_search <prefix>`)**: $O(\log N)$ binary search prefix lookup against `wiki/_graph/nodes.tsv` using BSD `look` or POSIX `awk` early-exit (< 1 ms latency).
+* **Ego-Subgraph Traversal (`_graph <node_id> [--depth 1|2]`)**: Traverses the sorted TSV adjacency tables to render 1-hop dependencies, backlinks, and optional 2-hop reachability.
 
 ### Summary Reference Table
 
@@ -205,7 +215,7 @@ rnex plugin karpathy-llm lint --strict
 | `wiki_dir` | Repo (`rnex.yaml`) | `string` | `wiki` | Directory containing atomic domain pages. |
 | `index_dir` | Repo (`rnex.yaml`) | `string` | `_index` | Subdirectory for sorted B-Tree leaf shards. |
 | `graph_dir` | Repo (`rnex.yaml`) | `string` | `_graph` | Subdirectory for sorted TSV property graph tables. |
-| `btree_root_max_lines` | Repo (`rnex.yaml`) | `integer` | `80` | Ceiling on lines allowed in `wiki/index.md`. |
+| `btree_root_max_lines` | Repo (`rnex.yaml`) | `integer` | `80` | Ceiling on lines allowed in `wiki/_index.md`. |
 | `btree_shard_max_entries` | Repo (`rnex.yaml`) | `integer` | `100` | Entry count threshold before automatically splitting a shard. |
 | `graph_default_depth` | Repo (`rnex.yaml`) | `integer` | `1` | Default ego-subgraph traversal depth in hops. |
 
@@ -214,9 +224,9 @@ rnex plugin karpathy-llm lint --strict
 ## Everyday Operation & Cadence
 
 1. **Intake:** Drop raw research papers, meeting notes, PRDs, or architecture specs into `./docs/` unmodified.
-2. **Ingest:** Instruct your AI assistant: *"Run wiki-ingest on docs/source-document.md"*, or run `rnex plugin karpathy-llm ingest`.
-3. **Index & Search:** Rebuild indexes with `rnex plugin karpathy-llm index --rebuild` or query nodes with `rnex plugin karpathy-llm search <keyword>`.
-4. **Maintenance:** Run `rnex plugin karpathy-llm lint` (or the `wiki-lint` workflow) to validate relations, prune orphans, and update graph edges.
+2. **Ingest:** Instruct your AI assistant: *"Run wiki-ingest on docs/source-document.md"*, or run `rnex plugin karpathy-llm ingest` (automatically rebuilds graph TSVs and B-Tree shards).
+3. **Maintenance:** Run `rnex plugin karpathy-llm lint` (or the `wiki-lint` workflow) to validate relations, purge legacy caches, and update graph edges.
+4. **Agent Navigation:** AI assistants navigate the knowledge base via `wiki/_index.md` $\to$ domain shards $\to$ target pages, querying relationships via internal agent search & graph operations.
 
 ---
 

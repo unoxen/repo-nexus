@@ -221,8 +221,10 @@ rnex plugin <name> <command> [options...]
 
 * Example: `rnex plugin karpathy-llm ingest docs/notes.md`
 * Example: `rnex plugin karpathy-llm ingest --source docs/notes.md`
-* Example: `rnex plugin karpathy-llm search auth`
-* Example: `rnex plugin karpathy-llm graph auth-svc --depth 1`
-* Example: `rnex plugin karpathy-llm index --rebuild`
+* Example: `rnex plugin karpathy-llm ingest --repo backend-api`
+* Example: `rnex plugin karpathy-llm lint`
 * Example: `rnex plugin karpathy-llm lint --strict`
-* Shorthand execution: `rnex plugin <command> [options...]` when `<command>` is unique across enabled plugins.
+* Shorthand execution: `rnex plugin <command> [options...]` when `<command>` is unique across enabled plugins (e.g. `rnex plugin ingest`).
+
+> [!NOTE]
+> Plugin commands such as `karpathy-llm ingest` and `karpathy-llm lint` automatically initialize directory structures, compile sorted TSV graph tables (`nodes.tsv`, `edges_out.tsv`, `edges_in.tsv`), and maintain B-Tree leaf shards without requiring manual indexing commands. High-speed binary search lookup (`_search`) and ego-subgraph traversal (`_graph`) run internally via agent query helpers and AI skill workflows.

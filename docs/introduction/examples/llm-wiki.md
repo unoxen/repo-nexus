@@ -63,27 +63,33 @@ rnex plugin enable karpathy-llm
 rnex sync
 ```
 
-## Wiki Ingest, Index & Graph Operations
+## Wiki Ingest & Integrity Verification
 
 ```bash
-# Ingest all intake sources and member repository READMEs
+# Ingest all intake sources and member repository READMEs (automatically builds index and graph)
 rnex plugin karpathy-llm ingest
 
-# Ingest a specific research document or design spec
+# Ingest a specific research document or design spec into wiki/concepts/
 rnex plugin karpathy-llm ingest --source specs/architecture.md
 
-# Rebuild sorted TSV property graph and B-Tree index shards
-rnex plugin karpathy-llm index --rebuild
-
-# Fast O(log N) binary search prefix lookup
-rnex plugin karpathy-llm search core
-
-# Explore node dependencies and backlinks
-rnex plugin karpathy-llm graph core-engine --depth 1
+# Ingest a specific member repository README into wiki/repos/core-engine/
+rnex plugin karpathy-llm ingest --repo core-engine
 
 # Validate wiki schema, sort invariants, and wikilink integrity
 rnex plugin karpathy-llm lint
 
-# Run strict verification before release
+# Run strict verification before release or in CI/CD pre-push hooks
 rnex plugin karpathy-llm lint --strict
 ```
+
+## Knowledge Base Navigation Architecture
+
+The curated wiki maintains a deterministic 2-level B-Tree and graph structure:
+- **`wiki/_index.md`**: B-Tree Root Router ($\le 80$ lines) organizing domain shards.
+- **`wiki/_index/`**: Lexicographically sorted leaf shards (`concepts.md`, `repos-nexus.md`, `repos-core-engine.md`).
+- **`wiki/_graph/`**: Sorted TSV property graph (`nodes.tsv`, `edges_out.tsv`, `edges_in.tsv`) supporting fast $O(\log N)$ traversal.
+- **`wiki/concepts/`**: Architectural principles, cross-cutting patterns, and domain concepts.
+- **`wiki/repos/`**: Repository-scoped documentation (`repos/nexus/` for nexus-level docs and `repos/<member-repo>/` for member repos).
+
+> [!NOTE]
+> Autonomous AI coding agents navigate this structure using internal binary search lookup (`_search`) and ego-subgraph traversal (`_graph`) helpers without requiring manual indexing commands.
