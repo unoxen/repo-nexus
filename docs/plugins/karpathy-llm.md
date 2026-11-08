@@ -1,13 +1,13 @@
 ---
 title: Karpathy LLM & Agent Knowledge Wiki Plugin
-description: Implement Andrej Karpathy's 4 cardinal principles for coding agents and autonomous zero-dependency LLM Wiki architecture in Repo Nexus.
+description: Implement Andrej Karpathy's 4 cardinal principles for coding agents and autonomous zero-dependency flat B-Tree LLM Wiki architecture in Repo Nexus.
 ---
 
 # Karpathy LLM & Agent Knowledge Wiki Plugin
 
 The **`karpathy-llm`** plugin packages Andrej Karpathy's agent behavioral principles, multi-repo context engineering standards, and the autonomous **Karpathy LLM Wiki** knowledge architecture for AI coding assistants.
 
-It requires **zero external vector databases, embedding pipelines, or heavy MCP infrastructure** — knowledge is indexed as a 2-level B-Tree sharded catalog, maintained as a sorted TSV property graph, and represented as interlinked markdown pages with typed YAML frontmatter that AI agents navigate natively.
+It requires **zero external vector databases, embedding pipelines, or heavy MCP infrastructure** — knowledge is indexed directly in place into a flat B-Tree sharded index (`wiki/*.md`), organized by a bounded root router (`wiki/index.md`), and recorded in a chronological audit log (`wiki/log.md`) that AI agents navigate natively.
 
 ![Karpathy LLM Wiki](/karpathy-llm.jpeg)
 
@@ -25,41 +25,33 @@ It requires **zero external vector databases, embedding pipelines, or heavy MCP 
 - Guidelines tailored specifically for multi-repo virtual workspaces:
   - Always read workspace configuration (`.local.rnex.yaml` and `rnex.yaml`) first.
   - Respect member repository autonomy (`<repos_dir>/<name>/`, default `repos/<name>/`).
-  - Follow the deterministic 3-step retrieval protocol: B-Tree Root Router (`_index.md`) $\to$ Domain Shard (`_index/<shard>.md`) $\to$ Target Leaf Page.
+  - Follow the deterministic 3-step retrieval protocol: B-Tree Root Router (`wiki/index.md`) $\to$ Domain Shard (`wiki/<shard>.md`) $\to$ In-Place Source Document.
   - Perform Git commits directly inside individual member repositories.
 
-### 3. Autonomous LLM Wiki Architecture
-A self-healing, agent-maintained knowledge graph structured as:
+### 3. Flat Zero-Prefix B-Tree Wiki Architecture
+A self-healing, agent-maintained knowledge base structured directly under `wiki/`:
 
 - **Authoritative Source Materials**:
   - Unmodified source documents (`README.md`, `docs/*.md`, `RFC/*.md`, and member repositories `<repos_dir>/<name>/**/*.md`) are inspected and indexed directly in place.
   - Zero duplicate file copies and zero symbolic links (`wiki/concepts/` and `wiki/repos/` are completely eradicated).
   - Intake sources are fully configurable via `sources` under `plugins.karpathy-llm`.
-- **`wiki/_index.md` B-Tree Root Router**:
-  - Compact, strictly bounded routing table ($\le 80$ lines, zero YAML frontmatter) organizing domain shards in `wiki/_index/` with key ranges and graph metrics.
-- **`wiki/_index/` Sorted B-Tree Leaf Shards**:
-  - Lexicographically sorted domain leaf pages (`repo-nexus.md`, `repo-nexus-<subscope>.md`, `repos-<member-repo>.md`). Automatically split into alphabetical sub-shards (e.g. `repo-nexus-docs-a-m.md`, `repo-nexus-docs-n-z.md`) when exceeding capacity thresholds.
-- **`wiki/_graph/` Sorted TSV Property Graph**:
-  - Tab-separated tables (`nodes.tsv`, `edges_out.tsv`, `edges_in.tsv`) maintaining adjacency relationships queried via \(O(\log N)\) binary search.
-- **`wiki/_log.md` Audit Trail**:
-  - Shared append-only log recording ingest and lint operations across tracked wiki pages with timestamped details and source attribution. Inspected with `tail -n 20 _log.md`.
+- **`wiki/index.md` B-Tree Root Router**:
+  - Compact, strictly bounded routing table ($\le 80$ lines, zero YAML frontmatter) organizing domain shards with key ranges and entry counts.
+- **`wiki/repo-nexus*.md` & `wiki/repos-*.md` Flat Leaf Shards**:
+  - Lexicographically sorted domain leaf pages (`repo-nexus.md`, `repos-<member-repo>.md`, `repos-<member-repo>-<subscope>.md`). Automatically split into alphabetical sub-shards (e.g. `repo-nexus-a-m.md`, `repo-nexus-n-z.md`) when exceeding capacity thresholds.
+- **`wiki/log.md` Operational Audit Trail**:
+  - Shared append-only log recording ingest and lint operations with UTC timestamped details and source attribution. Inspected with `tail -n 20 wiki/log.md`.
 
 ### 4. Standardized Agent Workflows
 - **`wiki-ingest.md` (Ingestion Protocol)**:
   - Scans and indexes authoritative workspace documentation in place.
-  - Rebuilds `wiki/_graph/*.tsv` via two-pass scanning, registers forward and reverse edges symmetrically, rebalances B-Tree shards in `wiki/_index/`, compiles `wiki/_index.md`, and updates `wiki/_log.md`.
+  - Rebalances flat B-Tree leaf shards directly in `wiki/`, compiles `wiki/index.md`, and updates `wiki/log.md`.
 - **`wiki-lint.md` (Integrity Audit Protocol)**:
   - Auto-heals directory structures and purges legacy categories (`concepts/`, `repos/`, `overview/`, `entities/`, `sources/`).
-  - Purges deprecated legacy files (`hot.md`, `index.md`).
+  - Purges deprecated legacy files (`hot.md`, `_index.md`, `_log.md`) and subdirectories (`_graph/`, `_index/`).
   - Enforces zero symbolic links across the `wiki/` directory.
-  - Detects broken `[[wikilinks]]` across the property graph.
-  - Verifies strict `LC_ALL=C` sorting across TSV tables.
-  - Enforces forward/reverse edge symmetry (`edges_out.tsv` count == `edges_in.tsv` count).
-  - Enforces the $\le 80$ line budget on root `wiki/_index.md`.
-  - Automatically records audit entries in `_log.md`.
-
-### 5. Specialized Agent (`agents/rnex-wiki-curator.agent.md`)
-- A dedicated autonomous curator agent configured to maintain the LLM Wiki graph, execute ingestion protocols, and perform periodic graph integrity audits.
+  - Enforces the $\le 80$ line budget on root `wiki/index.md`.
+  - Automatically records audit entries in `wiki/log.md`.
 
 ---
 
@@ -84,13 +76,12 @@ Configure options under `plugins.karpathy-llm` in `rnex.yaml` or `.local.rnex.ya
 ```yaml
 plugins:
   karpathy-llm:
-    # Directory paths relative to workspace root (defaults shown)
-    wiki_dir: wiki              # Directory for curated atomic markdown pages (default: wiki)
-    index_dir: "_index"         # Subdirectory for sorted B-Tree leaf shards (default: _index)
-    graph_dir: "_graph"         # Subdirectory for sorted TSV property graph tables (default: _graph)
-    btree_root_max_lines: 80    # Maximum allowed lines in root wiki/_index.md router (default: 80)
+    # Directory paths and control files relative to workspace root (defaults shown)
+    wiki_dir: wiki              # Directory for curated flat markdown shards (default: wiki)
+    index_file: "index.md"      # B-Tree Root Router filename (default: index.md)
+    log_file: "log.md"          # Chronological audit log filename (default: log.md)
+    btree_root_max_lines: 80    # Maximum allowed lines in root wiki/index.md router (default: 80)
     btree_shard_max_entries: 100# Threshold before splitting a B-Tree shard (default: 100)
-    graph_default_depth: 1      # Default ego-subgraph traversal depth in hops (default: 1)
     sources:                    # Intake documents: directories and/or glob patterns
       - docs                    #   directory: all files (hidden dirs and node_modules pruned)
       - "repos/**/README.md"    #   recursive glob (quote it); disabled repos are excluded
@@ -102,12 +93,11 @@ plugins:
 
 | Option | Type | Default | Description |
 |:---|:---|:---|:---|
-| `wiki_dir` | string | `wiki` | Directory containing curated atomic markdown pages. |
-| `index_dir` | string | `_index` | Subdirectory containing sorted B-Tree leaf shards. |
-| `graph_dir` | string | `_graph` | Subdirectory containing sorted TSV property graph tables. |
-| `btree_root_max_lines` | integer | `80` | Ceiling on lines allowed in `wiki/_index.md`. |
+| `wiki_dir` | string | `wiki` | Directory containing flat markdown shards and router files. |
+| `index_file` | string | `index.md` | B-Tree Root Router filename within `wiki_dir`. |
+| `log_file` | string | `log.md` | Chronological audit log filename within `wiki_dir`. |
+| `btree_root_max_lines` | integer | `80` | Ceiling on lines allowed in `wiki/index.md`. |
 | `btree_shard_max_entries` | integer | `100` | Entry count threshold before automatically splitting a shard. |
-| `graph_default_depth` | integer | `1` | Default ego-subgraph traversal depth in hops. |
 | `sources` | list | `[docs, "repos/**/README.md"]` | Intake directories and/or glob patterns relative to workspace root. Overridable in `.local.rnex.yaml`. |
 | `enabled` | boolean | `true` | Enable or disable the plugin. Overridable in `.local.rnex.yaml`. |
 
@@ -115,71 +105,62 @@ plugins:
 
 ### Intake Sources (`sources`)
 
-The `sources` setting defines where the Karpathy LLM Wiki discovers raw intake documents for `wiki-ingest` and change verification:
+The `sources` setting defines where the Karpathy LLM Wiki discovers documentation for in-place indexing:
 
-- **Directory Paths (e.g. `docs`, `notes`)**: Repo Nexus recursively scans the directory for all files. Hidden directories (starting with `.`) and `node_modules` are automatically pruned.
+- **Directory Paths (e.g. `docs`, `notes`)**: Repo Nexus recursively scans the directory for all Markdown files. Hidden directories (starting with `.`) and `node_modules` are automatically pruned.
 - **Recursive Globs (e.g. `"repos/**/README.md"`)**: Pure POSIX `/bin/sh` pattern resolution matches files at arbitrary directory depths. Always quote globs containing `*` in YAML. Directories named `.git`, `.rnex`, and `node_modules` are pruned during traversal.
-- **Single-Level Globs (e.g. `repos/*/README.md` or `docs/*.md`)**: Matches files at a fixed directory level.
 - **Active Repository Filtering**: Any resolved path located within `<repos_dir>/<name>/` (default `repos/<name>/`) is checked against member repository status. If a repository is disabled (`enabled: false`) in `rnex.yaml` or `.local.rnex.yaml`, its files are automatically excluded.
 - **Two-Level Configuration Precedence**: If `sources` is declared in `.local.rnex.yaml`, it completely overrides the `sources` list defined in `rnex.yaml`.
-- **Legacy Migration**: Existing configurations with `raw_dir: <dir>` are automatically rewritten to a `sources` list during `rnex sync`.
-- **Directory Provisioning**: When running `rnex sync`, explicit directory entries (such as `docs`) are created automatically if missing. Glob patterns (containing `*`, `?`, or `[`) and file targets are never converted into directories.
 
 ---
 
 ## Plugin CLI Commands
 
-The `karpathy-llm` plugin exposes a streamlined, focused 2-command CLI interface. Separate `init` and `index` commands are not needed because directory scaffolding, graph edge updates, and B-Tree rebalancing occur automatically inside `ingest` and `lint`:
+The `karpathy-llm` plugin exposes a streamlined, focused 2-command CLI surface:
 
 ### `rnex plugin karpathy-llm ingest`
 
-Ingests and indexes authoritative workspace documents and member repository READMEs directly in place, updates graph edges in `wiki/_graph/*.tsv`, and rebalances B-Tree shards in `wiki/_index/` and `wiki/_index.md`.
+Ingests and indexes authoritative workspace documents and member repository documentation directly in place into flat B-Tree shards in `wiki/*.md` and rebalances `wiki/index.md`:
 
 ```sh
-rnex plugin karpathy-llm ingest [options] [<file_path>]
+# Ingest all configured sources and enabled member repos
+rnex plugin karpathy-llm ingest
+
+# Ingest a specific markdown source file directly in place
+rnex plugin karpathy-llm ingest docs/architecture.md
+# Or using the --file flag
+rnex plugin karpathy-llm ingest --file docs/architecture.md
 ```
 
-| Option | Type | Default | Description |
+| Argument / Option | Type | Default | Description |
 |:---|:---|:---|:---|
 | `<file_path>` | string | *(all sources)* | Ingest a single specified markdown file directly. |
 | `--file, -f <path>` | string | *(all sources)* | Ingest a specific markdown file. |
-| `--source, -s <path>` | string | *(all sources)* | Ingest a specific markdown file or intake directory instead of all configured `sources`. |
-| `--repo <name>` | string | *(all enabled repos)* | Ingest a specific member repository README (`wiki/repos/<name>/<name>-readme.md`). |
-| `-q, --quiet` | boolean | `false` | Suppress non-error informational progress messages. |
 | `-h, --help` | boolean | `false` | Display command usage and options. |
 
 ### `rnex plugin karpathy-llm lint`
 
-Audits wiki graph integrity, validates required YAML frontmatter keys, verifies `LC_ALL=C` sorting across TSV tables, detects broken `[[wikilinks]]`, enforces the $\le 80$ line ceiling on `wiki/_index.md`, auto-migrates legacy pages to the `concepts/` and `repos/` taxonomy, and purges deprecated `hot.md` or `index.md` files with audit logging.
+Audits wiki integrity, purges legacy categories and files, enforces zero symbolic links, verifies the $\le 80$ line ceiling on `wiki/index.md`, and updates `wiki/log.md`:
 
 ```sh
-rnex plugin karpathy-llm lint [options]
+rnex plugin karpathy-llm lint
 ```
-
-| Option | Type | Default | Description |
-|:---|:---|:---|:---|
-| `--strict` | boolean | `false` | Treat warnings (broken sources, broken wikilinks, line budget overflow) as errors and exit with a non-zero code. |
-| `-q, --quiet` | boolean | `false` | Suppress non-error informational messages. |
-| `-h, --help` | boolean | `false` | Display command usage and options. |
 
 ---
 
-## Internal Agent Query Operations (`_search` & `_graph`)
+## Retrieval Protocol: How AI Agents Query the Wiki
 
-While human developers interact exclusively via `ingest` and `lint`, autonomous AI coding agents navigate the wiki during task execution using high-performance internal library helpers (`lib/agent_query_helpers.sh`):
+Autonomous AI coding agents navigate the wiki using a deterministic 3-step retrieval protocol without needing vector embeddings or external MCP services:
 
-* **Prefix Search (`_search <prefix>`)**:
-  Performs $O(\log N)$ binary search prefix lookup against `wiki/_graph/nodes.tsv` using BSD `look` or early-exit POSIX `awk`, returning matching node slugs, shard locations, and summaries in under 1 ms.
-* **Ego-Subgraph Traversal (`_graph <node_id> [--depth 1|2]`)**:
-  Traverses the sorted TSV adjacency tables to render the ego-subgraph for a queried node, displaying its metadata, 1-hop outbound dependencies, 1-hop inbound backlinks, and optional 2-hop reachability.
-
-These routines are invoked directly by the plugin's agent skills (`wiki-ingest` and `wiki-lint`) without exposing unnecessary CLI commands to user terminals.
+1. **Step 1 — Root Read**: Read `wiki/index.md` ($\le 80$ lines) to locate the target shard file (`repo-nexus*.md` or `repos-<member>*.md`).
+2. **Step 2 — Leaf Shard Read**: Read the target shard directly in `wiki/` to find the exact source file path and summary.
+3. **Step 3 — In-Place Access**: Read the authoritative source file directly where it resides in the workspace. Cross-references and backlinks are discovered natively using standard workspace search tools (`grep`, `ripgrep`).
 
 ---
 
 ## Automated Git Hooks Integration
 
-Integrate wiki integrity checks into your Git workflow using the declarative `git.hooks` configuration in `rnex.yaml`:
+Integrate wiki integrity checks into your Git workflow using declarative `git.hooks` configuration in `rnex.yaml`:
 
 ```yaml
 git:
@@ -190,31 +171,24 @@ git:
       - "rnex sync --quiet"
 ```
 
-During `rnex init` or `rnex sync`, Repo Nexus installs Git hook dispatchers in `.git/hooks/` that automatically execute the configured commands.
-
 ---
 
 ## Generated Directory Structure
 
-When `karpathy-llm` is enabled, it scaffolds:
+When `karpathy-llm` is enabled, it maintains:
 
 ```text
 my-workspace/
 ├── docs/                            # Workspace documentation
-│   └── .gitkeep
+│   └── architecture.md
 ├── repos/                           # Member repositories (inspected in-place)
 │   └── <member-repo>/
 │       └── README.md
 ├── wiki/
-│   ├── _index.md                    # B-Tree Root Router (<= 80 lines)
-│   ├── _log.md                      # Append-only audit history
-│   ├── _index/                      # B-Tree Domain Shards (sorted LC_ALL=C)
-│   │   ├── repo-nexus.md            # (or repo-nexus-<subscope>.md, e.g. -a-m.md)
-│   │   └── repos-<member-repo>.md   # Member repository documentation shards
-│   └── _graph/                      # Sorted TSV Property Graph
-│       ├── nodes.tsv
-│       ├── edges_out.tsv
-│       └── edges_in.tsv
+│   ├── index.md                     # B-Tree Root Router (<= 80 lines)
+│   ├── log.md                       # Chronological audit history
+│   ├── repo-nexus.md                # Nexus repo shard (or repo-nexus-a-m.md, etc.)
+│   └── repos-<member-repo>.md       # Member repo shard (e.g. repos-backend-apps.md)
 ├── .rnex/
 │   └── plugins/
 │       └── karpathy-llm/
@@ -229,16 +203,11 @@ my-workspace/
 │           ├── bin/
 │           │   ├── ingest.sh
 │           │   └── lint.sh
-│           ├── lib/
-│           │   ├── config.sh
-│           │   ├── utils.sh
-│           │   ├── source_helpers.sh
-│           │   ├── graph_helpers.sh
-│           │   ├── btree_helpers.sh
-│           │   └── agent_query_helpers.sh
-│           └── templates/
-│               ├── _index.md
-│               └── _log.md
+│           └── lib/
+│               ├── config.sh
+│               ├── utils.sh
+│               ├── source_helpers.sh
+│               └── btree_helpers.sh
 └── rnex.yaml
 ```
 
@@ -252,7 +221,7 @@ The `karpathy-llm` plugin encapsulates its agentic skills in `.rnex/plugins/karp
 
 During `rnex sync`, its `after_sync.sh` lifecycle hook automatically registers zero-logic User Skill pointers (`rnex-karpathy-llm-wiki-ingest` and `rnex-karpathy-llm-wiki-lint`) across all enabled AI provider directories (`.cursor/rules/`, `.claude/skills/`, `.agents/skills/`, `.codex/skills/`, `.github/skills/`, `.windsurf/rules/`).
 
-When running `rnex plugin disable karpathy-llm`, its `before_plugin_disable.sh` lifecycle hook automatically unregisters the User Skills from all provider directories, while keeping core workspace skills intact.
+When running `rnex plugin disable karpathy-llm`, its lifecycle hook automatically unregisters the User Skills from all provider directories, while keeping user data in `wiki/` intact.
 
 ---
 

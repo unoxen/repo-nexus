@@ -2,7 +2,7 @@
 # shellcheck shell=sh
 # =============================================================================
 # File: plugins/karpathy-llm/hooks/post-sync.sh
-# Architectural Layer: Lifecycle Hook (after_sync / post-sync)
+# Architectural Layer: Lifecycle Hook (post-sync)
 # Single Responsibility: Run wiki lint and synchronization during rnex sync.
 # =============================================================================
 set -e

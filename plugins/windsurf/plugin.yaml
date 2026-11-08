@@ -1,5 +1,5 @@
 name: windsurf
-version: 0.9.7
+version: 0.9.8
 description: Windsurf IDE integration (maintains .windsurfrules and generates user skills in .windsurf/rules/)
 author: unoxen
 homepage: https://github.com/unoxen/repo-nexus

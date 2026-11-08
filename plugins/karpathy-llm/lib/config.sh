@@ -3,26 +3,29 @@
 # =============================================================================
 # File: plugins/karpathy-llm/lib/config.sh
 # Architectural Layer: Configuration Management Contract (Fail-Fast)
-# Single Responsibility: Validate and expose immutable runtime configuration
-# variables for the Karpathy LLM Wiki plugin (Zero Hardcoding / Fail-Fast).
-# Patterns Applied: Singleton Config Contract, Dependency Inversion (DIP).
-# Security (OWASP A03/A05): Rejects path traversal sequences ("..") and enforces positive
-# integer bounds on B-Tree and Graph thresholds.
+# Single Responsibility: Validate and expose read-only runtime configuration
+# contracts for the flat Karpathy LLM Wiki B-Tree engine (wiki/*.md).
+# Patterns Applied: Singleton Configuration Contract, Dependency Inversion (DIP).
+# Standards: POSIX Shell (/bin/sh), OWASP A03/A04 Input Validation.
 # =============================================================================
 
 # Guard against multiple inclusion
-[ "${RNEX_KARPATHY_CONFIG_SH_SOURCED:-0}" = "1" ] && return 0
+if [ "${RNEX_KARPATHY_CONFIG_SH_SOURCED:-0}" = "1" ]; then
+    # shellcheck disable=SC2317
+    return 0 2>/dev/null || exit 0
+fi
 RNEX_KARPATHY_CONFIG_SH_SOURCED=1
 
 # -----------------------------------------------------------------------------
 # load_karpathy_wiki_config
-# Summary: Initializes and validates all RNEX_WIKI_* configuration variables.
-# @param $1: workspace_root - Optional workspace root path (defaults to PWD or RNEX_WORKSPACE_ROOT).
-# @returns: 0 on valid configuration; 1 on schema or security validation error.
-# @sideEffects: Exports read-only RNEX_WIKI_* environment contracts.
+# Summary: Initializes, validates, and exports immutable runtime configuration
+#          contracts for the flat Karpathy LLM Wiki B-Tree engine.
+# @param $1: ws_root - Optional workspace root path (defaults to RNEX_WORKSPACE_ROOT or PWD).
+# @returns: 0 on valid configuration; 1 on schema or security traversal error.
+# @sideEffects: Exports read-only RNEX_WIKI_* configuration environment variables.
 # -----------------------------------------------------------------------------
 load_karpathy_wiki_config() {
-    _ws_root="${1:-${NEXUS_DIR:-${RNEX_ROOT:-${RNEX_WORKSPACE_ROOT:-$(pwd)}}}}"
+    _ws_root="${1:-${RNEX_WORKSPACE_ROOT:-$(pwd)}}"
 
     # Reject path traversal in workspace root (OWASP A03)
     case "$_ws_root" in
@@ -71,6 +74,7 @@ load_karpathy_wiki_config() {
         [ -n "$RNEX_WIKI_REL_DIR" ] || RNEX_WIKI_REL_DIR="wiki"
     fi
 
+    # Reject path traversal or absolute paths in wiki_dir (OWASP A03)
     case "$RNEX_WIKI_REL_DIR" in
         *".."*|/*)
             printf 'Error [config]: wiki_dir must be a safe workspace-relative path.\n' >&2
@@ -78,97 +82,62 @@ load_karpathy_wiki_config() {
             ;;
     esac
 
-    # Resolve root router filename (_index.md)
+    # Resolve root router filename (index.md)
     if [ -n "${RNEX_CFG_INDEX_FILE:-}" ]; then
         _idx_name="$RNEX_CFG_INDEX_FILE"
     else
         _idx_name="$(_lookup_karpathy_cfg "index_file")"
-        [ -n "$_idx_name" ] || _idx_name="_index.md"
+        [ -n "$_idx_name" ] || _idx_name="index.md"
     fi
 
-    # Resolve audit log filename (_log.md)
+    # Resolve audit log filename (log.md)
     if [ -n "${RNEX_CFG_LOG_FILE:-}" ]; then
         _log_name="$RNEX_CFG_LOG_FILE"
     else
         _log_name="$(_lookup_karpathy_cfg "log_file")"
-        [ -n "$_log_name" ] || _log_name="_log.md"
+        [ -n "$_log_name" ] || _log_name="log.md"
     fi
 
-    # Resolve B-Tree shard directory name (_index)
-    if [ -n "${RNEX_CFG_INDEX_DIR:-}" ]; then
-        _idx_dir_name="$RNEX_CFG_INDEX_DIR"
-    else
-        _idx_dir_name="$(_lookup_karpathy_cfg "index_dir")"
-        [ -n "$_idx_dir_name" ] || _idx_dir_name="_index"
-    fi
-
-    # Resolve TSV graph directory name (_graph)
-    if [ -n "${RNEX_CFG_GRAPH_DIR:-}" ]; then
-        _grp_dir_name="$RNEX_CFG_GRAPH_DIR"
-    else
-        _grp_dir_name="$(_lookup_karpathy_cfg "graph_dir")"
-        [ -n "$_grp_dir_name" ] || _grp_dir_name="_graph"
-    fi
-
-    # Core directory & file contracts
+    # Core directory and file paths (Zero Underscore Prefixes)
     RNEX_WIKI_ROOT="${RNEX_WORKSPACE_ROOT}/${RNEX_WIKI_REL_DIR}"
     RNEX_WIKI_INDEX_FILE="${RNEX_WIKI_ROOT}/${_idx_name}"
     RNEX_WIKI_LOG_FILE="${RNEX_WIKI_ROOT}/${_log_name}"
 
-    # Tier 2 B-Tree Shards & Tier 3 Property Graph directories
-    RNEX_WIKI_BTREE_DIR="${RNEX_WIKI_ROOT}/${_idx_dir_name}"
-    RNEX_WIKI_GRAPH_DIR="${RNEX_WIKI_ROOT}/${_grp_dir_name}"
-    RNEX_WIKI_NODES_TSV="${RNEX_WIKI_GRAPH_DIR}/nodes.tsv"
-    RNEX_WIKI_EDGES_OUT_TSV="${RNEX_WIKI_GRAPH_DIR}/edges_out.tsv"
-    RNEX_WIKI_EDGES_IN_TSV="${RNEX_WIKI_GRAPH_DIR}/edges_in.tsv"
-
-    # Numeric capacity thresholds with positive integer validation
-    RNEX_WIKI_BTREE_SHARD_MAX_ENTRIES="${RNEX_CFG_BTREE_SHARD_MAX_ENTRIES:-}"
-    if [ -z "$RNEX_WIKI_BTREE_SHARD_MAX_ENTRIES" ]; then
+    # B-Tree Capacity Constraints
+    if [ -n "${RNEX_CFG_BTREE_SHARD_MAX_ENTRIES:-}" ]; then
+        RNEX_WIKI_BTREE_SHARD_MAX_ENTRIES="$RNEX_CFG_BTREE_SHARD_MAX_ENTRIES"
+    else
         RNEX_WIKI_BTREE_SHARD_MAX_ENTRIES="$(_lookup_karpathy_cfg "btree_shard_max_entries")"
+        [ -n "$RNEX_WIKI_BTREE_SHARD_MAX_ENTRIES" ] || RNEX_WIKI_BTREE_SHARD_MAX_ENTRIES=100
     fi
-    [ -n "$RNEX_WIKI_BTREE_SHARD_MAX_ENTRIES" ] || RNEX_WIKI_BTREE_SHARD_MAX_ENTRIES=100
 
-    RNEX_WIKI_BTREE_MAX_ROOT_LINES="${RNEX_CFG_BTREE_MAX_ROOT_LINES:-${RNEX_CFG_BTREE_ROOT_MAX_LINES:-}}"
-    if [ -z "$RNEX_WIKI_BTREE_MAX_ROOT_LINES" ]; then
-        RNEX_WIKI_BTREE_MAX_ROOT_LINES="$(_lookup_karpathy_cfg "btree_max_root_lines")"
-        [ -n "$RNEX_WIKI_BTREE_MAX_ROOT_LINES" ] || RNEX_WIKI_BTREE_MAX_ROOT_LINES="$(_lookup_karpathy_cfg "btree_root_max_lines")"
+    if [ -n "${RNEX_CFG_BTREE_ROOT_MAX_LINES:-}" ]; then
+        RNEX_WIKI_BTREE_MAX_ROOT_LINES="$RNEX_CFG_BTREE_ROOT_MAX_LINES"
+    else
+        RNEX_WIKI_BTREE_MAX_ROOT_LINES="$(_lookup_karpathy_cfg "btree_root_max_lines")"
+        [ -n "$RNEX_WIKI_BTREE_MAX_ROOT_LINES" ] || RNEX_WIKI_BTREE_MAX_ROOT_LINES=80
     fi
-    [ -n "$RNEX_WIKI_BTREE_MAX_ROOT_LINES" ] || RNEX_WIKI_BTREE_MAX_ROOT_LINES=80
-    RNEX_WIKI_BTREE_ROOT_MAX_LINES="$RNEX_WIKI_BTREE_MAX_ROOT_LINES"
-
-    RNEX_WIKI_GRAPH_DEFAULT_DEPTH="${RNEX_CFG_GRAPH_DEFAULT_DEPTH:-}"
-    if [ -z "$RNEX_WIKI_GRAPH_DEFAULT_DEPTH" ]; then
-        RNEX_WIKI_GRAPH_DEFAULT_DEPTH="$(_lookup_karpathy_cfg "graph_default_depth")"
-    fi
-    [ -n "$RNEX_WIKI_GRAPH_DEFAULT_DEPTH" ] || RNEX_WIKI_GRAPH_DEFAULT_DEPTH=1
 
     case "$RNEX_WIKI_BTREE_SHARD_MAX_ENTRIES" in
         ''|*[!0-9]*|0) RNEX_WIKI_BTREE_SHARD_MAX_ENTRIES=100 ;;
     esac
     case "$RNEX_WIKI_BTREE_MAX_ROOT_LINES" in
-        ''|*[!0-9]*|0) RNEX_WIKI_BTREE_MAX_ROOT_LINES=80; RNEX_WIKI_BTREE_ROOT_MAX_LINES=80 ;;
+        ''|*[!0-9]*|0) RNEX_WIKI_BTREE_MAX_ROOT_LINES=80 ;;
     esac
-    case "$RNEX_WIKI_GRAPH_DEFAULT_DEPTH" in
-        ''|*[!0-9]*|0) RNEX_WIKI_GRAPH_DEFAULT_DEPTH=1 ;;
-    esac
+    RNEX_WIKI_BTREE_ROOT_MAX_LINES="$RNEX_WIKI_BTREE_MAX_ROOT_LINES"
 
     export RNEX_WORKSPACE_ROOT RNEX_WIKI_ROOT RNEX_WIKI_INDEX_FILE RNEX_WIKI_LOG_FILE
-    export RNEX_WIKI_BTREE_DIR RNEX_WIKI_GRAPH_DIR RNEX_WIKI_NODES_TSV
-    export RNEX_WIKI_EDGES_OUT_TSV RNEX_WIKI_EDGES_IN_TSV
     export RNEX_WIKI_BTREE_SHARD_MAX_ENTRIES RNEX_WIKI_BTREE_MAX_ROOT_LINES RNEX_WIKI_BTREE_ROOT_MAX_LINES
-    export RNEX_WIKI_GRAPH_DEFAULT_DEPTH
 
-    RNEX_KARPATHY_CONFIG_LOADED=1
     return 0
 }
 
 # -----------------------------------------------------------------------------
 # load_wiki_config_contract
 # Summary: Backwards-compatible contract loader aliasing load_karpathy_wiki_config.
-# @param $1: workspace_root - Optional workspace root path.
+# @param $1: ws_root - Optional workspace root path.
 # @returns: 0 on valid configuration; 1 on schema validation error.
-# @sideEffects: Exports read-only RNEX_WIKI_* configuration environment variables.
+# @sideEffects: Delegates directly to load_karpathy_wiki_config.
 # -----------------------------------------------------------------------------
 load_wiki_config_contract() {
     load_karpathy_wiki_config "$@"
@@ -178,7 +147,7 @@ load_wiki_config_contract() {
 # is_repo_enabled
 # Summary: Determines whether a member repository is enabled or disabled
 #          in rnex.yaml or .local.rnex.yaml.
-# @param $1: repo_name - Target repository name.
+# @param $1: repo_name - Target member repository identifier.
 # @returns: 0 if enabled (or default enabled); 1 if explicitly disabled.
 # @pure
 # -----------------------------------------------------------------------------
@@ -211,18 +180,17 @@ is_repo_enabled() {
 
 # -----------------------------------------------------------------------------
 # discover_enabled_member_repos
-# Summary: Discovers active member repository names from ./repos/* and/or
-#          rnex.yaml so the wiki maintains at least one repos-<member>.md shard
-#          per active member repository alongside repo-nexus.md.
+# Summary: Discovers active, enabled member repository names from ./repos/*
+#          and the manifest rnex.yaml so flat B-Tree shards (wiki/repos-*.md)
+#          are maintained per active member repo.
 # @returns: Newline-delimited list of canonical member repo names on stdout.
-# @sideEffects: Reads filesystem ./repos/ directory and rnex.yaml manifest.
+# @sideEffects: Inspects filesystem ./repos/ directory and rnex.yaml manifest.
 # -----------------------------------------------------------------------------
 discover_enabled_member_repos() {
     _repos_base="${RNEX_WORKSPACE_ROOT}/${RNEX_CFG_REPOS_DIR:-repos}"
     _manifest="${RNEX_WORKSPACE_ROOT}/rnex.yaml"
 
     {
-        # 1. Discover physical member repo directories under ./repos/
         if [ -d "$_repos_base" ]; then
             for _d in "$_repos_base"/*; do
                 [ -d "$_d" ] || continue
@@ -231,12 +199,6 @@ discover_enabled_member_repos() {
             done
         fi
 
-        # 2. Query core yaml_list_repos if available in runtime
-        if command -v yaml_list_repos >/dev/null 2>&1; then
-            yaml_list_repos 2>/dev/null || true
-        fi
-
-        # 3. Parse declared repo keys under `repos:` in rnex.yaml if present
         if [ -f "$_manifest" ]; then
             LC_ALL=C awk '
                 /^repos:[[:space:]]*$/ { in_repos=1; next }

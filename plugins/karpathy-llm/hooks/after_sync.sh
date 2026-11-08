@@ -50,7 +50,7 @@ fi
 # Clean up obsolete leaked root ./raw and ./wiki directories if non-default paths are configured
 command -v _clean_leaked_plugin_dirs >/dev/null 2>&1 && _clean_leaked_plugin_dirs "$_root" "$_raw" "$_wiki"
 
-# Ensure configured wiki_dir and default control files (index.md, _log.md) exist
+# Ensure configured wiki_dir and default control files (index.md, log.md) exist
 kl_ensure_wiki_files
 
 # Clean up legacy staging directory only if empty or positively verified as managed duplicate copies

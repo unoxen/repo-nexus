@@ -219,12 +219,11 @@ Executes a subcommand exposed by an enabled plugin:
 rnex plugin <name> <command> [options...]
 ```
 
+* Example: `rnex plugin karpathy-llm ingest`
 * Example: `rnex plugin karpathy-llm ingest docs/notes.md`
-* Example: `rnex plugin karpathy-llm ingest --source docs/notes.md`
-* Example: `rnex plugin karpathy-llm ingest --repo backend-api`
+* Example: `rnex plugin karpathy-llm ingest --file docs/notes.md`
 * Example: `rnex plugin karpathy-llm lint`
-* Example: `rnex plugin karpathy-llm lint --strict`
 * Shorthand execution: `rnex plugin <command> [options...]` when `<command>` is unique across enabled plugins (e.g. `rnex plugin ingest`).
 
 > [!NOTE]
-> Plugin commands such as `karpathy-llm ingest` and `karpathy-llm lint` automatically initialize directory structures, compile sorted TSV graph tables (`nodes.tsv`, `edges_out.tsv`, `edges_in.tsv`), and maintain B-Tree leaf shards without requiring manual indexing commands. High-speed binary search lookup (`_search`) and ego-subgraph traversal (`_graph`) run internally via agent query helpers and AI skill workflows.
+> Plugin commands such as `karpathy-llm ingest` and `karpathy-llm lint` automatically initialize directory structures, maintain flat B-Tree leaf shards directly in `wiki/*.md`, compile the bounded root router `wiki/index.md` ($\le 80$ lines), and track chronological changes in `wiki/log.md` with zero symlinks and zero property graph dependencies. Autonomous agents navigate the structure via a 3-step retrieval protocol without requiring external databases or proprietary MCPs.

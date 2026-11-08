@@ -47,7 +47,7 @@ In a Repo Nexus workspace, independent repositories are organized into `./repos/
    - Rely on active workspace context, indexing, and compiled documentation rather than re-scanning raw files repeatedly.
 
 4. **In-Place Source Indexing & Encapsulated Metadata:**
-   - Source documents (`plugins.karpathy-llm.sources`, default: `docs`, `repos/**/README.md`) and member repositories (`./<repos_dir>/`, default: `./repos/`) are indexed directly in place without symlinks (`ln -s`) or redundant copies (`wiki/concepts/` and `wiki/repos/` do not exist). Generated wiki metadata (`_index.md`, `_log.md`, `_index/*.md`, `_graph/*.tsv`) resides exclusively inside `wiki_dir` (`wiki/`).
+   - Source documents (`plugins.karpathy-llm.sources`, default: `docs`, `repos/**/README.md`) and member repositories (`./<repos_dir>/`, default: `./repos/`) are indexed directly in place without symlinks (`ln -s`) or redundant copies (`wiki/concepts/` and `wiki/repos/` do not exist). Generated wiki metadata (`index.md`, `log.md`, `repo-nexus*.md`, `repos-*.md`) resides exclusively directly inside `wiki_dir` (`wiki/`). Zero `_graph/` and zero `_index/` subdirectories.
 
 5. **Wiki Navigation Order:**
    - **Step 1 — B-Tree Root Index**: Consult `<wiki_dir>/_index.md` (bounded root routing table <= 80 lines) to locate the appropriate shard (`_index/repo-nexus*.md` or `_index/repos-<member>*.md`).

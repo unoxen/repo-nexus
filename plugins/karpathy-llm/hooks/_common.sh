@@ -59,11 +59,7 @@ if [ -n "$_kl_plugin_lib" ]; then
   # shellcheck source=/dev/null
   . "$_kl_plugin_lib/source_helpers.sh" 2>/dev/null || true
   # shellcheck source=/dev/null
-  . "$_kl_plugin_lib/graph_helpers.sh" 2>/dev/null || true
-  # shellcheck source=/dev/null
   . "$_kl_plugin_lib/btree_helpers.sh" 2>/dev/null || true
-  # shellcheck source=/dev/null
-  . "$_kl_plugin_lib/agent_query_helpers.sh" 2>/dev/null || true
   load_wiki_config_contract "$_root" 2>/dev/null || true
 fi
 
@@ -423,7 +419,7 @@ kl_truncate_summary() {
   '
 }
 
-# Ensure the configured wiki directory, B-Tree shards, TSV graph, index.md, and _log.md exist.
+# Ensure the configured wiki directory, flat B-Tree shards, index.md, and log.md exist.
 kl_ensure_wiki_files() {
   if command -v load_wiki_config_contract >/dev/null 2>&1; then
     load_wiki_config_contract "$_root" 2>/dev/null || true
@@ -431,40 +427,27 @@ kl_ensure_wiki_files() {
   _wiki_path="${RNEX_WIKI_ROOT:-$_root/$_wiki}"
   mkdir -p "$_wiki_path"
 
-  # Clean up legacy hot.md if present
-  rm -f "$_wiki_path/hot.md" 2>/dev/null || true
+  # Clean up legacy artifacts
+  rm -f "$_wiki_path/hot.md" "$_wiki_path/_index.md" 2>/dev/null || true
+  rm -rf "$_wiki_path/_graph" "$_wiki_path/_index" 2>/dev/null || true
 
-  # Ensure B-Tree and Graph stores are initialized
-  if command -v init_wiki_btree_store >/dev/null 2>&1; then
-    init_wiki_btree_store || true
-  elif [ ! -f "$_wiki_path/_index.md" ]; then
-    _kew_pdir=""
-    for _kew_cand in "$_root/.rnex/plugins/karpathy-llm" "$_root/plugins/karpathy-llm"; do
-      if [ -d "$_kew_cand/templates" ]; then
-        _kew_pdir="$_kew_cand"
-        break
-      fi
-    done
-    if [ -n "$_kew_pdir" ] && [ -f "$_kew_pdir/templates/_index.md" ]; then
-      cp "$_kew_pdir/templates/_index.md" "$_wiki_path/_index.md"
-    fi
-  fi
-
-  if command -v init_wiki_graph_store >/dev/null 2>&1; then
-    init_wiki_graph_store || true
+  # Ensure flat B-Tree shards and root router are compiled
+  if command -v compile_flat_btree_wiki >/dev/null 2>&1; then
+    compile_flat_btree_wiki || true
   fi
 
   _kew_today="$(kl_today)"
-  if [ ! -f "$_wiki_path/_log.md" ]; then
-    cat > "$_wiki_path/_log.md" <<LOG_INIT
+  if [ -f "$_wiki_path/_log.md" ] && [ ! -f "$_wiki_path/log.md" ]; then
+    mv "$_wiki_path/_log.md" "$_wiki_path/log.md"
+  elif [ ! -f "$_wiki_path/log.md" ]; then
+    cat > "$_wiki_path/log.md" <<LOG_INIT
 # Karpathy Wiki Operation Log
 
 Append-only audit trail recording all ingest and maintenance runs.
 
 ---
 
-### Initial Setup — ${_kew_today}
-* **Action:** Initialized Karpathy LLM Wiki architecture via \`karpathy-llm\` plugin.
+- **${_kew_today}** | \`init\` | Initialized flat Karpathy LLM Wiki architecture via \`karpathy-llm\` plugin.
 LOG_INIT
   fi
 }

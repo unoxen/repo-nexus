@@ -942,7 +942,7 @@ plugin_list_commands() {
         gsub(/[ "]/, "", line)
         print line
       }
-      in_cmd && /^[ ]*[a-zA-Z0-9_.-]+:[ ]*/ {
+      in_cmd && /^[ ]{2,3}[a-zA-Z0-9_.-]+:[ ]*/ {
         line = $0
         sub(/^[ ]*/, "", line)
         sub(/:.*/, "", line)
@@ -971,6 +971,15 @@ plugin_get_command_desc() {
     in_cmd && /^[^ #]/ { exit }
     in_cmd && ($0 ~ ("^[ ]*-[ ]*" cmd ":") || $0 ~ ("^[ ]*" cmd ":")) {
       sub(/^[^:]*:[ ]*/, "")
+      sub(/[ ]*#.*/, "")
+      gsub(/^["\047]|["\047]$/, "")
+      if (length($0) > 0) { print; exit }
+      in_sub = 1
+      next
+    }
+    in_sub && /^[ ]{2}[a-zA-Z0-9_.-]+:/ { exit }
+    in_sub && /^[ ]*description:[ ]*/ {
+      sub(/^[ ]*description:[ ]*/, "")
       sub(/[ ]*#.*/, "")
       gsub(/^["\047]|["\047]$/, "")
       print

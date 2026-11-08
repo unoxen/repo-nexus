@@ -39,12 +39,12 @@ Practical diagnostic guidance and step-by-step solutions for everyday multi-repo
 * **Solution**: Run `rnex status` to view current repository states. Re-enable the repository using `rnex repo set <name> --enable --local` (or `--global`) and run `rnex sync`.
 
 ### 8. `rnex plugin karpathy-llm ingest <file>` reports path validation errors
-* **Cause**: Single-file ingestion validates that the target argument is a valid, readable regular file (`[ -f ]` and `[ -r ]`). It explicitly rejects non-existent paths, directories, and unsupported options.
-* **Solution**: Pass an existing file path (e.g. `rnex plugin karpathy-llm ingest docs/spec.md`). If you want to ingest an entire directory of documents, pass `--source <dir>` (e.g. `rnex plugin karpathy-llm ingest --source docs`) or run `rnex plugin karpathy-llm ingest` with no arguments to batch-ingest all configured sources.
+* **Cause**: Single-file ingestion validates that the target argument is a valid, readable regular file (`[ -f ]` and `! -L`). It explicitly rejects non-existent paths, directories, and symbolic links.
+* **Solution**: Pass an existing file path (e.g. `rnex plugin karpathy-llm ingest docs/spec.md` or `rnex plugin karpathy-llm ingest --file docs/spec.md`). To ingest all configured workspace sources, run `rnex plugin karpathy-llm ingest` with no arguments.
 
-### 9. Legacy `index.md` or `hot.md` in `wiki/`
-* **Cause**: The workspace was initialized using an older wiki layout version containing `wiki/index.md`, `wiki/hot.md`, or legacy directories (`overview/`, `entities/`, `sources/`). Because Repo Nexus strictly respects curated files, `rnex sync` never clobbers curated wiki pages.
-* **Solution**: Run `rnex plugin karpathy-llm lint` (or `rnex plugin karpathy-llm ingest`). The automated routine purges obsolete legacy staging folders (`concepts/`, `repos/`, `overview/`, `entities/`, `sources/`), purges legacy `hot.md` and `index.md` files, asserts zero symbolic links, compiles the bounded root router `wiki/_index.md` (\(\le 80\) lines), and rebuilds the in-place B-Tree leaf shards and graph TSVs. Run `rnex plugin karpathy-llm lint --strict` to verify that your wiki graph is completely clean.
+### 9. Legacy `_index.md`, `_graph/`, `_index/`, or `hot.md` in `wiki/`
+* **Cause**: The workspace was initialized using an older wiki layout version containing `wiki/_index.md`, `wiki/_graph/`, `wiki/_index/`, `wiki/hot.md`, or legacy category directories (`overview/`, `entities/`, `sources/`, `concepts/`, `repos/`).
+* **Solution**: Run `rnex plugin karpathy-llm lint` (or `rnex plugin karpathy-llm ingest`). The automated routine purges obsolete legacy folders (`_graph/`, `_index/`, `concepts/`, `repos/`, `overview/`, `entities/`, `sources/`), purges legacy `hot.md` and `_index.md` files, migrates historical audit entries from `_log.md` to `log.md`, asserts zero symbolic links, compiles the bounded root router `wiki/index.md` ($\le 80$ lines), and rebuilds the flat B-Tree leaf shards (`wiki/repo-nexus*.md`, `wiki/repos-*.md`).
 
 ### 10. Existing local Git hook was overwritten or not running
 * **Cause**: Repo Nexus manages Git hooks via non-destructive wrapper scripts in `.git/hooks/`. When installing wrappers, any pre-existing custom hook script is automatically backed up to `<hook>.user` (e.g. `.git/hooks/pre-commit.user`) and invoked by the wrapper during Git operations.

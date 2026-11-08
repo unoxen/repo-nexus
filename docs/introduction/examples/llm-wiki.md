@@ -66,29 +66,25 @@ rnex sync
 ## Wiki Ingest & Integrity Verification
 
 ```bash
-# Ingest all intake sources and member repository READMEs (automatically builds index and graph)
+# Ingest all intake sources and member repository documentation in place
 rnex plugin karpathy-llm ingest
 
 # Ingest a specific research document or design spec in place
-rnex plugin karpathy-llm ingest --source specs/architecture.md
+rnex plugin karpathy-llm ingest specs/architecture.md
+# Or using the --file flag
+rnex plugin karpathy-llm ingest --file specs/architecture.md
 
-# Ingest a specific member repository README
-rnex plugin karpathy-llm ingest --repo core-engine
-
-# Validate wiki schema, sort invariants, and wikilink integrity
+# Validate wiki structure, line budget, and zero-symlink invariants
 rnex plugin karpathy-llm lint
-
-# Run strict verification before release or in CI/CD pre-push hooks
-rnex plugin karpathy-llm lint --strict
 ```
 
 ## Knowledge Base Navigation Architecture
 
-The curated wiki maintains a deterministic 2-level B-Tree and graph structure:
-- **`wiki/_index.md`**: B-Tree Root Router ($\le 80$ lines) organizing index shards.
-- **`wiki/_index/`**: Lexicographically sorted leaf shards (`repo-nexus.md`, `repos-core-engine.md`).
-- **`wiki/_graph/`**: Sorted TSV property graph (`nodes.tsv`, `edges_out.tsv`, `edges_in.tsv`) supporting fast $O(\log N)$ traversal.
+The curated wiki maintains a deterministic flat B-Tree structure directly in `wiki/`:
+- **`wiki/index.md`**: B-Tree Root Router ($\le 80$ lines) organizing flat leaf shards.
+- **`wiki/repo-nexus*.md` & `wiki/repos-*.md`**: Flat lexicographically sorted leaf shards (`repo-nexus.md`, `repos-core-engine.md`) residing directly under `wiki/` with zero `_graph/` and zero `_index/` subdirectories.
+- **`wiki/log.md`**: Chronological audit trail recording all ingest and lint operations.
 - **In-Place Documentation**: Authoritative documents (`README.md`, `docs/*.md`, `repos/<member-repo>/**/*.md`) are indexed directly where they reside, with zero redundant copies and zero symbolic links.
 
 > [!NOTE]
-> Autonomous AI coding agents navigate this structure using internal binary search lookup (`_search`) and ego-subgraph traversal (`_graph`) helpers without requiring manual indexing commands.
+> Autonomous AI coding agents navigate this structure using the 3-step retrieval protocol: Root Router (`wiki/index.md`) $\to$ Leaf Shard (`wiki/<shard>.md`) $\to$ Target Source Document in place. Cross-references and backlinks are queried using standard workspace search tools (`grep`, `ripgrep`).

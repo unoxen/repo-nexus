@@ -17,12 +17,11 @@ Do not hard-code any specific AI tool or harness into the wiki structure itself.
 Initialize the fixed baseline directories and control files:
 
 - **`./docs/`** — Workspace documentation directory.
-- **`wiki/_index.md`** — B-Tree Root routing table (bounded <= 80 lines) organizing domain shards.
-- **`wiki/_index/`** — B-Tree leaf shards (`repo-nexus.md`, `repos-<member>.md`).
-- **`wiki/_graph/`** — Sorted TSV property graph (`nodes.tsv`, `edges_out.tsv`, `edges_in.tsv`).
-- **`wiki/_log.md`** — Append-only operation log recording all ingest and lint runs.
+- **`wiki/index.md`** — B-Tree Root routing table (bounded <= 80 lines) organizing domain shards.
+- **`wiki/repo-nexus.md`** & **`wiki/repos-<member>.md`** — Flat B-Tree leaf shards.
+- **`wiki/log.md`** — Append-only operation log recording all ingest and lint runs.
 
-Do not create arbitrary or speculative subdirectories during initialization. Scaffolding is 100% deterministic. Domain subfolders and categories emerge organically during the source ingestion phase (`wiki-ingest`).
+Do not create arbitrary or speculative subdirectories during initialization. Scaffolding is 100% deterministic. Flat leaf shards reside directly in `wiki/` with zero `_graph/` and zero `_index/` subdirectories. Domain sub-shards emerge organically during the source ingestion phase (`wiki-ingest`).
 
 ---
 
@@ -85,25 +84,17 @@ In standalone repositories (outside Repo Nexus), append:
 Create workflow instruction files at `.agent/workflows/` (or `.agent/skills/` depending on the harness):
 
 **`wiki-ingest.md`**:
-1. Scan configured `sources` (or `<raw_dir>/`) for files not yet recorded in `wiki/_log.md`.
-2. Scaffold deterministic wiki pages via `rnex plugin karpathy-llm ingest` (`repo-<name>.md` for root member repo READMEs, `<path-prefix>-<name>.md` for intake sources).
-3. Read each source fully and enrich the corresponding `<wiki_dir>/<slug>.md` page in-place (capturing architecture concepts, contracts, and patterns).
-4. For each page, maintain typed frontmatter (`sources`, `related`, `extends`, `contradicts`, `mentioned_in`).
-5. Write a concise body with inline links where contextually helpful.
-6. Verify the corresponding domain shard in `wiki/_index/` contains the annotated link.
-7. Run `rnex plugin karpathy-llm index` to synchronize the graph and recompile the root router.
-8. Verify graph integrity using `rnex plugin karpathy-llm lint`.
+1. Scan configured `sources` for files not yet recorded in `wiki/log.md`.
+2. Ingest and index authoritative workspace documents directly in place via `rnex plugin karpathy-llm ingest`.
+3. Rebalance flat B-Tree leaf shards directly under `wiki/` (`wiki/repo-nexus*.md`, `wiki/repos-*.md`) and recompile the root router `wiki/index.md`.
+4. Append an ingestion summary to `wiki/log.md`.
 
 **`wiki-lint.md`**:
-1. For every page, verify that all paths in frontmatter relation fields (`related`, `extends`, `contradicts`, `sources`) resolve to existing files. Fix or flag broken paths.
-2. Recompute `mentioned_in` for every page by scanning all other pages' relation fields and inline links. Update the field.
-3. Find orphaned pages (not reachable from `nodes.tsv` or any `mentioned_in` field). Add them to the appropriate shard.
-4. Detect duplicate or heavily overlapping pages. Consolidate and update relations.
-5. Check for factual inconsistencies between pages in `contradicts` relations or covering the same topic.
-6. Identify knowledge gaps: concepts referenced in relation fields but lacking their own page. Create stub pages or flag for future ingest.
-7. Suggest source candidates from configured `sources` (or `<raw_dir>/`) or external searches to fill gaps.
-8. Rebuild `wiki/_graph/*.tsv`, `wiki/_index/*.md`, and `wiki/index.md` via `rnex plugin karpathy-llm index`.
-9. Append a lint summary to `wiki/_log.md`.
+1. Verify flat B-Tree shard invariants, auto-healing legacy artifacts and directories (`_graph/`, `_index/`, `overview/`, `entities/`, `sources/`, `concepts/`, `repos/`).
+2. Assert zero symbolic links in `wiki/`.
+3. Verify the root router `wiki/index.md` remains strictly within its line budget ($\le 80$ lines).
+4. Run `rnex plugin karpathy-llm lint` to rebalance shards and verify structural integrity.
+5. Append a lint summary to `wiki/log.md`.
 
 ---
 

@@ -53,7 +53,7 @@ A lightweight, zero-dependency and AI-First Nexus Repository (Virtual Meta Repos
   <div class="rnex-feature-card">
     <div class="rnex-feature-icon">🧠</div>
     <h3>Karpathy LLM Wiki Architecture</h3>
-    <p>Built-in zero-dependency knowledge graph (<code>_graph/*.tsv</code>) and B-Tree sharded index (<code>_index/*.md</code>) with automated ingest, \(O(\log N)\) prefix search, and lint verification for autonomous AI agents.</p>
+    <p>Built-in zero-dependency flat B-Tree index (<code>wiki/*.md</code>) with bounded root router (<code>wiki/index.md</code>), chronological audit log (<code>wiki/log.md</code>), automated in-place ingest, and lint verification for autonomous AI agents.</p>
   </div>
   <div class="rnex-feature-card">
     <div class="rnex-feature-icon">⚙️</div>

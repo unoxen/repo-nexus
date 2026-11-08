@@ -441,9 +441,9 @@ render_ai_instructions() {
   printf 'Execute these steps in strict order:\n'
   _rai_n=1
   if [ "$_rai_kp" -eq 1 ]; then
-    printf "1. **Step 1 — Query B-Tree Root Index & Graph**: Read \`%s/_index.md\` (compact B-Tree router <= 80 lines) to locate matching shard (\`repo-nexus*.md\` or \`repos-<member>*.md\`) or node identifiers.\n" "$_rai_wiki"
-    printf "2. **Step 2 — Inspect Targeted Domain Shard**: Read only the relevant shard in \`%s/_index/<shard>.md\` identified in Step 1. Pinpoint the specific source document needed without exhaustive reading.\n" "$_rai_wiki"
-    printf "3. **Step 3 — Read Authoritative Source Document**: Read only the 1–3 target source document(s) referenced in the shard. Do NOT browse raw intake sources%s or \`%s/\` blindly before completing Steps 1–2.\n" "${_rai_src_dirs:+ ($_rai_src_dirs)}" "$_rai_rd"
+    printf "1. **Step 1 — Query B-Tree Root Index**: Read \`%s/index.md\` (compact B-Tree router <= 80 lines) to locate matching shard (\`repo-nexus*.md\` or \`repos-<member>*.md\`).\n" "$_rai_wiki"
+    printf "2. **Step 2 — Inspect Targeted Domain Shard**: Read only the relevant shard in \`%s/<shard>.md\` identified in Step 1. Pinpoint the specific source document needed without exhaustive reading.\n" "$_rai_wiki"
+    printf "3. **Step 3 — Read Authoritative Source Document**: Read only the 1–3 target source document(s) referenced in the shard directly in place. Do NOT browse raw intake sources%s or \`%s/\` blindly before completing Steps 1–2.\n" "${_rai_src_dirs:+ ($_rai_src_dirs)}" "$_rai_rd"
     _rai_n=4
   fi
   printf "%s. **Step %s — Targeted Repository Access**: Inspect or modify only the specific files in active \`%s/<name>/\` required for the task. Never modify or commit inside \`READ-ONLY\` repositories.\n" "$_rai_n" "$_rai_n" "$_rai_rd"

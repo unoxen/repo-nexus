@@ -1,53 +1,16 @@
 name: karpathy-llm
-version: 0.9.7
-description: "Zero-dependency B-Tree (_index/) and Sorted TSV Graph (_graph/) LLM Wiki for Repo Nexus"
-author: unoxen
-homepage: https://github.com/unoxen/repo-nexus
-
+version: 0.9.8
+description: "Zero-dependency B-Tree Sharded Markdown LLM Wiki for Repo Nexus"
 commands:
-  ingest: "Ingest a single file or batch-ingest workspace & member repository docs into the wiki, updating B-Tree shards and graph edges automatically"
-  lint: "Verify, auto-heal, and re-index wiki B-Tree shards (_index/*.md) and property graph tables (_graph/*.tsv)"
-
-config_defaults:
-  wiki_dir: "wiki"
-  index_file: "_index.md"
-  index_dir: "_index"
-  graph_dir: "_graph"
-  log_file: "_log.md"
-  btree_shard_max_entries: 100
-  btree_max_root_lines: 80
-  btree_root_max_lines: 80
-  graph_default_depth: 1
-
-config_descriptions:
-  wiki_dir: "<dir>  (directory for curated markdown pages, default: wiki)"
-  index_file: "<file> (root B-Tree router markdown file, default: _index.md)"
-  index_dir: "<dir>   (directory for B-Tree shards, default: _index)"
-  graph_dir: "<dir>   (directory for TSV property graph, default: _graph)"
-  log_file: "<file>   (append-only audit log file, default: _log.md)"
-  btree_shard_max_entries: "<int>  (entry count threshold before splitting a B-Tree shard, default: 100)"
-  btree_max_root_lines: "<int>  (maximum allowed lines in root wiki/_index.md router, default: 80)"
-  graph_default_depth: "<int>  (default ego-subgraph traversal depth in hops, default: 1)"
-
+  ingest:
+    script: bin/ingest.sh
+    description: "Ingest workspace documentation sources directly in place into flat B-Tree shards (wiki/*.md)"
+  lint:
+    script: bin/lint.sh
+    description: "Verify, auto-heal, and re-balance wiki B-Tree shards (wiki/*.md) and root index.md"
 config:
   wiki_dir: "wiki"
-  index_file: "_index.md"
-  index_dir: "_index"
-  graph_dir: "_graph"
-  log_file: "_log.md"
+  index_file: "index.md"
+  log_file: "log.md"
   btree_shard_max_entries: 100
-  btree_max_root_lines: 80
-  graph_default_depth: 1
-
-rules:
-  - rules/behavioral.md: .rnex/plugins/karpathy-llm/rules/behavioral.md
-skills:
-  - skills/wiki-ingest.md: .rnex/plugins/karpathy-llm/skills/wiki-ingest.md
-  - skills/wiki-lint.md: .rnex/plugins/karpathy-llm/skills/wiki-lint.md
-instructions:
-  - instructions/rnex-wiki-architecture.md: .rnex/plugins/karpathy-llm/instructions/rnex-wiki-architecture.md
-templates:
-  - templates/_index.md: "{wiki_dir}/_index.md"
-  - templates/_log.md: "{wiki_dir}/_log.md"
-  - templates/rnex-wiki-page.sample.md: .rnex/plugins/karpathy-llm/templates/rnex-wiki-page.template.md
-  - templates/rnex-llm-wiki.sample.md: .rnex/plugins/karpathy-llm/templates/rnex-llm-wiki.sample.md
+  btree_root_max_lines: 80
