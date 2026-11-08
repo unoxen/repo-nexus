@@ -1,5 +1,5 @@
 name: karpathy-llm
-version: 0.9.8
+version: 0.9.9
 description: "Zero-dependency B-Tree Sharded Markdown LLM Wiki for Repo Nexus"
 commands:
   ingest:

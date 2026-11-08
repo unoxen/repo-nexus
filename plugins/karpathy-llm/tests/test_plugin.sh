@@ -33,8 +33,9 @@ _kl_pdir="$TEST_KARPATHY_WS/plugins/karpathy-llm"
 # Test 1: Manifest integrity, version parity, and strict 2-command declaration
 # --------------------------------------------------------------------------
 run_test "Karpathy-llm: manifest integrity, version parity, and 2-command surface"
+_cli_ver="$("$TEST_KARPATHY_WS/rnex" --version | awk '{print $2}')"
 _m_ver="$(awk '/^version:[ ]*/ { sub(/^version:[ ]*/, ""); sub(/[ ]*#.*/, ""); print; exit }' "$_kl_pdir/plugin.yaml")"
-[ "$_m_ver" = "3.0.0" ] || { fail "Plugin version ($_m_ver) is not 3.0.0"; exit 1; }
+[ "$_m_ver" = "$_cli_ver" ] || { fail "Plugin version ($_m_ver) does not match CLI version ($_cli_ver)"; exit 1; }
 
 _yaml_file="$_kl_pdir/plugin.yaml"
 # Assert templates are not declared in plugin.yaml
