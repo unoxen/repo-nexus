@@ -145,6 +145,7 @@ EOF
 # @sideEffects: Writes $RNEX_WIKI_INDEX_FILE atomically.
 # -----------------------------------------------------------------------------
 compile_root_index_router() {
+    ensure_baseline_flat_shards
     _idx_tmp="${RNEX_WIKI_INDEX_FILE}.tmp.$$"
     cat <<'EOF' > "$_idx_tmp"
 # Wiki Index
@@ -425,6 +426,7 @@ EOF
 resolve_target_btree_shard_file() {
     _s_id="$1"
     _doc_title="$2"
+    _doc_path="${3:-}"
     _base_file="${RNEX_WIKI_ROOT}/${_s_id}.md"
 
     # Find existing shard candidate files for this shard ID
@@ -451,13 +453,47 @@ resolve_target_btree_shard_file() {
         fi
     fi
 
+    _base_exists=0
+    [ -f "$_base_file" ] && _base_exists=1
+
     # Sub-shards exist; route title to the most appropriate sub-shard via awk
     printf '%s\n' "$_cand_files" | LC_ALL=C awk \
         -v sid="$_s_id" \
         -v title="$_doc_title" \
-        -v def_file="$_base_file" '
+        -v path="$_doc_path" \
+        -v def_file="$_base_file" \
+        -v base_exists="$_base_exists" '
+        function clean_alpha_key(str,   res, i, c, d) {
+            res = ""
+            for (i = 1; i <= length(str); i++) {
+                c = substr(str, i, 1)
+                if (c >= "a" && c <= "z") {
+                    res = res c
+                } else if (c >= "A" && c <= "Z") {
+                    res = res tolower(c)
+                } else if (c >= "0" && c <= "9") {
+                    d = c + 0
+                    if (d == 0) res = res "zero"
+                    else if (d == 1) res = res "one"
+                    else if (d == 2) res = res "two"
+                    else if (d == 3) res = res "three"
+                    else if (d == 4) res = res "four"
+                    else if (d == 5) res = res "five"
+                    else if (d == 6) res = res "six"
+                    else if (d == 7) res = res "seven"
+                    else if (d == 8) res = res "eight"
+                    else if (d == 9) res = res "nine"
+                }
+            }
+            return res
+        }
         BEGIN {
-            t = tolower(title)
+            kt = clean_alpha_key(title)
+            kp = clean_alpha_key(path)
+            if (kt != "") t = kt kp
+            else if (kp != "") t = kp
+            else t = "untitled"
+
             prefix = sid "-"
             first_child = ""
             last_child = ""
@@ -512,8 +548,14 @@ resolve_target_btree_shard_file() {
                 print first_child
             } else if (t > "z" && last_child != "") {
                 print last_child
-            } else {
+            } else if (base_exists == 1 || first_child == "") {
                 print def_file
+            } else {
+                if (first_child != "") {
+                    print first_child
+                } else {
+                    print def_file
+                }
             }
         }
     '
@@ -681,13 +723,27 @@ split_oversized_btree_shards() {
                         }
                         return ""
                     }
-                    function clean_alpha_key(str,   res, i, c) {
+                    function clean_alpha_key(str,   res, i, c, d) {
                         res = ""
                         for (i = 1; i <= length(str); i++) {
                             c = substr(str, i, 1)
-                            if (c >= "a" && c <= "z") res = res c
-                            else if (c >= "0" && c <= "9") res = res c
-                            else if (c == "/" || c == "-" || c == "_") res = res "-"
+                            if (c >= "a" && c <= "z") {
+                                res = res c
+                            } else if (c >= "A" && c <= "Z") {
+                                res = res tolower(c)
+                            } else if (c >= "0" && c <= "9") {
+                                d = c + 0
+                                if (d == 0) res = res "zero"
+                                else if (d == 1) res = res "one"
+                                else if (d == 2) res = res "two"
+                                else if (d == 3) res = res "three"
+                                else if (d == 4) res = res "four"
+                                else if (d == 5) res = res "five"
+                                else if (d == 6) res = res "six"
+                                else if (d == 7) res = res "seven"
+                                else if (d == 8) res = res "eight"
+                                else if (d == 9) res = res "nine"
+                            }
                         }
                         return res
                     }
@@ -701,27 +757,19 @@ split_oversized_btree_shards() {
                         t = tolower(get_title($0))
                         p = tolower(get_path($0))
                         titles[lines_count] = (t != "") ? t : "untitled"
-                        paths[lines_count] = (p != "") ? p : ("item-" lines_count)
+                        paths[lines_count] = (p != "") ? p : ("item" lines_count)
                     }
                     END {
                         if (lines_count == 0) exit 0
 
-                        # Check if all titles are identical
-                        all_titles_same = 1
-                        for (i = 2; i <= lines_count; i++) {
-                            if (titles[i] != titles[1]) {
-                                all_titles_same = 0
-                                break
-                            }
-                        }
-
-                        # Build sorting keys: use title if they differ; use title + "-" + path if all titles are identical
+                        # Build sorting keys: title + unique path
                         for (i = 1; i <= lines_count; i++) {
-                            if (all_titles_same) {
-                                clean_p = clean_alpha_key(paths[i])
-                                keys[i] = clean_alpha_key(titles[i]) "-" clean_p
+                            kt = clean_alpha_key(titles[i])
+                            kp = clean_alpha_key(paths[i])
+                            if (kt != "") {
+                                keys[i] = kt kp
                             } else {
-                                keys[i] = clean_alpha_key(titles[i])
+                                keys[i] = (kp != "") ? kp : ("entry" clean_alpha_key(i))
                             }
                         }
 
@@ -834,12 +882,17 @@ split_oversized_btree_shards() {
                             }
                         }
 
-                        # Pure alphabetical fallback: derive semantic letter ranges from halves
+                        # Pure alphabetical fallback: find first character position where the two halves differ
                         half_idx = int((lines_count + 1) / 2)
-                        k1_start = substr(keys[1], 1, 2)
-                        k1_end = substr(keys[half_idx], 1, 2)
-                        k2_start = substr(keys[half_idx + 1], 1, 2)
-                        k2_end = substr(keys[lines_count], 1, 2)
+                        diff_pos = 1
+                        while (substr(keys[half_idx], diff_pos, 1) == substr(keys[half_idx + 1], diff_pos, 1) && diff_pos < length(keys[half_idx])) {
+                            diff_pos++
+                        }
+
+                        k1_start = substr(keys[1], 1, diff_pos)
+                        k1_end = substr(keys[half_idx], 1, diff_pos)
+                        k2_start = substr(keys[half_idx + 1], 1, diff_pos)
+                        k2_end = substr(keys[lines_count], 1, diff_pos)
 
                         sfx1 = (k1_start == k1_end) ? k1_start : (k1_start "-" k1_end)
                         sfx2 = (k2_start == k2_end) ? k2_start : (k2_start "-" k2_end)
@@ -862,6 +915,12 @@ split_oversized_btree_shards() {
 
                 _c1_id="${_child_names%%|*}"
                 _c2_id="${_child_names#*|}"
+
+                # Safety guard: reject self-split or identical child names
+                if [ -z "$_c1_id" ] || [ -z "$_c2_id" ] || [ "$_c1_id" = "$_c2_id" ] || [ "$_c1_id" = "$_s_id" ] || [ "$_c2_id" = "$_s_id" ]; then
+                    rm -f "$_part1_tmp" "$_part2_tmp"
+                    continue
+                fi
 
                 _wrote_any=0
 
@@ -946,6 +1005,7 @@ ingest_missing_sources_into_btree() {
     _missing_file="$1"
     _arg_label="$2"
     mkdir -p "$RNEX_WIKI_ROOT"
+    ensure_baseline_flat_shards
 
     # If zero missing sources, inspect existing shards for any needed splits before declaring up-to-date
     if [ ! -s "$_missing_file" ] && [ -f "$RNEX_WIKI_INDEX_FILE" ]; then
@@ -993,7 +1053,7 @@ ingest_missing_sources_into_btree() {
             _entry_line="- **[${_title}](${_rel_link})** (\`${_rel_path}\`) — ${_summary}"
 
             # Route dynamically to existing leaf sub-shard or base shard
-            _target_shard_file="$(resolve_target_btree_shard_file "$_shard_id" "$_title")"
+            _target_shard_file="$(resolve_target_btree_shard_file "$_shard_id" "$_title" "$_rel_path")"
 
             _shard_existed=0
             [ -f "$_target_shard_file" ] && _shard_existed=1

@@ -209,7 +209,7 @@ lint_existing_wiki_directory() {
                     fi
                 fi
 
-                _target_shard_file="$(resolve_target_btree_shard_file "$_shard_id" "$_title")"
+                _target_shard_file="$(resolve_target_btree_shard_file "$_shard_id" "$_title" "$_rel_path")"
                 _target_shard_id="$(basename "$_target_shard_file" .md)"
 
                 _t_entries="${_target_shard_file}.entries.$$"
@@ -268,6 +268,30 @@ lint_existing_wiki_directory() {
             -v k="${#_sp}" \
             -v val_file="$_valid_entries" \
             -v mis_file="$_misplaced_entries" '
+            function clean_alpha_key(str,   res, i, c, d) {
+                res = ""
+                for (i = 1; i <= length(str); i++) {
+                    c = substr(str, i, 1)
+                    if (c >= "a" && c <= "z") {
+                        res = res c
+                    } else if (c >= "A" && c <= "Z") {
+                        res = res tolower(c)
+                    } else if (c >= "0" && c <= "9") {
+                        d = c + 0
+                        if (d == 0) res = res "zero"
+                        else if (d == 1) res = res "one"
+                        else if (d == 2) res = res "two"
+                        else if (d == 3) res = res "three"
+                        else if (d == 4) res = res "four"
+                        else if (d == 5) res = res "five"
+                        else if (d == 6) res = res "six"
+                        else if (d == 7) res = res "seven"
+                        else if (d == 8) res = res "eight"
+                        else if (d == 9) res = res "nine"
+                    }
+                }
+                return res
+            }
             function get_title(line,   m) {
                 if (match(line, /^- \*\*\[[^]]+\]/)) {
                     m = substr(line, 6)
@@ -280,10 +304,25 @@ lint_existing_wiki_directory() {
                 }
                 return ""
             }
+            function get_path(line,   m) {
+                if (match(line, /\(`[^`]+`\)/)) {
+                    m = substr(line, RSTART + 2, RLENGTH - 4)
+                    return m
+                } else if (match(line, /\]\([^)]+\)/)) {
+                    m = substr(line, RSTART + 2, RLENGTH - 3)
+                    return m
+                }
+                return ""
+            }
             /^- \*\*/ {
-                t = tolower(get_title($0))
+                kt = clean_alpha_key(get_title($0))
+                kp = clean_alpha_key(get_path($0))
+                if (kt != "") t = kt kp
+                else if (kp != "") t = kp
+                else t = "untitled"
+
                 pfx = substr(t, 1, k)
-                if ((sp == "a" && pfx < sp) || (pfx >= sp && pfx <= ep)) {
+                if ((sp == "a" && pfx < sp) || (pfx >= sp && (ep == "z" || pfx <= ep))) {
                     print $0 >> val_file
                 } else {
                     print $0 >> mis_file
@@ -330,7 +369,7 @@ lint_existing_wiki_directory() {
                     fi
                 fi
 
-                _target_shard_file="$(resolve_target_btree_shard_file "$_t_shard_id" "$_title")"
+                _target_shard_file="$(resolve_target_btree_shard_file "$_t_shard_id" "$_title" "$_rel_path")"
                 _target_shard_id="$(basename "$_target_shard_file" .md)"
 
                 _t_entries="${_target_shard_file}.entries.$$"

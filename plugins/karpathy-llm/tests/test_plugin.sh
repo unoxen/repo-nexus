@@ -1509,6 +1509,84 @@ done
 }
 pass
 
+# --------------------------------------------------------------------------
+# Test 29: Idempotency across repeated ingest -> lint -> ingest -> lint cycles
+# --------------------------------------------------------------------------
+run_test "Karpathy-llm: strict idempotency across repeated ingest/lint cycles (zero ping-pong repairs)"
+TEST_IDEM_WS="$TEST_TMP/karpathy-idem-ws"
+mkdir -p "$TEST_IDEM_WS"
+setup_plugin_test_workspace karpathy-llm "$TEST_IDEM_WS"
+cd "$TEST_IDEM_WS"
+
+"$TEST_IDEM_WS/rnex" init -y --karpathy "$TEST_IDEM_WS" >/dev/null
+mkdir -p "$TEST_IDEM_WS/wiki"
+mkdir -p "$TEST_IDEM_WS/repos/test-repo/packages"
+
+_k=1
+while [ "$_k" -le 175 ]; do
+  mkdir -p "$TEST_IDEM_WS/repos/test-repo/packages/pkg-$_k"
+  printf '# Package %s\nDocumentation for package %s.\n' "$_k" "$_k" > "$TEST_IDEM_WS/repos/test-repo/packages/pkg-$_k/README.md"
+  _k=$((_k + 1))
+done
+
+cat <<'EOF_IDEM_CFG' > "$TEST_IDEM_WS/rnex.yaml"
+version: 1.0.0
+plugins:
+  karpathy-llm:
+    wiki_dir: wiki
+    btree_shard_max_entries: 100
+    sources: [repos/test-repo/packages]
+repos:
+  test-repo:
+    path: repos/test-repo
+EOF_IDEM_CFG
+
+# Cycle 1: First Ingest
+_out_ingest1="$(cd "$TEST_IDEM_WS" && ./rnex plugin karpathy-llm ingest)"
+echo "$_out_ingest1" | grep -q "Ingested 175 missing source(s)" || {
+  fail "First ingest failed to ingest 175 sources: $_out_ingest1"; exit 1;
+}
+
+# Invariant: All shards must have <= 100 entries and zero numeric shards
+for _shard in "$TEST_IDEM_WS/wiki"/*.md; do
+  [ -f "$_shard" ] || continue
+  case "$(basename "$_shard")" in
+    index.md|log.md) continue ;;
+  esac
+  _cnt="$(LC_ALL=C grep -c '^- \*\*' "$_shard" 2>/dev/null || true)"
+  [ "$_cnt" -le 100 ] || { fail "Shard $(basename "$_shard") has $_cnt records (> 100)"; exit 1; }
+done
+_num_shards="$(find "$TEST_IDEM_WS/wiki" -name '*-[0-9]*.md' | grep -v 'log.md' || true)"
+[ -z "$_num_shards" ] || { fail "Numeric shards found: $_num_shards"; exit 1; }
+
+# Cycle 2: First Lint (must be 100% clean with ZERO repairs)
+_out_lint1="$(cd "$TEST_IDEM_WS" && ./rnex plugin karpathy-llm lint)"
+echo "$_out_lint1" | grep -q "all existing docs and references in wiki are valid" || {
+  fail "First lint reported repairs instead of clean validation: $_out_lint1"; exit 1;
+}
+
+# Capture log checksum after first lint
+_log_sum1="$(cksum < "$TEST_IDEM_WS/wiki/log.md")"
+
+# Cycle 3: Second Ingest (must be completely up to date with zero changes)
+_out_ingest2="$(cd "$TEST_IDEM_WS" && ./rnex plugin karpathy-llm ingest)"
+echo "$_out_ingest2" | grep -q "Wiki is up to date" || {
+  fail "Second ingest re-ingested sources instead of reporting up to date: $_out_ingest2"; exit 1;
+}
+
+# Cycle 4: Second Lint (must be 100% clean with ZERO repairs)
+_out_lint2="$(cd "$TEST_IDEM_WS" && ./rnex plugin karpathy-llm lint)"
+echo "$_out_lint2" | grep -q "all existing docs and references in wiki are valid" || {
+  fail "Second lint reported repairs on unchanged wiki: $_out_lint2"; exit 1;
+}
+
+# Verify audit log was not mutated in cycles 2, 3, or 4
+_log_sum2="$(cksum < "$TEST_IDEM_WS/wiki/log.md")"
+[ "$_log_sum1" = "$_log_sum2" ] || {
+  fail "Operational log mutated during idempotent read-only cycles"; exit 1;
+}
+pass
+
 if [ "${_STANDALONE_RUN:-0}" -eq 1 ]; then
   report_results
 fi
