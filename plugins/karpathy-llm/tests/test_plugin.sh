@@ -767,6 +767,154 @@ _lint_fail=0
 [ "$_lint_fail" -eq 1 ] || { fail "Lint must fail when .rnex/wiki contains an unresolvable broken link"; exit 1; }
 pass
 
+# --------------------------------------------------------------------------
+# Test 17: Relative link rewriting during ingestion and lint verification
+# --------------------------------------------------------------------------
+run_test "Karpathy-llm: relative links in source summaries are rewritten to valid paths from wiki"
+TEST_REWRITE_WS="$TEST_TMP/karpathy-rewrite-ws"
+mkdir -p "$TEST_REWRITE_WS"
+setup_plugin_test_workspace karpathy-llm "$TEST_REWRITE_WS"
+cd "$TEST_REWRITE_WS"
+
+mkdir -p "$TEST_REWRITE_WS/docs/sub"
+printf '# Guide\nGuide content.\n' > "$TEST_REWRITE_WS/docs/guide.md"
+printf '# Submodule\nSubmodule content.\n' > "$TEST_REWRITE_WS/docs/sub/module.md"
+
+# Create a source document with intra-folder link, parent link, anchor link, and external link
+cat <<'EOF_INT_MD' > "$TEST_REWRITE_WS/docs/intro.md"
+# Introduction
+See [guide](guide.md), [sub/mod](sub/module.md), [sec](#setup), [web](https://example.com).
+
+## Setup
+Setup details here.
+EOF_INT_MD
+
+cat <<'EOF_REW_YAML' > "$TEST_REWRITE_WS/rnex.yaml"
+version: 1.0.0
+sources: [docs]
+plugins:
+  karpathy-llm:
+repos:
+EOF_REW_YAML
+
+"$TEST_REWRITE_WS/rnex" init -y --karpathy "$TEST_REWRITE_WS" >/dev/null
+(cd "$TEST_REWRITE_WS" && ./rnex plugin karpathy-llm ingest >/dev/null)
+
+_shard_content="$(cat "$TEST_REWRITE_WS/.rnex/wiki/repo-nexus-docs.md")"
+# Verify guide.md was rewritten relative to wiki (../../docs/guide.md)
+echo "$_shard_content" | grep -q '\[guide\](\.\./\.\./docs/guide\.md)' || {
+  fail "Relative link guide.md was not rewritten: $_shard_content"; exit 1;
+}
+# Verify sub/module.md was rewritten relative to wiki (../../docs/sub/module.md)
+echo "$_shard_content" | grep -q '\[sub/mod\](\.\./\.\./docs/sub/module\.md)' || {
+  fail "Relative link sub/module.md was not rewritten: $_shard_content"; exit 1;
+}
+# Verify external link https://example.com was preserved
+echo "$_shard_content" | grep -q '\[web\](https://example\.com)' || {
+  fail "External link https://example.com was not preserved: $_shard_content"; exit 1;
+}
+# Verify anchor link #setup was rewritten to source doc (../../docs/intro.md#setup)
+echo "$_shard_content" | grep -q '\[sec\](\.\./\.\./docs/intro\.md#setup)' || {
+  fail "Anchor link #setup was not rewritten: $_shard_content"; exit 1;
+}
+
+# Standalone lint must succeed with zero broken link errors
+(cd "$TEST_REWRITE_WS" && ./rnex plugin karpathy-llm lint >/dev/null) || {
+  fail "Lint failed on rewritten relative links in shard"; exit 1;
+}
+pass
+
+# --------------------------------------------------------------------------
+# Test 18: Unresolvable relative links & title links are stripped of markup
+# --------------------------------------------------------------------------
+run_test "Karpathy-llm: dead relative links and title links stripped of link markup"
+TEST_STRIP_WS="$TEST_TMP/karpathy-strip-ws"
+mkdir -p "$TEST_STRIP_WS"
+setup_plugin_test_workspace karpathy-llm "$TEST_STRIP_WS"
+cd "$TEST_STRIP_WS"
+
+mkdir -p "$TEST_STRIP_WS/docs"
+# Document with link in title and dead link in summary
+cat <<'EOF_DEAD_MD' > "$TEST_STRIP_WS/docs/dead.md"
+# [Getting Started](nonexistent/setup.md)
+Please consult [Dead Target](nonexistent/target.md) and [Real Real](real.md) for info.
+EOF_DEAD_MD
+printf '# Real Doc\nReal content.\n' > "$TEST_STRIP_WS/docs/real.md"
+
+cat <<'EOF_STRIP_YAML' > "$TEST_STRIP_WS/rnex.yaml"
+version: 1.0.0
+sources: [docs]
+plugins:
+  karpathy-llm:
+repos:
+EOF_STRIP_YAML
+
+"$TEST_STRIP_WS/rnex" init -y --karpathy "$TEST_STRIP_WS" >/dev/null
+(cd "$TEST_STRIP_WS" && ./rnex plugin karpathy-llm ingest >/dev/null)
+
+_dead_shard="$(cat "$TEST_STRIP_WS/.rnex/wiki/repo-nexus-docs.md")"
+# Verify title does not have nested markdown links
+echo "$_dead_shard" | grep -q '^- \*\*\[Getting Started\]' || {
+  fail "Title link was not stripped of markdown link syntax: $_dead_shard"; exit 1;
+}
+# Verify dead link was stripped to plain text
+echo "$_dead_shard" | grep -q 'Please consult Dead Target and \[Real Real\](\.\./\.\./docs/real\.md)' || {
+  fail "Dead link was not stripped or real link not rewritten: $_dead_shard"; exit 1;
+}
+# Verify lint succeeds with 0 errors
+(cd "$TEST_STRIP_WS" && ./rnex plugin karpathy-llm lint >/dev/null) || {
+  fail "Lint failed on stripped dead links"; exit 1;
+}
+pass
+
+# --------------------------------------------------------------------------
+# Test 19: Configurable relative_links: "strip" & CLI flag --strip-links
+# --------------------------------------------------------------------------
+run_test "Karpathy-llm: configurable relative_links: strip and CLI flag --strip-links"
+TEST_MODE_WS="$TEST_TMP/karpathy-mode-ws"
+mkdir -p "$TEST_MODE_WS"
+setup_plugin_test_workspace karpathy-llm "$TEST_MODE_WS"
+cd "$TEST_MODE_WS"
+
+mkdir -p "$TEST_MODE_WS/docs"
+printf '# Target Doc\nTarget content.\n' > "$TEST_MODE_WS/docs/target.md"
+cat <<'EOF_MODE_MD' > "$TEST_MODE_WS/docs/source.md"
+# Source Doc
+Check out [Target Doc](target.md) and [External](https://repo-nexus.dev).
+EOF_MODE_MD
+
+cat <<'EOF_MODE_YAML' > "$TEST_MODE_WS/rnex.yaml"
+version: 1.0.0
+sources: [docs]
+plugins:
+  karpathy-llm:
+    relative_links: "strip"
+repos:
+EOF_MODE_YAML
+
+"$TEST_MODE_WS/rnex" init -y --karpathy "$TEST_MODE_WS" >/dev/null
+(cd "$TEST_MODE_WS" && ./rnex plugin karpathy-llm ingest >/dev/null)
+
+_mode_shard="$(cat "$TEST_MODE_WS/.rnex/wiki/repo-nexus-docs.md")"
+# Target Doc must be stripped to plain text Target Doc
+echo "$_mode_shard" | grep -q 'Check out Target Doc and \[External\](https://repo-nexus\.dev)' || {
+  fail "Strip mode did not strip relative link while preserving external URL: $_mode_shard"; exit 1;
+}
+
+# Lint passes
+(cd "$TEST_MODE_WS" && ./rnex plugin karpathy-llm lint >/dev/null) || {
+  fail "Lint failed on strip-mode wiki"; exit 1;
+}
+
+# Test CLI flag --strip-links override
+printf '# Fresh One\nSee [Target Doc](target.md).\n' > "$TEST_MODE_WS/docs/fresh-one.md"
+(cd "$TEST_MODE_WS" && ./rnex plugin karpathy-llm ingest --strip-links docs/fresh-one.md >/dev/null)
+_fresh_shard="$(cat "$TEST_MODE_WS/.rnex/wiki/repo-nexus-docs.md")"
+echo "$_fresh_shard" | grep -q 'See Target Doc\.' || {
+  fail "--strip-links CLI flag failed to strip relative link: $_fresh_shard"; exit 1;
+}
+pass
+
 if [ "${_STANDALONE_RUN:-0}" -eq 1 ]; then
   report_results
 fi

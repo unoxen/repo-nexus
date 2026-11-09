@@ -124,19 +124,185 @@ compute_upward_rel_prefix() {
 }
 
 # -----------------------------------------------------------------------------
+# strip_markdown_links
+# Summary: Strips Markdown link syntax ([text](target)), image syntax
+#          (![alt](target)), and wikilink syntax ([[target|text]] / [[target]])
+#          from input text, retaining inner anchor, alt, or label text.
+#          Leaves non-link bracketed text untouched.
+# @param $1: raw_text - Input string containing Markdown links or text.
+# @returns: Plain text with links stripped on stdout.
+# @pure
+# -----------------------------------------------------------------------------
+strip_markdown_links() {
+    _raw_str="$1"
+    [ -n "$_raw_str" ] || return 0
+    printf '%s\n' "$_raw_str" | LC_ALL=C awk '
+        function strip_links(str,   out, rem, p, p2, p3, text, is_img) {
+            out = ""
+            rem = str
+            while (rem != "") {
+                # Find next opening bracket
+                p = index(rem, "[")
+                if (p == 0) {
+                    out = out rem
+                    break
+                }
+                # Check if preceding character is ! (Markdown image tag)
+                is_img = 0
+                if (p > 1 && substr(rem, p - 1, 1) == "!") {
+                    out = out substr(rem, 1, p - 2)
+                    is_img = 1
+                } else {
+                    out = out substr(rem, 1, p - 1)
+                }
+                rem = substr(rem, p)
+
+                # Check for wikilink format [[target|label]] or [[target]]
+                if (substr(rem, 1, 2) == "[[") {
+                    p2 = index(rem, "]]")
+                    if (p2 > 0) {
+                        text = substr(rem, 3, p2 - 3)
+                        p3 = index(text, "|")
+                        if (p3 > 0) {
+                            text = substr(text, p3 + 1)
+                        }
+                        out = out text
+                        rem = substr(rem, p2 + 2)
+                        continue
+                    }
+                }
+
+                # Check for standard markdown link [text](target)
+                p2 = index(rem, "](")
+                if (p2 > 0) {
+                    text = substr(rem, 2, p2 - 2)
+                    p3 = index(substr(rem, p2 + 2), ")")
+                    if (p3 > 0) {
+                        out = out text
+                        rem = substr(rem, p2 + 2 + p3)
+                        continue
+                    }
+                }
+
+                # Standalone bracket not forming a valid link; preserve verbatim
+                out = out substr(rem, 1, 1)
+                rem = substr(rem, 2)
+            }
+            return out
+        }
+        {
+            print strip_links($0)
+        }
+    '
+}
+
+# -----------------------------------------------------------------------------
+# normalize_relative_path
+# Summary: Normalizes a relative path target against a base directory into
+#          a clean workspace-relative path without filesystem operations.
+#          Resolves "." and ".." segments and rejects path traversal above root.
+# @param $1: base_dir    - Base directory relative to workspace root (e.g., "docs").
+# @param $2: target_path - Target path (e.g., "../api/index.md", "./setup.md").
+# @returns: Clean workspace-relative path on stdout, or returns 1 on traversal error.
+# @pure
+# -----------------------------------------------------------------------------
+normalize_relative_path() {
+    _base_dir="$1"
+    _target_path="$2"
+    _res="$(LC_ALL=C awk -v base_dir="$_base_dir" -v target="$_target_path" '
+        BEGIN {
+            # Workspace root relative targets beginning with /
+            if (substr(target, 1, 1) == "/") {
+                combined = substr(target, 2)
+            } else if (base_dir != "" && base_dir != ".") {
+                combined = base_dir "/" target
+            } else {
+                combined = target
+            }
+            # Collapse redundant slashes and remove leading/trailing slashes
+            gsub(/\/+/, "/", combined)
+            sub(/^\//, "", combined)
+            sub(/\/$/, "", combined)
+
+            n = split(combined, parts, "/")
+            top = 0
+            for (i = 1; i <= n; i++) {
+                seg = parts[i]
+                if (seg == "" || seg == ".") {
+                    continue
+                } else if (seg == "..") {
+                    if (top > 0) {
+                        top--
+                    } else {
+                        # Path traversal escapes workspace root; fail fast
+                        exit 1
+                    }
+                } else {
+                    stack[++top] = seg
+                }
+            }
+            res = ""
+            for (i = 1; i <= top; i++) {
+                res = (i == 1) ? stack[i] : res "/" stack[i]
+            }
+            print res
+        }
+    ' 2>/dev/null)" || return 1
+    [ -n "$_res" ] || return 1
+    printf '%s\n' "$_res"
+    return 0
+}
+
+# -----------------------------------------------------------------------------
 # sanitize_markdown_summary
 # Summary: Sanitizes a single-line summary string by stripping control chars,
 #          tabs, pipes, and newlines that could corrupt Markdown table or list
-#          formatting. Collapses consecutive whitespace and truncates to 140 chars.
+#          formatting. Collapses consecutive whitespace and truncates to 140 chars
+#          without slicing through unclosed Markdown links or brackets.
 # @param $1: raw_text - Input summary string.
-# @returns: Sanitized summary truncated to 140 characters on stdout.
+# @returns: Sanitized summary truncated to at most 140 characters on stdout.
 # @pure
 # -----------------------------------------------------------------------------
 sanitize_markdown_summary() {
-    printf '%s' "$1" \
+    [ -n "$1" ] || return 0
+    printf '%s\n' "$1" \
         | tr '\t\r\n|' '    ' \
         | sed 's/  */ /g; s/^ //; s/ $//' \
-        | cut -c1-140
+        | LC_ALL=C awk '
+            function safe_truncate(s, max_len,   sub_s, i, ch, p, p_bra, p_open) {
+                if (length(s) <= max_len) return s
+                sub_s = substr(s, 1, max_len)
+                p = 0
+                for (i = length(sub_s); i >= 1; i--) {
+                    ch = substr(sub_s, i, 1)
+                    if (ch == "]") break
+                    if (ch == "[") { p = i; break }
+                }
+                if (p > 0) {
+                    sub_s = substr(sub_s, 1, p - 1)
+                } else {
+                    p_bra = 0
+                    for (i = length(sub_s); i >= 1; i--) {
+                        if (substr(sub_s, i, 1) == ")") break
+                        if (substr(sub_s, i, 1) == "]") { p_bra = i; break }
+                    }
+                    if (p_bra > 0) {
+                        p_open = 0
+                        for (i = p_bra; i >= 1; i--) {
+                            if (substr(sub_s, i, 1) == "[") { p_open = i; break }
+                        }
+                        if (p_open > 0) {
+                            sub_s = substr(sub_s, 1, p_open - 1)
+                        }
+                    }
+                }
+                sub(/[[:space:]]+$/, "", sub_s)
+                return sub_s
+            }
+            {
+                print safe_truncate($0, 140)
+            }
+        '
 }
 
 # -----------------------------------------------------------------------------

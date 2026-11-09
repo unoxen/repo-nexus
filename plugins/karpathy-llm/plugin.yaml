@@ -1,5 +1,5 @@
 name: karpathy-llm
-version: 0.9.10
+version: 0.9.11
 description: "Deterministic B-Tree Markdown Wiki in .rnex/wiki for AI agents"
 config:
   wiki_dir: ".rnex/wiki"
@@ -7,6 +7,7 @@ config:
   log_file: "log.md"
   btree_root_max_lines: 80
   btree_shard_max_entries: 100
+  relative_links: "rewrite"
 commands:
   ingest:
     script: "bin/ingest.sh"

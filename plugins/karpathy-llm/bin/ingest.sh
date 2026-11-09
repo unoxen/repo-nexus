@@ -55,8 +55,18 @@ main_ingest() {
                 _quiet=1
                 shift
                 ;;
+            --rewrite-links)
+                RNEX_WIKI_RELATIVE_LINKS="rewrite"
+                export RNEX_WIKI_RELATIVE_LINKS
+                shift
+                ;;
+            --strip-links|--delete-links)
+                RNEX_WIKI_RELATIVE_LINKS="strip"
+                export RNEX_WIKI_RELATIVE_LINKS
+                shift
+                ;;
             --help|-h)
-                printf 'Usage: rnex plugin karpathy-llm ingest [<source_path>] [--file <path>] [--quiet]\n'
+                printf 'Usage: rnex plugin karpathy-llm ingest [<source_path>] [--file <path>] [--rewrite-links] [--strip-links] [--quiet]\n'
                 exit 0
                 ;;
             -*)

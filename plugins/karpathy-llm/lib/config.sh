@@ -174,13 +174,30 @@ load_wiki_config_contract() {
         esac
     done
 
+    # Relative links handling strategy: rewrite (default) or strip/delete
+    if [ -n "${RNEX_CFG_RELATIVE_LINKS:-}" ]; then
+        RNEX_WIKI_RELATIVE_LINKS="$RNEX_CFG_RELATIVE_LINKS"
+    else
+        RNEX_WIKI_RELATIVE_LINKS="$(_lookup_karpathy_cfg "relative_links")"
+        [ -n "$RNEX_WIKI_RELATIVE_LINKS" ] || RNEX_WIKI_RELATIVE_LINKS="rewrite"
+    fi
+
+    case "$RNEX_WIKI_RELATIVE_LINKS" in
+        strip|delete|unlink)
+            RNEX_WIKI_RELATIVE_LINKS="strip"
+            ;;
+        *)
+            RNEX_WIKI_RELATIVE_LINKS="rewrite"
+            ;;
+    esac
+
     # Preserve backwards compatibility variable aliases
     RNEX_WIKI_BTREE_ROOT_MAX_LINES="$RNEX_WIKI_BTREE_MAX_ROOT_LINES"
 
     export RNEX_WORKSPACE_ROOT RNEX_WIKI_REL_DIR RNEX_WIKI_ROOT \
            RNEX_WIKI_INDEX_FILE RNEX_WIKI_LOG_FILE RNEX_WIKI_UP_PREFIX \
            RNEX_WIKI_BTREE_MAX_ROOT_LINES RNEX_WIKI_BTREE_SHARD_MAX_ENTRIES \
-           RNEX_WIKI_BTREE_ROOT_MAX_LINES
+           RNEX_WIKI_BTREE_ROOT_MAX_LINES RNEX_WIKI_RELATIVE_LINKS
 
     return 0
 }

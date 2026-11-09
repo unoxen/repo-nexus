@@ -13,7 +13,7 @@ Use this skill when ingesting new reference materials, architecture documentatio
 Always scaffold and ingest missing documentation deterministically using the built-in CLI helper:
 
 ```sh
-rnex plugin karpathy-llm ingest [<source_path>] [--file <path>] [--quiet]
+rnex plugin karpathy-llm ingest [<source_path>] [--file <path>] [--rewrite-links] [--strip-links] [--quiet]
 ```
 
 - Ingest all configured missing sources:
@@ -45,6 +45,7 @@ AI coding agents navigate wiki context via the 3-step zero-token-bloat protocol:
    - The CLI identifies which candidate sources have not yet been indexed and appends only missing entries into their respective B-Tree shards, preserving all existing shard entries and custom summaries intact.
    - B-Tree shards are maintained in strict `LC_ALL=C` sort order.
    - `.rnex/wiki/index.md` is recompiled atomically to route to all existing shards.
+   - Relative Markdown links in source summaries are rewritten to resolve accurately from `.rnex/wiki/` (with unresolvable links stripped to plain text to prevent broken links). Use `--strip-links` to strip all relative link formatting.
 
 3. **In-Place Synthesis & Enrichment:**
    - Read and enrich authoritative source documents directly where they live.

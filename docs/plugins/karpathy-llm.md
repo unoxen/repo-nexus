@@ -85,6 +85,7 @@ plugins:
     log_file: "log.md"          # Chronological audit log filename (default: log.md)
     btree_root_max_lines: 80    # Maximum allowed lines in root index.md router (default: 80)
     btree_shard_max_entries: 100# Threshold before splitting a B-Tree shard (default: 100)
+    relative_links: "rewrite"   # Link strategy: "rewrite" (default) or "strip"/"delete"
     sources:                    # Intake documents: directories and/or glob patterns
       - docs                    #   directory: all files (hidden dirs and node_modules pruned)
       - "repos/**/README.md"    #   recursive glob (quote it); disabled repos are excluded
@@ -101,6 +102,7 @@ plugins:
 | `log_file` | string | `log.md` | Chronological audit log filename within `wiki_dir`. |
 | `btree_root_max_lines` | integer | `80` | Ceiling on lines allowed in `index.md`. |
 | `btree_shard_max_entries` | integer | `100` | Entry count threshold before automatically splitting a shard. |
+| `relative_links` | string | `"rewrite"` | Handling strategy for relative links in ingested markdown summaries: `"rewrite"` (resolves relative links against source directory to valid paths from wiki, stripping broken links) or `"strip"` / `"delete"` (removes relative link markup, preserving anchor text). External links are always preserved. |
 | `sources` | list | `[docs, "repos/**/README.md"]` | Intake directories and/or glob patterns relative to workspace root. Overridable in `.local.rnex.yaml`. |
 | `enabled` | boolean | `true` | Enable or disable the plugin. Overridable in `.local.rnex.yaml`. |
 
@@ -144,6 +146,8 @@ rnex plugin karpathy-llm ingest --quiet
 |:---|:---|:---|:---|
 | `<file_path>` | string | *(all missing sources)* | Ingest a single specified markdown file directly. |
 | `--file, -f <path>` | string | *(all missing sources)* | Ingest a specific markdown file. |
+| `--rewrite-links` | boolean | `true` | Rewrite relative links in source summaries to valid paths from wiki. |
+| `--strip-links, --delete-links` | boolean | `false` | Strip relative link formatting in source summaries to plain text. |
 | `--quiet, -q` | boolean | `false` | Suppress non-essential informational output. |
 | `-h, --help` | boolean | `false` | Display command usage and options. |
 

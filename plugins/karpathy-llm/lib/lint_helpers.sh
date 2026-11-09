@@ -82,7 +82,7 @@ lint_existing_wiki_directory() {
             index.md|log.md) continue ;;
         esac
 
-        # 4a. Check for dead workspace document references
+        # 4a. Check for dead workspace document references & auto-heal entry links
         _shard_tmp="${_wiki_md}.tmp.$$"
         _shard_pruned=0
         while IFS= read -r _line || [ -n "$_line" ]; do
@@ -93,6 +93,30 @@ lint_existing_wiki_directory() {
                         _shard_pruned=1
                         _fixes_count=$((_fixes_count + 1))
                         continue
+                    fi
+
+                    # Auto-heal broken links inside catalog entry summary if source document exists
+                    if [ -n "$_doc_rel" ] && [ -f "${RNEX_WORKSPACE_ROOT}/${_doc_rel}" ]; then
+                        case "$_line" in
+                            *']('*')'*)
+                                _prefix="${_line%% — *}"
+                                _sum_part="${_line#* — }"
+                                if [ "$_prefix" != "$_line" ] && [ -n "$_sum_part" ]; then
+                                    _healed_sum="$(rewrite_markdown_links_in_summary \
+                                        "$_sum_part" \
+                                        "$_doc_rel" \
+                                        "$RNEX_WORKSPACE_ROOT" \
+                                        "${RNEX_WIKI_UP_PREFIX:-../../}" \
+                                        "${RNEX_WIKI_RELATIVE_LINKS:-rewrite}")"
+                                    _healed_sum="$(sanitize_markdown_summary "$_healed_sum")"
+                                    if [ "$_healed_sum" != "$_sum_part" ]; then
+                                        _line="${_prefix} — ${_healed_sum}"
+                                        _shard_pruned=1
+                                        _fixes_count=$((_fixes_count + 1))
+                                    fi
+                                fi
+                                ;;
+                        esac
                     fi
                     ;;
             esac
@@ -168,7 +192,7 @@ lint_existing_wiki_directory() {
         ' "$_wiki_md" > "$_links_tmp"
         while IFS= read -r _link_target <&5; do
             case "$_link_target" in
-                ''|http://*|https://*|mailto:*|\#*) continue ;;
+                ''|http://*|https://*|mailto:*|ftp://*|//|\#*) continue ;;
             esac
             if [ ! -e "${RNEX_WIKI_ROOT}/${_link_target}" ] && [ ! -e "${RNEX_WORKSPACE_ROOT}/${_link_target}" ]; then
                 printf 'Lint Error [%s]: Broken Markdown link target "%s".\n' \
