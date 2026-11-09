@@ -20,8 +20,10 @@ code_workspace: "microservices.code-workspace"
 git:
   ignore:
     - "repos/"
-    - "**/.rnex*/"
-    - "**/rnex*/"
+    - "**/.rnex*"
+    - "**/rnex*"
+    - "!rnex.yaml"
+    - "!**/rnex.yaml"
     - "*.log"
   hooks:
     post-merge:

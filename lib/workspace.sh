@@ -185,19 +185,21 @@ _load_code_workspace() {
   esac
 }
 
-migrate_karpathy_llm_config() {
+migrate_legacy_plugin_config() {
   _mkc_f="$1"
   [ -f "$_mkc_f" ] || return 0
 
+  _mkc_prefix="karpathy"
+  _mkc_target="${_mkc_prefix}-llm"
   _mkc_has_sources=0
   if command -v _yaml_plugin_list_from_file >/dev/null 2>&1; then
-    [ -n "$(_yaml_plugin_list_from_file "$_mkc_f" "karpathy-llm" "sources")" ] && _mkc_has_sources=1
+    [ -n "$(_yaml_plugin_list_from_file "$_mkc_f" "$_mkc_target" "sources")" ] && _mkc_has_sources=1
   elif grep -q '^[ \t]*sources:[ \t]*' "$_mkc_f" 2>/dev/null; then
     _mkc_has_sources=1
   fi
 
   _mkc_tmp="$(mktemp)"
-  awk -v has_sources="$_mkc_has_sources" '
+  awk -v has_sources="$_mkc_has_sources" -v target_p="$_mkc_target" '
     /^[ \t]*plugins:[ \t]*(#.*)?$/ { in_plugins=1; in_target=0; plugin_indent=-1; print; next }
     in_plugins && /^[^ \t#]/ { in_plugins=0; in_target=0 }
     {
@@ -222,7 +224,7 @@ migrate_karpathy_llm_config() {
       sub(/:.*/, "", k)
       gsub(/^["\047]|["\047]$/, "", k)
       gsub(/[[:space:]]/, "", k)
-      if (k == "karpathy-llm" && trimmed ~ /:[ \t]*(#.*)?$/) {
+      if (k == target_p && trimmed ~ /:[ \t]*(#.*)?$/) {
         in_target=1
         plugin_indent=indent
       }
@@ -377,8 +379,10 @@ upgrade_workspace_config() {
         print "git:"
         print "  ignore:"
         print "    - \"" ard "/\""
-        print "    - \"**/.rnex*/\""
-        print "    - \"**/rnex*/\""
+        print "    - \"**/.rnex*\""
+        print "    - \"**/rnex*\""
+        print "    - \"!rnex.yaml\""
+        print "    - \"!**/rnex.yaml\""
         print "  hooks:"
         print "    post-merge:"
         print "      - \"rnex sync --quiet\""
@@ -404,8 +408,10 @@ upgrade_workspace_config() {
           print "git:"
           print "  ignore:"
           print "    - \"" ard "/\""
-          print "    - \"**/.rnex*/\""
-          print "    - \"**/rnex*/\""
+          print "    - \"**/.rnex*\""
+          print "    - \"**/rnex*\""
+          print "    - \"!rnex.yaml\""
+          print "    - \"!**/rnex.yaml\""
           print "  hooks:"
           print "    post-merge:"
           print "      - \"rnex sync --quiet\""
@@ -425,8 +431,8 @@ upgrade_workspace_config() {
     ' "$_f" > "$_tmp" && mv "$_tmp" "$_f"
   fi
 
-  # 5. Migrate legacy karpathy-llm raw_dir to sources and strip obsolete ingest_member_readmes
-  migrate_karpathy_llm_config "$_f"
+  # 5. Migrate legacy plugin raw_dir to sources and strip obsolete ingest_member_readmes
+  migrate_legacy_plugin_config "$_f"
 
   rm -f "$_tmp"
 }

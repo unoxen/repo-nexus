@@ -15,8 +15,10 @@ Repo Nexus manages Git integration through the declarative `git:` block in `rnex
 git:
   ignore:
     - "repos/"
-    - "**/.rnex*/"
-    - "**/rnex*/"
+    - "**/.rnex*"
+    - "**/rnex*"
+    - "!rnex.yaml"
+    - "!**/rnex.yaml"
     - "*.log"
     - ".env.local"
   hooks:
@@ -37,13 +39,14 @@ git:
 During `rnex init` and `rnex sync`, Repo Nexus deterministically reconciles a dedicated `# REPO-NEXUS:START` ... `# REPO-NEXUS:END` section inside `.gitignore` while preserving any user-authored rules outside the markers:
 
 1. **Deterministic Recursive Patterns**:
-   Generated runtime assets are ignored recursively across all directories using trailing-slash directory patterns:
-   * `**/.rnex*/`
-   * `**/rnex*/`
+   Generated runtime assets, caches, logs, and internal state are ignored recursively across all directories:
+   * `**/.rnex*`
+   * `**/rnex*`
    * `<repos_dir>/` (default `repos/`)
+   * `!rnex.yaml` and `!**/rnex.yaml` (explicitly un-ignored)
 
-   ::: tip Trailing Slashes Protect Root Files
-   Because the directory patterns explicitly end with `/`, Git matches only directories. The root CLI binary `rnex` and team configuration file `rnex.yaml` are never ignored by these patterns (while `.local.rnex.yaml` is ignored via its own explicit rule).
+   ::: tip Exclude Configuration via Negation
+   By omitting trailing slashes, all files and directories starting with `rnex` or `.rnex` (such as `.rnex/`, `.rnex_history`, `rnex.log`, and the local `rnex` binary) are ignored by default. The workspace configuration `rnex.yaml` (and nested `**/rnex.yaml`) is explicitly preserved and tracked via Git negation rules (`!rnex.yaml`, `!**/rnex.yaml`).
    :::
 
 2. **Synchronized Custom Patterns**:

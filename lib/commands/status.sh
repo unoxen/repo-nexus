@@ -73,7 +73,7 @@ cmd_status() {
     (grep -q "^${_repos_dir_name}/" "$_gi" 2>/dev/null || grep -q "^${_repos_dir_name}\*" "$_gi" 2>/dev/null || grep -q '^repos' "$_gi" 2>/dev/null) && _gi_repos=1
     grep -qF "$RNEX_LOCAL_CONFIG_FILE" "$_gi" 2>/dev/null && _gi_local=1
     grep -q "lint_trigger_counter" "$_gi" 2>/dev/null && _gi_has_counter=1
-    grep -q '\*\*/\.rnex\*/' "$_gi" 2>/dev/null && _gi_has_rnex=1
+    (grep -q '\*\*/\.rnex\*' "$_gi" 2>/dev/null || grep -q '\.rnex\*' "$_gi" 2>/dev/null) && _gi_has_rnex=1
     if grep -qFx -- "${GITIGNORE_MARKER_START:-# REPO-NEXUS:START}" "$_gi" 2>/dev/null && \
        grep -qFx -- "${GITIGNORE_MARKER_END:-# REPO-NEXUS:END}" "$_gi" 2>/dev/null; then
       _gi_has_markers=1
@@ -93,7 +93,7 @@ cmd_status() {
   fi
 
   if [ "$_gi_repos" -eq 1 ] && [ "$_gi_local" -eq 1 ] && [ "$_gi_has_counter" -eq 0 ] && [ "$_gi_has_rnex" -eq 1 ] && [ "$_gi_has_markers" -eq 1 ] && [ "$_gi_custom_ok" -eq 1 ]; then
-    printf '  %b✓%b Git Ignore:    %s/, %s, and **/.rnex*/ ignored in .gitignore\n' "$_G" "$_NC" "$_repos_dir_name" "$RNEX_LOCAL_CONFIG_FILE"
+    printf '  %b✓%b Git Ignore:    %s/, %s, and **/.rnex* ignored in .gitignore\n' "$_G" "$_NC" "$_repos_dir_name" "$RNEX_LOCAL_CONFIG_FILE"
   else
     printf '  %b!%b Git Ignore:    recommend running "rnex sync" to update .gitignore (%s/, local configs)\n' "$_Y" "$_NC" "$_repos_dir_name"
   fi
@@ -231,7 +231,7 @@ cmd_status() {
             if [ -n "$_opts" ]; then
               printf '    %b↳ Options: %s%b\n' "$_DIM" "$_opts" "$_NC"
             fi
-            if [ "$_pname" = "karpathy-llm" ] && [ -n "$(plugin_legacy_raw_dir "$_pname" 2>/dev/null)" ]; then
+            if [ -n "$(plugin_legacy_raw_dir "$_pname" 2>/dev/null)" ]; then
               printf '    %b↳ [!] Deprecated: raw_dir — run "rnex sync" to rewrite to sources%b\n' "$_Y" "$_NC"
             fi
           fi

@@ -21,8 +21,10 @@ code_workspace: "acme.code-workspace"
 git:
   ignore:
     - "repos/"
-    - "**/.rnex*/"
-    - "**/rnex*/"
+    - "**/.rnex*"
+    - "**/rnex*"
+    - "!rnex.yaml"
+    - "!**/rnex.yaml"
     - "*.log"
     - ".env.local"
   hooks:
@@ -42,7 +44,7 @@ rnex_hooks:
     - "echo 'Workspace initialized'"
   before_sync: []
   after_sync:
-    - "rnex plugin karpathy-llm ingest --quiet"
+    - "rnex plugin karpathy-llm ingest"
   before_clone: []
   after_clone:
     - "rnex exec npm install"
@@ -108,7 +110,7 @@ plugins:
     path: "./custom-plugins/my-plugin"
   karpathy-llm:
     enabled: true
-    wiki_dir: "wiki"
+    wiki_dir: ".rnex/wiki"
     index_file: "index.md"
     log_file: "log.md"
     btree_root_max_lines: 80

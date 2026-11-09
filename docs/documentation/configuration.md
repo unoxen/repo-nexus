@@ -38,8 +38,10 @@ code_workspace: "acme.code-workspace"
 git:
   ignore:
     - "repos/"
-    - "**/.rnex*/"
-    - "**/rnex*/"
+    - "**/.rnex*"
+    - "**/rnex*"
+    - "!rnex.yaml"
+    - "!**/rnex.yaml"
     - "*.log"
     - ".env.local"
   hooks:
@@ -130,7 +132,7 @@ plugins:
   # Built-in LLM Knowledge Base plugin
   karpathy-llm:
     enabled: true
-    wiki_dir: "wiki"
+    wiki_dir: ".rnex/wiki"
     sources:
       - "docs"
       - "adr"
@@ -152,7 +154,7 @@ plugins:
 
 ### Git Integration (`git`)
 
-* `git.ignore`: List of directories or file patterns appended to `.gitignore`. Directories starting with `.rnex` or `rnex` (`**/.rnex*/`, `**/rnex*/`) are recursively ignored by default.
+* `git.ignore`: List of directories or file patterns appended to `.gitignore`. Files and directories starting with `.rnex` or `rnex` (`**/.rnex*`, `**/rnex*`) are recursively ignored by default, while `rnex.yaml` (`!rnex.yaml`, `!**/rnex.yaml`) is excluded and tracked.
 * `git.hooks`: Map of Git hook names (`post-merge`, `post-checkout`, `pre-commit`, `pre-push`) to lists of shell commands executed when the hook fires.
 
 ### Lifecycle Hooks (`rnex_hooks`)

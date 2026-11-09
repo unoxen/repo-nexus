@@ -17,17 +17,17 @@ Do not hard-code any specific AI tool or harness into the wiki structure itself.
 Initialize the fixed baseline directories and control files:
 
 - **`./docs/`** — Workspace documentation directory.
-- **`wiki/index.md`** — B-Tree Root routing table (bounded <= 80 lines) organizing domain shards.
-- **`wiki/repo-nexus.md`** & **`wiki/repos-<member>.md`** — Flat B-Tree leaf shards.
-- **`wiki/log.md`** — Append-only operation log recording all ingest and lint runs.
+- **`.rnex/wiki/index.md`** — B-Tree Root routing table (bounded <= 80 lines) organizing domain shards.
+- **`.rnex/wiki/repo-nexus.md`** & **`.rnex/wiki/repos-<member>.md`** — Flat B-Tree leaf shards.
+- **`.rnex/wiki/log.md`** — Append-only operation log recording all ingest and lint runs.
 
-Do not create arbitrary or speculative subdirectories during initialization. Scaffolding is 100% deterministic. Flat leaf shards reside directly in `wiki/` with zero `_graph/` and zero `_index/` subdirectories. Domain sub-shards emerge organically during the source ingestion phase (`wiki-ingest`).
+Do not create arbitrary or speculative subdirectories during initialization. Scaffolding is 100% deterministic. Flat leaf shards reside directly in `.rnex/wiki/` (or configured `wiki_dir`) with zero `_graph/` and zero `_index/` subdirectories. Domain sub-shards emerge organically during the source ingestion phase (`wiki-ingest`).
 
 ---
 
 ### 2. Agent Rules & Routing
 
-- **Repo Nexus Workspaces**: Paths (`sources`, default: `["docs", "repos/**/README.md"]`; legacy `raw_dir`; `wiki_dir`, default: `wiki`) are configured in `rnex.yaml` under `plugins.karpathy-llm`. Plugin assets are scoped under `.rnex/plugins/karpathy-llm/` (`rules/behavioral.md` and `instructions/rnex-wiki-architecture.md`). Resolved paths are pre-compiled into `.rnex/ai-instructions.md`.
+- **Repo Nexus Workspaces**: Paths (`sources`, default: `["docs", "repos/**/README.md"]`; legacy `raw_dir`; `wiki_dir`, default: `.rnex/wiki`) are configured in `rnex.yaml` under `plugins.karpathy-llm`. Plugin assets are scoped under `.rnex/plugins/karpathy-llm/` (`rules/behavioral.md` and `instructions/rnex-wiki-architecture.md`). Resolved paths are pre-compiled into `.rnex/ai-instructions.md`.
 - **Standalone Repositories**: Append the `## Karpathy Wiki Rules` section (see Section 4) to the primary AI instructions file (`AGENTS.md`, `CLAUDE.md`, `.cursorrules`, etc.), preserving all existing content.
 
 ---

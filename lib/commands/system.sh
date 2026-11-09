@@ -124,8 +124,7 @@ cmd_help() {
     rnex list                                   # List all member repos and active branches
     rnex status                                 # Inspect workspace configuration and health
     rnex sync                                   # Reconcile all repos, plugins, skills, and .rnex directories
-    rnex plugin karpathy-llm ingest             # Ingest sources into the Karpathy LLM Wiki
-    rnex plugin karpathy-llm lint --strict      # Validate Karpathy LLM Wiki links and limits
+    rnex plugin <name> <command>                # Execute a plugin-provided command
     rnex completion zsh                         # Generate Zsh completion script
 
 EOF

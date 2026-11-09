@@ -1,16 +1,16 @@
 name: karpathy-llm
-version: 0.9.9
-description: "Zero-dependency B-Tree Sharded Markdown LLM Wiki for Repo Nexus"
-commands:
-  ingest:
-    script: bin/ingest.sh
-    description: "Ingest workspace documentation sources directly in place into flat B-Tree shards (wiki/*.md)"
-  lint:
-    script: bin/lint.sh
-    description: "Verify, auto-heal, and re-balance wiki B-Tree shards (wiki/*.md) and root index.md"
+version: 0.9.10
+description: "Deterministic B-Tree Markdown Wiki in .rnex/wiki for AI agents"
 config:
-  wiki_dir: "wiki"
+  wiki_dir: ".rnex/wiki"
   index_file: "index.md"
   log_file: "log.md"
-  btree_shard_max_entries: 100
   btree_root_max_lines: 80
+  btree_shard_max_entries: 100
+commands:
+  ingest:
+    script: "bin/ingest.sh"
+    description: "Ingest only missing sources from passed argument or configured sources into .rnex/wiki"
+  lint:
+    script: "bin/lint.sh"
+    description: "Lint existing wiki docs, shard links, and target references inside .rnex/wiki"

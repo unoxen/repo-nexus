@@ -1,28 +1,382 @@
 #!/bin/sh
 # shellcheck shell=sh
+# shellcheck disable=SC2016
 # =============================================================================
 # File: plugins/karpathy-llm/lib/source_helpers.sh
-# Architectural Layer: Domain-Aware Source Discovery Helpers (helpers/)
-# Single Responsibility: Resolve and expand workspace source declarations into
-# concrete regular Markdown files in place, supporting recursive glob patterns
-# ("**/*.md") portably in pure POSIX /bin/sh without symlinks or Bashisms.
-# Standards: POSIX Shell (/bin/sh), OWASP A03 Input Sanitization, SRP.
-# Patterns: Iterator Pattern, Information Expert (GRASP), Adapter Pattern.
-# Dependencies: config.sh, utils.sh
+# Architectural Layer: Domain Helpers (helpers/)
+# Single Responsibility: Discover candidate Markdown source files from an
+# explicit CLI source argument or configured `sources` in rnex YAML configs,
+# and filter them against existing .rnex/wiki/*.md shards so ONLY missing
+# sources are ingested into the B-Tree knowledge store.
+#
+# Design Patterns & Principles:
+#   - Information Expert (GRASP): Encapsulates knowledge of source file
+#     discovery, glob matching, and shard ID derivation.
+#   - Strategy Pattern (GoF): Supports multiple source discovery strategies
+#     (explicit file, directory scan, globstar recursion, YAML configuration).
+#   - Filter Pipeline: Candidate paths are discovered, deduplicated, and
+#     filtered against already-indexed shard records via set difference (comm).
+#
+# Security & Standards:
+#   - Pure POSIX Shell (/bin/sh): No bashisms, fully quoted expansions.
+#   - OWASP ASVS A03: Strict validation against path traversal (".."),
+#     absolute paths, and symbolic links.
 # =============================================================================
 
+# Guard against redundant multiple inclusion
+if [ "${RNEX_KARPATHY_SOURCE_HELPERS_SH_SOURCED:-0}" = "1" ]; then
+    # shellcheck disable=SC2317
+    return 0 2>/dev/null || exit 0
+fi
+RNEX_KARPATHY_SOURCE_HELPERS_SH_SOURCED=1
+
 # -----------------------------------------------------------------------------
-# extract_base_dir_from_pattern
-# Summary: Extracts the static leading directory component of a path pattern
-#          before any wildcard characters (*, ?, [) appear.
-# @param $1: pattern - Configured path pattern (e.g., "repos/**/README.md").
-# @returns: Leading static directory path on stdout (e.g., "repos").
+# parse_configured_workspace_sources
+# Summary: Parses the `sources` list from .local.rnex.yaml (Priority 1) or
+#          rnex.yaml (Priority 2), or plugin configuration. Supports both
+#          YAML block sequences (`- item`) and inline arrays (`sources: [...]`).
+# @param $1: workspace_root - Absolute path to workspace root.
+# @returns: Newline-delimited source specifications on stdout.
+# @pure (Read-only configuration inspection)
+# -----------------------------------------------------------------------------
+parse_configured_workspace_sources() {
+    _ws_root="$1"
+    _found_sources=""
+
+    for _cfg_file in "${_ws_root}/.local.rnex.yaml" "${_ws_root}/rnex.yaml"; do
+        [ -f "$_cfg_file" ] || continue
+        _extracted="$(LC_ALL=C awk '
+            function clean_token(s) {
+                gsub(/\r/, "", s)
+                sub(/[[:space:]]+#.*$/, "", s)
+                gsub(/^[[:space:]]+|[[:space:]]+$/, "", s)
+                if ((s ~ /^".*"$/) || (s ~ /^'\''[^'\'']*'\''$/)) {
+                    s = substr(s, 2, length(s) - 2)
+                }
+                return s
+            }
+            function emit_inline(raw, prefix,   n, i, parts, tok) {
+                sub(/^[[:space:]]*\[/, "", raw)
+                sub(/\][[:space:]]*$/, "", raw)
+                n = split(raw, parts, ",")
+                for (i = 1; i <= n; i++) {
+                    tok = clean_token(parts[i])
+                    if (tok != "") print (prefix != "" ? prefix "/" tok : tok)
+                }
+            }
+            /^[[:space:]]*#/ || /^[[:space:]]*$/ { next }
+            {
+                match($0, /^[ ]*/)
+                indent = RLENGTH
+                line = substr($0, indent + 1)
+
+                if (indent == 0) {
+                    in_repos = (line ~ /^repos:[[:space:]]*$/)
+                    in_plugins = (line ~ /^plugins:[[:space:]]*$/)
+                    curr_repo = ""
+                    in_repo_sources = 0
+                    in_top_sources = 0
+                    in_karpathy = 0
+                    in_karpathy_sources = 0
+                    if (line ~ /^sources:[[:space:]]*\[.*\][[:space:]]*$/) {
+                        sub(/^sources:[[:space:]]*/, "", line)
+                        emit_inline(line, "")
+                        found_top_sources = 1
+                    } else if (line ~ /^sources:[[:space:]]*$/) {
+                        in_top_sources = 1
+                        found_top_sources = 1
+                    }
+                    next
+                }
+                if (in_top_sources) {
+                    if (line ~ /^-[[:space:]]+/) {
+                        sub(/^-[[:space:]]+/, "", line)
+                        tok = clean_token(line)
+                        if (tok != "") print tok
+                    } else if (indent == 0) {
+                        in_top_sources = 0
+                    }
+                    next
+                }
+                if (in_plugins) {
+                    if (line ~ /^karpathy-llm:[[:space:]]*$/) {
+                        in_karpathy = 1
+                        in_karpathy_sources = 0
+                        next
+                    }
+                    if (in_karpathy) {
+                        if (line ~ /^sources:[[:space:]]*\[.*\][[:space:]]*$/) {
+                            sub(/^sources:[[:space:]]*/, "", line)
+                            emit_inline(line, "")
+                            found_top_sources = 1
+                        } else if (line ~ /^sources:[[:space:]]*$/) {
+                            in_karpathy_sources = 1
+                            found_top_sources = 1
+                        } else if (in_karpathy_sources && line ~ /^-[[:space:]]+/) {
+                            sub(/^-[[:space:]]+/, "", line)
+                            tok = clean_token(line)
+                            if (tok != "") print tok
+                        } else if (line !~ /^-[[:space:]]+/) {
+                            in_karpathy_sources = 0
+                        }
+                    }
+                }
+                if (in_repos) {
+                    if (indent == 2 && line ~ /^[^[:space:]-][^:]*:[[:space:]]*$/) {
+                        curr_repo = line
+                        sub(/:.*$/, "", curr_repo)
+                        curr_repo = clean_token(curr_repo)
+                        repo_order[++num_repos] = curr_repo
+                        repo_enabled[curr_repo] = 1
+                        in_repo_sources = 0
+                        next
+                    }
+                    if (curr_repo != "") {
+                        if (line ~ /^enabled:[[:space:]]*false/) {
+                            repo_enabled[curr_repo] = 0
+                        }
+                        if (line ~ /^sources:[[:space:]]*\[.*\][[:space:]]*$/) {
+                            sub(/^sources:[[:space:]]*/, "", line)
+                            emit_inline(line, "repos/" curr_repo)
+                            repo_has_sources[curr_repo] = 1
+                        } else if (line ~ /^sources:[[:space:]]*$/) {
+                            in_repo_sources = 1
+                        } else if (in_repo_sources && line ~ /^-[[:space:]]+/) {
+                            sub(/^-[[:space:]]+/, "", line)
+                            tok = clean_token(line)
+                            if (tok != "") {
+                                print "repos/" curr_repo "/" tok
+                                repo_has_sources[curr_repo] = 1
+                            }
+                        } else if (line !~ /^-[[:space:]]+/) {
+                            in_repo_sources = 0
+                        }
+                    }
+                }
+            }
+            END {
+                for (i = 1; i <= num_repos; i++) {
+                    r = repo_order[i]
+                    if (repo_enabled[r] && !repo_has_sources[r]) {
+                        print "repos/" r "/README.md"
+                    }
+                }
+            }
+        ' "$_cfg_file")"
+        if [ -n "$_extracted" ]; then
+            _found_sources="$_extracted"
+            break
+        fi
+    done
+
+    # 3. If still empty, fall back to default candidate sources
+    if [ -z "$_found_sources" ]; then
+        _found_sources="README.md
+docs
+repos/**/README.md"
+    fi
+
+    printf '%s\n' "$_found_sources"
+    return 0
+}
+
+# -----------------------------------------------------------------------------
+# extract_already_indexed_paths
+# Summary: Scans all existing B-Tree leaf shards (repo-nexus*.md and repos-*.md)
+#          inside $RNEX_WIKI_ROOT and outputs all already-indexed workspace-
+#          relative file paths in sorted LC_ALL=C order.
+# @param $1: out_indexed_file - File path to write sorted indexed paths.
+# @returns: 0 on success.
+# @sideEffects: Writes sorted workspace-relative paths to $1.
+# -----------------------------------------------------------------------------
+extract_already_indexed_paths() {
+    _out_idx="$1"
+    : > "$_out_idx"
+    [ -d "$RNEX_WIKI_ROOT" ] || return 0
+
+    for _shard_file in "${RNEX_WIKI_ROOT}"/repo-nexus*.md "${RNEX_WIKI_ROOT}"/repos-*.md; do
+        [ -f "$_shard_file" ] || continue
+        # Matches both formats:
+        # 1. - **[Title](../../path)** (`path`) — summary
+        # 2. - **slug** (`path`) — summary
+        LC_ALL=C sed -n 's/^- \*\*.*(`\([^`]*\)`).*/\1/p' "$_shard_file" >> "$_out_idx"
+    done
+
+    atomic_sort_unique_file "$_out_idx" || true
+    return 0
+}
+
+# -----------------------------------------------------------------------------
+# derive_shard_id_for_workspace_path
+# Summary: Deterministically maps a workspace-relative file path to its flat
+#          B-Tree shard identifier ("repo-nexus[-<scope>]" or "repos-<member>[-<scope>]").
+# @param $1: workspace_rel_path - Normalized workspace-relative file path.
+# @returns: Deterministic shard ID string on stdout.
 # @pure
+# -----------------------------------------------------------------------------
+derive_shard_id_for_workspace_path() {
+    _rel="$1"
+    _repos_dir="${RNEX_CFG_REPOS_DIR:-repos}"
+    _repos_dir="${_repos_dir%/}"
+
+    case "$_rel" in
+        "${_repos_dir}/"*)
+            _after_repos="${_rel#"${_repos_dir}/"}"
+            _member_name="$(printf '%s' "$_after_repos" | cut -d'/' -f1)"
+            _second_seg="$(printf '%s' "$_after_repos" | cut -d'/' -f2)"
+            _third_seg="$(printf '%s' "$_after_repos" | cut -d'/' -f3)"
+            _member_slug="$(normalize_slug_id "$_member_name")"
+            if [ -n "$_third_seg" ]; then
+                _scope_slug="$(normalize_slug_id "$_second_seg")"
+                printf 'repos-%s-%s\n' "$_member_slug" "$_scope_slug"
+            else
+                printf 'repos-%s\n' "$_member_slug"
+            fi
+            ;;
+        */*)
+            _top_dir="$(printf '%s' "$_rel" | cut -d'/' -f1)"
+            _top_slug="$(normalize_slug_id "$_top_dir")"
+            printf 'repo-nexus-%s\n' "$_top_slug"
+            ;;
+        *)
+            printf 'repo-nexus\n'
+            ;;
+    esac
+}
+
+# -----------------------------------------------------------------------------
+# expand_single_source_spec
+# Summary: Expands a single source specification (regular file, directory, or
+#          glob pattern including "**") into normalized workspace-relative
+#          Markdown file paths, rejecting symlinks and the wiki directory itself.
+# @param $1: source_spec - File path, directory path, or glob pattern.
+# @param $2: out_candidates_file - Output file to append discovered paths.
+# @returns: 0 on valid expansion; 1 if explicit path does not exist.
+# @throws: Writes error to stderr on path traversal or symlinks (OWASP A03).
+# @sideEffects: Appends workspace-relative paths to $2.
+# -----------------------------------------------------------------------------
+expand_single_source_spec() {
+    _spec="$(printf '%s' "$1" | tr -d '\r')"
+    _out_file="$2"
+    [ -n "$_spec" ] || return 0
+
+    case "$_spec" in
+        *..*|/*)
+            printf 'Error [security]: Unsafe source path "%s" rejected (OWASP A03).\n' "$_spec" >&2
+            return 1
+            ;;
+    esac
+
+    _abs_spec="${RNEX_WORKSPACE_ROOT}/${_spec#./}"
+
+    # Case 1: Glob pattern (*, ?, [) including globstar (**)
+    case "$_spec" in
+        *\**|*\?*|*\[*)
+            _prefix="${_spec%%[\*\?\[]*}"
+            _prefix="${_prefix%/}"
+            _search_root="${RNEX_WORKSPACE_ROOT}"
+            [ -n "$_prefix" ] && _search_root="${RNEX_WORKSPACE_ROOT}/${_prefix#./}"
+            [ -d "$_search_root" ] || return 0
+
+            find "$_search_root" -type f \( -name '*.md' -o -name '*.mdx' \) \
+                ! -path "${RNEX_WIKI_ROOT}/*" ! -path '*/.rnex/*' ! -path '*/.git/*' ! -path '*/node_modules/*' -print \
+            | while IFS= read -r _found_abs; do
+                [ -L "$_found_abs" ] && continue
+                _rel="$(normalize_workspace_rel_path "$RNEX_WORKSPACE_ROOT" "$_found_abs")" || continue
+                if match_globstar_path "$_rel" "$_spec"; then
+                    printf '%s\n' "$_rel" >> "$_out_file"
+                fi
+            done
+            return 0
+            ;;
+    esac
+
+    # Case 2: Reject symbolic links explicitly (OWASP ASVS A03)
+    if [ -L "$_abs_spec" ]; then
+        printf 'Error [ingest]: Symbolic link "%s" is not permitted.\n' "$_spec" >&2
+        return 1
+    fi
+
+    # Case 3: Exact regular file
+    if [ -f "$_abs_spec" ]; then
+        _rel="$(normalize_workspace_rel_path "$RNEX_WORKSPACE_ROOT" "$_abs_spec")" || return 1
+        printf '%s\n' "$_rel" >> "$_out_file"
+        return 0
+    fi
+
+    # Case 4: Directory -> recursively find all regular .md/.mdx files
+    if [ -d "$_abs_spec" ]; then
+        find "$_abs_spec" -type f \( -name '*.md' -o -name '*.mdx' \) \
+            ! -path "${RNEX_WIKI_ROOT}/*" ! -path '*/.rnex/*' ! -path '*/.git/*' ! -path '*/node_modules/*' -print \
+        | while IFS= read -r _found_abs; do
+            [ -L "$_found_abs" ] && continue
+            _rel="$(normalize_workspace_rel_path "$RNEX_WORKSPACE_ROOT" "$_found_abs")" || continue
+            printf '%s\n' "$_rel" >> "$_out_file"
+        done
+        return 0
+    fi
+
+    return 1
+}
+
+# -----------------------------------------------------------------------------
+# resolve_missing_sources_to_ingest
+# Summary: Resolves candidate Markdown files from either the passed CLI source
+#          argument ($1) or configured `sources` in .local.rnex.yaml / rnex.yaml,
+#          and filters out any source already present in .rnex/wiki/*.md shards.
+# @param $1: explicit_source_arg - Optional CLI source argument (empty for config).
+# @param $2: out_missing_file - File receiving ONLY missing workspace_rel_paths.
+# @returns: 0 on success; 1 if an explicit CLI source argument is invalid/missing.
+# @throws: Writes error to stderr on missing explicit argument file.
+# @sideEffects: Writes sorted missing workspace-relative file paths to $2.
+# -----------------------------------------------------------------------------
+resolve_missing_sources_to_ingest() {
+    _explicit_arg="$1"
+    _out_missing="$2"
+    _candidates_tmp="${_out_missing}.cand.$$"
+    _indexed_tmp="${_out_missing}.idx.$$"
+    : > "$_candidates_tmp"
+    : > "$_out_missing"
+
+    if [ -n "$_explicit_arg" ]; then
+        if ! expand_single_source_spec "$_explicit_arg" "$_candidates_tmp"; then
+            rm -f "$_candidates_tmp" "$_indexed_tmp"
+            printf 'Error [ingest]: Source "%s" not found or invalid.\n' "$_explicit_arg" >&2
+            return 1
+        fi
+    else
+        _sources_list="$(parse_configured_workspace_sources "$RNEX_WORKSPACE_ROOT")"
+        _spec_tmp="${_out_missing}.specs.$$"
+        printf '%s\n' "$_sources_list" > "$_spec_tmp"
+        while IFS= read -r _src_entry <&3; do
+            [ -n "$_src_entry" ] || continue
+            expand_single_source_spec "$_src_entry" "$_candidates_tmp" < /dev/null || true
+        done 3< "$_spec_tmp"
+        rm -f "$_spec_tmp"
+    fi
+
+    atomic_sort_unique_file "$_candidates_tmp" || true
+    extract_already_indexed_paths "$_indexed_tmp"
+
+    # Keep ONLY candidate paths NOT already present in $_indexed_tmp
+    if [ -s "$_candidates_tmp" ]; then
+        if [ -s "$_indexed_tmp" ]; then
+            LC_ALL=C comm -23 "$_candidates_tmp" "$_indexed_tmp" > "$_out_missing"
+        else
+            cp "$_candidates_tmp" "$_out_missing"
+        fi
+    fi
+
+    rm -f "$_candidates_tmp" "$_indexed_tmp"
+    return 0
+}
+
+# -----------------------------------------------------------------------------
+# Backwards-Compatible Helpers
 # -----------------------------------------------------------------------------
 extract_base_dir_from_pattern() {
     _pat="$1"
     _dir="$(dirname "$_pat")"
-
     case "$_dir" in
         *\**|*\?*|*\[*)
             _curr="$_pat"
@@ -35,52 +389,36 @@ extract_base_dir_from_pattern() {
             done
             ;;
     esac
-
     if [ -z "$_dir" ] || [ "$_dir" = "." ] || [ "$_dir" = "/" ]; then
         _dir="."
     fi
     printf '%s\n' "$_dir"
 }
 
-# -----------------------------------------------------------------------------
-# match_globstar_path
-# Summary: Tests whether a relative path matches a pattern containing `**`
-#          using standard POSIX string pattern matching.
-# @param $1: rel_path - Workspace-relative candidate path.
-# @param $2: pattern  - Configured glob pattern (e.g., "repos/**/README.md").
-# @returns: 0 if matched, 1 if not matched.
-# @pure
-# -----------------------------------------------------------------------------
 match_globstar_path() {
     _candidate_path="$1"
     _target_pat="$2"
 
-    # Strip any enclosing quotes or whitespace
     _candidate_path="$(printf '%s' "$_candidate_path" | tr -d '"'\''' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
     _target_pat="$(printf '%s' "$_target_pat" | tr -d '"'\''' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
 
-    # Strip leading ./ if present
     while [ "${_candidate_path#./}" != "$_candidate_path" ]; do _candidate_path="${_candidate_path#./}"; done
     while [ "${_target_pat#./}" != "$_target_pat" ]; do _target_pat="${_target_pat#./}"; done
 
-    # If candidate path was provided with absolute prefix matching workspace root, strip it
     if [ -n "${RNEX_WORKSPACE_ROOT:-}" ]; then
         _candidate_path="${_candidate_path#"${RNEX_WORKSPACE_ROOT}/"}"
     fi
 
-    # Exact equality shortcut
     if [ "$_candidate_path" = "$_target_pat" ]; then
         return 0
     fi
 
-    # Evaluate recursive '**/' globbing via portable POSIX case expansion
     case "$_target_pat" in
         *\*\**)
-            _prefix="${_target_pat%%\*\**}" # substring before first '**'
-            _suffix="${_target_pat##*\*\*}" # substring after last '**'
-            _suffix="${_suffix#/}"          # strip leading separator if present
+            _prefix="${_target_pat%%\*\**}"
+            _suffix="${_target_pat##*\*\*}"
+            _suffix="${_suffix#/}"
 
-            # Validate prefix alignment and suffix matching
             # shellcheck disable=SC2254
             case "$_candidate_path" in
                 "$_prefix"*$_suffix)
@@ -100,368 +438,11 @@ match_globstar_path() {
             esac
             ;;
         *)
-            # Single-level shell pattern match
-            _c_dir="$(dirname "$_candidate_path")"
-            _p_dir="$(dirname "$_target_pat")"
-            [ "$_c_dir" = "$_p_dir" ] || return 1
-
-            _c_base="$(basename "$_candidate_path")"
-            _p_base="$(basename "$_target_pat")"
             # shellcheck disable=SC2254
-            case "$_c_base" in
-                $_p_base) return 0 ;;
+            case "$_candidate_path" in
+                $_target_pat) return 0 ;;
                 *) return 1 ;;
             esac
             ;;
     esac
-}
-
-# -----------------------------------------------------------------------------
-# parse_yaml_sources_for_scope
-# Summary: Extracts configured source paths for either the root "repo-nexus"
-#          scope (under plugins.karpathy-llm.sources or top-level sources) or a
-#          specific member repository (under repos.<repo_name>.sources).
-#          Supports both YAML block lists (- item) and inline arrays ([a, b]).
-# @param $1: yaml_file  - Path to rnex.yaml or .local.rnex.yaml.
-# @param $2: scope_type - "nexus" or "repo".
-# @param $3: repo_name  - Member repository name when scope_type="repo".
-# @returns: Normalized relative source paths (one per line) on stdout.
-# @pure
-# -----------------------------------------------------------------------------
-parse_yaml_sources_for_scope() {
-    _yaml_file="$1"
-    _scope_type="$2"
-    _target_repo="$3"
-
-    [ -f "$_yaml_file" ] || return 0
-
-    LC_ALL=C awk -v scope="$_scope_type" -v repo="$_target_repo" '
-        function clean_token(val) {
-            sub(/#.*$/, "", val)
-            gsub(/^[ \t"'\''\[\]]+|[ \t"'\''\[\]\r]+$/, "", val)
-            sub(/^\.\//, "", val)
-            return val
-        }
-        function emit_inline_array(raw,   n, i, arr, tok) {
-            gsub(/^\[|\]$/, "", raw)
-            n = split(raw, arr, ",")
-            for (i = 1; i <= n; i++) {
-                tok = clean_token(arr[i])
-                if (length(tok) > 0) print tok
-            }
-        }
-        /^[ \t]*#/ || /^[ \t]*$/ { next }
-        {
-            match($0, /^[ ]*/)
-            indent = RLENGTH
-            line = substr($0, indent + 1)
-
-            if (indent == 0) {
-                in_repos = (line ~ /^repos:[ \t]*$/)
-                in_plugins = (line ~ /^plugins:[ \t]*$/)
-                in_target_repo = 0
-                in_karpathy = 0
-                in_sources_list = 0
-                if (scope == "nexus" && line ~ /^sources:[ \t]*/) {
-                    rest = line; sub(/^sources:[ \t]*/, "", rest)
-                    if (rest ~ /^\[/) emit_inline_array(rest)
-                    else { in_sources_list = 1; sources_indent = indent }
-                }
-                next
-            }
-
-            if (scope == "nexus" && in_plugins) {
-                if (line ~ /^karpathy-llm:[ \t]*$/ || line ~ /^-[ \t]*name:[ \t]*karpathy-llm/) {
-                    in_karpathy = 1
-                    karpathy_indent = indent
-                    in_sources_list = 0
-                    next
-                }
-                if (in_karpathy && indent <= karpathy_indent && line !~ /^sources:/) {
-                    in_karpathy = 0
-                    in_sources_list = 0
-                }
-                if (in_karpathy && line ~ /^sources:[ \t]*/) {
-                    rest = line; sub(/^sources:[ \t]*/, "", rest)
-                    if (rest ~ /^\[/) emit_inline_array(rest)
-                    else { in_sources_list = 1; sources_indent = indent }
-                    next
-                }
-            }
-
-            if (scope == "repo" && in_repos) {
-                if (line ~ ("^" repo ":[ \t]*$") || line ~ ("^-[ \t]*name:[ \t]*[\"'\'']?" repo "[\"'\'']?[ \t]*$")) {
-                    in_target_repo = 1
-                    repo_indent = indent
-                    in_sources_list = 0
-                    next
-                }
-                if (in_target_repo && indent <= repo_indent && line !~ /^sources:/) {
-                    in_target_repo = 0
-                    in_sources_list = 0
-                }
-                if (in_target_repo && line ~ /^sources:[ \t]*/) {
-                    rest = line; sub(/^sources:[ \t]*/, "", rest)
-                    if (rest ~ /^\[/) emit_inline_array(rest)
-                    else { in_sources_list = 1; sources_indent = indent }
-                    next
-                }
-            }
-
-            if (in_sources_list) {
-                if (indent > sources_indent && line ~ /^-[ \t]+/) {
-                    item = line
-                    sub(/^-[ \t]+/, "", item)
-                    item = clean_token(item)
-                    if (length(item) > 0) print item
-                } else if (indent <= sources_indent) {
-                    in_sources_list = 0
-                }
-            }
-        }
-    ' "$_yaml_file"
-}
-
-# -----------------------------------------------------------------------------
-# expand_source_entry_to_files
-# Summary: Resolves a single source declaration (file, directory, or recursive
-#          glob pattern) to absolute paths of existing regular files (-type f).
-#          Strictly excludes symbolic links for Windows/MSYS2 portable safety.
-# @param $1: workspace_root - Absolute path to workspace or repository root.
-# @param $2: source_entry   - Path, folder, or glob from configuration.
-# @returns: Absolute file paths (one per line) on stdout.
-# @sideEffects: Traverses filesystem using find.
-# -----------------------------------------------------------------------------
-expand_source_entry_to_files() {
-    _ws_root="$1"
-    _entry="${2#./}"
-
-    # OWASP A03: Reject empty values, upward path traversal, or absolute paths
-    case "$_entry" in
-        ''|*..*|/*) return 0 ;;
-    esac
-
-    _full_target="${_ws_root}/${_entry}"
-
-    # 1. Exact regular file (NOT a symlink)
-    if [ -f "$_full_target" ] && [ ! -L "$_full_target" ]; then
-        printf '%s\n' "$_full_target"
-        return 0
-    fi
-
-    # 2. Directory -> find all Markdown files strictly within this directory
-    if [ -d "$_full_target" ] && [ ! -L "$_full_target" ]; then
-        find "$_full_target" -type f \( -name '*.md' -o -name '*.mdx' \) \
-            ! -path '*/.git/*' \
-            ! -path '*/.rnex/*' \
-            ! -path '*/node_modules/*' \
-            ! -path "${_ws_root}/wiki/*" 2>/dev/null | LC_ALL=C sort
-        return 0
-    fi
-
-    # 3. Glob pattern (e.g., "repos/**/README.md" or "docs/**/*.md")
-    _base_rel="$(extract_base_dir_from_pattern "$_entry")"
-    if [ "$_base_rel" = "." ]; then
-        _search_dir="$_ws_root"
-    else
-        _search_dir="${_ws_root}/${_base_rel}"
-    fi
-
-    [ -d "$_search_dir" ] || return 0
-
-    _leaf_name="$(basename "$_entry")"
-    case "$_leaf_name" in
-        *\**|*\?*|*\[*)
-            find "$_search_dir" -type f \( -name '*.md' -o -name '*.mdx' \) \
-                ! -path '*/.git/*' \
-                ! -path '*/.rnex/*' \
-                ! -path '*/node_modules/*' \
-                ! -path "${_ws_root}/wiki/*" 2>/dev/null | LC_ALL=C sort | while IFS= read -r _abs_cand; do
-                [ -n "$_abs_cand" ] || continue
-                _rel_cand="${_abs_cand#"${_ws_root}/"}"
-                if match_globstar_path "$_rel_cand" "$_entry"; then
-                    printf '%s\n' "$_abs_cand"
-                fi
-            done
-            ;;
-        *)
-            find "$_search_dir" -type f -name "$_leaf_name" \
-                ! -path '*/.git/*' \
-                ! -path '*/.rnex/*' \
-                ! -path '*/node_modules/*' \
-                ! -path "${_ws_root}/wiki/*" 2>/dev/null | LC_ALL=C sort | while IFS= read -r _abs_cand; do
-                [ -n "$_abs_cand" ] || continue
-                _rel_cand="${_abs_cand#"${_ws_root}/"}"
-                if match_globstar_path "$_rel_cand" "$_entry"; then
-                    printf '%s\n' "$_abs_cand"
-                fi
-            done
-            ;;
-    esac
-}
-
-# -----------------------------------------------------------------------------
-# append_source_file_to_btree_records
-# Summary: Extracts metadata (title, summary, slug, shard assignment) from an
-#          authoritative Markdown file in place and appends a 5-column TSV record:
-#          <shard_id>\t<entry_slug>\t<rel_ws_path>\t<title>\t<summary>
-# @param $1: abs_file - Absolute path to target Markdown file.
-# @param $2: out_tmp  - Target output file descriptor/path for batch appending.
-# @sideEffects: Appends record line to target file.
-# -----------------------------------------------------------------------------
-append_source_file_to_btree_records() {
-    _abs_file="$1"
-    _out_tmp="$2"
-
-    [ -f "$_abs_file" ] && [ ! -L "$_abs_file" ] || return 0
-
-    _rel_ws="${_abs_file#"${RNEX_WORKSPACE_ROOT}/"}"
-
-    case "$_rel_ws" in
-        repos/*)
-            _member="$(printf '%s' "$_rel_ws" | cut -d'/' -f2)"
-            if command -v is_repo_enabled >/dev/null 2>&1; then
-                is_repo_enabled "$_member" || return 0
-            fi
-            _rel_in_repo="${_rel_ws#"repos/${_member}/"}"
-            _sub_dir="$(printf '%s' "$_rel_in_repo" | cut -d'/' -f1)"
-            _member_slug="$(normalize_slug_id "$_member")"
-
-            if [ "$_sub_dir" != "$_rel_in_repo" ] && [ -n "$_sub_dir" ]; then
-                _shard_id="repos-${_member_slug}-$(normalize_slug_id "$_sub_dir")"
-            else
-                _shard_id="repos-${_member_slug}"
-            fi
-            ;;
-        *)
-            _first_dir="$(printf '%s' "$_rel_ws" | cut -d'/' -f1)"
-            if [ "$_first_dir" != "$_rel_ws" ] && [ "$_first_dir" != "docs" ]; then
-                _shard_id="repo-nexus-$(normalize_slug_id "$_first_dir")"
-            else
-                _shard_id="repo-nexus"
-            fi
-            ;;
-    esac
-
-    _stem="$(basename "$_abs_file" | sed 's/\.[^.]*$//')"
-    _entry_slug="$(normalize_slug_id "$_stem")" || _entry_slug="doc"
-
-    _title="$(LC_ALL=C awk '/^# / { sub(/^# +/, ""); print; exit }' "$_abs_file" < /dev/null)"
-    [ -n "$_title" ] || _title="$_stem"
-
-    _summary="$(LC_ALL=C awk '
-        /^#/ || /^$/ || /^---/ || /^```/ || /^- \*\*/ || /^\|/ { next }
-        { print; exit }
-    ' "$_abs_file" < /dev/null)"
-    [ -n "$_summary" ] || _summary="Source documentation at ${_rel_ws}"
-
-    printf '%s\t%s\t%s\t%s\t%s\n' \
-        "$_shard_id" \
-        "$_entry_slug" \
-        "$_rel_ws" \
-        "$(sanitize_single_line_text "$_title")" \
-        "$(sanitize_single_line_text "$_summary")" >> "$_out_tmp"
-}
-
-# -----------------------------------------------------------------------------
-# build_workspace_btree_records
-# Summary: Enumerates all configured sources across repo-nexus and member repos
-#          in place without symlinks, extracting titles and summaries, and
-#          compiling a sorted, deduplicated 5-column intermediate manifest:
-#          <shard_id>\t<entry_slug>\t<rel_ws_path>\t<title>\t<summary>
-# @param $1: records_out - Destination filepath for compiled TSV records.
-# @param $2: single_opt  - Optional specific file path to ingest or prioritize.
-# @returns: 0 on success, 1 on error.
-# @sideEffects: Creates records_out atomically using sort -u.
-# -----------------------------------------------------------------------------
-build_workspace_btree_records() {
-    _records_out="$1"
-    _single_opt="${2:-}"
-    _raw_tmp="${_records_out}.tmp.$$"
-    : > "$_raw_tmp"
-
-    # Priority 1 (.local.rnex.yaml) + Priority 2 (rnex.yaml)
-    _sources="$(
-        {
-            parse_yaml_sources_for_scope "${RNEX_WORKSPACE_ROOT}/.local.rnex.yaml" "nexus" ""
-            parse_yaml_sources_for_scope "${RNEX_WORKSPACE_ROOT}/rnex.yaml" "nexus" ""
-        } | LC_ALL=C awk '!seen[$0]++'
-    )"
-
-    _top_sources_configured=1
-    if [ -z "$_sources" ]; then
-        _top_sources_configured=0
-        _sources="$(printf 'README.md\nAGENTS.md\ndocs\n')"
-    fi
-
-    # Expand top-level declared sources
-    printf '%s\n' "$_sources" | while IFS= read -r _entry; do
-        [ -n "$_entry" ] || continue
-        expand_source_entry_to_files "$RNEX_WORKSPACE_ROOT" "$_entry" | while IFS= read -r _abs_file; do
-            [ -n "$_abs_file" ] || continue
-            append_source_file_to_btree_records "$_abs_file" "$_raw_tmp"
-        done
-    done
-
-    # Member repositories resolution
-    _repos_dir="${RNEX_WORKSPACE_ROOT}/${RNEX_CFG_REPOS_DIR:-repos}"
-    for _member in $(discover_enabled_member_repos < /dev/null); do
-        _member_root="${_repos_dir}/${_member}"
-        [ -d "$_member_root" ] || continue
-
-        _member_sources="$(
-            {
-                parse_yaml_sources_for_scope "${RNEX_WORKSPACE_ROOT}/.local.rnex.yaml" "repo" "$_member"
-                parse_yaml_sources_for_scope "${RNEX_WORKSPACE_ROOT}/rnex.yaml" "repo" "$_member"
-            } | LC_ALL=C awk '!seen[$0]++'
-        )"
-
-        if [ -n "$_member_sources" ]; then
-            printf '%s\n' "$_member_sources" | while IFS= read -r _m_entry; do
-                [ -n "$_m_entry" ] || continue
-                expand_source_entry_to_files "$_member_root" "$_m_entry" | while IFS= read -r _abs_mf; do
-                    [ -n "$_abs_mf" ] || continue
-                    append_source_file_to_btree_records "$_abs_mf" "$_raw_tmp"
-                done
-            done
-        elif [ "$_top_sources_configured" -eq 0 ]; then
-            if [ -f "${_member_root}/README.md" ] && [ ! -L "${_member_root}/README.md" ]; then
-                append_source_file_to_btree_records "${_member_root}/README.md" "$_raw_tmp"
-            fi
-        fi
-    done
-
-    # Optional single file inclusion if supplied and valid
-    if [ -n "$_single_opt" ]; then
-        case "$_single_opt" in
-            /*) _s_abs="$_single_opt" ;;
-            *)  _s_abs="${RNEX_WORKSPACE_ROOT}/${_single_opt}" ;;
-        esac
-        append_source_file_to_btree_records "$_s_abs" "$_raw_tmp"
-    fi
-
-    LC_ALL=C sort -u "$_raw_tmp" > "$_records_out"
-    rm -f "$_raw_tmp"
-    return 0
-}
-
-# -----------------------------------------------------------------------------
-# build_workspace_source_manifest
-# Summary: Adapter maintaining compatibility for 4-column source manifests:
-#          <shard_id>\t<sub_scope>\t<workspace_rel_path>\t<abs_file_path>
-# @param $1: manifest_out - Output manifest filepath.
-# @param $2: single_opt   - Optional specific file path.
-# -----------------------------------------------------------------------------
-build_workspace_source_manifest() {
-    _manifest_out="$1"
-    _single_opt="${2:-}"
-    _btree_tmp="${_manifest_out}.btree.$$"
-    build_workspace_btree_records "$_btree_tmp" "$_single_opt" || return 1
-    awk -F '\t' -v ws="$RNEX_WORKSPACE_ROOT" '{
-        split($1, parts, "-")
-        sub_scope = (length(parts) > 2) ? parts[length(parts)] : ""
-        printf "%s\t%s\t%s\t%s/%s\n", $1, sub_scope, $3, ws, $3
-    }' "$_btree_tmp" > "$_manifest_out"
-    rm -f "$_btree_tmp"
-    return 0
 }

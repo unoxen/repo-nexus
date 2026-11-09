@@ -20,8 +20,10 @@ code_workspace: "fullstack.code-workspace"
 git:
   ignore:
     - "repos/"
-    - "**/.rnex*/"
-    - "**/rnex*/"
+    - "**/.rnex*"
+    - "**/rnex*"
+    - "!rnex.yaml"
+    - "!**/rnex.yaml"
   hooks:
     post-merge:
       - "rnex sync --quiet"

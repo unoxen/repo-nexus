@@ -124,25 +124,25 @@ Yes, core routing files like `AGENTS.md` are established during `rnex init`. Spe
 Traditional Retrieval-Augmented Generation (RAG) splits raw documents into arbitrary text chunks and dynamically retrieves top-k matches to synthesize answers from scratch on every query.
 
 In contrast, the **Karpathy LLM Wiki** architecture:
-- **Synthesizes Once on Ingest**: Source documents and member repository documentation are compiled into atomic, structured Markdown pages under your configured wiki directory (default `wiki/`).
+- **Synthesizes Once on Ingest**: Source documents and member repository documentation are compiled into atomic, structured Markdown pages under your configured wiki directory (default `.rnex/wiki/`).
 - **Knowledge Compounding**: Curated pages link to related concepts using standard Markdown links (`[Title](./page.md)`) and typed frontmatter graphs (`sources`, `related`, `extends`), allowing knowledge quality to compound over time as the codebase evolves.
 - **Deterministic Navigation**: Agents navigate compiled domain knowledge systematically via the B-Tree root table (`index.md`) and flat domain shards (`repo-nexus*.md`, `repos-<member>*.md`) without exploratory trial-and-error searches.
 
 ### What is the structure of the flat B-Tree Karpathy LLM Wiki?
-Each core wiki asset has a distinct architectural responsibility directly under `wiki/`:
-- **`index.md` (B-Tree Root Router)**: Strictly bounded under 80 lines with zero YAML frontmatter. Contains a compact routing table mapping domain key ranges to flat leaf shards in `wiki/`.
+Each core wiki asset has a distinct architectural responsibility directly under `.rnex/wiki/` (or custom configured `wiki_dir`):
+- **`index.md` (B-Tree Root Router)**: Strictly bounded under 80 lines with zero YAML frontmatter. Contains a compact routing table mapping domain key ranges to flat leaf shards in `.rnex/wiki/`.
 - **`repo-nexus*.md` & `repos-<member>*.md` (Sorted Flat Leaf Shards)**: Domain-partitioned catalogs sorted in strict `LC_ALL=C` order. Automatically splits into alphabetical sub-shards (e.g. `repo-nexus-a-m.md`, `repo-nexus-n-z.md`) when entry thresholds are exceeded.
-- **`log.md` (Operational Audit Trail)**: An append-only, timestamped log recording every source ingestion, shard rebalance, and lint validation run. Recent activity is checked with `tail -n 20 log.md`.
+- **`log.md` (Operational Audit Trail)**: An append-only, timestamped log recording every source ingestion, shard rebalance, and lint validation run. Recent activity is checked with `tail -n 20 .rnex/wiki/log.md`.
 
 ### Why were TSV property graphs (`_graph/`) and legacy wrappers removed?
 Plain TSV graphs (`nodes.tsv`, `edges_out.tsv`, `edges_in.tsv`) and nested directory wrappers (`_index/`, `_graph/`) added unnecessary multi-table bookkeeping and synchronization complexity. Modern AI coding assistants and native workspace search tools (`grep`, `ripgrep`) resolve backlinks and references instantaneously directly from the codebase. Eliminating property graphs and subdirectory prefixes provides:
-1. **Flat Zero-Prefix Simplicity**: All shard files and root control files reside directly under `wiki/` (`index.md`, `log.md`, `repo-nexus*.md`, `repos-*.md`).
+1. **Flat Zero-Prefix Simplicity**: All shard files and root control files reside directly under `.rnex/wiki/` (`index.md`, `log.md`, `repo-nexus*.md`, `repos-*.md`).
 2. **Strictly Bounded Context**: `index.md` is guaranteed to remain $\le 80$ lines regardless of repository size.
 3. **Predictable Token Consumption**: Agents navigate via a 3-step retrieval protocol (Root Router $\to$ Leaf Shard $\to$ In-Place Source Document) loading only the exact knowledge required.
 4. **Zero Dependencies & Zero Symlinks**: Operates purely on standard POSIX shell tools (`awk`, `sed`, `grep`, `sort`) with zero symlinks, ensuring cross-platform safety on Windows, Linux, and macOS.
 
 ### Can I ingest a single document or specific repository?
-Yes. The `ingest` command supports granular targeting:
+Yes. The `ingest` command supports granular targeting and processes only missing sources by default:
 ```bash
 # Ingest a single source document
 rnex plugin karpathy-llm ingest docs/spec.md

@@ -2,9 +2,16 @@
 # shellcheck shell=sh
 # =============================================================================
 # File: plugins/karpathy-llm/bin/lint.sh
-# Architectural Layer: Public Plugin CLI Command (lint)
-# Single Responsibility: Auto-heal wiki structure, remove legacy artifacts,
-# verify index line count bounds, and assert zero symlinks.
+# Architectural Layer: Plugin CLI Entrypoint (lint)
+# Single Responsibility: Lint ONLY existing documentation and references inside
+# .rnex/wiki/. Does NOT inspect rnex config `sources` and does NOT run ingestion.
+#
+# Design Patterns & Principles:
+#   - Single Responsibility Principle (SRP): Confined strictly to read-only
+#     structural and link verification. Zero compilation or mutation.
+#   - Fail-Fast Principle: Exits with non-zero status on the first invariant failure.
+#
+# Standards: Pure POSIX Shell (/bin/sh), zero external runtime dependencies.
 # =============================================================================
 
 set -e
@@ -12,64 +19,63 @@ set -e
 SCRIPT_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
 PLUGIN_ROOT="$(CDPATH='' cd -- "${SCRIPT_DIR}/.." && pwd)"
 
-# shellcheck source=plugins/karpathy-llm/lib/config.sh
-. "${PLUGIN_ROOT}/lib/config.sh"
 # shellcheck source=plugins/karpathy-llm/lib/utils.sh
 . "${PLUGIN_ROOT}/lib/utils.sh"
-# shellcheck source=plugins/karpathy-llm/lib/source_helpers.sh
-. "${PLUGIN_ROOT}/lib/source_helpers.sh"
+# shellcheck source=plugins/karpathy-llm/lib/config.sh
+. "${PLUGIN_ROOT}/lib/config.sh"
 # shellcheck source=plugins/karpathy-llm/lib/btree_helpers.sh
 . "${PLUGIN_ROOT}/lib/btree_helpers.sh"
+# shellcheck source=plugins/karpathy-llm/lib/lint_helpers.sh
+. "${PLUGIN_ROOT}/lib/lint_helpers.sh"
 
-load_karpathy_wiki_config "${RNEX_WORKSPACE_ROOT:-$(pwd)}"
+# -----------------------------------------------------------------------------
+# main_lint
+# Summary: Entrypoint for the `rnex plugin karpathy-llm lint` CLI command.
+#          Parses CLI arguments, loads configuration, and delegates to the
+#          pure lint helper.
+# @param $@: CLI arguments (--strict, --quiet/-q, --help/-h).
+# @returns: 0 on successful validation; 1 on any structural or reference error.
+# -----------------------------------------------------------------------------
+main_lint() {
+    _ws_root="${RNEX_WORKSPACE_ROOT:-${RNEX_ROOT:-$(pwd)}}"
+    load_wiki_config_contract "$_ws_root" || exit 1
 
-QUIET=0
-STRICT=0
+    _quiet=0
+    _strict=0
 
-while [ $# -gt 0 ]; do
-    case "$1" in
-        --strict)
-            STRICT=1
-            shift
-            ;;
-        --quiet|-q)
-            QUIET=1
-            shift
-            ;;
-        --help|-h)
-            printf 'Usage: rnex plugin karpathy-llm lint [--strict] [--quiet]\n'
-            exit 0
-            ;;
-        -*)
-            shift
-            ;;
-        *)
-            shift
-            ;;
-    esac
-done
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --strict)
+                _strict=1
+                shift
+                ;;
+            --quiet|-q)
+                _quiet=1
+                shift
+                ;;
+            --help|-h)
+                printf 'Usage: rnex plugin karpathy-llm lint [--strict] [--quiet]\n'
+                printf '\n'
+                printf 'Validates existing wiki documentation, B-Tree shard links, and references.\n'
+                printf 'Does not inspect workspace sources or trigger ingestion.\n'
+                exit 0
+                ;;
+            -*)
+                printf 'Error [lint]: Unknown option "%s".\n' "$1" >&2
+                printf 'Usage: rnex plugin karpathy-llm lint [--strict] [--quiet]\n' >&2
+                exit 1
+                ;;
+            *)
+                shift
+                ;;
+        esac
+    done
 
-compile_flat_btree_wiki
+    if [ "$_quiet" -eq 1 ]; then
+        lint_existing_wiki_directory "$_strict" "$_quiet" >/dev/null
+    else
+        lint_existing_wiki_directory "$_strict" "$_quiet"
+    fi
+}
 
-# Invariant 1: Assert zero symlinks in wiki/
-if [ -n "$(find "$RNEX_WIKI_ROOT" -type l 2>/dev/null)" ]; then
-    printf 'Error [lint]: Found forbidden symbolic links in wiki directory.\n' >&2
-    exit 1
-fi
-
-# Invariant 2: Assert no legacy _graph/ or _index/ directories
-if [ -d "${RNEX_WIKI_ROOT}/_graph" ] || [ -d "${RNEX_WIKI_ROOT}/_index" ]; then
-    printf 'Error [lint]: Found deprecated _graph/ or _index/ directories.\n' >&2
-    exit 1
-fi
-
-# Invariant 3: Verify root router bounds (<= 80 lines)
-_root_lines="$(LC_ALL=C awk 'END { print NR+0 }' "$RNEX_WIKI_INDEX_FILE" 2>/dev/null || printf '0')"
-if [ "$_root_lines" -gt "$RNEX_WIKI_BTREE_MAX_ROOT_LINES" ]; then
-    printf 'Error [lint]: wiki/index.md exceeds %s lines (%s lines)\n' \
-        "$RNEX_WIKI_BTREE_MAX_ROOT_LINES" "$_root_lines" >&2
-    exit 1
-fi
-
-append_wiki_log_entry "lint" "Verified flat wiki B-Tree shards (0 symlinks, root is ${_root_lines} lines)."
-[ "$QUIET" = "1" ] || printf 'Wiki lint passed: 0 symlinks, 0 graphs, root index.md is %s lines.\n' "$_root_lines"
+main_lint "$@"

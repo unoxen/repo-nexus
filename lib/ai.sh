@@ -23,10 +23,6 @@ fi
 _build_rnex_gitignore_section() {
   _active_repos_dir="$(yaml_get_repos_dir 2>/dev/null || printf 'repos')"
   [ -n "$_active_repos_dir" ] || _active_repos_dir="repos"
-  _active_wiki_dir="$(yaml_plugin_get "karpathy-llm" "wiki_dir" 2>/dev/null || printf 'wiki')"
-  _active_wiki_dir="${_active_wiki_dir#./}"
-  _active_wiki_dir="${_active_wiki_dir%/}"
-  [ -n "$_active_wiki_dir" ] || _active_wiki_dir="wiki"
   cat <<GI_SECTION_EOF
 $GITIGNORE_MARKER_START
 # Managed by Repo Nexus (rnex) — synced with git.ignore in workspace configuration
@@ -35,11 +31,15 @@ ${_active_repos_dir}/
 ${_active_repos_dir}/*
 !${_active_repos_dir}/.gitkeep
 
-# Recursive Repo Nexus directories (trailing slashes prevent ignoring rnex executable or rnex.yaml)
-**/.rnex*/
-**/rnex*/
-.rnex*/
-rnex*/
+# Recursive Repo Nexus files and directories (rnex.yaml is excluded below)
+**/.rnex*
+**/rnex*
+.rnex*
+rnex*
+
+# Exclude workspace configuration from git ignore
+!rnex.yaml
+!**/rnex.yaml
 
 # Local machine-specific configuration
 $RNEX_LOCAL_CONFIG_FILE
@@ -53,7 +53,11 @@ GI_SECTION_EOF
     printf '%s\n' "$_custom_ignores" | while IFS= read -r _ci || [ -n "$_ci" ]; do
       [ -n "$_ci" ] || continue
       case "$_ci" in
-        "repos/"|"repos/*"|"!repos/.gitkeep"|"${_active_repos_dir}/"|"${_active_repos_dir}/*"|"!${_active_repos_dir}/.gitkeep"|"**/.rnex*/"|"**/rnex*/"|".rnex*/"|"rnex*/"|"$RNEX_LOCAL_CONFIG_FILE"|".rnex.local.yaml")
+        "repos/"|"repos/*"|"!repos/.gitkeep"|"${_active_repos_dir}/"|"${_active_repos_dir}/*"|"!${_active_repos_dir}/.gitkeep"|\
+        "**/.rnex*"|"**/rnex*"|".rnex*"|"rnex*"|\
+        "**/.rnex*/"|"**/rnex*/"|".rnex*/"|"rnex*/"|\
+        "!rnex.yaml"|"!**/rnex.yaml"|\
+        "$RNEX_LOCAL_CONFIG_FILE"|".rnex.local.yaml")
           continue
           ;;
       esac
@@ -130,6 +134,8 @@ reconcile_gitignore() {
         $0 == "repos/*" || $0 == "!repos/.gitkeep" || $0 == "repos/" { next }
         $0 == (ard "/*") || $0 == ("!" ard "/.gitkeep") || $0 == (ard "/") { next }
         $0 == "**/.rnex*/" || $0 == "**/rnex*/" || $0 == ".rnex*/" || $0 == "rnex*/" { next }
+        $0 == "**/.rnex*" || $0 == "**/rnex*" || $0 == ".rnex*" || $0 == "rnex*" { next }
+        $0 == "!rnex.yaml" || $0 == "!**/rnex.yaml" { next }
         $0 == ".rnex" || $0 == "rnex" { next }
         $0 == local_cfg || $0 == ".rnex.local.yaml" { next }
         { lines[++n] = $0 }
@@ -367,32 +373,13 @@ render_ai_instructions() {
   [ -n "$_rai_ws" ] || _rai_ws="$(basename "$_rai_dir")"
   _rai_plugins="$(yaml_list_enabled_plugins_sorted 2>/dev/null || true)"
 
-  _rai_kp=0
-  _rai_wiki=""
-  _rai_src_dirs=""
-  _rai_srcs=""
-  if printf '%s\n' "$_rai_plugins" | grep -qx "karpathy-llm"; then
-    _rai_kp=1
-    _rai_wiki="$(yaml_get_merged_plugin_config "karpathy-llm" "wiki_dir" "wiki" 2>/dev/null | sed -n '1p')"
-    _rai_wiki="${_rai_wiki%/}"
-    [ -n "$_rai_wiki" ] || _rai_wiki="wiki"
-    _rai_src_list="$(yaml_get_plugin_list "karpathy-llm" "sources" 2>/dev/null || true)"
-    [ -n "$_rai_src_list" ] || _rai_src_list="$(yaml_get_merged_plugin_config "karpathy-llm" "sources" 2>/dev/null || true)"
-    _rai_src_dirs="$(printf '%s\n' "$_rai_src_list" | grep -v '[*?]' | sed -e 's#/*$#/#' | _ai_md_code_list)"
-    _rai_srcs="$(printf '%s\n' "$_rai_src_list" | _ai_md_code_list)"
-  fi
-
   # Header & Section 1
   printf '# Repo Nexus Workspace Instructions (rnex v%s)\n\n' "${RNEX_VERSION:-unknown}"
   printf "> Pre-compiled from merged workspace configuration (\`.local.rnex.yaml\` > \`rnex.yaml\`).\n\n"
   printf '## 1. Strict Operating Constraints\n'
   printf -- '- **NO CONFIG READS**: DO NOT read or search for rnex.yaml or .local.rnex.yaml. The complete merged configuration is embedded in Section 2.\n'
   printf -- '- **READ FILES ONCE**: Read each file at most once per session. Never re-read a file already in context.\n'
-  if [ "$_rai_kp" -eq 1 ]; then
-    printf -- "- **NO BLIND SCANS**: Never run broad directory scans or unbounded searches across \`%s/\`%s (exception: targeted file reads and recursive discovery are permitted strictly when executing source ingestion for \`karpathy-llm\`).\n" "$_rai_rd" "${_rai_src_dirs:+ or raw intake directories ($_rai_src_dirs)}"
-  else
-    printf -- "- **NO BLIND SCANS**: Never run broad directory scans or unbounded searches across \`%s/\`.\n" "$_rai_rd"
-  fi
+  printf -- "- **NO BLIND SCANS**: Never run broad directory scans or unbounded searches across \`%s/\`.\n" "$_rai_rd"
 
   # Section 2
   printf '\n## 2. Merged Workspace Configuration\n'
@@ -429,42 +416,24 @@ render_ai_instructions() {
     printf '\n- **Disabled Repositories (Do Not Access)**: %s\n' "$(printf '%s' "$_rai_disabled" | _ai_md_code_list)"
   fi
 
-  if [ "$_rai_kp" -eq 1 ]; then
-    _rai_srcs="$(yaml_get_merged_plugin_config "karpathy-llm" "sources" 2>/dev/null | _ai_md_code_list)"
-    printf "\n### Resolved Knowledge Base (\`karpathy-llm\`)\n"
-    printf -- "- **Curated Wiki Path**: \`%s/\`\n" "$_rai_wiki"
-    printf -- "- **Raw Intake Sources**: %s *(read-only inputs used strictly during \`rnex plugin karpathy-llm ingest\`; do not browse during normal tasks)*\n" "${_rai_srcs:-_none_}"
-  fi
-
   # Section 3
   printf '\n## 3. Mandatory Execution Sequence\n'
   printf 'Execute these steps in strict order:\n'
   _rai_n=1
-  if [ "$_rai_kp" -eq 1 ]; then
-    printf "1. **Step 1 — Query B-Tree Root Index**: Read \`%s/index.md\` (compact B-Tree router <= 80 lines) to locate matching shard (\`repo-nexus*.md\` or \`repos-<member>*.md\`).\n" "$_rai_wiki"
-    printf "2. **Step 2 — Inspect Targeted Domain Shard**: Read only the relevant shard in \`%s/<shard>.md\` identified in Step 1. Pinpoint the specific source document needed without exhaustive reading.\n" "$_rai_wiki"
-    printf "3. **Step 3 — Read Authoritative Source Document**: Read only the 1–3 target source document(s) referenced in the shard directly in place. Do NOT browse raw intake sources%s or \`%s/\` blindly before completing Steps 1–2.\n" "${_rai_src_dirs:+ ($_rai_src_dirs)}" "$_rai_rd"
-    _rai_n=4
-  fi
   printf "%s. **Step %s — Targeted Repository Access**: Inspect or modify only the specific files in active \`%s/<name>/\` required for the task. Never modify or commit inside \`READ-ONLY\` repositories.\n" "$_rai_n" "$_rai_n" "$_rai_rd"
   _rai_n=$((_rai_n + 1))
   printf "%s. **Step %s — Git & Maintenance**: Commit and push inside \`%s/<name>/\`. Run \`rnex sync\` if workspace state changes.\n" "$_rai_n" "$_rai_n" "$_rai_rd"
 
   # Section 4
-  printf '\n## 4. Coding & Wiki Directives\n'
+  printf '\n## 4. Coding & Architecture Directives\n'
   if [ -d "$_rai_dir/.rnex/skills" ] && [ -n "$(ls -A "$_rai_dir/.rnex/skills" 2>/dev/null)" ]; then
     printf -- "- **Skills**: \`.rnex/skills/\` (load a skill only when its task applies).\n"
   fi
   if [ -d "$_rai_dir/.rnex/agents" ] && [ -n "$(ls -A "$_rai_dir/.rnex/agents" 2>/dev/null)" ]; then
     printf -- "- **Subagents**: \`.rnex/agents/\`.\n"
   fi
-  if [ "$_rai_kp" -eq 1 ]; then
-    printf -- '- **Behavioral Rules**: (1) State assumptions and surface trade-offs before coding; (2) Prefer minimal, non-speculative code; (3) Make surgical edits touching only required lines; (4) Verify changes against concrete goals.\n'
-    printf -- "- **Wiki Operations**: Never edit \`%s/\` files ad-hoc. To ingest raw sources or validate wiki frontmatter/links, run \`rnex plugin karpathy-llm ingest\` or \`rnex plugin karpathy-llm lint\` (or load \`.rnex/plugins/karpathy-llm/skills/\` only when executing ingestion/linting).\n" "$_rai_wiki"
-  fi
 
   for _rai_p in $_rai_plugins; do
-    [ "$_rai_p" = "karpathy-llm" ] && continue
     plugin_is_provider "$_rai_p" && continue
     _ai_emit_workflow_plugin_instructions "$_rai_dir" "$_rai_p"
   done

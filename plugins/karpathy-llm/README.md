@@ -2,7 +2,7 @@
 
 The **`karpathy-llm`** plugin packages Andrej Karpathy's agent behavioral principles, multi-repo context engineering standards, and the autonomous **Karpathy LLM Wiki** knowledge architecture for AI coding assistants (Cursor, Claude Code, GitHub Copilot, Antigravity, Windsurf).
 
-No external vector databases, embedding pipelines, or MCP servers required — just a zero-dependency flat B-Tree sharded index directly in `wiki/*.md`, organized by a bounded root router (`wiki/index.md`), and recorded in a chronological audit log (`wiki/log.md`).
+No external vector databases, embedding pipelines, or MCP servers required — just a zero-dependency flat B-Tree sharded index directly in `.rnex/wiki/*.md`, organized by a bounded root router (`.rnex/wiki/index.md`), and recorded in a chronological audit log (`.rnex/wiki/log.md`).
 
 Reference specification: [setup-karpathy-wiki.md](https://github.com/unoxen/ai-toolkit/blob/main/prompts/setup-karpathy-wiki.md) (also available locally in [`instructions/rnex-scaffolding-meta-prompt.md`](instructions/rnex-scaffolding-meta-prompt.md)).
 
@@ -18,18 +18,19 @@ Reference specification: [setup-karpathy-wiki.md](https://github.com/unoxen/ai-t
 
 ### 2. Multi-Repo Context Engineering & Autonomy (`rules/behavioral.md`)
 * Guidelines tailored for Repo Nexus workspaces respecting member repository autonomy and physical repository boundaries.
-* Deterministic 3-step retrieval protocol: B-Tree Root Router (`wiki/index.md`) $\to$ Targeted Leaf Shard (`wiki/<shard>.md`) $\to$ In-Place Source Document.
+* Deterministic 3-step retrieval protocol: B-Tree Root Router (`.rnex/wiki/index.md`) $\to$ Targeted Leaf Shard (`.rnex/wiki/<shard>.md`) $\to$ In-Place Source Document.
 
 ### 3. Zero-Dependency Flat B-Tree Architecture (`instructions/rnex-wiki-architecture.md`)
 * **Intake Sources (`sources`, default: `["docs", "repos/**/README.md"]`):** Multi-value array of directory paths and glob patterns for unmodified source material (articles, transcripts, docs, meeting notes, repo READMEs).
-* **Zero-Duplication In-Place Architecture:** Source files are indexed directly where they reside in the workspace (`README.md`, `docs/`, `RFC/`, `repos/<member>/...`). Zero redundant copies and zero symbolic links (`wiki/concepts/` and `wiki/repos/` are completely eradicated).
-* **B-Tree Root Router (`<wiki_dir>/index.md`):** Compact, strictly bounded routing table ($\le 80$ lines, zero YAML frontmatter) mapping lexicographic key ranges to leaf shard files in `<wiki_dir>/`.
-* **Flat Leaf Shards (`<wiki_dir>/repo-nexus*.md`, `<wiki_dir>/repos-*.md`):** Lexicographically sorted catalogs. Automatically split into alphabetical sub-shards (`<shard>-a-m.md`, `<shard>-n-z.md`) when exceeding capacity thresholds.
-* **Chronological Audit Log (`<wiki_dir>/log.md`):** Shared append-only log recording ingest and lint operations across tracked wiki pages. Inspected via `tail -n 20 wiki/log.md`.
+* **Zero-Duplication In-Place Architecture:** Source files are indexed directly where they reside in the workspace (`README.md`, `docs/`, `RFC/`, `repos/<member>/...`). Zero redundant copies and zero symbolic links.
+* **B-Tree Root Router (`<wiki_dir>/index.md`):** Compact, strictly bounded routing table ($\le 80$ lines, zero YAML frontmatter) mapping lexicographic key ranges to leaf shard files in `<wiki_dir>/`. Default: `.rnex/wiki/index.md`.
+* **Flat Leaf Shards (`<wiki_dir>/repo-nexus*.md`, `<wiki_dir>/repos-*.md`):** Lexicographically sorted catalogs.
+* **Chronological Audit Log (`<wiki_dir>/log.md`):** Shared append-only log recording source ingestion events when new sources are indexed into the wiki. Inspected via `tail -n 20 .rnex/wiki/log.md`.
 
 ### 4. Standardized Agent Skills (`skills/`)
-* **`wiki-ingest.md` (User Skill: `rnex-karpathy-llm-wiki-ingest`):** Guides deterministic CLI in-place scanning, flat B-Tree leaf shard rebalancing, root router compilation, and audit log updates.
-* **`wiki-lint.md` (User Skill: `rnex-karpathy-llm-wiki-lint`):** Integrity audit protocol to validate paths, auto-heal legacy structures (`_graph/`, `_index/`, `concepts/`, `repos/`, `overview/`, `entities/`, `sources/`), purge legacy files (`hot.md`, `_index.md`, `_log.md`), assert zero symlinks, and verify root router bounds ($\le 80$ lines).
+* **`wiki-ingest.md` (User Skill: `rnex-karpathy-llm-wiki-ingest`):** Guides deterministic CLI missing-source ingestion, flat B-Tree leaf shard updates, root router compilation, and audit log updates.
+* **`wiki-lint.md` (User Skill: `rnex-karpathy-llm-wiki-lint`):** Standalone integrity audit protocol to validate existing wiki files, assert zero symlinks, verify shard links and workspace doc references, and check root router bounds ($\le 80$ lines).
+* **`wiki-query.md` (User Skill: `rnex-karpathy-llm-wiki-query`):** Guides 3-step zero-token-bloat context retrieval from the root router to leaf shards and authoritative sources.
 
 ---
 
@@ -44,12 +45,12 @@ my-workspace/
 ├── repos/                           # Member repositories (inspected in-place)
 │   └── <member-repo>/
 │       └── README.md
-├── wiki/
-│   ├── index.md                     # B-Tree Root Router (<= 80 lines)
-│   ├── log.md                       # Ingestion & lint audit history
-│   ├── repo-nexus.md                # Nexus repo shard (or repo-nexus-a-m.md, etc.)
-│   └── repos-<member-repo>.md       # Member repo shard (e.g. repos-backend-apps.md)
 ├── .rnex/
+│   ├── wiki/                        # Default curated flat markdown wiki
+│   │   ├── index.md                 # B-Tree Root Router (<= 80 lines)
+│   │   ├── log.md                   # Ingestion & lint audit history
+│   │   ├── repo-nexus.md            # Nexus repo shard
+│   │   └── repos-<member-repo>.md   # Member repo shard
 │   └── plugins/
 │       └── karpathy-llm/
 │           ├── instructions/
@@ -59,7 +60,8 @@ my-workspace/
 │           │   └── behavioral.md
 │           ├── skills/
 │           │   ├── wiki-ingest.md
-│           │   └── wiki-lint.md
+│           │   ├── wiki-lint.md
+│           │   └── wiki-query.md
 │           ├── bin/
 │           │   ├── ingest.sh
 │           │   └── lint.sh
@@ -67,7 +69,8 @@ my-workspace/
 │               ├── config.sh
 │               ├── utils.sh
 │               ├── source_helpers.sh
-│               └── btree_helpers.sh
+│               ├── btree_helpers.sh
+│               └── lint_helpers.sh
 └── rnex.yaml
 ```
 
@@ -101,10 +104,10 @@ plugins:
       - "repos/**/README.md"
 
     # Directory paths and control files relative to workspace root (defaults shown)
-    wiki_dir: wiki              # Directory for curated flat markdown shards
+    wiki_dir: ".rnex/wiki"      # Directory for curated flat markdown shards
     index_file: "index.md"      # B-Tree Root Router filename
     log_file: "log.md"          # Chronological audit log filename
-    btree_root_max_lines: 80    # Maximum allowed lines in root wiki/index.md router
+    btree_root_max_lines: 80    # Maximum allowed lines in root index.md router
     btree_shard_max_entries: 100# Threshold before splitting a B-Tree shard
 ```
 
@@ -113,22 +116,22 @@ plugins:
 The `karpathy-llm` plugin exposes a streamlined 2-command CLI:
 
 ```sh
-# Ingest all configured sources and enabled member repos
+# Ingest missing sources from configured intake sources
 rnex plugin karpathy-llm ingest
 
 # Ingest a specific markdown source file directly in place
 rnex plugin karpathy-llm ingest docs/architecture.md
 rnex plugin karpathy-llm ingest --file docs/architecture.md
 
-# Lint wiki structure, line budget, and zero-symlink invariants
+# Lint existing wiki structure, link integrity, and zero-symlink invariants
 rnex plugin karpathy-llm lint
 ```
 
 ### Retrieval Protocol: How AI Agents Query the Wiki
 
 AI coding assistants navigate the wiki using a deterministic 3-step retrieval protocol:
-1. **Root Read:** Read `wiki/index.md` ($\le 80$ lines) to locate the relevant leaf shard.
-2. **Shard Read:** Read the target shard in `wiki/` (`repo-nexus*.md` or `repos-<member>*.md`) to find the exact source file path and summary.
+1. **Root Read:** Read `.rnex/wiki/index.md` ($\le 80$ lines) to locate the relevant leaf shard.
+2. **Shard Read:** Read the target shard in `.rnex/wiki/` (`repo-nexus*.md` or `repos-<member>*.md`) to find the exact source file path and summary.
 3. **In-Place Read:** Open and read the authoritative source file directly where it resides in the workspace. Discover backlinks and cross-references using standard workspace search tools (`grep`, `ripgrep`).
 
 ---
@@ -141,4 +144,4 @@ rnex plugin disable karpathy-llm
 
 When disabled:
 - Scoped assets under `.rnex/plugins/karpathy-llm/` are cleanly removed.
-- **Your data in `./docs/` and `wiki/` is preserved 100% intact.** Repo Nexus never deletes user-generated knowledge bases upon plugin disablement.
+- **Your data in `./docs/` and `.rnex/wiki/` is preserved 100% intact.** Repo Nexus never deletes user-generated knowledge bases upon plugin disablement.

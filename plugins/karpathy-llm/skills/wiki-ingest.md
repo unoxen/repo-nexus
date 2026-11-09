@@ -1,44 +1,54 @@
 # Agentic Skill: wiki-ingest
 
-Universal agentic skill protocol for deterministically ingesting and enriching source materials in the flat Karpathy LLM Wiki.
+Deterministically ingest missing documentation sources into .rnex/wiki using the rnex CLI.
 
 ---
 
 ## Capabilities & Context
 
-Use this skill when ingesting new reference materials, architecture documentation, transcripts, articles, or member repository documentation into the workspace curated wiki catalog shards.
+Use this skill when ingesting new reference materials, architecture documentation, transcripts, articles, or member repository documentation into the curated workspace wiki catalog shards.
 
 ## CLI Helper
 
-Always scaffold and rebalance flat wiki shards deterministically using the built-in CLI helper:
+Always scaffold and ingest missing documentation deterministically using the built-in CLI helper:
 
 ```sh
-rnex plugin karpathy-llm ingest [<file_path>] [--file <path>] [--quiet]
+rnex plugin karpathy-llm ingest [<source_path>] [--file <path>] [--quiet]
 ```
 
-Initialization and flat B-Tree compilation execute automatically on ingest.
+- Ingest all configured missing sources:
+  ```sh
+  rnex plugin karpathy-llm ingest
+  ```
+- Ingest a specific missing document, directory, or glob pattern:
+  ```sh
+  rnex plugin karpathy-llm ingest docs/new-feature.md
+  ```
 
 ## Agent Context Retrieval Protocol
 
-AI coding agents traverse wiki context via the 3-step zero-token-bloat protocol:
-1. **Root Router:** Read `wiki/index.md` ($\le 80$ lines) to locate the target shard file (`wiki/repo-nexus*.md` or `wiki/repos-<member>*.md`).
-2. **Shard Read:** Read the target shard directly in `wiki/` to find the exact workspace file path and summary.
+AI coding agents navigate wiki context via the 3-step zero-token-bloat protocol:
+1. **Root Router:** Read `.rnex/wiki/index.md` ($\le 80$ lines) to locate the target shard file (`.rnex/wiki/repo-nexus*.md` or `.rnex/wiki/repos-<member>*.md`).
+2. **Shard Read:** Read the target shard directly in `.rnex/wiki/` to find the exact workspace file path and summary.
 3. **In-Place Access:** Open the authoritative source file directly in place. To locate cross-references or backlinks, use native workspace search tools (`grep`, `ripgrep`).
 
 ## Ingestion Protocol
 
 1. **Zero-Duplication In-Place Architecture:**
    - Files are indexed directly in place from authoritative workspace paths (e.g., `README.md`, `docs/**/*.md`, `architecture/*.md`, and `repos/<member>/**/*.md`).
-   - Zero symbolic links (`ln -s`) and zero redundant content copies (`wiki/concepts/` and `wiki/repos/` do not exist).
-   - Generated wiki artifacts reside exclusively directly in `wiki/`: `wiki/index.md` (root router table), `wiki/log.md` (audit log), and flat leaf shards (`wiki/repo-nexus*.md`, `wiki/repos-*.md`). Zero `_graph/` and zero `_index/` subdirectories.
+   - Zero symbolic links (`ln -s`) and zero redundant content copies.
+   - Generated wiki artifacts reside exclusively directly in `.rnex/wiki/`: `.rnex/wiki/index.md` (root router table), `.rnex/wiki/log.md` (audit log), and flat leaf shards (`.rnex/wiki/repo-nexus*.md`, `.rnex/wiki/repos-*.md`). Zero `_graph/` and zero `_index/` subdirectories.
 
-2. **Step 1 — Deterministic CLI Ingestion:**
-   - Run `rnex plugin karpathy-llm ingest [<file_path>]` (or batch-ingest with bare `rnex plugin karpathy-llm ingest`).
-   - The CLI inspects source documents in-place, synchronizes flat B-Tree leaf shards (`wiki/*.md`), compiles bounded `wiki/index.md`, and records an entry in `wiki/log.md`.
+2. **Deterministic CLI Ingestion (Missing Sources Only):**
+   - Execute `rnex plugin karpathy-llm ingest [<source_path>]` under the hood.
+   - **NEVER** manually create, sort, or edit `.rnex/wiki/index.md` or `.rnex/wiki/*.md` shard files.
+   - The CLI identifies which candidate sources have not yet been indexed and appends only missing entries into their respective B-Tree shards, preserving all existing shard entries and custom summaries intact.
+   - B-Tree shards are maintained in strict `LC_ALL=C` sort order.
+   - `.rnex/wiki/index.md` is recompiled atomically to route to all existing shards.
 
-3. **Step 2 — In-Place Synthesis & Enrichment:**
+3. **In-Place Synthesis & Enrichment:**
    - Read and enrich authoritative source documents directly where they live.
-   - Maintain clear Markdown cross-references.
+   - Maintain clear Markdown cross-references and backlinks.
 
-4. **Audit Verification:**
-   - Run `rnex plugin karpathy-llm lint` to verify zero symlinks, zero legacy artifacts, and root bounds ($\le 80$ lines).
+4. **Integrity Verification:**
+   - Execute `rnex plugin karpathy-llm lint` to verify zero symlinks, zero broken links, valid workspace references, and root router line count bounds ($\le 80$ lines).

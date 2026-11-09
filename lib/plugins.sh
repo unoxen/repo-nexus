@@ -17,7 +17,7 @@
 #     3. Standard candidate plugin directory search.
 #
 # Arguments:
-#   $1 - Plugin name (e.g. "karpathy-llm", "claude", "custom-plugin")
+#   $1 - Plugin name (e.g. "copilot", "claude", "custom-plugin")
 #
 # Returns:
 #   Outputs the resolved directory path to stdout; returns 0 on success,
@@ -213,7 +213,7 @@ plugin_get_field() {
 #   'version' field from their plugin.yaml, defaulting to 'custom' if unset.
 #
 # Arguments:
-#   $1 - Plugin name (e.g. "karpathy-llm", "claude")
+#   $1 - Plugin name (e.g. "copilot", "claude")
 #   $2 - (Optional) Pre-resolved directory path of the plugin
 #
 # Returns:
@@ -452,27 +452,33 @@ _clean_leaked_plugin_dirs() {
   _cld_root="${1:-$NEXUS_DIR}"
   _cld_raw="$(normalize_rel_path "$2")"
   _cld_wiki="$(normalize_rel_path "$3")"
+  _cld_plugin="${4:-}"
   [ -n "$_cld_raw" ] || _cld_raw="docs"
   [ -n "$_cld_wiki" ] || _cld_wiki="wiki"
 
-  if [ "$_cld_raw" != "raw" ] && [ -d "$_cld_root/raw" ] && \
-     ! plugin_source_dirs "karpathy-llm" 2>/dev/null | grep -qx 'raw'; then
-    if ! rmdir "$_cld_root/raw" 2>/dev/null; then
-      _can_clean=1
-      for _f in "$_cld_root/raw"/* "$_cld_root/raw"/.[!.]* "$_cld_root/raw"/..?*; do
-        [ -e "$_f" ] || continue
-        _b="$(basename "$_f")"
-        [ "$_b" = ".gitkeep" ] && continue
-        [ -f "$_cld_root/$_cld_raw/$_b" ] && cmp -s "$_f" "$_cld_root/$_cld_raw/$_b" && continue
-        _can_clean=0
-        break
-      done
-      if [ "$_can_clean" -eq 1 ]; then
-        rm -rf "$_cld_root/raw" 2>/dev/null || true
-        log_dim "Cleaned up obsolete root raw/ directory"
+  if [ "$_cld_raw" != "raw" ] && [ -d "$_cld_root/raw" ]; then
+    _raw_is_configured=0
+    if [ -n "$_cld_plugin" ] && plugin_source_dirs "$_cld_plugin" 2>/dev/null | grep -qx 'raw'; then
+      _raw_is_configured=1
+    fi
+    if [ "$_raw_is_configured" -eq 0 ]; then
+      if ! rmdir "$_cld_root/raw" 2>/dev/null; then
+        _can_clean=1
+        for _f in "$_cld_root/raw"/* "$_cld_root/raw"/.[!.]* "$_cld_root/raw"/..?*; do
+          [ -e "$_f" ] || continue
+          _b="$(basename "$_f")"
+          [ "$_b" = ".gitkeep" ] && continue
+          [ -f "$_cld_root/$_cld_raw/$_b" ] && cmp -s "$_f" "$_cld_root/$_cld_raw/$_b" && continue
+          _can_clean=0
+          break
+        done
+        if [ "$_can_clean" -eq 1 ]; then
+          rm -rf "$_cld_root/raw" 2>/dev/null || true
+          log_dim "Cleaned up obsolete root raw/ directory"
+        fi
+      else
+        log_dim "Removed empty obsolete root raw/ directory"
       fi
-    else
-      log_dim "Removed empty obsolete root raw/ directory"
     fi
   fi
 
@@ -516,12 +522,13 @@ sync_plugins() {
   done
 
   # Clean up obsolete leaked root ./raw and ./wiki directories if non-default paths are configured
-  _raw_cfg="$(plugin_primary_source_dir "karpathy-llm" 2>/dev/null || true)"
-  [ -n "$_raw_cfg" ] || _raw_cfg="docs"
-  _wiki_cfg="$(yaml_plugin_get "karpathy-llm" "wiki_dir" 2>/dev/null || true)"
-  [ -n "$_wiki_cfg" ] || _wiki_cfg="wiki"
-  _wiki_cfg="$(normalize_rel_path "$_wiki_cfg")"
-  _clean_leaked_plugin_dirs "$NEXUS_DIR" "$_raw_cfg" "$_wiki_cfg"
+  for _cld_p in $(yaml_list_plugins 2>/dev/null); do
+    _raw_cfg="$(plugin_primary_source_dir "$_cld_p" 2>/dev/null || true)"
+    _wiki_cfg="$(yaml_plugin_get "$_cld_p" "wiki_dir" 2>/dev/null || true)"
+    if [ -n "$_wiki_cfg" ] || [ -n "$_raw_cfg" ]; then
+      _clean_leaked_plugin_dirs "$NEXUS_DIR" "${_raw_cfg:-docs}" "$(normalize_rel_path "${_wiki_cfg:-wiki}")" "$_cld_p"
+    fi
+  done
 
   # 1. Prune plugins that are disabled or no longer enabled in config
   if [ -d "$NEXUS_DIR/.rnex/plugins" ]; then

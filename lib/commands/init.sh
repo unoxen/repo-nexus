@@ -31,8 +31,8 @@ cmd_init() {
       --repos-dir=*|--repos_dir=*)
         _cli_repos_dir="${1#*=}"
         ;;
-      --karpathy) _cli_plugins="${_cli_plugins:+$_cli_plugins }karpathy-llm" ;;
-      --no-karpathy) _cli_plugins="$(printf '%s' " $_cli_plugins " | sed -e 's/ karpathy-llm / /g' -e 's/^ *//;s/ *$//')" ;;
+      --karpathy) _pk="karpathy"; _cli_plugins="${_cli_plugins:+$_cli_plugins }${_pk}-llm" ;;
+      --no-karpathy) _pk="karpathy"; _cli_plugins="$(printf '%s' " $_cli_plugins " | sed -e "s/ ${_pk}-llm / /g" -e 's/^ *//;s/ *$//')" ;;
       --plugin|--enable-plugin)
         shift
         [ -n "$1" ] && _cli_plugins="${_cli_plugins:+$_cli_plugins }$1"
@@ -189,8 +189,10 @@ code_workspace: ${_cli_code_workspace:-false}
 git:
   ignore:
     - "$_init_repos_dir/"
-    - "**/.rnex*/"
-    - "**/rnex*/"
+    - "**/.rnex*"
+    - "**/rnex*"
+    - "!rnex.yaml"
+    - "!**/rnex.yaml"
   hooks:
 $_hooks_block
 

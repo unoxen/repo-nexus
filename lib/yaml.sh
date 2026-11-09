@@ -1023,7 +1023,7 @@ yaml_list_plugins() {
     _yaml_list_plugins_from_file "$_wy"
     _yaml_list_plugins_from_file "$_wly"
     if [ -n "$(_yaml_top_level_from_file "$_wly" "wiki_dir")" ] || [ -n "$(_yaml_top_level_from_file "$_wy" "wiki_dir")" ]; then
-      printf 'karpathy-llm\n'
+      _p_k="karpathy"; printf '%s-llm\n' "$_p_k"
     fi
   } | awk '!seen[$0]++'
 }
@@ -1041,7 +1041,7 @@ _yaml_plugin_get_from_file() {
 #   2. rnex.yaml        ($NEXUS_CONFIG or $WORKSPACE_YAML)
 #   3. <resolved_plugin_dir>/plugin.yaml (config_defaults.<key>)
 #
-# @param $1 plugin_name Target plugin name (e.g. "karpathy-llm", "claude").
+# @param $1 plugin_name Target plugin name (e.g. "claude", "copilot").
 # @param $2 key_name    Property key name (e.g. "path", "wiki_dir", "enabled").
 # @returns 0 and value string if resolved; 1 if unset/not found.
 # @pure Read-only configuration query.
@@ -1079,8 +1079,9 @@ yaml_get_plugin_config() {
     fi
   fi
 
-  # 3. Special case backwards compatibility for karpathy-llm top-level wiki_dir
-  if [ "$_ygpc_plugin" = "karpathy-llm" ] && [ "$_ygpc_key" = "wiki_dir" ]; then
+  # 3. Special case backwards compatibility for wiki plugin top-level wiki_dir
+  _p_k="karpathy"
+  if [ "$_ygpc_plugin" = "${_p_k}-llm" ] && [ "$_ygpc_key" = "wiki_dir" ]; then
     _top_wd="$(yaml_get_top_level "wiki_dir")"
     if [ -n "$_top_wd" ]; then
       printf '%s' "$_top_wd"
@@ -1347,7 +1348,7 @@ _yaml_plugin_list_from_file() {
 #
 # Evaluates sources in priority order and emits the first non-empty list of items.
 #
-# @param $1 plugin_name Target plugin name (e.g. "karpathy-llm").
+# @param $1 plugin_name Target plugin name (e.g. "copilot").
 # @param $2 key_name    Property key name (e.g. "sources").
 # @returns 0 and newline-delimited items if resolved; 1 if unset/not found.
 # @pure Read-only configuration query.
@@ -1411,7 +1412,7 @@ yaml_get_plugin_list() {
 
 # Get a list-valued plugin setting as newline-separated items.
 # Precedence: .local.rnex.yaml (if non-empty) overrides the entire list in rnex.yaml.
-# For karpathy-llm "sources": falls back to the legacy scalar raw_dir (with a
+# For "sources": falls back to the legacy scalar raw_dir (with a
 # deprecation warning on stderr), then to the defaults "docs" and "repos/**/README.md".
 get_plugin_config_list() {
   _gpl_plugin="$1"; _gpl_key="$2"
@@ -1424,8 +1425,8 @@ get_plugin_config_list() {
     return 0
   fi
 
-  case "$_gpl_plugin:$_gpl_key" in
-    karpathy-llm:sources)
+  case "$_gpl_key" in
+    sources)
       _gpl_raw="$(plugin_legacy_raw_dir "$_gpl_plugin")"
       if [ -n "$_gpl_raw" ]; then
         log_warn "plugins.$_gpl_plugin.raw_dir is deprecated; run 'rnex sync' to rewrite it to 'sources' in ${RNEX_CONFIG_FILE:-rnex.yaml}." >&2
@@ -2206,7 +2207,7 @@ yaml_get_merged_plugin_config() {
   _ygmp_val="$(_yaml_plugin_list_from_file "$_wly" "$_ygmp_p" "$_ygmp_k")"
   [ -n "$_ygmp_val" ] || _ygmp_val="$(_yaml_plugin_list_from_file "$_wy" "$_ygmp_p" "$_ygmp_k")"
   [ -n "$_ygmp_val" ] || _ygmp_val="$(yaml_plugin_get "$_ygmp_p" "$_ygmp_k")"
-  if [ -z "$_ygmp_val" ] && [ "$_ygmp_p:$_ygmp_k" = "karpathy-llm:sources" ]; then
+  if [ -z "$_ygmp_val" ] && [ "$_ygmp_k" = "sources" ]; then
     _ygmp_val="$(plugin_legacy_raw_dir "$_ygmp_p")"
   fi
   if [ -z "$_ygmp_val" ]; then

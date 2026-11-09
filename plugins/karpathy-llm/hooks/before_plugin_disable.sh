@@ -16,6 +16,8 @@ fi
 if command -v rnex_unregister_user_skill >/dev/null 2>&1; then
   rnex_unregister_user_skill "wiki-ingest" "karpathy-llm"
   rnex_unregister_user_skill "wiki-lint" "karpathy-llm"
+  rnex_unregister_user_skill "wiki-query" "karpathy-llm"
   rnex_unregister_user_skill "wiki-ingest"
   rnex_unregister_user_skill "wiki-lint"
+  rnex_unregister_user_skill "wiki-query"
 fi

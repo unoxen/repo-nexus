@@ -63,8 +63,10 @@ Member repositories reside in `./<repos_dir>/<name>/` (default: `./repos/<name>/
 Repo Nexus automatically configures `.gitignore` in the meta-repo root with:
 ```text
 <repos_dir>/
-**/.rnex*/
-**/rnex*/
+**/.rnex*
+**/rnex*
+!rnex.yaml
+!**/rnex.yaml
 ```
 Member repository files are never tracked or committed to the parent meta-repo.
 :::

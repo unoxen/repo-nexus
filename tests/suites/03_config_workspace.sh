@@ -23,23 +23,33 @@ if ! grep -q "test-app:" "$TEST_WORKSPACE/rnex.yaml" 2>/dev/null; then
 fi
 
 # --------------------------------------------------------------------------
-run_test "Gitignore reconciliation removes legacy lint_trigger_counter and ensures safe recursive .rnex directories"
+run_test "Gitignore reconciliation removes legacy lint_trigger_counter and ensures safe recursive .rnex patterns with rnex.yaml excluded"
 printf '\n.rnex/.lint_trigger_counter\nwiki/.lint_trigger_counter\n.lint_trigger_counter\n' >> "$TEST_WORKSPACE/.gitignore"
 "$TEST_WORKSPACE/rnex" sync >/dev/null
 grep -q "lint_trigger_counter" "$TEST_WORKSPACE/.gitignore" && { fail "Legacy lint_trigger_counter still present in .gitignore"; exit 1; }
-grep -q '\*\*/\.rnex\*/' "$TEST_WORKSPACE/.gitignore" || { fail "**/.rnex*/ missing from .gitignore after sync"; exit 1; }
-grep -q '\*\*/rnex\*/' "$TEST_WORKSPACE/.gitignore" || { fail "**/rnex*/ missing from .gitignore after sync"; exit 1; }
+grep -q '\*\*/\.rnex\*' "$TEST_WORKSPACE/.gitignore" || { fail "**/.rnex* missing from .gitignore after sync"; exit 1; }
+grep -q '\*\*/rnex\*' "$TEST_WORKSPACE/.gitignore" || { fail "**/rnex* missing from .gitignore after sync"; exit 1; }
 grep -q 'repos/\*' "$TEST_WORKSPACE/.gitignore" || { fail "repos/* missing from .gitignore after sync"; exit 1; }
 grep -q '.local.rnex.yaml' "$TEST_WORKSPACE/.gitignore" || { fail ".local.rnex.yaml missing from .gitignore after sync"; exit 1; }
+grep -q '!rnex.yaml' "$TEST_WORKSPACE/.gitignore" || { fail "!rnex.yaml missing from .gitignore after sync"; exit 1; }
 [ -f "$TEST_WORKSPACE/.ignore" ] || { fail ".ignore missing after sync"; exit 1; }
 grep -q '!repos/\*' "$TEST_WORKSPACE/.ignore" || { fail "!repos/* missing from .ignore after sync"; exit 1; }
-# Risk mitigation check: rnex CLI binary and rnex.yaml remain untracked by gitignore, but directories are ignored
-! git -C "$TEST_WORKSPACE" check-ignore -q rnex || { fail "rnex file is ignored by git"; exit 1; }
+# rnex.yaml is excluded from gitignore, while all other files and directories starting with rnex or .rnex are ignored
 ! git -C "$TEST_WORKSPACE" check-ignore -q rnex.yaml || { fail "rnex.yaml file is ignored by git"; exit 1; }
+git -C "$TEST_WORKSPACE" check-ignore -q rnex || { fail "rnex binary/file is not ignored by git"; exit 1; }
+touch "$TEST_WORKSPACE/rnex.log" "$TEST_WORKSPACE/.rnex_history"
+git -C "$TEST_WORKSPACE" check-ignore -q "$TEST_WORKSPACE/rnex.log" || { fail "rnex.log is not ignored by git"; exit 1; }
+git -C "$TEST_WORKSPACE" check-ignore -q "$TEST_WORKSPACE/.rnex_history" || { fail ".rnex_history is not ignored by git"; exit 1; }
 mkdir -p "$TEST_WORKSPACE/.rnex" "$TEST_WORKSPACE/.claude/skills/rnex-core"
 touch "$TEST_WORKSPACE/.rnex/test.txt" "$TEST_WORKSPACE/.claude/skills/rnex-core/test.txt"
 git -C "$TEST_WORKSPACE" check-ignore -q "$TEST_WORKSPACE/.rnex/" || { fail ".rnex/ directory is not ignored by git"; exit 1; }
 git -C "$TEST_WORKSPACE" check-ignore -q "$TEST_WORKSPACE/.claude/skills/rnex-core/" || { fail ".claude/skills/rnex-core/ directory is not ignored by git"; exit 1; }
+
+# Determinism check: repeated sync calls produce byte-for-byte identical .gitignore
+_gi_cksum_1="$(cksum < "$TEST_WORKSPACE/.gitignore")"
+"$TEST_WORKSPACE/rnex" sync >/dev/null
+_gi_cksum_2="$(cksum < "$TEST_WORKSPACE/.gitignore")"
+[ "$_gi_cksum_1" = "$_gi_cksum_2" ] || { fail ".gitignore is not deterministic across repeated rnex sync invocations"; exit 1; }
 pass
 
 # --------------------------------------------------------------------------
@@ -92,7 +102,7 @@ grep -q "^\*\.log$" "$TEST_GI_WS/.gitignore" || { fail "*.log missing from .giti
 grep -q "^build-output/$" "$TEST_GI_WS/.gitignore" || { fail "build-output/ missing from .gitignore after sync"; exit 1; }
 grep -q "^\.env\.local$" "$TEST_GI_WS/.gitignore" || { fail ".env.local missing from .gitignore after sync"; exit 1; }
 grep -qFx ".DS_Store" "$TEST_GI_WS/.gitignore" || { fail "User rule .DS_Store lost after sync"; exit 1; }
-! git -C "$TEST_GI_WS" check-ignore -q rnex || { fail "rnex binary is ignored by git"; exit 1; }
+git -C "$TEST_GI_WS" check-ignore -q rnex || { fail "rnex binary is not ignored by git"; exit 1; }
 ! git -C "$TEST_GI_WS" check-ignore -q rnex.yaml || { fail "rnex.yaml is ignored by git"; exit 1; }
 
 # Remove *.log from rnex.yaml and replace build-output/ with dist/, then sync and verify removal

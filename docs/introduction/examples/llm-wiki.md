@@ -19,8 +19,10 @@ repos_dir: "./repos"
 git:
   ignore:
     - "repos/"
-    - "**/.rnex*/"
-    - "**/rnex*/"
+    - "**/.rnex*"
+    - "**/rnex*"
+    - "!rnex.yaml"
+    - "!**/rnex.yaml"
   hooks:
     pre-commit:
       - "rnex plugin karpathy-llm lint"

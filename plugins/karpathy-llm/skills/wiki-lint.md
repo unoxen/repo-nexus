@@ -1,46 +1,41 @@
 # Agentic Skill: wiki-lint
 
-Universal agentic skill protocol for maintaining flat Karpathy LLM Wiki structure, auto-healing legacy artifacts, and rebalancing B-Tree index shards.
+Validate existing wiki documents, shard links, and workspace references inside .rnex/wiki.
 
 ---
 
 ## Capabilities & Context
 
-Use this skill to perform health checks and maintenance on the curated flat wiki catalog, auto-heal legacy directory layouts, and ensure B-Tree shards and root router remain consistent.
+Use this skill to validate the curated flat wiki catalog, ensuring all B-Tree shards, root router links, workspace references, and sort invariants remain consistent without inspecting workspace sources or triggering re-ingestion.
 
 ## CLI Helper
 
-Invoke the built-in deterministic lint helper directly from the terminal:
+Always invoke the deterministic rnex CLI command under the hood:
 
 ```sh
 rnex plugin karpathy-llm lint [--strict] [--quiet]
 ```
 
-Auto-healing legacy purge, shard splitting, and B-Tree root rebalancing execute automatically during linting.
-
 ## Agent Context Retrieval Protocol
 
 AI coding agents navigate wiki structure through:
-1. **Root Router:** Read `wiki/index.md` ($\le 80$ lines) to route to the appropriate shard.
-2. **Leaf Shards:** Read `wiki/repo-nexus*.md` or `wiki/repos-<member>*.md` directly in `wiki/`.
+1. **Root Router:** Read `.rnex/wiki/index.md` ($\le 80$ lines) to route to the appropriate shard.
+2. **Leaf Shards:** Read `.rnex/wiki/repo-nexus*.md` or `.rnex/wiki/repos-<member>*.md` directly in `.rnex/wiki/`.
 3. **Authoritative Sources:** Read source documents directly in place in the workspace.
 
-## Maintenance Protocol
+## Linting Protocol
 
-1. **Auto-Healing & Legacy Purge:**
-   - Purges obsolete directories `wiki/_graph/`, `wiki/_index/`, `wiki/concepts/`, `wiki/repos/`, `wiki/overview/`, `wiki/entities/`, and `wiki/sources/`.
-   - Purges deprecated `wiki/_index.md`, `wiki/_log.md`, `wiki/hot.md`. Migrates historical audit entries from `_log.md` to `log.md`.
-   - Enforces zero symbolic links (`[ -f ] && [ ! -L ]`) across the entire `wiki/` directory.
+1. **Scope & Source Independence:**
+   - Inspects existing files inside `.rnex/wiki/` exclusively.
+   - Does NOT inspect `rnex.yaml` `sources` and does NOT run ingestion of workspace files.
+   - Enforces zero symbolic links across `.rnex/wiki/`.
 
-2. **B-Tree Shard Rebalancing:**
-   - Scans authoritative documents in place and rebuilds leaf shards `wiki/repo-nexus*.md` and `wiki/repos-<member_repo>*.md` ($\ge 1$ shard per enabled member repo).
-   - Automatically splits shards exceeding `btree_shard_max_entries` into lexicographical ranges (`a-m` and `n-z`).
-   - Compiles bounded root router at `wiki/index.md` ($\le 80$ lines).
+2. **Auto-Healing & Invariants:**
+   - **Root Router:** Validates that `.rnex/wiki/index.md` exists and is $\le 80$ lines; auto-rebuilds router to index orphan shards and prune dead shard links.
+   - **Workspace References:** Validates that every referenced workspace document in shard entries exists; prunes dead references to deleted files.
+   - **Relative Link Integrity:** Validates all relative Markdown links and `[[wikilinks]]`.
+   - **Deterministic Sort Order:** Auto-heals and enforces strict `LC_ALL=C` sorting of catalog entries across all shards.
 
-3. **Invariants Verification:**
-   - Verifies zero symbolic links.
-   - Verifies zero `_graph/` and zero `_index/` directories.
-   - Validates that `wiki/index.md` remains $\le 80$ lines.
-
-4. **Operational Logging:**
-   - Appends a sanitized ISO-8601 UTC event entry to `wiki/log.md`.
+3. **Conditional Audit Logging:**
+   - If issues are detected and repaired: appends an audit record to `log.md` detailing the repairs.
+   - If everything is already valid (clean run): does NOT touch `log.md` or any wiki files, preserving clean working tree state for Git hooks (e.g. `pre-commit`).
