@@ -46,6 +46,7 @@ AI coding agents navigate wiki context via the 3-step zero-token-bloat protocol:
    - B-Tree shards are maintained in strict `LC_ALL=C` sort order.
    - `.rnex/wiki/index.md` is recompiled atomically to route to all existing shards.
    - Relative Markdown links in source summaries are rewritten to resolve accurately from `.rnex/wiki/` (with unresolvable links stripped to plain text to prevent broken links). Use `--strip-links` to strip all relative link formatting.
+   - Detailed document lifecycle records (`created`, `updated`, `deleted`) are appended to `log.md`, capped at a rolling maximum of 1000 records pruning oldest first.
 
 3. **In-Place Synthesis & Enrichment:**
    - Read and enrich authoritative source documents directly where they live.

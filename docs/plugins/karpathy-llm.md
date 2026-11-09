@@ -40,7 +40,7 @@ A self-healing, agent-maintained knowledge base structured directly under `.rnex
 - **`.rnex/wiki/repo-nexus*.md` & `.rnex/wiki/repos-*.md` Flat Leaf Shards**:
   - Lexicographically sorted domain leaf pages (`repo-nexus.md`, `repos-<member-repo>.md`, `repos-<member-repo>-<subscope>.md`). Automatically split into alphabetical sub-shards (e.g. `repo-nexus-a-m.md`, `repo-nexus-n-z.md`) when exceeding capacity thresholds.
 - **`.rnex/wiki/log.md` Operational Audit Trail**:
-  - Shared append-only log recording source ingestion events when new sources are indexed into the wiki. Inspected with `tail -n 20 .rnex/wiki/log.md`.
+  - Shared append-only log recording granular document lifecycle events (`created`, `updated`, `deleted`) and operational summaries when sources are ingested or repaired. Automatically trimmed to `log_max_records` (default: 1000) by cutting oldest entries first. Inspected with `tail -n 20 .rnex/wiki/log.md`.
 
 ### 4. Standardized Agent Workflows
 - **`wiki-ingest.md` (Ingestion Protocol)**:
@@ -83,6 +83,7 @@ plugins:
     wiki_dir: ".rnex/wiki"      # Directory for curated flat markdown shards (default: .rnex/wiki)
     index_file: "index.md"      # B-Tree Root Router filename (default: index.md)
     log_file: "log.md"          # Chronological audit log filename (default: log.md)
+    log_max_records: 1000       # Maximum records in log.md before oldest are pruned (default: 1000)
     btree_root_max_lines: 80    # Maximum allowed lines in root index.md router (default: 80)
     btree_shard_max_entries: 100# Threshold before splitting a B-Tree shard (default: 100)
     relative_links: "rewrite"   # Link strategy: "rewrite" (default) or "strip"/"delete"
@@ -100,8 +101,9 @@ plugins:
 | `wiki_dir` | string | `".rnex/wiki"` | Directory containing flat markdown shards and router files. |
 | `index_file` | string | `index.md` | B-Tree Root Router filename within `wiki_dir`. |
 | `log_file` | string | `log.md` | Chronological audit log filename within `wiki_dir`. |
+| `log_max_records` | integer | `1000` | Maximum records in `log.md` before oldest entries are pruned (FIFO rolling window). |
 | `btree_root_max_lines` | integer | `80` | Ceiling on lines allowed in `index.md`. |
-| `btree_shard_max_entries` | integer | `100` | Entry count threshold before automatically splitting a shard. |
+| `btree_shard_max_entries` | integer | `100` | Maximum records allowed per leaf shard (default: 100). All wiki files (excluding `index.md` and `log.md`) strictly enforce this limit; shards exceeding this threshold are automatically and recursively subdivided to arbitrary depths (by letters `a-m`/`n-z`, by first 2 letters `pa-pm`/`pn-pz`, by first 3 letters `paa-pam`/`pan-paz`, etc.). |
 | `relative_links` | string | `"rewrite"` | Handling strategy for relative links in ingested markdown summaries: `"rewrite"` (resolves relative links against source directory to valid paths from wiki, stripping broken links) or `"strip"` / `"delete"` (removes relative link markup, preserving anchor text). External links are always preserved. |
 | `sources` | list | `[docs, "repos/**/README.md"]` | Intake directories and/or glob patterns relative to workspace root. Overridable in `.local.rnex.yaml`. |
 | `enabled` | boolean | `true` | Enable or disable the plugin. Overridable in `.local.rnex.yaml`. |
@@ -153,7 +155,7 @@ rnex plugin karpathy-llm ingest --quiet
 
 ### `rnex plugin karpathy-llm lint`
 
-Standalone structural, reference, and sorting audit for the wiki. Inspects directory structures, verifies link targets, checks sorting order (`LC_ALL=C`), asserts zero symbolic links, and verifies the $\le 80$ line ceiling on `index.md` without modifying files or writing to `log.md`:
+Standalone structural, reference, and sorting audit for the wiki. Inspects directory structures, auto-heals and recursively subdivides oversized shards exceeding `btree_shard_max_entries` (max 100 records per leaf shard; splits infinitely by letters, first 2 letters, first 3 letters, etc. without error), verifies link targets, checks sorting order (`LC_ALL=C`), asserts zero symbolic links, and verifies the $\le 80$ line ceiling on `index.md`:
 
 ```sh
 # Audit wiki integrity (standalone, zero ingestion)

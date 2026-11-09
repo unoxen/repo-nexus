@@ -284,9 +284,9 @@ plugins:
 repos:
 EOF_BTREE_CFG
 
-# Create 8 documentation notes under docs/ to exceed the split threshold of 5
+# Create 8 documentation notes under docs/ to exceed the split threshold of 5 (4 in a-m, 4 in n-z)
 mkdir -p "$TEST_BTREE_WS/docs"
-for _cname in "auth-tokens" "caching" "distributed-locks" "encryption" "jwt" "message-brokers" "networking" "queues"; do
+for _cname in "auth-tokens" "caching" "encryption" "jwt" "networking" "queues" "routing" "security"; do
   cat <<EOF_C > "$TEST_BTREE_WS/docs/${_cname}.md"
 # ${_cname}
 Detailed explanation of ${_cname} architecture.
@@ -912,6 +912,459 @@ printf '# Fresh One\nSee [Target Doc](target.md).\n' > "$TEST_MODE_WS/docs/fresh
 _fresh_shard="$(cat "$TEST_MODE_WS/.rnex/wiki/repo-nexus-docs.md")"
 echo "$_fresh_shard" | grep -q 'See Target Doc\.' || {
   fail "--strip-links CLI flag failed to strip relative link: $_fresh_shard"; exit 1;
+}
+pass
+
+# --------------------------------------------------------------------------
+# Test 20: Detailed operational log records created, updated, and deleted document actions
+# --------------------------------------------------------------------------
+run_test "Karpathy-llm: detailed operational log records created, updated, and deleted document actions"
+TEST_DET_LOG_WS="$TEST_TMP/karpathy-det-log-ws"
+mkdir -p "$TEST_DET_LOG_WS"
+setup_plugin_test_workspace karpathy-llm "$TEST_DET_LOG_WS"
+cd "$TEST_DET_LOG_WS"
+
+mkdir -p "$TEST_DET_LOG_WS/docs"
+printf '# Doc Alpha\nAlpha doc content.\n' > "$TEST_DET_LOG_WS/docs/alpha.md"
+printf '# Doc Beta\nBeta doc with [Alpha](alpha.md).\n' > "$TEST_DET_LOG_WS/docs/beta.md"
+
+cat <<'EOF_DET_YAML' > "$TEST_DET_LOG_WS/rnex.yaml"
+version: 1.0.0
+sources: [docs]
+plugins:
+  karpathy-llm:
+repos:
+EOF_DET_YAML
+
+"$TEST_DET_LOG_WS/rnex" init -y --karpathy "$TEST_DET_LOG_WS" >/dev/null
+(cd "$TEST_DET_LOG_WS" && ./rnex plugin karpathy-llm ingest >/dev/null)
+
+_log_content="$(cat "$TEST_DET_LOG_WS/.rnex/wiki/log.md")"
+
+# 1. Assert created document actions recorded
+echo "$_log_content" | grep -q 'created: `docs/alpha.md` (indexed into `repo-nexus-docs.md`)' || {
+  fail "Missing created action for docs/alpha.md in log: $_log_content"; exit 1;
+}
+echo "$_log_content" | grep -q 'created: `docs/beta.md` (indexed into `repo-nexus-docs.md`)' || {
+  fail "Missing created action for docs/beta.md in log: $_log_content"; exit 1;
+}
+# 2. Assert index.md router creation/update recorded
+echo "$_log_content" | grep -q 'index.md` (root router table)' || {
+  fail "Missing index.md action in log: $_log_content"; exit 1;
+}
+
+# 3. Test deleted document action during lint (pruning dead reference)
+rm -f "$TEST_DET_LOG_WS/docs/alpha.md"
+(cd "$TEST_DET_LOG_WS" && ./rnex plugin karpathy-llm lint >/dev/null)
+_log_after_del="$(cat "$TEST_DET_LOG_WS/.rnex/wiki/log.md")"
+echo "$_log_after_del" | grep -q 'deleted: `docs/alpha.md` (pruned dead reference from `repo-nexus-docs.md`)' || {
+  fail "Missing deleted action for docs/alpha.md in log: $_log_after_del"; exit 1;
+}
+
+# 4. Test updated action during lint (re-sorting entries)
+printf '# Wiki Index Shard: repo-nexus-docs\n\n- **[Zebra](../../docs/beta.md)** (`docs/beta.md`) — Z.\n- **[Alpha](../../docs/beta.md)** (`docs/beta.md`) — A.\n' > "$TEST_DET_LOG_WS/.rnex/wiki/repo-nexus-docs.md"
+(cd "$TEST_DET_LOG_WS" && ./rnex plugin karpathy-llm lint >/dev/null)
+_log_after_sort="$(cat "$TEST_DET_LOG_WS/.rnex/wiki/log.md")"
+echo "$_log_after_sort" | grep -q 'updated: `repo-nexus-docs.md` (auto-healed LC_ALL=C sort order)' || {
+  fail "Missing updated action for shard sort in log: $_log_after_sort"; exit 1;
+}
+pass
+
+# --------------------------------------------------------------------------
+# Test 21: Operational log rolling buffer caps at max records (FIFO, pruning oldest first)
+# --------------------------------------------------------------------------
+run_test "Karpathy-llm: operational log rolling buffer prunes oldest records while preserving header"
+TEST_ROLL_WS="$TEST_TMP/karpathy-roll-ws"
+mkdir -p "$TEST_ROLL_WS"
+setup_plugin_test_workspace karpathy-llm "$TEST_ROLL_WS"
+cd "$TEST_ROLL_WS"
+
+cat <<'EOF_ROLL_YAML' > "$TEST_ROLL_WS/rnex.yaml"
+version: 1.0.0
+plugins:
+  karpathy-llm:
+    log_max_records: 5
+sources: [docs]
+repos:
+EOF_ROLL_YAML
+
+"$TEST_ROLL_WS/rnex" init -y --karpathy "$TEST_ROLL_WS" >/dev/null
+mkdir -p "$TEST_ROLL_WS/.rnex/wiki"
+
+# Seed log with 7 entries (Oldest: Record 1, Newest: Record 7)
+cat <<'EOF_SEED' > "$TEST_ROLL_WS/.rnex/wiki/log.md"
+# Wiki Operational Log
+
+- **2026-11-01** | `ingest` | Record 1
+- **2026-11-02** | `ingest` | Record 2
+- **2026-11-03** | `ingest` | Record 3
+- **2026-11-04** | `ingest` | Record 4
+- **2026-11-05** | `ingest` | Record 5
+- **2026-11-06** | `ingest` | Record 6
+- **2026-11-07** | `ingest` | Record 7
+EOF_SEED
+
+mkdir -p "$TEST_ROLL_WS/docs"
+printf '# New Document\nNew document content.\n' > "$TEST_ROLL_WS/docs/new.md"
+(cd "$TEST_ROLL_WS" && ./rnex plugin karpathy-llm ingest >/dev/null)
+
+_roll_content="$(cat "$TEST_ROLL_WS/.rnex/wiki/log.md")"
+_roll_rec_count="$(echo "$_roll_content" | LC_ALL=C grep -c '^- \*\*')"
+
+# Assert total records capped at max (5)
+[ "$_roll_rec_count" -le 5 ] || {
+  fail "Log record count ($_roll_rec_count) exceeds log_max_records (5): $_roll_content"; exit 1;
+}
+
+# Assert oldest records (Record 1, Record 2) were pruned
+! echo "$_roll_content" | grep -q 'Record 1' || {
+  fail "Oldest Record 1 was not pruned from rolling log: $_roll_content"; exit 1;
+}
+! echo "$_roll_content" | grep -q 'Record 2' || {
+  fail "Oldest Record 2 was not pruned from rolling log: $_roll_content"; exit 1;
+}
+
+# Assert newest records and header are present
+echo "$_roll_content" | grep -q '# Wiki Operational Log' || {
+  fail "Header block missing in pruned log: $_roll_content"; exit 1;
+}
+echo "$_roll_content" | grep -q 'created: `docs/new.md`' || {
+  fail "Newest ingest action missing from log: $_roll_content"; exit 1;
+}
+pass
+
+# --------------------------------------------------------------------------
+# Test 22: Recursive B-Tree shard breakdown beyond a-m/n-z (subdividing n-z into n-s/t-z)
+# --------------------------------------------------------------------------
+run_test "Karpathy-llm: recursive B-Tree shard breakdown beyond a-m/n-z into n-s and t-z"
+TEST_RECURSE_WS="$TEST_TMP/karpathy-recurse-ws"
+mkdir -p "$TEST_RECURSE_WS"
+setup_plugin_test_workspace karpathy-llm "$TEST_RECURSE_WS"
+cd "$TEST_RECURSE_WS"
+
+"$TEST_RECURSE_WS/rnex" init -y --karpathy "$TEST_RECURSE_WS" >/dev/null
+
+cat <<'EOF_RECURSE_CFG' > "$TEST_RECURSE_WS/rnex.yaml"
+version: 1.0.0
+plugins:
+  karpathy-llm:
+    wiki_dir: wiki
+    btree_shard_max_entries: 100
+    sources: [repos/test-repo/packages]
+repos:
+  test-repo:
+    path: repos/test-repo
+EOF_RECURSE_CFG
+
+# Create member repository packages directory with 175 files spanning n through z
+mkdir -p "$TEST_RECURSE_WS/repos/test-repo/packages"
+_i=1
+while [ "$_i" -le 175 ]; do
+  _mod=$(( (_i - 1) % 13 ))
+  _ch="$(printf '%s' "nopqrstuvwxyz" | cut -c $((_mod + 1)))"
+  cat <<EOF_DOC > "$TEST_RECURSE_WS/repos/test-repo/packages/${_ch}-pkg-${_i}.md"
+# ${_ch}-pkg-${_i}
+Architecture description for package ${_ch}-${_i}.
+EOF_DOC
+  _i=$((_i + 1))
+done
+
+# Run ingest to compile B-Tree shards
+(cd "$TEST_RECURSE_WS" && ./rnex plugin karpathy-llm ingest >/dev/null)
+
+# Assert that repos-test-repo-packages-n-z.md was broken down and deleted
+[ ! -f "$TEST_RECURSE_WS/wiki/repos-test-repo-packages-n-z.md" ] || {
+  fail "repos-test-repo-packages-n-z.md should have been split and removed"; exit 1;
+}
+
+# Assert that sub-shards n-s and t-z were created
+[ -f "$TEST_RECURSE_WS/wiki/repos-test-repo-packages-n-s.md" ] || {
+  fail "repos-test-repo-packages-n-s.md missing after recursive split"; exit 1;
+}
+[ -f "$TEST_RECURSE_WS/wiki/repos-test-repo-packages-t-z.md" ] || {
+  fail "repos-test-repo-packages-t-z.md missing after recursive split"; exit 1;
+}
+
+# Assert that every sub-shard has <= 100 records
+_ns_count="$(LC_ALL=C grep -c '^- \*\*' "$TEST_RECURSE_WS/wiki/repos-test-repo-packages-n-s.md" 2>/dev/null || true)"
+_tz_count="$(LC_ALL=C grep -c '^- \*\*' "$TEST_RECURSE_WS/wiki/repos-test-repo-packages-t-z.md" 2>/dev/null || true)"
+[ "$_ns_count" -le 100 ] || { fail "Sub-shard n-s has $_ns_count records (> 100)"; exit 1; }
+[ "$_tz_count" -le 100 ] || { fail "Sub-shard t-z has $_tz_count records (> 100)"; exit 1; }
+
+# Assert index.md references n-s and t-z sub-shards and not n-z
+grep -q 'repos-test-repo-packages-n-s.md' "$TEST_RECURSE_WS/wiki/index.md" || {
+  fail "repos-test-repo-packages-n-s missing from root router table"; exit 1;
+}
+grep -q 'repos-test-repo-packages-t-z.md' "$TEST_RECURSE_WS/wiki/index.md" || {
+  fail "repos-test-repo-packages-t-z missing from root router table"; exit 1;
+}
+! grep -q 'repos-test-repo-packages-n-z.md' "$TEST_RECURSE_WS/wiki/index.md" || {
+  fail "Deleted repos-test-repo-packages-n-z still referenced in index.md"; exit 1;
+}
+
+# Assert log.md recorded creation of sub-shards
+grep -q 'created: `repos-test-repo-packages-n-s.md` (split sub-shard)' "$TEST_RECURSE_WS/wiki/log.md" || {
+  fail "Creation of n-s sub-shard not logged in log.md"; exit 1;
+}
+grep -q 'created: `repos-test-repo-packages-t-z.md` (split sub-shard)' "$TEST_RECURSE_WS/wiki/log.md" || {
+  fail "Creation of t-z sub-shard not logged in log.md"; exit 1;
+}
+pass
+
+# --------------------------------------------------------------------------
+# Test 23: Standalone lint auto-heals oversized leaf shards (> 100 records)
+# --------------------------------------------------------------------------
+run_test "Karpathy-llm: standalone lint auto-heals existing oversized shard (>100 records)"
+TEST_LINT_SPLIT_WS="$TEST_TMP/karpathy-lint-split-ws"
+mkdir -p "$TEST_LINT_SPLIT_WS"
+setup_plugin_test_workspace karpathy-llm "$TEST_LINT_SPLIT_WS"
+cd "$TEST_LINT_SPLIT_WS"
+
+"$TEST_LINT_SPLIT_WS/rnex" init -y --karpathy "$TEST_LINT_SPLIT_WS" >/dev/null
+mkdir -p "$TEST_LINT_SPLIT_WS/wiki"
+mkdir -p "$TEST_LINT_SPLIT_WS/repos/test-repo/packages"
+
+# Seed oversized shard repos-test-repo-packages-n-z.md with 175 entries directly
+cat <<'EOF_HDR' > "$TEST_LINT_SPLIT_WS/wiki/repos-test-repo-packages-n-z.md"
+# Wiki Index Shard: repos-test-repo-packages-n-z
+
+EOF_HDR
+
+_i=1
+while [ "$_i" -le 175 ]; do
+  _mod=$(( (_i - 1) % 13 ))
+  _ch="$(printf '%s' "nopqrstuvwxyz" | cut -c $((_mod + 1)))"
+  # Create source file so links are valid
+  touch "$TEST_LINT_SPLIT_WS/repos/test-repo/packages/${_ch}-pkg-${_i}.md"
+  printf -- '- **[%s-pkg-%s](../repos/test-repo/packages/%s-pkg-%s.md)** (`repos/test-repo/packages/%s-pkg-%s.md`) — Description.\n' \
+    "$_ch" "$_i" "$_ch" "$_i" "$_ch" "$_i" >> "$TEST_LINT_SPLIT_WS/wiki/repos-test-repo-packages-n-z.md"
+  _i=$((_i + 1))
+done
+
+cat <<'EOF_LINT_CFG' > "$TEST_LINT_SPLIT_WS/rnex.yaml"
+version: 1.0.0
+plugins:
+  karpathy-llm:
+    wiki_dir: wiki
+    btree_shard_max_entries: 100
+    sources: [repos/test-repo/packages]
+repos:
+  test-repo:
+    path: repos/test-repo
+EOF_LINT_CFG
+
+# Run standalone lint -- should auto-heal and split the oversized shard without error
+(cd "$TEST_LINT_SPLIT_WS" && ./rnex plugin karpathy-llm lint) || {
+  fail "Standalone lint failed to auto-heal oversized shard"; exit 1;
+}
+
+# Assert that oversized shard was deleted
+[ ! -f "$TEST_LINT_SPLIT_WS/wiki/repos-test-repo-packages-n-z.md" ] || {
+  fail "Oversized repos-test-repo-packages-n-z.md was not split and removed by lint"; exit 1;
+}
+
+# Assert that n-s and t-z sub-shards exist and are <= 100 records
+[ -f "$TEST_LINT_SPLIT_WS/wiki/repos-test-repo-packages-n-s.md" ] || {
+  fail "repos-test-repo-packages-n-s.md missing after lint auto-heal"; exit 1;
+}
+[ -f "$TEST_LINT_SPLIT_WS/wiki/repos-test-repo-packages-t-z.md" ] || {
+  fail "repos-test-repo-packages-t-z.md missing after lint auto-heal"; exit 1;
+}
+_lint_ns="$(LC_ALL=C grep -c '^- \*\*' "$TEST_LINT_SPLIT_WS/wiki/repos-test-repo-packages-n-s.md")"
+_lint_tz="$(LC_ALL=C grep -c '^- \*\*' "$TEST_LINT_SPLIT_WS/wiki/repos-test-repo-packages-t-z.md")"
+[ "$_lint_ns" -le 100 ] || { fail "n-s count after lint ($_lint_ns) > 100"; exit 1; }
+[ "$_lint_tz" -le 100 ] || { fail "t-z count after lint ($_lint_tz) > 100"; exit 1; }
+
+# Assert log.md recorded the auto-healing actions
+grep -q 'created: `repos-test-repo-packages-n-s.md` (split sub-shard)' "$TEST_LINT_SPLIT_WS/wiki/log.md" || {
+  fail "Lint creation of n-s shard not recorded in log.md"; exit 1;
+}
+grep -q 'deleted: `repos-test-repo-packages-n-z.md` (split into sub-shards)' "$TEST_LINT_SPLIT_WS/wiki/log.md" || {
+  fail "Lint deletion of parent shard not recorded in log.md"; exit 1;
+}
+pass
+
+# --------------------------------------------------------------------------
+# Test 24: Document routing into deep sub-shards during ingestion
+# --------------------------------------------------------------------------
+run_test "Karpathy-llm: document routing into deep sub-shards (n-s vs t-z)"
+TEST_ROUTE_WS="$TEST_TMP/karpathy-route-ws"
+mkdir -p "$TEST_ROUTE_WS"
+setup_plugin_test_workspace karpathy-llm "$TEST_ROUTE_WS"
+cd "$TEST_ROUTE_WS"
+
+"$TEST_ROUTE_WS/rnex" init -y --karpathy "$TEST_ROUTE_WS" >/dev/null
+mkdir -p "$TEST_ROUTE_WS/wiki"
+
+# Seed existing split sub-shards (a-m, n-s, t-z)
+cat <<'EOF_AM' > "$TEST_ROUTE_WS/wiki/repos-test-repo-packages-a-m.md"
+# Wiki Index Shard: repos-test-repo-packages-a-m
+
+- **[auth](../../repos/test-repo/packages/auth.md)** (`repos/test-repo/packages/auth.md`) — Auth module
+EOF_AM
+
+cat <<'EOF_NS' > "$TEST_ROUTE_WS/wiki/repos-test-repo-packages-n-s.md"
+# Wiki Index Shard: repos-test-repo-packages-n-s
+
+- **[network](../../repos/test-repo/packages/network.md)** (`repos/test-repo/packages/network.md`) — Network module
+EOF_NS
+
+cat <<'EOF_TZ' > "$TEST_ROUTE_WS/wiki/repos-test-repo-packages-t-z.md"
+# Wiki Index Shard: repos-test-repo-packages-t-z
+
+- **[tools](../../repos/test-repo/packages/tools.md)** (`repos/test-repo/packages/tools.md`) — Tools module
+EOF_TZ
+
+cat <<'EOF_ROUTE_CFG' > "$TEST_ROUTE_WS/rnex.yaml"
+version: 1.0.0
+plugins:
+  karpathy-llm:
+    wiki_dir: wiki
+    btree_shard_max_entries: 100
+    sources: [repos/test-repo/packages]
+repos:
+  test-repo:
+    path: repos/test-repo
+EOF_ROUTE_CFG
+
+# Create a new package document starting with 'p' (belongs in n-s) and one starting with 'z' (belongs in t-z)
+mkdir -p "$TEST_ROUTE_WS/repos/test-repo/packages"
+printf '# package-manager\nPackage manager module.\n' > "$TEST_ROUTE_WS/repos/test-repo/packages/pkg-manager.md"
+printf '# zebra-worker\nZebra worker module.\n' > "$TEST_ROUTE_WS/repos/test-repo/packages/zebra-worker.md"
+
+(cd "$TEST_ROUTE_WS" && ./rnex plugin karpathy-llm ingest >/dev/null)
+
+# Assert package-manager was routed to n-s and zebra-worker to t-z
+grep -q 'package-manager' "$TEST_ROUTE_WS/wiki/repos-test-repo-packages-n-s.md" || {
+  fail "package-manager was not routed to n-s shard"; exit 1;
+}
+grep -q 'zebra-worker' "$TEST_ROUTE_WS/wiki/repos-test-repo-packages-t-z.md" || {
+  fail "zebra-worker was not routed to t-z shard"; exit 1;
+}
+# Assert base shard was not created
+[ ! -f "$TEST_ROUTE_WS/wiki/repos-test-repo-packages.md" ] || {
+  fail "Base shard should not be created when sub-shards exist"; exit 1;
+}
+# Assert n-z was not created
+[ ! -f "$TEST_ROUTE_WS/wiki/repos-test-repo-packages-n-z.md" ] || {
+  fail "Old n-z shard should not be created when deep sub-shards exist"; exit 1;
+}
+pass
+
+# --------------------------------------------------------------------------
+# Test 25: Multi-letter B-Tree splitting by first 2 letters (pa-pm / pn-pz)
+# --------------------------------------------------------------------------
+run_test "Karpathy-llm: multi-letter B-Tree splitting by first 2 letters (p -> pa-pm and pn-pz)"
+TEST_2LET_WS="$TEST_TMP/karpathy-2let-ws"
+mkdir -p "$TEST_2LET_WS"
+setup_plugin_test_workspace karpathy-llm "$TEST_2LET_WS"
+cd "$TEST_2LET_WS"
+
+"$TEST_2LET_WS/rnex" init -y --karpathy "$TEST_2LET_WS" >/dev/null
+mkdir -p "$TEST_2LET_WS/wiki"
+mkdir -p "$TEST_2LET_WS/repos/test-repo/packages"
+
+# Generate 150 docs starting with 'p': 75 package-* (pa), 75 python-* (py)
+_i=1
+while [ "$_i" -le 75 ]; do
+  printf '# package-mod-%s\nPackage module %s.\n' "$_i" "$_i" > "$TEST_2LET_WS/repos/test-repo/packages/package-mod-${_i}.md"
+  _i=$((_i + 1))
+done
+_j=1
+while [ "$_j" -le 75 ]; do
+  printf '# python-mod-%s\nPython module %s.\n' "$_j" "$_j" > "$TEST_2LET_WS/repos/test-repo/packages/python-mod-${_j}.md"
+  _j=$((_j + 1))
+done
+
+cat <<'EOF_2LET_CFG' > "$TEST_2LET_WS/rnex.yaml"
+version: 1.0.0
+plugins:
+  karpathy-llm:
+    wiki_dir: wiki
+    btree_shard_max_entries: 100
+    sources: [repos/test-repo/packages]
+repos:
+  test-repo:
+    path: repos/test-repo
+EOF_2LET_CFG
+
+(cd "$TEST_2LET_WS" && ./rnex plugin karpathy-llm ingest >/dev/null)
+
+# Verify that splitting produced 2-letter sub-shards (pa-pm and pn-pz)
+[ -f "$TEST_2LET_WS/wiki/repos-test-repo-packages-pa-pm.md" ] || {
+  fail "repos-test-repo-packages-pa-pm.md was not created"; exit 1;
+}
+[ -f "$TEST_2LET_WS/wiki/repos-test-repo-packages-pn-pz.md" ] || {
+  fail "repos-test-repo-packages-pn-pz.md was not created"; exit 1;
+}
+
+# Verify entries are strictly <= 100 in each shard
+_pa_pm_count="$(LC_ALL=C grep -c '^- \*\*' "$TEST_2LET_WS/wiki/repos-test-repo-packages-pa-pm.md" 2>/dev/null || true)"
+_pn_pz_count="$(LC_ALL=C grep -c '^- \*\*' "$TEST_2LET_WS/wiki/repos-test-repo-packages-pn-pz.md" 2>/dev/null || true)"
+[ "$_pa_pm_count" -le 100 ] || { fail "pa-pm shard has $_pa_pm_count entries (>100)"; exit 1; }
+[ "$_pn_pz_count" -le 100 ] || { fail "pn-pz shard has $_pn_pz_count entries (>100)"; exit 1; }
+
+# Verify standalone lint passes with 0 errors
+(cd "$TEST_2LET_WS" && ./rnex plugin karpathy-llm lint) || {
+  fail "Standalone lint failed on 2-letter sub-shards"; exit 1;
+}
+pass
+
+# --------------------------------------------------------------------------
+# Test 26: Multi-letter B-Tree splitting by first 3 letters (paa-pam / pan-paz)
+# --------------------------------------------------------------------------
+run_test "Karpathy-llm: multi-letter B-Tree splitting by first 3 letters (pa -> paa-pam and pan-paz)"
+TEST_3LET_WS="$TEST_TMP/karpathy-3let-ws"
+mkdir -p "$TEST_3LET_WS"
+setup_plugin_test_workspace karpathy-llm "$TEST_3LET_WS"
+cd "$TEST_3LET_WS"
+
+"$TEST_3LET_WS/rnex" init -y --karpathy "$TEST_3LET_WS" >/dev/null
+mkdir -p "$TEST_3LET_WS/wiki"
+mkdir -p "$TEST_3LET_WS/repos/test-repo/packages"
+
+# Generate 150 docs starting with 'pa': 75 package-* (pac -> paa-pam), 75 payment-* (pay -> pan-paz)
+_i=1
+while [ "$_i" -le 75 ]; do
+  printf '# package-item-%s\nPackage item %s.\n' "$_i" "$_i" > "$TEST_3LET_WS/repos/test-repo/packages/package-item-${_i}.md"
+  _i=$((_i + 1))
+done
+_j=1
+while [ "$_j" -le 75 ]; do
+  printf '# payment-item-%s\nPayment item %s.\n' "$_j" "$_j" > "$TEST_3LET_WS/repos/test-repo/packages/payment-item-${_j}.md"
+  _j=$((_j + 1))
+done
+
+cat <<'EOF_3LET_CFG' > "$TEST_3LET_WS/rnex.yaml"
+version: 1.0.0
+plugins:
+  karpathy-llm:
+    wiki_dir: wiki
+    btree_shard_max_entries: 100
+    sources: [repos/test-repo/packages]
+repos:
+  test-repo:
+    path: repos/test-repo
+EOF_3LET_CFG
+
+(cd "$TEST_3LET_WS" && ./rnex plugin karpathy-llm ingest >/dev/null)
+
+# Verify that splitting produced 3-letter sub-shards (paa-pam and pan-paz)
+[ -f "$TEST_3LET_WS/wiki/repos-test-repo-packages-paa-pam.md" ] || {
+  fail "repos-test-repo-packages-paa-pam.md was not created"; exit 1;
+}
+[ -f "$TEST_3LET_WS/wiki/repos-test-repo-packages-pan-paz.md" ] || {
+  fail "repos-test-repo-packages-pan-paz.md was not created"; exit 1;
+}
+
+_paa_pam_count="$(LC_ALL=C grep -c '^- \*\*' "$TEST_3LET_WS/wiki/repos-test-repo-packages-paa-pam.md" 2>/dev/null || true)"
+_pan_paz_count="$(LC_ALL=C grep -c '^- \*\*' "$TEST_3LET_WS/wiki/repos-test-repo-packages-pan-paz.md" 2>/dev/null || true)"
+[ "$_paa_pam_count" -le 100 ] || { fail "paa-pam shard has $_paa_pam_count entries (>100)"; exit 1; }
+[ "$_pan_paz_count" -le 100 ] || { fail "pan-paz shard has $_pan_paz_count entries (>100)"; exit 1; }
+
+# Verify standalone lint passes with 0 errors
+(cd "$TEST_3LET_WS" && ./rnex plugin karpathy-llm lint) || {
+  fail "Standalone lint failed on 3-letter sub-shards"; exit 1;
 }
 pass
 

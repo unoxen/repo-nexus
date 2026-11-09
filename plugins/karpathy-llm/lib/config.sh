@@ -164,8 +164,16 @@ load_wiki_config_contract() {
         [ -n "$RNEX_WIKI_BTREE_SHARD_MAX_ENTRIES" ] || RNEX_WIKI_BTREE_SHARD_MAX_ENTRIES=100
     fi
 
+    # Audit log capacity: maximum records before oldest entries are pruned (default: 1000)
+    if [ -n "${RNEX_CFG_LOG_MAX_RECORDS:-}" ]; then
+        RNEX_WIKI_LOG_MAX_RECORDS="$RNEX_CFG_LOG_MAX_RECORDS"
+    else
+        RNEX_WIKI_LOG_MAX_RECORDS="$(_lookup_karpathy_cfg "log_max_records")"
+        [ -n "$RNEX_WIKI_LOG_MAX_RECORDS" ] || RNEX_WIKI_LOG_MAX_RECORDS=1000
+    fi
+
     # Enforce strictly positive integers for capacity thresholds
-    for _num_val in "$RNEX_WIKI_BTREE_MAX_ROOT_LINES" "$RNEX_WIKI_BTREE_SHARD_MAX_ENTRIES"; do
+    for _num_val in "$RNEX_WIKI_BTREE_MAX_ROOT_LINES" "$RNEX_WIKI_BTREE_SHARD_MAX_ENTRIES" "$RNEX_WIKI_LOG_MAX_RECORDS"; do
         case "$_num_val" in
             ''|*[!0-9]*|0)
                 printf 'Error [config]: Numeric threshold "%s" must be a positive integer.\n' "$_num_val" >&2
@@ -197,7 +205,8 @@ load_wiki_config_contract() {
     export RNEX_WORKSPACE_ROOT RNEX_WIKI_REL_DIR RNEX_WIKI_ROOT \
            RNEX_WIKI_INDEX_FILE RNEX_WIKI_LOG_FILE RNEX_WIKI_UP_PREFIX \
            RNEX_WIKI_BTREE_MAX_ROOT_LINES RNEX_WIKI_BTREE_SHARD_MAX_ENTRIES \
-           RNEX_WIKI_BTREE_ROOT_MAX_LINES RNEX_WIKI_RELATIVE_LINKS
+           RNEX_WIKI_BTREE_ROOT_MAX_LINES RNEX_WIKI_RELATIVE_LINKS \
+           RNEX_WIKI_LOG_MAX_RECORDS
 
     return 0
 }

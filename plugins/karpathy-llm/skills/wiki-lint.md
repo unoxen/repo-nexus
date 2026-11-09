@@ -37,5 +37,5 @@ AI coding agents navigate wiki structure through:
    - **Deterministic Sort Order:** Auto-heals and enforces strict `LC_ALL=C` sorting of catalog entries across all shards.
 
 3. **Conditional Audit Logging:**
-   - If issues are detected and repaired: appends an audit record to `log.md` detailing the repairs.
+   - If issues are detected and repaired: appends granular audit records (`created`, `updated`, `deleted`) to `log.md` detailing the repairs, bounded to a rolling max of 1000 records.
    - If everything is already valid (clean run): does NOT touch `log.md` or any wiki files, preserving clean working tree state for Git hooks (e.g. `pre-commit`).

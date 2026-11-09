@@ -69,6 +69,7 @@ lint_existing_wiki_directory() {
     if [ -n "$_symlinks" ]; then
         find "$RNEX_WIKI_ROOT" -type l -exec rm -f {} + 2>/dev/null || true
         _fixes_count=$((_fixes_count + 1))
+        append_wiki_log_entry "lint" "deleted: prohibited symbolic links in ${RNEX_WIKI_REL_DIR}"
     fi
 
     # 3. Ensure baseline leaf shard exists if wiki is empty
@@ -92,6 +93,7 @@ lint_existing_wiki_directory() {
                     if [ -n "$_doc_rel" ] && [ ! -f "${RNEX_WORKSPACE_ROOT}/${_doc_rel}" ]; then
                         _shard_pruned=1
                         _fixes_count=$((_fixes_count + 1))
+                        append_wiki_log_entry "lint" "deleted: \`${_doc_rel}\` (pruned dead reference from \`${_base_md}\`)"
                         continue
                     fi
 
@@ -113,6 +115,7 @@ lint_existing_wiki_directory() {
                                         _line="${_prefix} — ${_healed_sum}"
                                         _shard_pruned=1
                                         _fixes_count=$((_fixes_count + 1))
+                                        append_wiki_log_entry "lint" "updated: \`${_doc_rel}\` in \`${_base_md}\` (auto-healed broken link targets)"
                                     fi
                                 fi
                                 ;;
@@ -140,10 +143,17 @@ lint_existing_wiki_directory() {
                 LC_ALL=C sort -u "$_entries_tmp" >> "$_wiki_md"
                 rm -f "$_hdr_tmp"
                 _fixes_count=$((_fixes_count + 1))
+                append_wiki_log_entry "lint" "updated: \`${_base_md}\` (auto-healed LC_ALL=C sort order)"
             fi
         fi
         rm -f "$_entries_tmp"
     done
+
+    # 4c. Auto-heal oversized B-Tree leaf shards (> RNEX_WIKI_BTREE_SHARD_MAX_ENTRIES)
+    _splits_count="$(split_oversized_btree_shards "lint")"
+    if [ -n "$_splits_count" ] && [ "$_splits_count" -gt 0 ]; then
+        _fixes_count=$((_fixes_count + _splits_count))
+    fi
 
     # 5. Rebuild root router index.md (linking orphan shards, pruning missing shards, updating counts)
     _idx_old_sum=""
@@ -154,6 +164,7 @@ lint_existing_wiki_directory() {
     _idx_new_sum="$(cksum < "$RNEX_WIKI_INDEX_FILE" 2>/dev/null || true)"
     if [ "$_idx_old_sum" != "$_idx_new_sum" ]; then
         _fixes_count=$((_fixes_count + 1))
+        append_wiki_log_entry "lint" "updated: \`index.md\` (recompiled root router table)"
     fi
 
     # 6. Post-healing invariant checks
@@ -229,6 +240,22 @@ lint_existing_wiki_directory() {
             fi
         done 6< "$_wikilinks_tmp"
         rm -f "$_wikilinks_tmp"
+    done
+
+    # 6d. Verify no leaf shard exceeds RNEX_WIKI_BTREE_SHARD_MAX_ENTRIES (default: 100)
+    for _wiki_md in "${RNEX_WIKI_ROOT}"/*.md; do
+        [ -f "$_wiki_md" ] || continue
+        _base_md="$(basename "$_wiki_md")"
+        case "$_base_md" in
+            index.md|log.md) continue ;;
+        esac
+        _rec_cnt="$(LC_ALL=C grep -c '^- \*\*' "$_wiki_md" 2>/dev/null || true)"
+        [ -n "$_rec_cnt" ] || _rec_cnt=0
+        if [ "$_rec_cnt" -gt "${RNEX_WIKI_BTREE_SHARD_MAX_ENTRIES:-100}" ]; then
+            printf 'Lint Error [%s]: Shard has %s records (exceeds max %s).\n' \
+                "$_base_md" "$_rec_cnt" "${RNEX_WIKI_BTREE_SHARD_MAX_ENTRIES:-100}" >&2
+            _errors=$((_errors + 1))
+        fi
     done
 
     # 7. In --strict mode or on fatal errors, fail

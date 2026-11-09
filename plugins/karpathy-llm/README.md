@@ -25,7 +25,7 @@ Reference specification: [setup-karpathy-wiki.md](https://github.com/unoxen/ai-t
 * **Zero-Duplication In-Place Architecture:** Source files are indexed directly where they reside in the workspace (`README.md`, `docs/`, `RFC/`, `repos/<member>/...`). Zero redundant copies and zero symbolic links.
 * **B-Tree Root Router (`<wiki_dir>/index.md`):** Compact, strictly bounded routing table ($\le 80$ lines, zero YAML frontmatter) mapping lexicographic key ranges to leaf shard files in `<wiki_dir>/`. Default: `.rnex/wiki/index.md`.
 * **Flat Leaf Shards (`<wiki_dir>/repo-nexus*.md`, `<wiki_dir>/repos-*.md`):** Lexicographically sorted catalogs.
-* **Chronological Audit Log (`<wiki_dir>/log.md`):** Shared append-only log recording source ingestion events when new sources are indexed into the wiki. Inspected via `tail -n 20 .rnex/wiki/log.md`.
+* **Chronological Audit Log (`<wiki_dir>/log.md`):** Shared append-only log recording granular document lifecycle events (`created`, `updated`, `deleted`) and operational summaries when sources are indexed or repaired. Bounded to a rolling 1000-record window pruning oldest records first. Inspected via `tail -n 20 .rnex/wiki/log.md`.
 
 ### 4. Standardized Agent Skills (`skills/`)
 * **`wiki-ingest.md` (User Skill: `rnex-karpathy-llm-wiki-ingest`):** Guides deterministic CLI missing-source ingestion, flat B-Tree leaf shard updates, root router compilation, and audit log updates.
