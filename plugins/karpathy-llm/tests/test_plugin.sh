@@ -1368,6 +1368,147 @@ _pan_paz_count="$(LC_ALL=C grep -c '^- \*\*' "$TEST_3LET_WS/wiki/repos-test-repo
 }
 pass
 
+# --------------------------------------------------------------------------
+# Test 27: Standalone lint auto-heals legacy numeric shards and misplaced entries
+# --------------------------------------------------------------------------
+run_test "Karpathy-llm: lint auto-heals legacy numeric shards and re-routes misplaced entries"
+TEST_NUM_HEAL_WS="$TEST_TMP/karpathy-num-heal-ws"
+mkdir -p "$TEST_NUM_HEAL_WS"
+setup_plugin_test_workspace karpathy-llm "$TEST_NUM_HEAL_WS"
+cd "$TEST_NUM_HEAL_WS"
+
+"$TEST_NUM_HEAL_WS/rnex" init -y --karpathy "$TEST_NUM_HEAL_WS" >/dev/null
+mkdir -p "$TEST_NUM_HEAL_WS/wiki"
+mkdir -p "$TEST_NUM_HEAL_WS/repos/test-module/education"
+mkdir -p "$TEST_NUM_HEAL_WS/repos/test-module/example"
+mkdir -p "$TEST_NUM_HEAL_WS/repos/test-module/aa"
+
+# Create valid markdown source files
+touch "$TEST_NUM_HEAL_WS/repos/test-module/education/README.md"
+touch "$TEST_NUM_HEAL_WS/repos/test-module/example/README.md"
+touch "$TEST_NUM_HEAL_WS/repos/test-module/aa/README.md"
+
+# Seed a legacy numeric shard (repos-test-module-aa-1.md) containing misplaced entries
+cat <<'EOF_NUM_SHARD' > "$TEST_NUM_HEAL_WS/wiki/repos-test-module-aa-1.md"
+# Wiki Index Shard: repos-test-module-aa-1
+
+- **[aa-service](../../repos/test-module/aa/README.md)** (`repos/test-module/aa/README.md`) — AA service.
+- **[education](../../repos/test-module/education/README.md)** (`repos/test-module/education/README.md`) — Education module.
+- **[example-module](../../repos/test-module/example/README.md)** (`repos/test-module/example/README.md`) — Example module.
+EOF_NUM_SHARD
+
+cat <<'EOF_HEAL_CFG' > "$TEST_NUM_HEAL_WS/rnex.yaml"
+version: 1.0.0
+plugins:
+  karpathy-llm:
+    wiki_dir: wiki
+    btree_shard_max_entries: 100
+    sources: [repos/test-module]
+repos:
+  test-module:
+    path: repos/test-module
+EOF_HEAL_CFG
+
+# Run standalone lint -- must dissolve the numeric shard and re-route misplaced entries without error
+(cd "$TEST_NUM_HEAL_WS" && ./rnex plugin karpathy-llm lint) || {
+  fail "Standalone lint failed to auto-heal numeric shard"; exit 1;
+}
+
+# 1. Assert that legacy numeric shard repos-test-module-aa-1.md was deleted
+[ ! -f "$TEST_NUM_HEAL_WS/wiki/repos-test-module-aa-1.md" ] || {
+  fail "Legacy numeric shard repos-test-module-aa-1.md was not deleted by lint"; exit 1;
+}
+
+# 2. Assert that entries were re-routed into valid semantic shard(s)
+_found_edu=0
+_found_ex=0
+_found_aa=0
+for _shard_f in "$TEST_NUM_HEAL_WS/wiki"/repos-test-module*.md; do
+  [ -f "$_shard_f" ] || continue
+  grep -q 'education' "$_shard_f" && _found_edu=1
+  grep -q 'example-module' "$_shard_f" && _found_ex=1
+  grep -q 'aa-service' "$_shard_f" && _found_aa=1
+done
+[ "$_found_edu" -eq 1 ] || { fail "education entry missing after numeric shard healing"; exit 1; }
+[ "$_found_ex" -eq 1 ] || { fail "example-module entry missing after numeric shard healing"; exit 1; }
+[ "$_found_aa" -eq 1 ] || { fail "aa-service entry missing after numeric shard healing"; exit 1; }
+
+# 3. Assert zero numeric shards exist
+_num_shards_left="$(find "$TEST_NUM_HEAL_WS/wiki" -name '*-[0-9]*.md' | grep -v 'log.md' || true)"
+[ -z "$_num_shards_left" ] || {
+  fail "Numeric shard(s) still exist after healing: $_num_shards_left"; exit 1;
+}
+
+# 4. Assert log recorded deletion of numeric shard
+grep -q 'purged non-semantic numeric shard' "$TEST_NUM_HEAL_WS/wiki/log.md" || {
+  fail "Purging of numeric shard not logged in log.md"; exit 1;
+}
+pass
+
+# --------------------------------------------------------------------------
+# Test 28: Pure alphabetical B-Tree splitting with identical titles using path tie-breaker
+# --------------------------------------------------------------------------
+run_test "Karpathy-llm: pure alphabetical splitting with identical titles (zero numbers)"
+TEST_IDENT_WS="$TEST_TMP/karpathy-ident-ws"
+mkdir -p "$TEST_IDENT_WS"
+setup_plugin_test_workspace karpathy-llm "$TEST_IDENT_WS"
+cd "$TEST_IDENT_WS"
+
+"$TEST_IDENT_WS/rnex" init -y --karpathy "$TEST_IDENT_WS" >/dev/null
+mkdir -p "$TEST_IDENT_WS/wiki"
+mkdir -p "$TEST_IDENT_WS/repos/test-repo/packages"
+
+# Generate 120 files all with identical title '# README' in different package directories
+# 60 in auth-*/README.md (a), 60 in worker-*/README.md (w)
+_i=1
+while [ "$_i" -le 60 ]; do
+  mkdir -p "$TEST_IDENT_WS/repos/test-repo/packages/auth-${_i}"
+  printf '# README\nAuth service documentation.\n' > "$TEST_IDENT_WS/repos/test-repo/packages/auth-${_i}/README.md"
+  _i=$((_i + 1))
+done
+_j=1
+while [ "$_j" -le 60 ]; do
+  mkdir -p "$TEST_IDENT_WS/repos/test-repo/packages/worker-${_j}"
+  printf '# README\nWorker service documentation.\n' > "$TEST_IDENT_WS/repos/test-repo/packages/worker-${_j}/README.md"
+  _j=$((_j + 1))
+done
+
+cat <<'EOF_IDENT_CFG' > "$TEST_IDENT_WS/rnex.yaml"
+version: 1.0.0
+plugins:
+  karpathy-llm:
+    wiki_dir: wiki
+    btree_shard_max_entries: 100
+    sources: [repos/test-repo/packages]
+repos:
+  test-repo:
+    path: repos/test-repo
+EOF_IDENT_CFG
+
+(cd "$TEST_IDENT_WS" && ./rnex plugin karpathy-llm ingest >/dev/null)
+
+# Verify zero numeric shards were created
+_num_shards_ident="$(find "$TEST_IDENT_WS/wiki" -name '*-[0-9]*.md' | grep -v 'log.md' || true)"
+[ -z "$_num_shards_ident" ] || {
+  fail "Prohibited numeric shards created during identical titles split: $_num_shards_ident"; exit 1;
+}
+
+# Verify that all resulting shards have <= 100 entries
+for _shard in "$TEST_IDENT_WS/wiki"/*.md; do
+  [ -f "$_shard" ] || continue
+  case "$(basename "$_shard")" in
+    index.md|log.md) continue ;;
+  esac
+  _cnt="$(LC_ALL=C grep -c '^- \*\*' "$_shard" 2>/dev/null || true)"
+  [ "$_cnt" -le 100 ] || { fail "Shard $(basename "$_shard") has $_cnt records (> 100)"; exit 1; }
+done
+
+# Verify standalone lint passes
+(cd "$TEST_IDENT_WS" && ./rnex plugin karpathy-llm lint) || {
+  fail "Standalone lint failed on identical-titles wiki"; exit 1;
+}
+pass
+
 if [ "${_STANDALONE_RUN:-0}" -eq 1 ]; then
   report_results
 fi

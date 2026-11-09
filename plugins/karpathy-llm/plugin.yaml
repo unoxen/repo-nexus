@@ -1,5 +1,5 @@
 name: karpathy-llm
-version: 0.9.12
+version: 0.9.13
 description: "Deterministic B-Tree Markdown Wiki in .rnex/wiki for AI agents"
 config:
   wiki_dir: ".rnex/wiki"

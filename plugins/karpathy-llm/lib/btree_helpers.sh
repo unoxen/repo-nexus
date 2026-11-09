@@ -473,6 +473,9 @@ resolve_target_btree_shard_file() {
             if (index(sub_id, prefix) != 1) next
             sub_suffix = substr(sub_id, length(prefix) + 1)
 
+            # Strictly require valid alphabetic range or prefix (ignore legacy numeric shards)
+            if (!match(sub_suffix, /^[a-z]+-[a-z]+$/) && !match(sub_suffix, /^[a-z]+$/)) next
+
             if (first_child == "" || f < first_child) first_child = f
             if (last_child == "" || f > last_child) last_child = f
 
@@ -509,8 +512,6 @@ resolve_target_btree_shard_file() {
                 print first_child
             } else if (t > "z" && last_child != "") {
                 print last_child
-            } else if (first_child != "") {
-                print first_child
             } else {
                 print def_file
             }
@@ -668,7 +669,27 @@ split_oversized_btree_shards() {
                             sub(/\*\*.*$/, "", m)
                             return m
                         }
-                        return line
+                        return ""
+                    }
+                    function get_path(line,   m) {
+                        if (match(line, /\(`[^`]+`\)/)) {
+                            m = substr(line, RSTART + 2, RLENGTH - 4)
+                            return m
+                        } else if (match(line, /\]\([^)]+\)/)) {
+                            m = substr(line, RSTART + 2, RLENGTH - 3)
+                            return m
+                        }
+                        return ""
+                    }
+                    function clean_alpha_key(str,   res, i, c) {
+                        res = ""
+                        for (i = 1; i <= length(str); i++) {
+                            c = substr(str, i, 1)
+                            if (c >= "a" && c <= "z") res = res c
+                            else if (c >= "0" && c <= "9") res = res c
+                            else if (c == "/" || c == "-" || c == "_") res = res "-"
+                        }
+                        return res
                     }
                     BEGIN {
                         alpha = "abcdefghijklmnopqrstuvwxyz"
@@ -677,10 +698,32 @@ split_oversized_btree_shards() {
                     {
                         lines_count++
                         lines[lines_count] = $0
-                        titles[lines_count] = tolower(get_title($0))
+                        t = tolower(get_title($0))
+                        p = tolower(get_path($0))
+                        titles[lines_count] = (t != "") ? t : "untitled"
+                        paths[lines_count] = (p != "") ? p : ("item-" lines_count)
                     }
                     END {
                         if (lines_count == 0) exit 0
+
+                        # Check if all titles are identical
+                        all_titles_same = 1
+                        for (i = 2; i <= lines_count; i++) {
+                            if (titles[i] != titles[1]) {
+                                all_titles_same = 0
+                                break
+                            }
+                        }
+
+                        # Build sorting keys: use title if they differ; use title + "-" + path if all titles are identical
+                        for (i = 1; i <= lines_count; i++) {
+                            if (all_titles_same) {
+                                clean_p = clean_alpha_key(paths[i])
+                                keys[i] = clean_alpha_key(titles[i]) "-" clean_p
+                            } else {
+                                keys[i] = clean_alpha_key(titles[i])
+                            }
+                        }
 
                         # Suffix of shard_id relative to base_id
                         if (shard_id == base_id) {
@@ -699,23 +742,20 @@ split_oversized_btree_shards() {
                             if (length(s_part) == length(e_part)) {
                                 S = s_part; E = e_part; K = length(s_part)
                             } else {
-                                S = ""; E = ""; K = 0
+                                S = "a"; E = "z"; K = 1
                             }
                         } else if (match(suffix, /^[a-z]+$/)) {
                             S = suffix; E = suffix; K = length(suffix)
                         } else {
-                            S = ""; E = ""; K = 0
+                            S = "a"; E = "z"; K = 1
                         }
 
-                        split_by_median = 0
-                        if (K == 0) split_by_median = 1
-
                         loop_limit = 0
-                        while (!split_by_median && loop_limit++ < 40) {
-                            # Skip past common characters if all titles share the character at position K
-                            min_c = substr(titles[1], K, 1)
-                            max_c = substr(titles[lines_count], K, 1)
-                            if (min_c == max_c && min_c != "") {
+                        while (loop_limit++ < 60) {
+                            # Advance past characters shared by all keys in this shard
+                            min_c = substr(keys[1], K, 1)
+                            max_c = substr(keys[lines_count], K, 1)
+                            if (min_c == max_c && min_c >= "a" && min_c <= "z") {
                                 P = (K > 1) ? substr(S, 1, K - 1) : ""
                                 S = P min_c
                                 E = P min_c
@@ -752,7 +792,7 @@ split_oversized_btree_shards() {
                                     cnt1 = 0
                                     cnt2 = 0
                                     for (i = 1; i <= lines_count; i++) {
-                                        pfx = substr(titles[i], 1, K)
+                                        pfx = substr(keys[i], 1, K)
                                         if ((r1_s == (P "a") && pfx < r1_s) || (pfx <= r1_e)) {
                                             cnt1++
                                         } else {
@@ -762,7 +802,7 @@ split_oversized_btree_shards() {
 
                                     if (cnt1 > 0 && cnt2 > 0) {
                                         for (i = 1; i <= lines_count; i++) {
-                                            pfx = substr(titles[i], 1, K)
+                                            pfx = substr(keys[i], 1, K)
                                             if ((r1_s == (P "a") && pfx < r1_s) || (pfx <= r1_e)) {
                                                 print lines[i] >> part1_file
                                             } else {
@@ -794,10 +834,19 @@ split_oversized_btree_shards() {
                             }
                         }
 
-                        # Median partitioning fallback
-                        c1_name = shard_id "-1"
-                        c2_name = shard_id "-2"
+                        # Pure alphabetical fallback: derive semantic letter ranges from halves
                         half_idx = int((lines_count + 1) / 2)
+                        k1_start = substr(keys[1], 1, 2)
+                        k1_end = substr(keys[half_idx], 1, 2)
+                        k2_start = substr(keys[half_idx + 1], 1, 2)
+                        k2_end = substr(keys[lines_count], 1, 2)
+
+                        sfx1 = (k1_start == k1_end) ? k1_start : (k1_start "-" k1_end)
+                        sfx2 = (k2_start == k2_end) ? k2_start : (k2_start "-" k2_end)
+
+                        c1_name = base_id "-" sfx1
+                        c2_name = base_id "-" sfx2
+
                         for (i = 1; i <= lines_count; i++) {
                             if (i <= half_idx) {
                                 print lines[i] >> part1_file

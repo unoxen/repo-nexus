@@ -23,6 +23,8 @@ PLUGIN_ROOT="$(CDPATH='' cd -- "${SCRIPT_DIR}/.." && pwd)"
 . "${PLUGIN_ROOT}/lib/utils.sh"
 # shellcheck source=plugins/karpathy-llm/lib/config.sh
 . "${PLUGIN_ROOT}/lib/config.sh"
+# shellcheck source=plugins/karpathy-llm/lib/source_helpers.sh
+. "${PLUGIN_ROOT}/lib/source_helpers.sh"
 # shellcheck source=plugins/karpathy-llm/lib/btree_helpers.sh
 . "${PLUGIN_ROOT}/lib/btree_helpers.sh"
 # shellcheck source=plugins/karpathy-llm/lib/lint_helpers.sh

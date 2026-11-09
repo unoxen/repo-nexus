@@ -57,6 +57,15 @@ lint_existing_wiki_directory() {
     _fixes_count=0
     _errors=0
 
+    # Ensure upward relative prefix is reliably initialized
+    _up_prefix="${RNEX_WIKI_UP_PREFIX:-}"
+    if [ -z "$_up_prefix" ] && command -v compute_upward_rel_prefix >/dev/null 2>&1; then
+        _up_prefix="$(compute_upward_rel_prefix "$RNEX_WIKI_REL_DIR")"
+    fi
+    [ -n "$_up_prefix" ] || _up_prefix="../../"
+    RNEX_WIKI_UP_PREFIX="$_up_prefix"
+    export RNEX_WIKI_UP_PREFIX
+
     # 1. Verify wiki directory exists
     if [ ! -d "$RNEX_WIKI_ROOT" ]; then
         printf 'Lint Error: Wiki directory "%s" does not exist.\n' "$RNEX_WIKI_REL_DIR" >&2
@@ -99,6 +108,19 @@ lint_existing_wiki_directory() {
 
                     # Auto-heal broken links inside catalog entry summary if source document exists
                     if [ -n "$_doc_rel" ] && [ -f "${RNEX_WORKSPACE_ROOT}/${_doc_rel}" ]; then
+                        # 4a-1. Auto-heal entry title link target depth if it does not match RNEX_WIKI_UP_PREFIX
+                        _expected_target="${RNEX_WIKI_UP_PREFIX}${_doc_rel}"
+                        _curr_target="$(printf '%s\n' "$_line" | sed -n 's/^- \*\*\[[^]]*\](\([^)]*\)).*/\1/p')"
+                        if [ -n "$_curr_target" ] && [ "$_curr_target" != "$_expected_target" ]; then
+                            _title_text="$(printf '%s\n' "$_line" | sed -n 's/^- \*\*\[\([^]]*\)\].*/\1/p')"
+                            _rest="${_line#*(\`"${_doc_rel}"\`)}"
+                            _line="- **[${_title_text}](${_expected_target})** (\`${_doc_rel}\`)${_rest}"
+                            _shard_pruned=1
+                            _fixes_count=$((_fixes_count + 1))
+                            append_wiki_log_entry "lint" "updated: \`${_doc_rel}\` in \`${_base_md}\` (auto-healed entry link depth)"
+                        fi
+
+                        # 4a-2. Auto-heal links inside catalog entry summary
                         case "$_line" in
                             *']('*')'*)
                                 _prefix="${_line%% — *}"
@@ -147,6 +169,188 @@ lint_existing_wiki_directory() {
             fi
         fi
         rm -f "$_entries_tmp"
+    done
+
+    # 4b-2. Detect and dissolve any legacy numeric shards (e.g. *-1.md, *-2.md, *-aa-1.md)
+    for _num_shard in "${RNEX_WIKI_ROOT}"/*-[0-9]*.md; do
+        [ -f "$_num_shard" ] || continue
+        _num_bname="$(basename "$_num_shard")"
+        case "$_num_bname" in
+            index.md|log.md) continue ;;
+        esac
+
+        _raw_entries="${_num_shard}.raw.$$"
+        LC_ALL=C grep '^- \*\*' "$_num_shard" > "$_raw_entries" 2>/dev/null || : > "$_raw_entries"
+        rm -f "$_num_shard"
+        append_wiki_log_entry "lint" "deleted: \`${_num_bname}\` (purged non-semantic numeric shard)"
+        _fixes_count=$((_fixes_count + 1))
+
+        if [ -s "$_raw_entries" ]; then
+            while IFS= read -r _entry_line <&6; do
+                [ -n "$_entry_line" ] || continue
+                _rel_path="$(printf '%s' "$_entry_line" | sed -n 's/.*(`\([^`]*\)`).*/\1/p')"
+                _title="$(printf '%s' "$_entry_line" | sed -n 's/^- \*\*\[\([^]]*\)\].*/\1/p')"
+                [ -n "$_title" ] || _title="$(printf '%s' "$_entry_line" | sed -n 's/^- \*\*\([^*]*\)\*\*.*/\1/p')"
+                [ -n "$_title" ] || _title="untitled"
+
+                if [ -n "$_rel_path" ]; then
+                    _shard_id="$(derive_shard_id_for_workspace_path "$_rel_path")"
+                else
+                    _shard_id="$(derive_base_id_for_shard "${_num_bname%.md}")"
+                fi
+
+                # Auto-heal entry relative link depth if source file exists
+                if [ -n "$_rel_path" ] && [ -f "${RNEX_WORKSPACE_ROOT}/${_rel_path}" ]; then
+                    _expected_target="${RNEX_WIKI_UP_PREFIX}${_rel_path}"
+                    _curr_target="$(printf '%s\n' "$_entry_line" | sed -n 's/^- \*\*\[[^]]*\](\([^)]*\)).*/\1/p')"
+                    if [ -n "$_curr_target" ] && [ "$_curr_target" != "$_expected_target" ]; then
+                        _rest="${_entry_line#*(\`"${_rel_path}"\`)}"
+                        _entry_line="- **[${_title}](${_expected_target})** (\`${_rel_path}\`)${_rest}"
+                    fi
+                fi
+
+                _target_shard_file="$(resolve_target_btree_shard_file "$_shard_id" "$_title")"
+                _target_shard_id="$(basename "$_target_shard_file" .md)"
+
+                _t_entries="${_target_shard_file}.entries.$$"
+                if [ -f "$_target_shard_file" ]; then
+                    LC_ALL=C grep '^- \*\*' "$_target_shard_file" > "$_t_entries" 2>/dev/null || : > "$_t_entries"
+                else
+                    : > "$_t_entries"
+                fi
+                printf '%s\n' "$_entry_line" >> "$_t_entries"
+                atomic_sort_unique_file "$_t_entries"
+
+                _t_tmp="${_target_shard_file}.tmp.$$"
+                printf '# Wiki Index Shard: %s\n<!-- base: %s -->\n\n' "$_target_shard_id" "$_shard_id" > "$_t_tmp"
+                cat "$_t_entries" >> "$_t_tmp"
+                rm -f "$_t_entries"
+                mv "$_t_tmp" "$_target_shard_file"
+                append_wiki_log_entry "lint" "updated: \`${_target_shard_id}.md\` (re-routed entry from purged numeric shard)"
+            done 6< "$_raw_entries"
+        fi
+        rm -f "$_raw_entries"
+    done
+
+    # 4b-3. Detect and re-route misplaced entries in existing leaf shards
+    for _wiki_md in "${RNEX_WIKI_ROOT}"/repo-nexus*.md "${RNEX_WIKI_ROOT}"/repos-*.md; do
+        [ -f "$_wiki_md" ] || continue
+        _base_md="$(basename "$_wiki_md")"
+        case "$_base_md" in
+            index.md|log.md) continue ;;
+        esac
+
+        _sid="${_base_md%.md}"
+        _base_id="$(derive_base_id_for_shard "$_sid")"
+        [ "$_sid" != "$_base_id" ] || continue
+        _sfx="${_sid#"${_base_id}-"}"
+
+        case "$_sfx" in
+            *-*)
+                _sp="${_sfx%%-*}"
+                _ep="${_sfx#*-}"
+                [ "${#_sp}" -eq "${#_ep}" ] || continue
+                ;;
+            *)
+                _sp="$_sfx"
+                _ep="$_sfx"
+                ;;
+        esac
+
+        _valid_entries="${_wiki_md}.valid.$$"
+        _misplaced_entries="${_wiki_md}.misplaced.$$"
+        : > "$_valid_entries"
+        : > "$_misplaced_entries"
+
+        LC_ALL=C awk \
+            -v sp="$_sp" \
+            -v ep="$_ep" \
+            -v k="${#_sp}" \
+            -v val_file="$_valid_entries" \
+            -v mis_file="$_misplaced_entries" '
+            function get_title(line,   m) {
+                if (match(line, /^- \*\*\[[^]]+\]/)) {
+                    m = substr(line, 6)
+                    sub(/\].*$/, "", m)
+                    return m
+                } else if (match(line, /^- \*\*[^*]+\*\*/)) {
+                    m = substr(line, 6)
+                    sub(/\*\*.*$/, "", m)
+                    return m
+                }
+                return ""
+            }
+            /^- \*\*/ {
+                t = tolower(get_title($0))
+                pfx = substr(t, 1, k)
+                if ((sp == "a" && pfx < sp) || (pfx >= sp && pfx <= ep)) {
+                    print $0 >> val_file
+                } else {
+                    print $0 >> mis_file
+                }
+            }
+        ' "$_wiki_md"
+
+        if [ -s "$_misplaced_entries" ]; then
+            _mis_count="$(LC_ALL=C grep -c '^- \*\*' "$_misplaced_entries" 2>/dev/null || true)"
+            _hdr_tmp="${_wiki_md}.hdr.$$"
+            LC_ALL=C grep -v '^- \*\*' "$_wiki_md" > "$_hdr_tmp"
+            cat "$_hdr_tmp" > "$_wiki_md"
+            cat "$_valid_entries" >> "$_wiki_md"
+            rm -f "$_hdr_tmp"
+
+            if [ ! -s "$_valid_entries" ]; then
+                rm -f "$_wiki_md"
+                append_wiki_log_entry "lint" "deleted: \`${_base_md}\` (empty after extracting misplaced entries)"
+            else
+                append_wiki_log_entry "lint" "updated: \`${_base_md}\` (removed ${_mis_count} misplaced entries)"
+            fi
+            _fixes_count=$((_fixes_count + 1))
+
+            while IFS= read -r _m_line <&7; do
+                [ -n "$_m_line" ] || continue
+                _rel_path="$(printf '%s' "$_m_line" | sed -n 's/.*(`\([^`]*\)`).*/\1/p')"
+                _title="$(printf '%s' "$_m_line" | sed -n 's/^- \*\*\[\([^]]*\)\].*/\1/p')"
+                [ -n "$_title" ] || _title="$(printf '%s' "$_m_line" | sed -n 's/^- \*\*\([^*]*\)\*\*.*/\1/p')"
+                [ -n "$_title" ] || _title="untitled"
+
+                if [ -n "$_rel_path" ]; then
+                    _t_shard_id="$(derive_shard_id_for_workspace_path "$_rel_path")"
+                else
+                    _t_shard_id="$_base_id"
+                fi
+
+                # Auto-heal entry relative link depth if source file exists
+                if [ -n "$_rel_path" ] && [ -f "${RNEX_WORKSPACE_ROOT}/${_rel_path}" ]; then
+                    _expected_target="${RNEX_WIKI_UP_PREFIX}${_rel_path}"
+                    _curr_target="$(printf '%s\n' "$_m_line" | sed -n 's/^- \*\*\[[^]]*\](\([^)]*\)).*/\1/p')"
+                    if [ -n "$_curr_target" ] && [ "$_curr_target" != "$_expected_target" ]; then
+                        _rest="${_m_line#*(\`"${_rel_path}"\`)}"
+                        _m_line="- **[${_title}](${_expected_target})** (\`${_rel_path}\`)${_rest}"
+                    fi
+                fi
+
+                _target_shard_file="$(resolve_target_btree_shard_file "$_t_shard_id" "$_title")"
+                _target_shard_id="$(basename "$_target_shard_file" .md)"
+
+                _t_entries="${_target_shard_file}.entries.$$"
+                if [ -f "$_target_shard_file" ]; then
+                    LC_ALL=C grep '^- \*\*' "$_target_shard_file" > "$_t_entries" 2>/dev/null || : > "$_t_entries"
+                else
+                    : > "$_t_entries"
+                fi
+                printf '%s\n' "$_m_line" >> "$_t_entries"
+                atomic_sort_unique_file "$_t_entries"
+
+                _t_tmp="${_target_shard_file}.tmp.$$"
+                printf '# Wiki Index Shard: %s\n<!-- base: %s -->\n\n' "$_target_shard_id" "$_t_shard_id" > "$_t_tmp"
+                cat "$_t_entries" >> "$_t_tmp"
+                rm -f "$_t_entries"
+                mv "$_t_tmp" "$_target_shard_file"
+                append_wiki_log_entry "lint" "updated: \`${_target_shard_id}.md\` (re-routed misplaced entry \"${_title}\")"
+            done 7< "$_misplaced_entries"
+        fi
+        rm -f "$_valid_entries" "$_misplaced_entries"
     done
 
     # 4c. Auto-heal oversized B-Tree leaf shards (> RNEX_WIKI_BTREE_SHARD_MAX_ENTRIES)
@@ -256,6 +460,17 @@ lint_existing_wiki_directory() {
                 "$_base_md" "$_rec_cnt" "${RNEX_WIKI_BTREE_SHARD_MAX_ENTRIES:-100}" >&2
             _errors=$((_errors + 1))
         fi
+    done
+
+    # 6e. Verify zero non-semantic numeric shards (*-[0-9]*.md) exist
+    for _num_check in "${RNEX_WIKI_ROOT}"/*-[0-9]*.md; do
+        [ -f "$_num_check" ] || continue
+        _nc_bname="$(basename "$_num_check")"
+        case "$_nc_bname" in
+            index.md|log.md) continue ;;
+        esac
+        printf 'Lint Error [%s]: Prohibited non-semantic numeric shard found in wiki.\n' "$_nc_bname" >&2
+        _errors=$((_errors + 1))
     done
 
     # 7. In --strict mode or on fatal errors, fail
