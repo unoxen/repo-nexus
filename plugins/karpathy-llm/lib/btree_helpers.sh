@@ -562,7 +562,8 @@ resolve_target_btree_shard_file() {
                 if (length(s_part) == length(e_part) && s_part <= e_part) {
                     K = length(s_part)
                     pfx = substr(t, 1, K)
-                    if (pfx >= s_part && pfx <= e_part) {
+                    while (length(pfx) < K) pfx = pfx "a"
+                    if ((s_part == "a" && pfx < s_part) || (pfx >= s_part && (e_part == "z" || pfx <= e_part))) {
                         if (K > max_match_k) {
                             max_match_k = K
                             matched_child = f
@@ -572,6 +573,7 @@ resolve_target_btree_shard_file() {
             } else if (match(sub_suffix, /^[a-z]+$/)) {
                 K = length(sub_suffix)
                 pfx = substr(t, 1, K)
+                while (length(pfx) < K) pfx = pfx "a"
                 if (pfx == sub_suffix) {
                     if (K > max_match_k) {
                         max_match_k = K
@@ -583,18 +585,8 @@ resolve_target_btree_shard_file() {
         END {
             if (matched_child != "") {
                 print matched_child
-            } else if (t < "a" && first_child != "") {
-                print first_child
-            } else if (t > "z" && last_child != "") {
-                print last_child
-            } else if (base_exists == 1 || first_child == "") {
-                print def_file
             } else {
-                if (first_child != "") {
-                    print first_child
-                } else {
-                    print def_file
-                }
+                print def_file
             }
         }
     '
@@ -624,10 +616,12 @@ derive_base_id_for_shard() {
         repo-nexus-*)
             _after_rn="${_sid#repo-nexus-}"
             _best_rn_base=""
-            for _top_d in "${RNEX_WORKSPACE_ROOT}"/*; do
+            for _top_d in "${RNEX_WORKSPACE_ROOT}"/* "${RNEX_WORKSPACE_ROOT}"/.[!.]* "${RNEX_WORKSPACE_ROOT}"/..?*; do
                 [ -d "$_top_d" ] || continue
                 _top_bname="$(basename "$_top_d")"
-                [ "$_top_bname" = "${RNEX_CFG_REPOS_DIR:-repos}" ] && continue
+                case "$_top_bname" in
+                    .git|.rnex|"${RNEX_CFG_REPOS_DIR:-repos}") continue ;;
+                esac
                 _top_slug="$(normalize_slug_id "$_top_bname")"
                 case "$_after_rn" in
                     "${_top_slug}"|"${_top_slug}-"*)
@@ -656,9 +650,13 @@ derive_base_id_for_shard() {
                         if [ "${#_cand_base}" -gt "${#_best_rep_base}" ]; then
                             _best_rep_base="$_cand_base"
                         fi
-                        for _sub_dir in "$_m_dir"/*; do
+                        for _sub_dir in "$_m_dir"/* "$_m_dir"/.[!.]* "$_m_dir"/..?*; do
                             [ -d "$_sub_dir" ] || continue
-                            _sub_slug="$(normalize_slug_id "$(basename "$_sub_dir")")"
+                            _sub_bname="$(basename "$_sub_dir")"
+                            case "$_sub_bname" in
+                                .git|.rnex) continue ;;
+                            esac
+                            _sub_slug="$(normalize_slug_id "$_sub_bname")"
                             case "$_after_rep" in
                                 "${_m_slug}-${_sub_slug}"|"${_m_slug}-${_sub_slug}-"*)
                                     _cand_sub="repos-${_m_slug}-${_sub_slug}"
@@ -861,10 +859,18 @@ split_oversized_btree_shards() {
                         }
 
                         loop_limit = 0
-                        while (loop_limit++ < 60) {
-                            # Advance past characters shared by all keys in this shard
-                            min_c = substr(keys[1], K, 1)
-                            max_c = substr(keys[lines_count], K, 1)
+                        while (loop_limit++ < 120) {
+                            # Compute true min_c and max_c at position K across ALL keys in this shard
+                            min_c = ""
+                            max_c = ""
+                            for (i = 1; i <= lines_count; i++) {
+                                c = substr(keys[i], K, 1)
+                                if (c < "a" || c > "z") c = "a"
+                                if (min_c == "" || c < min_c) min_c = c
+                                if (max_c == "" || c > max_c) max_c = c
+                            }
+
+                            # Advance past characters shared by ALL keys in this shard
                             if (min_c == max_c && min_c >= "a" && min_c <= "z") {
                                 P = (K > 1) ? substr(S, 1, K - 1) : ""
                                 S = P min_c
@@ -903,6 +909,7 @@ split_oversized_btree_shards() {
                                     cnt2 = 0
                                     for (i = 1; i <= lines_count; i++) {
                                         pfx = substr(keys[i], 1, K)
+                                        while (length(pfx) < K) pfx = pfx "a"
                                         if ((r1_s == (P "a") && pfx < r1_s) || (pfx <= r1_e)) {
                                             cnt1++
                                         } else {
@@ -913,6 +920,7 @@ split_oversized_btree_shards() {
                                     if (cnt1 > 0 && cnt2 > 0) {
                                         for (i = 1; i <= lines_count; i++) {
                                             pfx = substr(keys[i], 1, K)
+                                            while (length(pfx) < K) pfx = pfx "a"
                                             if ((r1_s == (P "a") && pfx < r1_s) || (pfx <= r1_e)) {
                                                 print lines[i] >> part1_file
                                             } else {
@@ -943,33 +951,6 @@ split_oversized_btree_shards() {
                                 continue
                             }
                         }
-
-                        # Pure alphabetical fallback: find first character position where the two halves differ
-                        half_idx = int((lines_count + 1) / 2)
-                        diff_pos = 1
-                        while (substr(keys[half_idx], diff_pos, 1) == substr(keys[half_idx + 1], diff_pos, 1) && diff_pos < length(keys[half_idx])) {
-                            diff_pos++
-                        }
-
-                        k1_start = substr(keys[1], 1, diff_pos)
-                        k1_end = substr(keys[half_idx], 1, diff_pos)
-                        k2_start = substr(keys[half_idx + 1], 1, diff_pos)
-                        k2_end = substr(keys[lines_count], 1, diff_pos)
-
-                        sfx1 = (k1_start == k1_end) ? k1_start : (k1_start "-" k1_end)
-                        sfx2 = (k2_start == k2_end) ? k2_start : (k2_start "-" k2_end)
-
-                        c1_name = base_id "-" sfx1
-                        c2_name = base_id "-" sfx2
-
-                        for (i = 1; i <= lines_count; i++) {
-                            if (i <= half_idx) {
-                                print lines[i] >> part1_file
-                            } else {
-                                print lines[i] >> part2_file
-                            }
-                        }
-                        printf "%s|%s\n", c1_name, c2_name
                     }
                 ' "$_entries_all")"
 

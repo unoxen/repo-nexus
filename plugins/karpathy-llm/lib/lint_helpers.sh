@@ -188,6 +188,9 @@ lint_existing_wiki_directory() {
         case "$_num_bname" in
             index.md|log.md) continue ;;
         esac
+        _num_sid="${_num_bname%.md}"
+        _num_base="$(derive_base_id_for_shard "$_num_sid")"
+        [ "$_num_sid" != "$_num_base" ] || continue
 
         _raw_entries="${_num_shard}.raw.$$"
         LC_ALL=C grep '^- \*\*' "$_num_shard" > "$_raw_entries" 2>/dev/null || : > "$_raw_entries"
@@ -206,7 +209,7 @@ lint_existing_wiki_directory() {
                 if [ -n "$_rel_path" ]; then
                     _shard_id="$(derive_shard_id_for_workspace_path "$_rel_path")"
                 else
-                    _shard_id="$(derive_base_id_for_shard "${_num_bname%.md}")"
+                    _shard_id="$_num_base"
                 fi
 
                 # Auto-heal entry relative link depth if source file exists
@@ -262,6 +265,7 @@ lint_existing_wiki_directory() {
         fi
 
         _is_sub=0
+        _is_invalid_sub=0
         _sp=""
         _ep=""
         if [ "$_sid" != "$_base_id" ]; then
@@ -270,14 +274,30 @@ lint_existing_wiki_directory() {
                 *-*)
                     _sp="${_sfx%%-*}"
                     _ep="${_sfx#*-}"
-                    if [ "${#_sp}" -eq "${#_ep}" ] && expr "$_sp" \<= "$_ep" >/dev/null 2>&1; then
-                        _is_sub=1
-                    fi
+                    case "${_sp}${_ep}" in
+                        *[!a-z]*|'')
+                            _is_invalid_sub=1
+                            ;;
+                        *)
+                            if [ "${#_sp}" -eq "${#_ep}" ] && expr "$_sp" \<= "$_ep" >/dev/null 2>&1; then
+                                _is_sub=1
+                            else
+                                _is_invalid_sub=1
+                            fi
+                            ;;
+                    esac
                     ;;
                 *)
-                    _sp="$_sfx"
-                    _ep="$_sfx"
-                    _is_sub=1
+                    case "$_sfx" in
+                        *[!a-z]*|'')
+                            _is_invalid_sub=1
+                            ;;
+                        *)
+                            _sp="$_sfx"
+                            _ep="$_sfx"
+                            _is_sub=1
+                            ;;
+                    esac
                     ;;
             esac
         fi
@@ -291,6 +311,7 @@ lint_existing_wiki_directory() {
             -v base_id="$_base_id" \
             -v repos_dir="${RNEX_CFG_REPOS_DIR:-repos}" \
             -v is_sub="$_is_sub" \
+            -v is_invalid_sub="$_is_invalid_sub" \
             -v sp="$_sp" \
             -v ep="$_ep" \
             -v k="${#_sp}" \
@@ -298,7 +319,8 @@ lint_existing_wiki_directory() {
             -v mis_file="$_misplaced_entries" '
             function normalize_slug(s,   r) {
                 r = tolower(s)
-                gsub(/[^a-z0-9]+/, "-", r)
+                gsub(/[^a-z0-9._-]+/, "-", r)
+                gsub(/--+/, "-", r)
                 gsub(/^-+|-+$/, "", r)
                 return (r != "") ? r : "unknown"
             }
@@ -376,6 +398,10 @@ lint_existing_wiki_directory() {
                 return ""
             }
             /^- \*\*/ {
+                if (is_invalid_sub == 1) {
+                    print $0 >> mis_file
+                    next
+                }
                 p_rel = get_rel_path($0)
                 exp_base = expected_base_shard(p_rel, repos_dir)
                 if (exp_base != "" && exp_base != base_id) {
@@ -390,6 +416,7 @@ lint_existing_wiki_directory() {
                     else t = "untitled"
 
                     pfx = substr(t, 1, k)
+                    while (length(pfx) < k) pfx = pfx "a"
                     if ((sp == "a" && pfx < sp) || (pfx >= sp && (ep == "z" || pfx <= ep))) {
                         print $0 >> val_file
                     } else {
@@ -461,6 +488,36 @@ lint_existing_wiki_directory() {
             done 7< "$_misplaced_entries"
         fi
         rm -f "$_valid_entries" "$_misplaced_entries"
+    done
+
+    # 4b-4. Consolidate gapped sub-shards back into their base shard whenever
+    #       both a base shard file and its sub-shards exist simultaneously,
+    #       allowing Step 4c to cleanly rebalance into gap-free B-Tree ranges.
+    for _sub_cand in "${RNEX_WIKI_ROOT}"/repo-nexus*.md "${RNEX_WIKI_ROOT}"/repos-*.md; do
+        [ -f "$_sub_cand" ] || continue
+        _sc_bname="$(basename "$_sub_cand")"
+        case "$_sc_bname" in
+            index.md|log.md) continue ;;
+        esac
+        _sc_sid="${_sc_bname%.md}"
+        _sc_base="$(derive_base_id_for_shard "$_sc_sid")"
+        [ "$_sc_sid" != "$_sc_base" ] || continue
+        _sc_base_file="${RNEX_WIKI_ROOT}/${_sc_base}.md"
+        if [ -f "$_sc_base_file" ]; then
+            _mrg_entries="${_sc_base_file}.mrg.$$"
+            LC_ALL=C grep '^- \*\*' "$_sc_base_file" > "$_mrg_entries" 2>/dev/null || : > "$_mrg_entries"
+            LC_ALL=C grep '^- \*\*' "$_sub_cand" >> "$_mrg_entries" 2>/dev/null || true
+            atomic_sort_unique_file "$_mrg_entries"
+
+            _mrg_tmp="${_sc_base_file}.tmp.$$"
+            printf '# Wiki Index Shard: %s\n<!-- base: %s -->\n\n' "$_sc_base" "$_sc_base" > "$_mrg_tmp"
+            cat "$_mrg_entries" >> "$_mrg_tmp"
+            rm -f "$_mrg_entries"
+            mv "$_mrg_tmp" "$_sc_base_file"
+            rm -f "$_sub_cand"
+            _fixes_count=$((_fixes_count + 1))
+            append_wiki_log_entry "lint" "deleted: \`${_sc_bname}\` (consolidated gapped sub-shard into \`${_sc_base}.md\`)"
+        fi
     done
 
     # 4c. Auto-heal oversized B-Tree leaf shards (> RNEX_WIKI_BTREE_SHARD_MAX_ENTRIES)
@@ -579,6 +636,9 @@ lint_existing_wiki_directory() {
         case "$_nc_bname" in
             index.md|log.md) continue ;;
         esac
+        _nc_sid="${_nc_bname%.md}"
+        _nc_base="$(derive_base_id_for_shard "$_nc_sid")"
+        [ "$_nc_sid" != "$_nc_base" ] || continue
         printf 'Lint Error [%s]: Prohibited non-semantic numeric shard found in wiki.\n' "$_nc_bname" >&2
         _errors=$((_errors + 1))
     done

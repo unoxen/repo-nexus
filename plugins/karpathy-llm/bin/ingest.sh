@@ -18,6 +18,13 @@ set -e
 
 SCRIPT_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
 PLUGIN_ROOT="$(CDPATH='' cd -- "${SCRIPT_DIR}/.." && pwd)"
+case "$PLUGIN_ROOT" in
+    */.rnex/plugins/karpathy-llm)
+        if [ -n "${RNEX_PLUGINS_DIR:-}" ] && [ -d "${RNEX_PLUGINS_DIR}/karpathy-llm/lib" ]; then
+            PLUGIN_ROOT="${RNEX_PLUGINS_DIR}/karpathy-llm"
+        fi
+        ;;
+esac
 
 # shellcheck source=plugins/karpathy-llm/lib/utils.sh
 . "${PLUGIN_ROOT}/lib/utils.sh"

@@ -1526,8 +1526,8 @@ _k=1
 while [ "$_k" -le 175 ]; do
   mkdir -p "$TEST_IDEM_WS/repos/test-repo/packages/pkg-$_k"
   if [ "$_k" -eq 1 ]; then
-    printf '# Package %s — **Core** | [Beta]\nSee [setup](setup.md) and ([`run_cmd`](setup.md)) for details.\n' "$_k" > "$TEST_IDEM_WS/repos/test-repo/packages/pkg-$_k/README.md"
-    printf '# Setup for Package 1\nSetup instructions.\n' > "$TEST_IDEM_WS/repos/test-repo/packages/pkg-$_k/setup.md"
+    printf '# (Package %s) — **Core** | [Beta]\nSee [setup](setup.md) and ([`run_cmd`](setup.md)) for details.\n' "$_k" > "$TEST_IDEM_WS/repos/test-repo/packages/pkg-$_k/README.md"
+    printf '# API Commands\nSetup instructions.\n' > "$TEST_IDEM_WS/repos/test-repo/packages/pkg-$_k/setup.md"
   elif [ "$_k" -eq 2 ]; then
     printf '# Package %s — Module\n[![Build](badge.svg)](../pkg-1/README.md) Refer to [sibling](../pkg-1/README.md) for info.\n' "$_k" > "$TEST_IDEM_WS/repos/test-repo/packages/pkg-$_k/README.md"
   elif [ "$_k" -eq 3 ]; then
@@ -1538,11 +1538,15 @@ while [ "$_k" -le 175 ]; do
   _k=$((_k + 1))
 done
 
-# Add sibling repos with prefix overlap (test1 and test1-one) and lib scope shard
-mkdir -p "$TEST_IDEM_WS/repos/test1" "$TEST_IDEM_WS/repos/test1-one/lib"
+# Add sibling repos with prefix overlap (test1, test1-one), dot-dirs (.github), underscores, and numeric repo names
+mkdir -p "$TEST_IDEM_WS/repos/test1/one" "$TEST_IDEM_WS/repos/test1-one/lib" "$TEST_IDEM_WS/repos/my_repo/.github" "$TEST_IDEM_WS/repos/service-1"
 printf '# Test1 Root\nRoot doc for test1.\n' > "$TEST_IDEM_WS/repos/test1/README.md"
+printf '# API Commands\nCommands in test1/one.\n' > "$TEST_IDEM_WS/repos/test1/one/api.md"
+printf '# Lib Overview\nLibrary overview in test1/one.\n' > "$TEST_IDEM_WS/repos/test1/one/lib.md"
 printf '# Lib Helpers\nLibrary helper routines.\n' > "$TEST_IDEM_WS/repos/test1-one/lib/README.md"
 printf '# API Commands\nRoot command reference for test1-one.\n' > "$TEST_IDEM_WS/repos/test1-one/usage.md"
+printf '# Contributing Guide\nWorkflow docs.\n' > "$TEST_IDEM_WS/repos/my_repo/.github/README.md"
+printf '# Service 1 Docs\nService 1 overview.\n' > "$TEST_IDEM_WS/repos/service-1/README.md"
 
 cat <<'EOF_IDEM_CFG' > "$TEST_IDEM_WS/rnex.yaml"
 version: 1.0.0
@@ -1550,7 +1554,7 @@ plugins:
   karpathy-llm:
     wiki_dir: wiki
     btree_shard_max_entries: 100
-    sources: [repos/test-repo/packages, repos/test1, repos/test1-one]
+    sources: [repos/test-repo/packages, repos/test1, repos/test1-one, repos/my_repo, repos/service-1]
 repos:
   test-repo:
     path: repos/test-repo
@@ -1558,15 +1562,19 @@ repos:
     path: repos/test1
   test1-one:
     path: repos/test1-one
+  my_repo:
+    path: repos/my_repo
+  service-1:
+    path: repos/service-1
 EOF_IDEM_CFG
 
 # Cycle 1: First Ingest
 _out_ingest1="$(cd "$TEST_IDEM_WS" && ./rnex plugin karpathy-llm ingest)"
-echo "$_out_ingest1" | grep -q "Ingested 179 missing source(s)" || {
-  fail "First ingest failed to ingest 179 sources: $_out_ingest1"; exit 1;
+echo "$_out_ingest1" | grep -q "Ingested 183 missing source(s)" || {
+  fail "First ingest failed to ingest 183 sources: $_out_ingest1"; exit 1;
 }
 
-# Invariant: All shards must have <= 100 entries and zero numeric shards
+# Invariant: All shards must have <= 100 entries
 for _shard in "$TEST_IDEM_WS/wiki"/*.md; do
   [ -f "$_shard" ] || continue
   case "$(basename "$_shard")" in
@@ -1575,8 +1583,6 @@ for _shard in "$TEST_IDEM_WS/wiki"/*.md; do
   _cnt="$(LC_ALL=C grep -c '^- \*\*' "$_shard" 2>/dev/null || true)"
   [ "$_cnt" -le 100 ] || { fail "Shard $(basename "$_shard") has $_cnt records (> 100)"; exit 1; }
 done
-_num_shards="$(find "$TEST_IDEM_WS/wiki" -name '*-[0-9]*.md' | grep -v 'log.md' || true)"
-[ -z "$_num_shards" ] || { fail "Numeric shards found: $_num_shards"; exit 1; }
 
 # Cycle 2: First Lint (must be 100% clean with ZERO repairs)
 _out_lint1="$(cd "$TEST_IDEM_WS" && ./rnex plugin karpathy-llm lint)"
@@ -1615,6 +1621,32 @@ echo "$_out_lint3" | grep -q "all existing docs and references in wiki are valid
 _log_sum2="$(cksum < "$TEST_IDEM_WS/wiki/log.md")"
 [ "$_log_sum1" = "$_log_sum2" ] || {
   fail "Operational log mutated during idempotent read-only cycles"; exit 1;
+}
+
+# Simulate legacy gapped sub-shard (repos-test1-one-lib.md) containing misplaced "API Commands"
+rm -f "$TEST_IDEM_WS/wiki/repos-test1-one.md"
+cat <<'EOF_GAPPED_SUB' > "$TEST_IDEM_WS/wiki/repos-test1-one-lib.md"
+# Wiki Index Shard: repos-test1-one-lib
+<!-- base: repos-test1-one -->
+
+- **[API Commands](../repos/test1/one/api.md)** (`repos/test1/one/api.md`) — Commands in test1/one.
+- **[Lib Overview](../repos/test1/one/lib.md)** (`repos/test1/one/lib.md`) — Library overview in test1/one.
+EOF_GAPPED_SUB
+
+# First lint after corruption must repair and consolidate the gapped sub-shard
+_out_heal1="$(cd "$TEST_IDEM_WS" && ./rnex plugin karpathy-llm lint)"
+echo "$_out_heal1" | grep -q "repaired" || {
+  fail "Expected first lint to repair gapped sub-shard: $_out_heal1"; exit 1;
+}
+
+# Second and third lint runs must be 100% clean (0 repairs!)
+_out_heal2="$(cd "$TEST_IDEM_WS" && ./rnex plugin karpathy-llm lint)"
+echo "$_out_heal2" | grep -q "all existing docs and references in wiki are valid" || {
+  fail "Second lint after healing gapped sub-shard still reported repairs: $_out_heal2"; exit 1;
+}
+_out_heal3="$(cd "$TEST_IDEM_WS" && ./rnex plugin karpathy-llm lint)"
+echo "$_out_heal3" | grep -q "all existing docs and references in wiki are valid" || {
+  fail "Third lint after healing gapped sub-shard still reported repairs: $_out_heal3"; exit 1;
 }
 pass
 
