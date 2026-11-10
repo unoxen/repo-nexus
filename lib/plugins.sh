@@ -865,17 +865,7 @@ plugin_find_command() {
   _pfc_cmd="$2"
   [ -n "$_pfc_pname" ] && [ -n "$_pfc_cmd" ] || return 1
 
-  # 1. Scoped directory in workspace
-  for _cand in \
-    "$NEXUS_DIR/.rnex/plugins/$_pfc_pname/commands/${_pfc_cmd}.sh" \
-    "$NEXUS_DIR/.rnex/plugins/$_pfc_pname/commands/${_pfc_cmd}"; do
-    if [ -f "$_cand" ]; then
-      printf '%s' "$_cand"
-      return 0
-    fi
-  done
-
-  # 2. Candidate source plugin directory
+  # 1. Candidate source plugin directory (live built-in or path-mapped plugin)
   _pdir="$(find_plugin_dir "$_pfc_pname" 2>/dev/null || true)"
   if [ -n "$_pdir" ]; then
     for _cand in \
@@ -887,6 +877,16 @@ plugin_find_command() {
       fi
     done
   fi
+
+  # 2. Scoped directory in workspace
+  for _cand in \
+    "$NEXUS_DIR/.rnex/plugins/$_pfc_pname/commands/${_pfc_cmd}.sh" \
+    "$NEXUS_DIR/.rnex/plugins/$_pfc_pname/commands/${_pfc_cmd}"; do
+    if [ -f "$_cand" ]; then
+      printf '%s' "$_cand"
+      return 0
+    fi
+  done
 
   return 1
 }
@@ -1001,14 +1001,26 @@ run_plugin_command() {
   _rpc_cmd="$2"
   shift 2 2>/dev/null || true
 
+  _rpc_root="${NEXUS_DIR:-${RNEX_ROOT:-$PWD}}"
+  _src_pdir="$(find_plugin_dir "$_rpc_plugin" 2>/dev/null || true)"
+  if [ -n "$_src_pdir" ] && [ -d "$_rpc_root/.rnex/plugins/$_rpc_plugin" ] && [ "$_src_pdir" != "$_rpc_root/.rnex/plugins/$_rpc_plugin" ]; then
+    for _rpc_sub in commands lib bin; do
+      if [ -d "$_src_pdir/$_rpc_sub" ]; then
+        mkdir -p "$_rpc_root/.rnex/plugins/$_rpc_plugin/$_rpc_sub"
+        cp -R "$_src_pdir/$_rpc_sub"/. "$_rpc_root/.rnex/plugins/$_rpc_plugin/$_rpc_sub"/ 2>/dev/null || true
+        if [ "$_rpc_sub" = "commands" ] || [ "$_rpc_sub" = "bin" ]; then
+          chmod +x "$_rpc_root/.rnex/plugins/$_rpc_plugin/$_rpc_sub"/* 2>/dev/null || true
+        fi
+      fi
+    done
+  fi
+
   _rpc_script="$(plugin_find_command "$_rpc_plugin" "$_rpc_cmd")"
   if [ -z "$_rpc_script" ] || [ ! -f "$_rpc_script" ]; then
     die "Command '$_rpc_cmd' not found for plugin '$_rpc_plugin'"
   fi
 
   chmod +x "$_rpc_script" 2>/dev/null || true
-
-  _rpc_root="${NEXUS_DIR:-${RNEX_ROOT:-$PWD}}"
   _rpc_yaml="${WORKSPACE_YAML:-$_rpc_root/${RNEX_CONFIG_FILE:-rnex.yaml}}"
   _rpc_local_yaml="${WORKSPACE_LOCAL_YAML:-${LOCAL_WORKSPACE_YAML:-$_rpc_root/${RNEX_LOCAL_CONFIG_FILE:-.local.rnex.yaml}}}"
   _rpc_lib_dir="${RNEX_LIB_DIR:-$_rpc_root/lib}"

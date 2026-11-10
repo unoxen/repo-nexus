@@ -1526,10 +1526,10 @@ _k=1
 while [ "$_k" -le 175 ]; do
   mkdir -p "$TEST_IDEM_WS/repos/test-repo/packages/pkg-$_k"
   if [ "$_k" -eq 1 ]; then
-    printf '# Package %s\nSee [setup](setup.md) and (`run_cmd`) for details.\n' "$_k" > "$TEST_IDEM_WS/repos/test-repo/packages/pkg-$_k/README.md"
+    printf '# Package %s — **Core** | [Beta]\nSee [setup](setup.md) and ([`run_cmd`](setup.md)) for details.\n' "$_k" > "$TEST_IDEM_WS/repos/test-repo/packages/pkg-$_k/README.md"
     printf '# Setup for Package 1\nSetup instructions.\n' > "$TEST_IDEM_WS/repos/test-repo/packages/pkg-$_k/setup.md"
   elif [ "$_k" -eq 2 ]; then
-    printf '# Package %s\nRefer to [sibling](../pkg-1/README.md) for info.\n' "$_k" > "$TEST_IDEM_WS/repos/test-repo/packages/pkg-$_k/README.md"
+    printf '# Package %s — Module\n[![Build](badge.svg)](../pkg-1/README.md) Refer to [sibling](../pkg-1/README.md) for info.\n' "$_k" > "$TEST_IDEM_WS/repos/test-repo/packages/pkg-$_k/README.md"
   elif [ "$_k" -eq 3 ]; then
     printf '# Package %s\nUse (`config.json`) for options.\n' "$_k" > "$TEST_IDEM_WS/repos/test-repo/packages/pkg-$_k/README.md"
   else
@@ -1538,22 +1538,32 @@ while [ "$_k" -le 175 ]; do
   _k=$((_k + 1))
 done
 
+# Add sibling repos with prefix overlap (test1 and test1-one) and lib scope shard
+mkdir -p "$TEST_IDEM_WS/repos/test1" "$TEST_IDEM_WS/repos/test1-one/lib"
+printf '# Test1 Root\nRoot doc for test1.\n' > "$TEST_IDEM_WS/repos/test1/README.md"
+printf '# Lib Helpers\nLibrary helper routines.\n' > "$TEST_IDEM_WS/repos/test1-one/lib/README.md"
+printf '# API Commands\nRoot command reference for test1-one.\n' > "$TEST_IDEM_WS/repos/test1-one/usage.md"
+
 cat <<'EOF_IDEM_CFG' > "$TEST_IDEM_WS/rnex.yaml"
 version: 1.0.0
 plugins:
   karpathy-llm:
     wiki_dir: wiki
     btree_shard_max_entries: 100
-    sources: [repos/test-repo/packages]
+    sources: [repos/test-repo/packages, repos/test1, repos/test1-one]
 repos:
   test-repo:
     path: repos/test-repo
+  test1:
+    path: repos/test1
+  test1-one:
+    path: repos/test1-one
 EOF_IDEM_CFG
 
 # Cycle 1: First Ingest
 _out_ingest1="$(cd "$TEST_IDEM_WS" && ./rnex plugin karpathy-llm ingest)"
-echo "$_out_ingest1" | grep -q "Ingested 176 missing source(s)" || {
-  fail "First ingest failed to ingest 176 sources: $_out_ingest1"; exit 1;
+echo "$_out_ingest1" | grep -q "Ingested 179 missing source(s)" || {
+  fail "First ingest failed to ingest 179 sources: $_out_ingest1"; exit 1;
 }
 
 # Invariant: All shards must have <= 100 entries and zero numeric shards

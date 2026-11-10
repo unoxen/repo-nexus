@@ -97,9 +97,15 @@ lint_existing_wiki_directory() {
         _shard_pruned=0
         while IFS= read -r _line || [ -n "$_line" ]; do
             case "$_line" in
-                '- **'*'(`'*'`)'*)
-                    _doc_rel="$(printf '%s\n' "$_line" | sed -n 's/^- \*\*[^*]*\*\* (`\([^`]*\)`).*/\1/p')"
-                    if [ -n "$_doc_rel" ] && [ ! -f "${RNEX_WORKSPACE_ROOT}/${_doc_rel}" ]; then
+                '- **'*)
+                    _doc_rel="$(printf '%s\n' "$_line" | LC_ALL=C awk 'match($0, /\*\* \(`[^`]+`\)/) { print substr($0, RSTART + 5, RLENGTH - 7) }')"
+                    if [ -z "$_doc_rel" ]; then
+                        _shard_pruned=1
+                        _fixes_count=$((_fixes_count + 1))
+                        append_wiki_log_entry "lint" "deleted: malformed catalog entry from \`${_base_md}\`"
+                        continue
+                    fi
+                    if [ ! -f "${RNEX_WORKSPACE_ROOT}/${_doc_rel}" ]; then
                         _shard_pruned=1
                         _fixes_count=$((_fixes_count + 1))
                         append_wiki_log_entry "lint" "deleted: \`${_doc_rel}\` (pruned dead reference from \`${_base_md}\`)"
@@ -107,41 +113,43 @@ lint_existing_wiki_directory() {
                     fi
 
                     # Auto-heal broken links inside catalog entry summary if source document exists
-                    if [ -n "$_doc_rel" ] && [ -f "${RNEX_WORKSPACE_ROOT}/${_doc_rel}" ]; then
+                    if [ -f "${RNEX_WORKSPACE_ROOT}/${_doc_rel}" ]; then
                         # 4a-1. Auto-heal entry title link target depth if it does not match RNEX_WIKI_UP_PREFIX
                         _expected_target="${RNEX_WIKI_UP_PREFIX}${_doc_rel}"
                         _curr_target="$(printf '%s\n' "$_line" | sed -n 's/^- \*\*\[[^]]*\](\([^)]*\)).*/\1/p')"
                         if [ -n "$_curr_target" ] && [ "$_curr_target" != "$_expected_target" ]; then
                             _title_text="$(printf '%s\n' "$_line" | sed -n 's/^- \*\*\[\([^]]*\)\].*/\1/p')"
-                            _rest="${_line#*(\`"${_doc_rel}"\`)}"
+                            _rest="${_line#*\*\* (\`"${_doc_rel}"\`)}"
                             _line="- **[${_title_text}](${_expected_target})** (\`${_doc_rel}\`)${_rest}"
                             _shard_pruned=1
                             _fixes_count=$((_fixes_count + 1))
                             append_wiki_log_entry "lint" "updated: \`${_doc_rel}\` in \`${_base_md}\` (auto-healed entry link depth)"
                         fi
 
-                        # 4a-2. Auto-heal links inside catalog entry summary against canonical source
+                        # 4a-2. Auto-heal links inside catalog entry summary
+                        _marker="** (\`${_doc_rel}\`) — "
                         case "$_line" in
-                            *']('*')'*)
-                                _prefix="${_line%% — *}"
-                                _sum_part="${_line#* — }"
-                                if [ "$_prefix" != "$_line" ] && [ -n "$_sum_part" ]; then
-                                    _meta="$(extract_markdown_title_and_summary "${RNEX_WORKSPACE_ROOT}/${_doc_rel}" "$(basename "$_doc_rel")")"
-                                    _raw_summary="${_meta#*|}"
-                                    _healed_sum="$(rewrite_markdown_links_in_summary \
-                                        "$_raw_summary" \
-                                        "$_doc_rel" \
-                                        "$RNEX_WORKSPACE_ROOT" \
-                                        "${RNEX_WIKI_UP_PREFIX:-../../}" \
-                                        "${RNEX_WIKI_RELATIVE_LINKS:-rewrite}")"
-                                    _healed_sum="$(sanitize_markdown_summary "$_healed_sum")"
-                                    if [ "$_healed_sum" != "$_sum_part" ]; then
-                                        _line="${_prefix} — ${_healed_sum}"
-                                        _shard_pruned=1
-                                        _fixes_count=$((_fixes_count + 1))
-                                        append_wiki_log_entry "lint" "updated: \`${_doc_rel}\` in \`${_base_md}\` (auto-healed broken link targets)"
-                                    fi
-                                fi
+                            *"$_marker"*)
+                                _prefix="${_line%%"$_marker"*}** (\`${_doc_rel}\`)"
+                                _sum_part="${_line#*"$_marker"}"
+                                case "$_sum_part" in
+                                    *']('*')'*|*'[['*']]'*)
+                                        _healed_sum="$(rewrite_markdown_links_in_summary \
+                                            "$_sum_part" \
+                                            "$_doc_rel" \
+                                            "$RNEX_WORKSPACE_ROOT" \
+                                            "${RNEX_WIKI_UP_PREFIX:-../../}" \
+                                            "${RNEX_WIKI_RELATIVE_LINKS:-rewrite}" \
+                                            "1")"
+                                        _healed_sum="$(sanitize_markdown_summary "$_healed_sum")"
+                                        if [ "$_healed_sum" != "$_sum_part" ]; then
+                                            _line="${_prefix} — ${_healed_sum}"
+                                            _shard_pruned=1
+                                            _fixes_count=$((_fixes_count + 1))
+                                            append_wiki_log_entry "lint" "updated: \`${_doc_rel}\` in \`${_base_md}\` (auto-healed broken link targets)"
+                                        fi
+                                        ;;
+                                esac
                                 ;;
                         esac
                     fi
@@ -190,7 +198,7 @@ lint_existing_wiki_directory() {
         if [ -s "$_raw_entries" ]; then
             while IFS= read -r _entry_line <&6; do
                 [ -n "$_entry_line" ] || continue
-                _rel_path="$(printf '%s' "$_entry_line" | sed -n 's/^- \*\*[^*]*\*\* (`\([^`]*\)`).*/\1/p')"
+                _rel_path="$(printf '%s\n' "$_entry_line" | LC_ALL=C awk 'match($0, /\*\* \(`[^`]+`\)/) { print substr($0, RSTART + 5, RLENGTH - 7) }')"
                 _title="$(printf '%s' "$_entry_line" | sed -n 's/^- \*\*\[\([^]]*\)\].*/\1/p')"
                 [ -n "$_title" ] || _title="$(printf '%s' "$_entry_line" | sed -n 's/^- \*\*\([^*]*\)\*\*.*/\1/p')"
                 [ -n "$_title" ] || _title="untitled"
@@ -206,7 +214,7 @@ lint_existing_wiki_directory() {
                     _expected_target="${RNEX_WIKI_UP_PREFIX}${_rel_path}"
                     _curr_target="$(printf '%s\n' "$_entry_line" | sed -n 's/^- \*\*\[[^]]*\](\([^)]*\)).*/\1/p')"
                     if [ -n "$_curr_target" ] && [ "$_curr_target" != "$_expected_target" ]; then
-                        _rest="${_entry_line#*(\`"${_rel_path}"\`)}"
+                        _rest="${_entry_line#*\*\* (\`"${_rel_path}"\`)}"
                         _entry_line="- **[${_title}](${_expected_target})** (\`${_rel_path}\`)${_rest}"
                     fi
                 fi
@@ -244,20 +252,35 @@ lint_existing_wiki_directory() {
 
         _sid="${_base_md%.md}"
         _base_id="$(derive_base_id_for_shard "$_sid")"
-        [ "$_sid" != "$_base_id" ] || continue
-        _sfx="${_sid#"${_base_id}-"}"
 
-        case "$_sfx" in
-            *-*)
-                _sp="${_sfx%%-*}"
-                _ep="${_sfx#*-}"
-                [ "${#_sp}" -eq "${#_ep}" ] || continue
-                ;;
-            *)
-                _sp="$_sfx"
-                _ep="$_sfx"
-                ;;
-        esac
+        # Heal embedded base metadata comment if it drifted from canonical _base_id
+        _curr_meta_base="$(sed -n 's/^<!-- base: \(.*\) -->$/\1/p' "$_wiki_md" 2>/dev/null | head -n 1)"
+        if [ -n "$_curr_meta_base" ] && [ "$_curr_meta_base" != "$_base_id" ]; then
+            _meta_tmp="${_wiki_md}.meta.$$"
+            sed "s/^<!-- base: .* -->$/<!-- base: ${_base_id} -->/" "$_wiki_md" > "$_meta_tmp" && mv "$_meta_tmp" "$_wiki_md"
+            rm -f "$_meta_tmp"
+        fi
+
+        _is_sub=0
+        _sp=""
+        _ep=""
+        if [ "$_sid" != "$_base_id" ]; then
+            _sfx="${_sid#"${_base_id}-"}"
+            case "$_sfx" in
+                *-*)
+                    _sp="${_sfx%%-*}"
+                    _ep="${_sfx#*-}"
+                    if [ "${#_sp}" -eq "${#_ep}" ] && expr "$_sp" \<= "$_ep" >/dev/null 2>&1; then
+                        _is_sub=1
+                    fi
+                    ;;
+                *)
+                    _sp="$_sfx"
+                    _ep="$_sfx"
+                    _is_sub=1
+                    ;;
+            esac
+        fi
 
         _valid_entries="${_wiki_md}.valid.$$"
         _misplaced_entries="${_wiki_md}.misplaced.$$"
@@ -265,11 +288,38 @@ lint_existing_wiki_directory() {
         : > "$_misplaced_entries"
 
         LC_ALL=C awk \
+            -v base_id="$_base_id" \
+            -v repos_dir="${RNEX_CFG_REPOS_DIR:-repos}" \
+            -v is_sub="$_is_sub" \
             -v sp="$_sp" \
             -v ep="$_ep" \
             -v k="${#_sp}" \
             -v val_file="$_valid_entries" \
             -v mis_file="$_misplaced_entries" '
+            function normalize_slug(s,   r) {
+                r = tolower(s)
+                gsub(/[^a-z0-9]+/, "-", r)
+                gsub(/^-+|-+$/, "", r)
+                return (r != "") ? r : "unknown"
+            }
+            function expected_base_shard(rel_path, rdir,   rest, n, parts) {
+                if (rel_path == "") return ""
+                sub(/\/$/, "", rdir)
+                if (index(rel_path, rdir "/") == 1) {
+                    rest = substr(rel_path, length(rdir) + 2)
+                    n = split(rest, parts, "/")
+                    if (n >= 3) {
+                        return "repos-" normalize_slug(parts[1]) "-" normalize_slug(parts[2])
+                    } else {
+                        return "repos-" normalize_slug(parts[1])
+                    }
+                } else if (index(rel_path, "/") > 0) {
+                    n = split(rel_path, parts, "/")
+                    return "repo-nexus-" normalize_slug(parts[1])
+                } else {
+                    return "repo-nexus"
+                }
+            }
             function clean_alpha_key(str,   res, i, c, d) {
                 res = ""
                 for (i = 1; i <= length(str); i++) {
@@ -306,28 +356,47 @@ lint_existing_wiki_directory() {
                 }
                 return ""
             }
-            function get_path(line,   m) {
-                if (match(line, /\(`[^`]+`\)/)) {
+            function get_rel_path(line,   m) {
+                if (match(line, /\*\* \(`[^`]+`\)/)) {
+                    m = substr(line, RSTART + 5, RLENGTH - 7)
+                    return m
+                } else if (match(line, /\(`[^`]+`\)/)) {
                     m = substr(line, RSTART + 2, RLENGTH - 4)
                     return m
-                } else if (match(line, /\]\([^)]+\)/)) {
+                }
+                return ""
+            }
+            function get_path(line,   m) {
+                m = get_rel_path(line)
+                if (m != "") return m
+                if (match(line, /\]\([^)]+\)/)) {
                     m = substr(line, RSTART + 2, RLENGTH - 3)
                     return m
                 }
                 return ""
             }
             /^- \*\*/ {
-                kt = clean_alpha_key(get_title($0))
-                kp = clean_alpha_key(get_path($0))
-                if (kt != "") t = kt kp
-                else if (kp != "") t = kp
-                else t = "untitled"
-
-                pfx = substr(t, 1, k)
-                if ((sp == "a" && pfx < sp) || (pfx >= sp && (ep == "z" || pfx <= ep))) {
-                    print $0 >> val_file
-                } else {
+                p_rel = get_rel_path($0)
+                exp_base = expected_base_shard(p_rel, repos_dir)
+                if (exp_base != "" && exp_base != base_id) {
                     print $0 >> mis_file
+                    next
+                }
+                if (is_sub == 1 && k > 0) {
+                    kt = clean_alpha_key(get_title($0))
+                    kp = clean_alpha_key(get_path($0))
+                    if (kt != "") t = kt kp
+                    else if (kp != "") t = kp
+                    else t = "untitled"
+
+                    pfx = substr(t, 1, k)
+                    if ((sp == "a" && pfx < sp) || (pfx >= sp && (ep == "z" || pfx <= ep))) {
+                        print $0 >> val_file
+                    } else {
+                        print $0 >> mis_file
+                    }
+                } else {
+                    print $0 >> val_file
                 }
             }
         ' "$_wiki_md"
@@ -350,7 +419,7 @@ lint_existing_wiki_directory() {
 
             while IFS= read -r _m_line <&7; do
                 [ -n "$_m_line" ] || continue
-                _rel_path="$(printf '%s' "$_m_line" | sed -n 's/^- \*\*[^*]*\*\* (`\([^`]*\)`).*/\1/p')"
+                _rel_path="$(printf '%s\n' "$_m_line" | LC_ALL=C awk 'match($0, /\*\* \(`[^`]+`\)/) { print substr($0, RSTART + 5, RLENGTH - 7) }')"
                 _title="$(printf '%s' "$_m_line" | sed -n 's/^- \*\*\[\([^]]*\)\].*/\1/p')"
                 [ -n "$_title" ] || _title="$(printf '%s' "$_m_line" | sed -n 's/^- \*\*\([^*]*\)\*\*.*/\1/p')"
                 [ -n "$_title" ] || _title="untitled"
@@ -366,7 +435,7 @@ lint_existing_wiki_directory() {
                     _expected_target="${RNEX_WIKI_UP_PREFIX}${_rel_path}"
                     _curr_target="$(printf '%s\n' "$_m_line" | sed -n 's/^- \*\*\[[^]]*\](\([^)]*\)).*/\1/p')"
                     if [ -n "$_curr_target" ] && [ "$_curr_target" != "$_expected_target" ]; then
-                        _rest="${_m_line#*(\`"${_rel_path}"\`)}"
+                        _rest="${_m_line#*\*\* (\`"${_rel_path}"\`)}"
                         _m_line="- **[${_title}](${_expected_target})** (\`${_rel_path}\`)${_rest}"
                     fi
                 fi

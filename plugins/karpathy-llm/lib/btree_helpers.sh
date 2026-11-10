@@ -51,6 +51,7 @@ extract_markdown_title_and_summary() {
             line = $0
             sub(/^#[[:space:]]+/, "", line)
             gsub(/\r/, "", line)
+            gsub(/[|*]/, " ", line)
             title = line
             next
         }
@@ -223,6 +224,7 @@ rewrite_markdown_links_in_summary() {
     _ws_root="$3"
     _up_prefix="${4:-../../}"
     _mode="${5:-rewrite}"
+    _from_wiki="${6:-0}"
 
     [ -n "$_raw_sum" ] || return 0
 
@@ -247,6 +249,12 @@ rewrite_markdown_links_in_summary() {
         }
         {
             str = $0
+            # Pre-strip markdown image tags ![alt](target) to alt text so clickable badges [![alt](img)](url) become [alt](url)
+            while (match(str, /!\[[^][]+\]\([^()]+\)/)) {
+                alt_txt = substr(str, RSTART + 2, RLENGTH - 2)
+                sub(/\]\([^()]*\)$/, "", alt_txt)
+                str = substr(str, 1, RSTART - 1) alt_txt substr(str, RSTART + RLENGTH)
+            }
             rem = str
             while (rem != "") {
                 p = index(rem, "[")
@@ -285,20 +293,22 @@ rewrite_markdown_links_in_summary() {
                     }
                 }
 
-                # Check for markdown link [text](target)
-                p2 = index(rem, "](")
-                if (p2 > 0) {
-                    text = substr(rem, 2, p2 - 2)
-                    p3 = index(substr(rem, p2 + 2), ")")
-                    if (p3 > 0) {
-                        target = substr(rem, p2 + 2, p3 - 1)
-                        if (is_img) {
-                            emit("I", text, target)
-                        } else {
-                            emit("L", text, target)
+                # Check for markdown link [text](target) where first ] is immediately followed by (
+                p_close = index(substr(rem, 2), "]")
+                if (p_close > 0 && substr(rem, 1 + p_close, 2) == "](") {
+                    text = substr(rem, 2, p_close - 1)
+                    if (index(text, "[") == 0) {
+                        p3 = index(substr(rem, 1 + p_close + 2), ")")
+                        if (p3 > 0) {
+                            target = substr(rem, 1 + p_close + 2, p3 - 1)
+                            if (is_img) {
+                                emit("I", text, target)
+                            } else {
+                                emit("L", text, target)
+                            }
+                            rem = substr(rem, 1 + p_close + 2 + p3)
+                            continue
                         }
-                        rem = substr(rem, p2 + 2 + p3)
-                        continue
                     }
                 }
 
@@ -372,25 +382,59 @@ rewrite_markdown_links_in_summary() {
                         # Relative workspace link
                         _target_path="${_target%%[#?]*}"
                         _target_extra="${_target#"$_target_path"}"
-                        if _norm_rel="$(normalize_relative_path "$_source_dir" "$_target_path")"; then
-                            _resolved=""
-                            if [ -e "${_ws_root}/${_norm_rel}" ]; then
-                                _resolved="$_norm_rel"
-                            elif [ -e "${_ws_root}/${_norm_rel}.md" ]; then
-                                _resolved="${_norm_rel}.md"
-                            elif [ -e "${_ws_root}/${_norm_rel}/README.md" ]; then
-                                _resolved="${_norm_rel}/README.md"
-                            fi
+                        _resolved=""
 
-                            if [ -n "$_resolved" ]; then
-                                # Target exists in workspace; rewrite relative to wiki destination
-                                _out="${_out}[${_text}](${_up_prefix}${_resolved}${_target_extra})"
-                            else
-                                # Dead/broken relative target; strip link markup to avoid broken wiki links
-                                _out="${_out}${_text}"
+                        if [ "$_from_wiki" = "1" ]; then
+                            case "$_target_path" in
+                                "${_up_prefix}"*)
+                                    _rel_from_up="${_target_path#"$_up_prefix"}"
+                                    if _norm_up="$(normalize_relative_path "" "$_rel_from_up")"; then
+                                        if [ -e "${_ws_root}/${_norm_up}" ]; then
+                                            _resolved="$_norm_up"
+                                        elif [ -e "${_ws_root}/${_norm_up}.md" ]; then
+                                            _resolved="${_norm_up}.md"
+                                        elif [ -e "${_ws_root}/${_norm_up}/README.md" ]; then
+                                            _resolved="${_norm_up}/README.md"
+                                        fi
+                                    fi
+                                    ;;
+                            esac
+                        fi
+
+                        if [ -z "$_resolved" ]; then
+                            if _norm_rel="$(normalize_relative_path "$_source_dir" "$_target_path")"; then
+                                if [ -e "${_ws_root}/${_norm_rel}" ]; then
+                                    _resolved="$_norm_rel"
+                                elif [ -e "${_ws_root}/${_norm_rel}.md" ]; then
+                                    _resolved="${_norm_rel}.md"
+                                elif [ -e "${_ws_root}/${_norm_rel}/README.md" ]; then
+                                    _resolved="${_norm_rel}/README.md"
+                                fi
                             fi
+                        fi
+
+                        if [ -z "$_resolved" ] && [ "$_from_wiki" != "1" ]; then
+                            case "$_target_path" in
+                                "${_up_prefix}"*)
+                                    _rel_from_up="${_target_path#"$_up_prefix"}"
+                                    if _norm_up="$(normalize_relative_path "" "$_rel_from_up")"; then
+                                        if [ -e "${_ws_root}/${_norm_up}" ]; then
+                                            _resolved="$_norm_up"
+                                        elif [ -e "${_ws_root}/${_norm_up}.md" ]; then
+                                            _resolved="${_norm_up}.md"
+                                        elif [ -e "${_ws_root}/${_norm_up}/README.md" ]; then
+                                            _resolved="${_norm_up}/README.md"
+                                        fi
+                                    fi
+                                    ;;
+                            esac
+                        fi
+
+                        if [ -n "$_resolved" ]; then
+                            # Target exists in workspace; rewrite relative to wiki destination
+                            _out="${_out}[${_text}](${_up_prefix}${_resolved}${_target_extra})"
                         else
-                            # Path traversal or invalid segment; strip link markup
+                            # Dead/broken relative target; strip link markup to avoid broken wiki links
                             _out="${_out}${_text}"
                         fi
                         ;;
@@ -429,35 +473,30 @@ resolve_target_btree_shard_file() {
     _doc_path="${3:-}"
     _base_file="${RNEX_WIKI_ROOT}/${_s_id}.md"
 
-    # Find existing shard candidate files for this shard ID
-    _cand_files="$(find "$RNEX_WIKI_ROOT" -maxdepth 1 -name "${_s_id}*.md" 2>/dev/null | LC_ALL=C sort)"
+    # Find existing sub-shard files whose canonical base shard ID equals $_s_id
+    # (filtering out sibling scope shards such as repos-<member>-lib.md)
+    _cand_files=""
+    for _f in "${RNEX_WIKI_ROOT}/${_s_id}-"*.md; do
+        [ -f "$_f" ] || continue
+        _f_sid="$(basename "$_f" .md)"
+        _f_base="$(derive_base_id_for_shard "$_f_sid")"
+        if [ "$_f_base" = "$_s_id" ]; then
+            _cand_files="${_cand_files}${_f}
+"
+        fi
+    done
 
-    # If no files exist yet, target is the base shard file
+    # If no true sub-shards exist for this base shard ID, target is the base shard file
     if [ -z "$_cand_files" ]; then
         printf '%s\n' "$_base_file"
         return 0
-    fi
-
-    # If base shard file exists and no sub-shards exist, target is base shard file
-    if [ -f "$_base_file" ]; then
-        _has_sub=0
-        for _f in $_cand_files; do
-            if [ "$_f" != "$_base_file" ]; then
-                _has_sub=1
-                break
-            fi
-        done
-        if [ "$_has_sub" -eq 0 ]; then
-            printf '%s\n' "$_base_file"
-            return 0
-        fi
     fi
 
     _base_exists=0
     [ -f "$_base_file" ] && _base_exists=1
 
     # Sub-shards exist; route title to the most appropriate sub-shard via awk
-    printf '%s\n' "$_cand_files" | LC_ALL=C awk \
+    printf '%s' "$_cand_files" | LC_ALL=C awk \
         -v sid="$_s_id" \
         -v title="$_doc_title" \
         -v path="$_doc_path" \
@@ -520,7 +559,7 @@ resolve_target_btree_shard_file() {
                 dash_pos = index(sub_suffix, "-")
                 s_part = substr(sub_suffix, 1, dash_pos - 1)
                 e_part = substr(sub_suffix, dash_pos + 1)
-                if (length(s_part) == length(e_part)) {
+                if (length(s_part) == length(e_part) && s_part <= e_part) {
                     K = length(s_part)
                     pfx = substr(t, 1, K)
                     if (pfx >= s_part && pfx <= e_part) {
@@ -576,7 +615,70 @@ derive_base_id_for_shard() {
     _sid="$1"
     _shard_path="${RNEX_WIKI_ROOT}/${_sid}.md"
 
-    # 1. Read embedded metadata tag if present
+    # 1. Check workspace directory structure first (finding longest matching base)
+    case "$_sid" in
+        repo-nexus)
+            printf 'repo-nexus\n'
+            return 0
+            ;;
+        repo-nexus-*)
+            _after_rn="${_sid#repo-nexus-}"
+            _best_rn_base=""
+            for _top_d in "${RNEX_WORKSPACE_ROOT}"/*; do
+                [ -d "$_top_d" ] || continue
+                _top_bname="$(basename "$_top_d")"
+                [ "$_top_bname" = "${RNEX_CFG_REPOS_DIR:-repos}" ] && continue
+                _top_slug="$(normalize_slug_id "$_top_bname")"
+                case "$_after_rn" in
+                    "${_top_slug}"|"${_top_slug}-"*)
+                        _cand_base="repo-nexus-${_top_slug}"
+                        if [ "${#_cand_base}" -gt "${#_best_rn_base}" ]; then
+                            _best_rn_base="$_cand_base"
+                        fi
+                        ;;
+                esac
+            done
+            if [ -n "$_best_rn_base" ]; then
+                printf '%s\n' "$_best_rn_base"
+                return 0
+            fi
+            ;;
+        repos-*)
+            _after_rep="${_sid#repos-}"
+            _rep_dir="${RNEX_CFG_REPOS_DIR:-repos}"
+            _best_rep_base=""
+            for _m_dir in "${RNEX_WORKSPACE_ROOT}/${_rep_dir}"/*; do
+                [ -d "$_m_dir" ] || continue
+                _m_slug="$(normalize_slug_id "$(basename "$_m_dir")")"
+                case "$_after_rep" in
+                    "${_m_slug}"|"${_m_slug}-"*)
+                        _cand_base="repos-${_m_slug}"
+                        if [ "${#_cand_base}" -gt "${#_best_rep_base}" ]; then
+                            _best_rep_base="$_cand_base"
+                        fi
+                        for _sub_dir in "$_m_dir"/*; do
+                            [ -d "$_sub_dir" ] || continue
+                            _sub_slug="$(normalize_slug_id "$(basename "$_sub_dir")")"
+                            case "$_after_rep" in
+                                "${_m_slug}-${_sub_slug}"|"${_m_slug}-${_sub_slug}-"*)
+                                    _cand_sub="repos-${_m_slug}-${_sub_slug}"
+                                    if [ "${#_cand_sub}" -gt "${#_best_rep_base}" ]; then
+                                        _best_rep_base="$_cand_sub"
+                                    fi
+                                    ;;
+                            esac
+                        done
+                        ;;
+                esac
+            done
+            if [ -n "$_best_rep_base" ]; then
+                printf '%s\n' "$_best_rep_base"
+                return 0
+            fi
+            ;;
+    esac
+
+    # 2. Read embedded metadata tag if present (for synthetic/unmounted test shards)
     if [ -f "$_shard_path" ]; then
         _meta_base="$(sed -n 's/^<!-- base: \(.*\) -->$/\1/p' "$_shard_path" 2>/dev/null | head -n 1)"
         if [ -n "$_meta_base" ]; then
@@ -584,49 +686,6 @@ derive_base_id_for_shard() {
             return 0
         fi
     fi
-
-    # 2. Check repo-nexus top-level directories
-    case "$_sid" in
-        repo-nexus-*)
-            _after_rn="${_sid#repo-nexus-}"
-            _dir_cand="${_after_rn%%-*}"
-            if [ -d "${RNEX_WORKSPACE_ROOT}/${_dir_cand}" ]; then
-                printf 'repo-nexus-%s\n' "$_dir_cand"
-                return 0
-            fi
-            printf 'repo-nexus\n'
-            return 0
-            ;;
-        repo-nexus)
-            printf 'repo-nexus\n'
-            return 0
-            ;;
-        repos-*)
-            _after_rep="${_sid#repos-}"
-            _rep_dir="${RNEX_CFG_REPOS_DIR:-repos}"
-            for _m_dir in "${RNEX_WORKSPACE_ROOT}/${_rep_dir}"/*; do
-                [ -d "$_m_dir" ] || continue
-                _m_slug="$(normalize_slug_id "$(basename "$_m_dir")")"
-                case "$_after_rep" in
-                    "${_m_slug}"|"${_m_slug}-"*)
-                        _longest_base="repos-${_m_slug}"
-                        for _sub_dir in "$_m_dir"/*; do
-                            [ -d "$_sub_dir" ] || continue
-                            _sub_slug="$(normalize_slug_id "$(basename "$_sub_dir")")"
-                            case "$_after_rep" in
-                                "${_m_slug}-${_sub_slug}"|"${_m_slug}-${_sub_slug}-"*)
-                                    _longest_base="repos-${_m_slug}-${_sub_slug}"
-                                    break
-                                    ;;
-                            esac
-                        done
-                        printf '%s\n' "$_longest_base"
-                        return 0
-                        ;;
-                esac
-            done
-            ;;
-    esac
 
     # 3. Fallback: strip range or numeric suffix using sed
     _stripped="$(printf '%s' "$_sid" | sed 's/-[a-z]\{1,\}-[a-z]\{1,\}$//; s/-[0-9]\{1,\}$//')"
@@ -714,7 +773,10 @@ split_oversized_btree_shards() {
                         return ""
                     }
                     function get_path(line,   m) {
-                        if (match(line, /\(`[^`]+`\)/)) {
+                        if (match(line, /\*\* \(`[^`]+`\)/)) {
+                            m = substr(line, RSTART + 5, RLENGTH - 7)
+                            return m
+                        } else if (match(line, /\(`[^`]+`\)/)) {
                             m = substr(line, RSTART + 2, RLENGTH - 4)
                             return m
                         } else if (match(line, /\]\([^)]+\)/)) {
@@ -1041,6 +1103,8 @@ ingest_missing_sources_into_btree() {
             _raw_title="${_meta%%|*}"
             _raw_summary="${_meta#*|}"
             _title="$(sanitize_markdown_summary "$(strip_markdown_links "$_raw_title")")"
+            _title="$(printf '%s' "$_title" | tr -d '[]*')"
+            [ -n "$_title" ] || _title="$(basename "$_rel_path")"
             _summary_rewritten="$(rewrite_markdown_links_in_summary \
                 "$_raw_summary" \
                 "$_rel_path" \

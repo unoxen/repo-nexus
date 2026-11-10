@@ -137,7 +137,13 @@ strip_markdown_links() {
     _raw_str="$1"
     [ -n "$_raw_str" ] || return 0
     printf '%s\n' "$_raw_str" | LC_ALL=C awk '
-        function strip_links(str,   out, rem, p, p2, p3, text, is_img) {
+        function strip_links(str,   out, rem, p, p2, p3, text, is_img, p_close) {
+            # First strip markdown image tags ![alt](target) to alt text so nested badges [![alt](img)](url) become [alt](url)
+            while (match(str, /!\[[^][]+\]\([^()]+\)/)) {
+                text = substr(str, RSTART + 2, RLENGTH - 2)
+                sub(/\]\([^()]*\)$/, "", text)
+                str = substr(str, 1, RSTART - 1) text substr(str, RSTART + RLENGTH)
+            }
             out = ""
             rem = str
             while (rem != "") {
@@ -172,20 +178,26 @@ strip_markdown_links() {
                     }
                 }
 
-                # Check for standard markdown link [text](target)
-                p2 = index(rem, "](")
-                if (p2 > 0) {
-                    text = substr(rem, 2, p2 - 2)
-                    p3 = index(substr(rem, p2 + 2), ")")
-                    if (p3 > 0) {
-                        out = out text
-                        rem = substr(rem, p2 + 2 + p3)
-                        continue
+                # Check for standard markdown link [text](target) where first ] is immediately followed by (
+                p_close = index(substr(rem, 2), "]")
+                if (p_close > 0 && substr(rem, 1 + p_close, 2) == "](") {
+                    text = substr(rem, 2, p_close - 1)
+                    if (index(text, "[") == 0) {
+                        p3 = index(substr(rem, 1 + p_close + 2), ")")
+                        if (p3 > 0) {
+                            out = out text
+                            rem = substr(rem, 1 + p_close + 2 + p3)
+                            continue
+                        }
                     }
                 }
 
                 # Standalone bracket not forming a valid link; preserve verbatim
-                out = out substr(rem, 1, 1)
+                if (is_img) {
+                    out = out "!["
+                } else {
+                    out = out "["
+                }
                 rem = substr(rem, 2)
             }
             return out
@@ -279,12 +291,14 @@ sanitize_markdown_summary() {
                     if (ch == "[") { p = i; break }
                 }
                 if (p > 0) {
+                    if (p > 1 && substr(sub_s, p - 1, 1) == "[") p--
+                    if (p > 1 && substr(sub_s, p - 1, 1) == "!") p--
                     sub_s = substr(sub_s, 1, p - 1)
                 } else {
                     p_bra = 0
                     for (i = length(sub_s); i >= 1; i--) {
                         if (substr(sub_s, i, 1) == ")") break
-                        if (substr(sub_s, i, 1) == "]") { p_bra = i; break }
+                        if (substr(sub_s, i, 2) == "](") { p_bra = i; break }
                     }
                     if (p_bra > 0) {
                         p_open = 0
@@ -292,6 +306,7 @@ sanitize_markdown_summary() {
                             if (substr(sub_s, i, 1) == "[") { p_open = i; break }
                         }
                         if (p_open > 0) {
+                            if (p_open > 1 && substr(sub_s, p_open - 1, 1) == "!") p_open--
                             sub_s = substr(sub_s, 1, p_open - 1)
                         }
                     }
