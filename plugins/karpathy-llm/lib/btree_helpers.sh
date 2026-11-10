@@ -707,7 +707,7 @@ split_oversized_btree_shards() {
                             sub(/\].*$/, "", m)
                             return m
                         } else if (match(line, /^- \*\*[^*]+\*\*/)) {
-                            m = substr(line, 6)
+                            m = substr(line, 5)
                             sub(/\*\*.*$/, "", m)
                             return m
                         }

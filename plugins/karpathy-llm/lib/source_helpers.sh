@@ -199,7 +199,7 @@ extract_already_indexed_paths() {
         # Matches both formats:
         # 1. - **[Title](../../path)** (`path`) — summary
         # 2. - **slug** (`path`) — summary
-        LC_ALL=C sed -n 's/^- \*\*.*(`\([^`]*\)`).*/\1/p' "$_shard_file" >> "$_out_idx"
+        LC_ALL=C sed -n 's/^- \*\*[^*]*\*\* (`\([^`]*\)`).*/\1/p' "$_shard_file" >> "$_out_idx"
     done
 
     atomic_sort_unique_file "$_out_idx" || true

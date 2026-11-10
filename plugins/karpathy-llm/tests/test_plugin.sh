@@ -1525,7 +1525,16 @@ mkdir -p "$TEST_IDEM_WS/repos/test-repo/packages"
 _k=1
 while [ "$_k" -le 175 ]; do
   mkdir -p "$TEST_IDEM_WS/repos/test-repo/packages/pkg-$_k"
-  printf '# Package %s\nDocumentation for package %s.\n' "$_k" "$_k" > "$TEST_IDEM_WS/repos/test-repo/packages/pkg-$_k/README.md"
+  if [ "$_k" -eq 1 ]; then
+    printf '# Package %s\nSee [setup](setup.md) and (`run_cmd`) for details.\n' "$_k" > "$TEST_IDEM_WS/repos/test-repo/packages/pkg-$_k/README.md"
+    printf '# Setup for Package 1\nSetup instructions.\n' > "$TEST_IDEM_WS/repos/test-repo/packages/pkg-$_k/setup.md"
+  elif [ "$_k" -eq 2 ]; then
+    printf '# Package %s\nRefer to [sibling](../pkg-1/README.md) for info.\n' "$_k" > "$TEST_IDEM_WS/repos/test-repo/packages/pkg-$_k/README.md"
+  elif [ "$_k" -eq 3 ]; then
+    printf '# Package %s\nUse (`config.json`) for options.\n' "$_k" > "$TEST_IDEM_WS/repos/test-repo/packages/pkg-$_k/README.md"
+  else
+    printf '# Package %s\nDocumentation for package %s.\n' "$_k" "$_k" > "$TEST_IDEM_WS/repos/test-repo/packages/pkg-$_k/README.md"
+  fi
   _k=$((_k + 1))
 done
 
@@ -1543,8 +1552,8 @@ EOF_IDEM_CFG
 
 # Cycle 1: First Ingest
 _out_ingest1="$(cd "$TEST_IDEM_WS" && ./rnex plugin karpathy-llm ingest)"
-echo "$_out_ingest1" | grep -q "Ingested 175 missing source(s)" || {
-  fail "First ingest failed to ingest 175 sources: $_out_ingest1"; exit 1;
+echo "$_out_ingest1" | grep -q "Ingested 176 missing source(s)" || {
+  fail "First ingest failed to ingest 176 sources: $_out_ingest1"; exit 1;
 }
 
 # Invariant: All shards must have <= 100 entries and zero numeric shards
@@ -1580,7 +1589,19 @@ echo "$_out_lint2" | grep -q "all existing docs and references in wiki are valid
   fail "Second lint reported repairs on unchanged wiki: $_out_lint2"; exit 1;
 }
 
-# Verify audit log was not mutated in cycles 2, 3, or 4
+# Cycle 5: Third Ingest (must remain completely up to date with zero changes)
+_out_ingest3="$(cd "$TEST_IDEM_WS" && ./rnex plugin karpathy-llm ingest)"
+echo "$_out_ingest3" | grep -q "Wiki is up to date" || {
+  fail "Third ingest re-ingested sources instead of reporting up to date: $_out_ingest3"; exit 1;
+}
+
+# Cycle 6: Third Lint (must remain 100% clean with ZERO repairs)
+_out_lint3="$(cd "$TEST_IDEM_WS" && ./rnex plugin karpathy-llm lint)"
+echo "$_out_lint3" | grep -q "all existing docs and references in wiki are valid" || {
+  fail "Third lint reported repairs on unchanged wiki: $_out_lint3"; exit 1;
+}
+
+# Verify audit log was not mutated in cycles 2, 3, 4, 5, or 6
 _log_sum2="$(cksum < "$TEST_IDEM_WS/wiki/log.md")"
 [ "$_log_sum1" = "$_log_sum2" ] || {
   fail "Operational log mutated during idempotent read-only cycles"; exit 1;

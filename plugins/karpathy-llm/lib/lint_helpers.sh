@@ -98,7 +98,7 @@ lint_existing_wiki_directory() {
         while IFS= read -r _line || [ -n "$_line" ]; do
             case "$_line" in
                 '- **'*'(`'*'`)'*)
-                    _doc_rel="$(printf '%s\n' "$_line" | sed -n 's/^- \*\*.*(`\([^`]*\)`).*/\1/p')"
+                    _doc_rel="$(printf '%s\n' "$_line" | sed -n 's/^- \*\*[^*]*\*\* (`\([^`]*\)`).*/\1/p')"
                     if [ -n "$_doc_rel" ] && [ ! -f "${RNEX_WORKSPACE_ROOT}/${_doc_rel}" ]; then
                         _shard_pruned=1
                         _fixes_count=$((_fixes_count + 1))
@@ -120,14 +120,16 @@ lint_existing_wiki_directory() {
                             append_wiki_log_entry "lint" "updated: \`${_doc_rel}\` in \`${_base_md}\` (auto-healed entry link depth)"
                         fi
 
-                        # 4a-2. Auto-heal links inside catalog entry summary
+                        # 4a-2. Auto-heal links inside catalog entry summary against canonical source
                         case "$_line" in
                             *']('*')'*)
                                 _prefix="${_line%% — *}"
                                 _sum_part="${_line#* — }"
                                 if [ "$_prefix" != "$_line" ] && [ -n "$_sum_part" ]; then
+                                    _meta="$(extract_markdown_title_and_summary "${RNEX_WORKSPACE_ROOT}/${_doc_rel}" "$(basename "$_doc_rel")")"
+                                    _raw_summary="${_meta#*|}"
                                     _healed_sum="$(rewrite_markdown_links_in_summary \
-                                        "$_sum_part" \
+                                        "$_raw_summary" \
                                         "$_doc_rel" \
                                         "$RNEX_WORKSPACE_ROOT" \
                                         "${RNEX_WIKI_UP_PREFIX:-../../}" \
@@ -188,7 +190,7 @@ lint_existing_wiki_directory() {
         if [ -s "$_raw_entries" ]; then
             while IFS= read -r _entry_line <&6; do
                 [ -n "$_entry_line" ] || continue
-                _rel_path="$(printf '%s' "$_entry_line" | sed -n 's/.*(`\([^`]*\)`).*/\1/p')"
+                _rel_path="$(printf '%s' "$_entry_line" | sed -n 's/^- \*\*[^*]*\*\* (`\([^`]*\)`).*/\1/p')"
                 _title="$(printf '%s' "$_entry_line" | sed -n 's/^- \*\*\[\([^]]*\)\].*/\1/p')"
                 [ -n "$_title" ] || _title="$(printf '%s' "$_entry_line" | sed -n 's/^- \*\*\([^*]*\)\*\*.*/\1/p')"
                 [ -n "$_title" ] || _title="untitled"
@@ -298,7 +300,7 @@ lint_existing_wiki_directory() {
                     sub(/\].*$/, "", m)
                     return m
                 } else if (match(line, /^- \*\*[^*]+\*\*/)) {
-                    m = substr(line, 6)
+                    m = substr(line, 5)
                     sub(/\*\*.*$/, "", m)
                     return m
                 }
@@ -348,7 +350,7 @@ lint_existing_wiki_directory() {
 
             while IFS= read -r _m_line <&7; do
                 [ -n "$_m_line" ] || continue
-                _rel_path="$(printf '%s' "$_m_line" | sed -n 's/.*(`\([^`]*\)`).*/\1/p')"
+                _rel_path="$(printf '%s' "$_m_line" | sed -n 's/^- \*\*[^*]*\*\* (`\([^`]*\)`).*/\1/p')"
                 _title="$(printf '%s' "$_m_line" | sed -n 's/^- \*\*\[\([^]]*\)\].*/\1/p')"
                 [ -n "$_title" ] || _title="$(printf '%s' "$_m_line" | sed -n 's/^- \*\*\([^*]*\)\*\*.*/\1/p')"
                 [ -n "$_title" ] || _title="untitled"
