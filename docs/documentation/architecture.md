@@ -32,7 +32,8 @@ my-workspace/
 ├── .local.rnex.yaml                 # (Optional) Developer workstation overrides (gitignored)
 │
 ├── .rnex/                           # Workspace orchestration directory (gitignored)
-│   ├── ai-instructions.md           # Compiled AI routing & plugin context
+│   ├── ai-instructions.md           # Master compiled AI instructions router
+│   ├── repos-instructions.md        # Active member repositories & mode matrix
 │   ├── sync_stamp                   # Checksum-based drift detection stamp
 │   ├── plugins/                     # Enabled plugin instructions, skills, and agents
 │   └── skills/                      # Core workspace agentic skills (clone-sync, batch-exec, etc.)
@@ -73,10 +74,14 @@ Member repository files are never tracked or committed to the parent meta-repo.
 
 To ensure code search tools (ripgrep, Claude Code, VS Code search) and AI indexers (Cursor codebase indexing, Gemini CLI) can discover and index member code across repos, Repo Nexus automatically maintains un-ignore files (`.ignore`, `.cursorignore`, `.geminiignore`) with `!<repos_dir>/*`. This allows AI assistants and search engines to index code while meta-repo Git remains completely clean.
 
-### 2. The `.rnex/` Orchestration Directory
-The `.rnex/` directory encapsulates active plugins, automation hooks, and agentic skills:
+### 2. The `.rnex/` Orchestration Directory & AI Routing Architecture
+The `.rnex/` directory encapsulates active plugins, automation hooks, and agentic context:
+* **`.rnex/ai-instructions.md`**: Master compiled AI instructions router structured in two deterministic sections:
+  1. **Mandatory Execution Sequence**: Contains the pre-execution **Execution Gate** (prohibiting arbitrary scans, commands, or decisions until instructions are read), sequential plugin execution order, repository mode rules pointer (`.rnex/repos-instructions.md`), and task-scoped skills guidance.
+  2. **Plugin AI Instructions**: Sequentially lists registered plugin instructions (e.g., `1. **Mandatory**: Read and follow .rnex/plugins/<plugin>/ai-instructions.md.`) in the exact order declared in configuration (`.local.rnex.yaml` > `rnex.yaml`).
+* **`.rnex/repos-instructions.md`**: Dedicated active member repository access matrix containing only `Path` and `Mode` (`read-write` or `read-only`), eliminating configuration overhead while strictly enforcing repository modification constraints.
 * **`.rnex/skills/`**: Core workspace-wide agentic skills owned by `rnex` (`clone-sync.md`, `batch-exec.md`, `workspace-status.md`).
-* **`.rnex/plugins/`**: Isolated directory per enabled plugin (`.rnex/plugins/<plugin-name>/`), encapsulating plugin-owned skills, rules, and commands without naming collisions.
+* **`.rnex/plugins/`**: Isolated directory per enabled plugin (`.rnex/plugins/<plugin-name>/`), encapsulating plugin `ai-instructions.md`, skills, rules, and commands without naming collisions.
 
 ### 3. Non-Destructive Delimited Merging & Permanent Routing
 Repo Nexus injects workspace routing rules into developer instruction files (`AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `CODEX.md`, `.cursorrules`, `.windsurfrules`, `.github/copilot-instructions.md`) by isolating managed blocks inside explicit HTML comments:

@@ -38,6 +38,9 @@ _copilot_block="$(awk '/<!-- REPO-NEXUS:START -->/,/<!-- REPO-NEXUS:END -->/' "$
 ! grep -q "GitHub Copilot Integration for Repo Nexus" "$TEST_COPILOT_WS/.rnex/ai-instructions.md" || {
   fail "Copilot integration instructions should not be compiled into .rnex/ai-instructions.md"; exit 1;
 }
+grep -q "No plugin AI instructions registered." "$TEST_COPILOT_WS/.rnex/ai-instructions.md" || {
+  fail "Section 2 should indicate no plugin AI instructions registered for copilot"; exit 1;
+}
 
 # Verify integration instructions reference .github/skills/rnex-*/SKILL.md
 grep -q "\.github/skills/rnex-\*/SKILL\.md" "$_copilot_pdir/instructions/rnex-copilot-integration.md" || {

@@ -45,6 +45,9 @@ _gemini_block="$(awk '/<!-- REPO-NEXUS:START -->/,/<!-- REPO-NEXUS:END -->/' "$T
 ! grep -q "Google Gemini & Antigravity Integration" "$TEST_GEMINI_WS/.rnex/ai-instructions.md" || {
   fail "Gemini integration instructions should not be compiled into .rnex/ai-instructions.md"; exit 1;
 }
+grep -q "No plugin AI instructions registered." "$TEST_GEMINI_WS/.rnex/ai-instructions.md" || {
+  fail "Section 2 should indicate no plugin AI instructions registered for gemini"; exit 1;
+}
 
 _status_out="$(cd "$TEST_GEMINI_WS" && ./rnex status 2>&1)"
 echo "$_status_out" | grep -q "GEMINI.md" || { fail "Status did not report GEMINI.md"; exit 1; }

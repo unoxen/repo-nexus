@@ -146,7 +146,7 @@ _upgraded_agents="$(cat "$TEST_WORKSPACE/AGENTS.md")"
 echo "$_upgraded_agents" | grep -q "<!-- REPO-NEXUS:START -->" || { fail "Missing start delimiter after upgrade"; exit 1; }
 echo "$_upgraded_agents" | grep -q "<!-- REPO-NEXUS:END -->" || { fail "Missing end delimiter after upgrade"; exit 1; }
 echo "$_upgraded_agents" | grep -q "CRITICAL: You MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\`" || { fail "Missing critical directive after upgrade"; exit 1; }
-grep -q "Strict Operating Constraints" "$TEST_WORKSPACE/.rnex/ai-instructions.md" || { fail "Missing Routing Protocol in .rnex/ai-instructions.md"; exit 1; }
+grep -q "Mandatory Execution Sequence" "$TEST_WORKSPACE/.rnex/ai-instructions.md" || { fail "Missing Mandatory Execution Sequence in .rnex/ai-instructions.md"; exit 1; }
 ! echo "$_upgraded_agents" | grep -qi "symlink" || { fail "Upgraded AGENTS.md still contains symlink mentions"; exit 1; }
 pass
 
@@ -450,9 +450,11 @@ grep -q "readonly: false" "$TEST_RO_WS/rnex.yaml" || { fail "readonly: false not
 [ -f "$TEST_RO_WS/.local.rnex.yaml" ] || { fail ".local.rnex.yaml missing"; exit 1; }
 grep -q "readonly: true" "$TEST_RO_WS/.local.rnex.yaml" || { fail "readonly: true not in .local.rnex.yaml"; exit 1; }
 
-# 6. Verify AI instructions mention readonly rules
+# 6. Verify AI instructions and repos instructions mention repository mode rules
 [ -f "$TEST_RO_WS/.rnex/ai-instructions.md" ] || { fail ".rnex/ai-instructions.md missing"; exit 1; }
-grep -q "READ-ONLY" "$TEST_RO_WS/.rnex/ai-instructions.md" || { fail "readonly directive missing from compiled AI instructions"; exit 1; }
+grep -q "Repository Mode Rules" "$TEST_RO_WS/.rnex/ai-instructions.md" || { fail "Repository Mode Rules missing from compiled AI instructions"; exit 1; }
+[ -f "$TEST_RO_WS/.rnex/repos-instructions.md" ] || { fail ".rnex/repos-instructions.md missing"; exit 1; }
+grep -q "read-only" "$TEST_RO_WS/.rnex/repos-instructions.md" || { fail "read-only directive missing from compiled repos instructions"; exit 1; }
 
 # 7. Lazy on-demand .rnex behavior:
 # - If user or plugin creates a custom file in member .rnex/, it is preserved
@@ -520,9 +522,10 @@ git -C "$_svc_remote" commit -q -m "initial commit"
 [ -d "$TEST_RDIR_WS/services/auth/.git" ] || { fail "Repository not cloned into services/auth"; exit 1; }
 [ ! -d "$TEST_RDIR_WS/repos" ] || { fail "repos/ was created when adding repo"; exit 1; }
 
-# 3. Verify .rnex/ai-instructions.md references services/<name> and not repos/<name>
-grep -q "services/<name>" "$TEST_RDIR_WS/.rnex/ai-instructions.md" || { fail "ai-instructions.md does not reference services/<name>"; exit 1; }
-! grep -q "repos/<name>" "$TEST_RDIR_WS/.rnex/ai-instructions.md" || { fail "ai-instructions.md still references repos/<name>"; exit 1; }
+# 3. Verify .rnex/repos-instructions.md references services/auth and not repos/auth
+[ -f "$TEST_RDIR_WS/.rnex/repos-instructions.md" ] || { fail ".rnex/repos-instructions.md missing"; exit 1; }
+grep -q "services/auth" "$TEST_RDIR_WS/.rnex/repos-instructions.md" || { fail "repos-instructions.md does not reference services/auth"; exit 1; }
+! grep -q "repos/auth" "$TEST_RDIR_WS/.rnex/repos-instructions.md" || { fail "repos-instructions.md still references repos/auth"; exit 1; }
 
 # 4. Verify rnex status checks services/ in gitignore
 _status_out="$(cd "$TEST_RDIR_WS" && ./rnex status 2>&1)"
@@ -627,11 +630,12 @@ repos:
 MERGE_LOCAL_EOF
 (cd "$TEST_MERGE_WS" && ./rnex sync -y >/dev/null 2>&1) || true
 _merge_ai="$TEST_MERGE_WS/.rnex/ai-instructions.md"
+_merge_repos="$TEST_MERGE_WS/.rnex/repos-instructions.md"
 [ -f "$_merge_ai" ] || { fail "ai-instructions.md missing after sync"; exit 1; }
-grep -qF "| \`repo-alpha\` | \`repos/repo-alpha/\` | \`dev\` | \`READ-ONLY\` |" "$_merge_ai" || { fail "repo-alpha not rendered with local overrides (dev, READ-ONLY)"; exit 1; }
-grep -qF "**Disabled Repositories (Do Not Access)**: \`repo-beta\`" "$_merge_ai" || { fail "repo-beta not listed as disabled"; exit 1; }
-! grep -qF "| \`repo-beta\` |" "$_merge_ai" || { fail "Disabled repo-beta present in active table"; exit 1; }
-grep -qF 'DO NOT read or search for rnex.yaml or .local.rnex.yaml' "$_merge_ai" || { fail "Missing NO CONFIG READS constraint"; exit 1; }
+[ -f "$_merge_repos" ] || { fail "repos-instructions.md missing after sync"; exit 1; }
+grep -qF "| \`repos/repo-alpha\` | \`read-only\` |" "$_merge_repos" || { fail "repo-alpha not rendered with local overrides (read-only) in repos-instructions.md"; exit 1; }
+! grep -qF "repo-beta" "$_merge_repos" || { fail "Disabled repo-beta present in active table of repos-instructions.md"; exit 1; }
+grep -qF "Do NOT make any decisions, start searching across directories, or run arbitrary commands" "$_merge_ai" || { fail "Missing Execution Gate constraint in ai-instructions.md"; exit 1; }
 ! grep -qE "Read .*\.local\.rnex\.yaml" "$_merge_ai" || { fail "ai-instructions.md still instructs reading config files"; exit 1; }
 pass
 
@@ -658,15 +662,104 @@ _det_3="$(cksum < "$_merge_ai")"
 [ "$_det_1" = "$_det_2" ] || { fail "ai-instructions.md changed between identical syncs"; exit 1; }
 [ "$_det_1" = "$_det_3" ] || { fail "ai-instructions.md depends on repo declaration order"; exit 1; }
 
-# Verify rnex repo set and rnex plugin enable/disable immediately update .rnex/ai-instructions.md
+# Verify rnex repo set updates .rnex/repos-instructions.md and rnex plugin enable/disable updates .rnex/ai-instructions.md
 (cd "$TEST_MERGE_WS" && ./rnex repo set repo-alpha --readwrite --local >/dev/null 2>&1)
-grep -qF "| \`repo-alpha\` | \`repos/repo-alpha/\` | \`dev\` | \`READ-WRITE\` |" "$_merge_ai" || { fail "rnex repo set --readwrite did not immediately update ai-instructions.md"; exit 1; }
+grep -qF "| \`repos/repo-alpha\` | \`read-write\` |" "$_merge_repos" || { fail "rnex repo set --readwrite did not immediately update repos-instructions.md"; exit 1; }
 (cd "$TEST_MERGE_WS" && ./rnex repo set repo-alpha --readonly --local >/dev/null 2>&1)
-grep -qF "| \`repo-alpha\` | \`repos/repo-alpha/\` | \`dev\` | \`READ-ONLY\` |" "$_merge_ai" || { fail "rnex repo set --readonly did not immediately update ai-instructions.md"; exit 1; }
-(cd "$TEST_MERGE_WS" && ./rnex plugin enable copilot >/dev/null 2>&1)
-grep -qF "**Enabled Plugins**: \`copilot\`" "$_merge_ai" || { fail "rnex plugin enable did not immediately update ai-instructions.md"; exit 1; }
-(cd "$TEST_MERGE_WS" && ./rnex plugin disable copilot >/dev/null 2>&1)
-! grep -qF "\`copilot\`" "$_merge_ai" || { fail "rnex plugin disable did not immediately update ai-instructions.md"; exit 1; }
+grep -qF "| \`repos/repo-alpha\` | \`read-only\` |" "$_merge_repos" || { fail "rnex repo set --readonly did not immediately update repos-instructions.md"; exit 1; }
+
+mkdir -p "$TEST_MERGE_WS/plugins/plug-sample"
+cat <<'EOF_SAMPLE_AI' > "$TEST_MERGE_WS/plugins/plug-sample/ai-instructions.md"
+# Sample AI Instructions
+EOF_SAMPLE_AI
+cat <<'EOF_SAMPLE_CFG' > "$TEST_MERGE_WS/plugins/plug-sample/plugin.yaml"
+name: plug-sample
+version: 1.0.0
+EOF_SAMPLE_CFG
+(cd "$TEST_MERGE_WS" && ./rnex plugin enable plug-sample >/dev/null 2>&1)
+grep -qF "Read and follow \`.rnex/plugins/plug-sample/ai-instructions.md\`" "$_merge_ai" || { fail "rnex plugin enable did not immediately update ai-instructions.md"; exit 1; }
+(cd "$TEST_MERGE_WS" && ./rnex plugin disable plug-sample >/dev/null 2>&1)
+! grep -qF "plug-sample" "$_merge_ai" || { fail "rnex plugin disable did not immediately update ai-instructions.md"; exit 1; }
+grep -qF "No plugin AI instructions registered." "$_merge_ai" || { fail "fallback text missing when no plugins have ai instructions"; exit 1; }
+rm -rf "$TEST_MERGE_WS/plugins/plug-sample" "$TEST_MERGE_WS/.rnex/plugins/plug-sample"
+pass
+
+# --------------------------------------------------------------------------
+run_test "Dedicated repos instructions: rnex sync creates .rnex/repos-instructions.md with Path and Mode schema"
+TEST_REPOS_INSTR_WS="$TEST_TMP/repos-instr-ws"
+mkdir -p "$TEST_REPOS_INSTR_WS"
+cp "$CLI" "$TEST_REPOS_INSTR_WS/rnex"
+chmod +x "$TEST_REPOS_INSTR_WS/rnex"
+cp "$DIR/package.json" "$TEST_REPOS_INSTR_WS/package.json"
+cp -r "$DIR/lib" "$TEST_REPOS_INSTR_WS/lib"
+cp -r "$DIR/templates" "$TEST_REPOS_INSTR_WS/templates"
+(cd "$TEST_REPOS_INSTR_WS" && ./rnex init -y >/dev/null)
+
+# Configure repositories in rnex.yaml: app-backend (read-write), app-frontend (readonly), app-tools (enabled)
+cat <<'EOF_RI_YAML' >> "$TEST_REPOS_INSTR_WS/rnex.yaml"
+repos:
+  app-backend:
+    url: "https://example.invalid/backend.git"
+    readonly: false
+  app-frontend:
+    url: "https://example.invalid/frontend.git"
+    readonly: true
+  app-tools:
+    url: "https://example.invalid/tools.git"
+    enabled: true
+EOF_RI_YAML
+
+# In .local.rnex.yaml: disable app-tools, make app-frontend enabled and readonly
+cat <<'EOF_RI_LOCAL' > "$TEST_REPOS_INSTR_WS/.local.rnex.yaml"
+repos:
+  app-tools:
+    enabled: false
+  app-frontend:
+    enabled: true
+    readonly: true
+EOF_RI_LOCAL
+
+# Run rnex sync
+(cd "$TEST_REPOS_INSTR_WS" && ./rnex sync --quiet)
+
+_repos_instr="$TEST_REPOS_INSTR_WS/.rnex/repos-instructions.md"
+[ -f "$_repos_instr" ] || { fail ".rnex/repos-instructions.md missing after sync"; exit 1; }
+
+# Assert exact header columns | Path | Mode |
+grep -qF '| Path | Mode |' "$_repos_instr" || { fail "Missing header '| Path | Mode |' in $_repos_instr"; exit 1; }
+grep -qF '| :--- | :--- |' "$_repos_instr" || { fail "Missing alignment '| :--- | :--- |' in $_repos_instr"; exit 1; }
+
+# Assert redundant columns are excluded
+! grep -q 'Repository' "$_repos_instr" || { fail "Redundant 'Repository' column present in repos-instructions.md"; exit 1; }
+! grep -q 'Branch' "$_repos_instr" || { fail "Redundant 'Branch' column present in repos-instructions.md"; exit 1; }
+! grep -q 'Description' "$_repos_instr" || { fail "Redundant 'Description' column present in repos-instructions.md"; exit 1; }
+
+# Assert active rows: app-backend is read-write, app-frontend is read-only
+grep -qF "| \`repos/app-backend\` | \`read-write\` |" "$_repos_instr" || { fail "app-backend read-write row missing or malformed"; exit 1; }
+grep -qF "| \`repos/app-frontend\` | \`read-only\` |" "$_repos_instr" || { fail "app-frontend read-only row missing or malformed"; exit 1; }
+
+# Assert disabled repo (app-tools) is omitted from repos-instructions.md
+! grep -q 'app-tools' "$_repos_instr" || { fail "Disabled app-tools unexpectedly found in repos-instructions.md"; exit 1; }
+
+# Assert mode rules header is present
+grep -qF '# Active Member Repositories' "$_repos_instr" || { fail "Missing '# Active Member Repositories' header"; exit 1; }
+grep -qF -- "- **\`read-write\`**" "$_repos_instr" || { fail "Missing read-write rule description"; exit 1; }
+grep -qF -- "- **\`read-only\`**" "$_repos_instr" || { fail "Missing read-only rule description"; exit 1; }
+
+# Test zero active repositories fallback
+cat <<'EOF_RI_ZERO' > "$TEST_REPOS_INSTR_WS/.local.rnex.yaml"
+repos:
+  app-backend:
+    enabled: false
+  app-frontend:
+    enabled: false
+  app-tools:
+    enabled: false
+EOF_RI_ZERO
+
+(cd "$TEST_REPOS_INSTR_WS" && ./rnex sync --quiet)
+grep -qF 'No active member repositories configured.' "$_repos_instr" || { fail "Missing zero repos fallback notice"; exit 1; }
+! grep -qF '| Path | Mode |' "$_repos_instr" || { fail "Header table should not be present when zero repos are active"; exit 1; }
 pass
 
 if [ "${_STANDALONE_RUN:-0}" -eq 1 ]; then

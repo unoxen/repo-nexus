@@ -27,7 +27,7 @@ Do not create arbitrary or speculative subdirectories during initialization. Sca
 
 ### 2. Agent Rules & Routing
 
-- **Repo Nexus Workspaces**: Paths (`sources`, default: `["docs", "repos/**/README.md"]`; legacy `raw_dir`; `wiki_dir`, default: `.rnex/wiki`) are configured in `rnex.yaml` under `plugins.karpathy-llm`. Plugin assets are scoped under `.rnex/plugins/karpathy-llm/` (`rules/behavioral.md` and `instructions/rnex-wiki-architecture.md`). Resolved paths are pre-compiled into `.rnex/ai-instructions.md`.
+- **Repo Nexus Workspaces**: Paths (`sources`, default: `["docs", "repos/**/README.md"]`; legacy `raw_dir`; `wiki_dir`, default: `.rnex/wiki`) are configured in `rnex.yaml` under `plugins.karpathy-llm`. Plugin assets are scoped under `.rnex/plugins/karpathy-llm/` (`ai-instructions.md`, `rules/behavioral.md`, and `instructions/rnex-wiki-architecture.md`). Instructions are registered in `.rnex/ai-instructions.md`.
 - **Standalone Repositories**: Append the `## Karpathy Wiki Rules` section (see Section 4) to the primary AI instructions file (`AGENTS.md`, `CLAUDE.md`, `.cursorrules`, etc.), preserving all existing content.
 
 ---

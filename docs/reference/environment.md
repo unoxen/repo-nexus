@@ -48,11 +48,13 @@ my-workspace/
 ├── .local.rnex.yaml                 # (Optional) Developer workstation overrides
 │
 ├── .rnex/                           # Internal runtime harness (git-ignored)
-│   ├── ai-instructions.md           # Master compiled AI instructions
+│   ├── ai-instructions.md           # Master compiled AI instructions router
+│   ├── repos-instructions.md        # Active member repositories & mode matrix
 │   ├── sync_stamp                   # Checksum stamp for configuration drift detection
 │   ├── skills/                      # Standardized core agentic skills
 │   └── plugins/                     # Scoped plugin directories
 │       └── <plugin-name>/
+│           ├── ai-instructions.md   # Projected plugin-specific AI instructions
 │           ├── commands/            # Plugin CLI executable commands
 │           ├── skills/              # Plugin-owned agentic skills
 │           └── rules/               # Mirrored plugin rules

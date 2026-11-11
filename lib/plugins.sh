@@ -30,6 +30,12 @@ plugin_resolve_dir() {
   _prd_name="$1"
   [ -n "$_prd_name" ] || return 1
 
+  # OWASP A03 / Path Traversal Guard: plugin name must strictly match allowlist
+  case "$_prd_name" in
+    *[!a-zA-Z0-9._-]*|"") return 1 ;;
+    .|..) return 1 ;;
+  esac
+
   _ws_root="${NEXUS_DIR:-${RNEX_ROOT:-.}}"
 
   # Priority 1: Explicit per-plugin path override (.local.rnex.yaml > rnex.yaml)
@@ -93,6 +99,13 @@ plugin_resolve_dir() {
 # Search all candidate plugin directories and locate a plugin by name containing plugin.yaml.
 find_plugin_dir() {
   _query="$1"
+  [ -n "$_query" ] || return 1
+
+  # OWASP A03 / Path Traversal Guard: plugin query must strictly match allowlist
+  case "$_query" in
+    *[!a-zA-Z0-9._-]*|"") return 1 ;;
+    .|..) return 1 ;;
+  esac
   if command -v plugin_resolve_dir >/dev/null 2>&1; then
     _res="$(plugin_resolve_dir "$_query" 2>/dev/null || true)"
     if [ -n "$_res" ]; then
@@ -117,6 +130,81 @@ find_plugin_dir() {
     fi
   done
   return 1
+}
+
+# ==============================================================================
+# rnex_plugins_list_ordered_active
+#
+# Summary:
+#   Returns the deterministic sequence of active (enabled) plugin names
+#   strictly ordered by their declaration position in the merged workspace
+#   configuration (rnex.yaml declaration order, followed by any local-only
+#   additions in .local.rnex.yaml). Plugins marked with enabled: false (or
+#   falsy equivalents) in .local.rnex.yaml or rnex.yaml are filtered out.
+#   Each plugin name is strictly validated against a POSIX safe identifier
+#   allowlist to prevent path-traversal attacks (OWASP A03).
+#
+# Architectural Layer:
+#   Plugin Discovery & Query Engine
+#
+# Design Pattern:
+#   Information Expert (GRASP)
+#
+# Arguments:
+#   $1 - (Optional) Workspace root directory path (defaults to ambient NEXUS_DIR)
+#
+# Returns:
+#   Outputs active plugin names to stdout, one per line. Exit code 0.
+#
+# Security:
+#   OWASP A03 (Injection / Path Traversal): Enforces POSIX allowlist ^[a-zA-Z0-9._-]+$
+#   and explicitly rejects navigation tokens ('.', '..').
+#
+# Purity:
+#   @pure (stateless query of resolved configuration files)
+# ==============================================================================
+rnex_plugins_list_ordered_active() {
+  _rplo_ws="${1:-}"
+  _rplo_old_nd="${NEXUS_DIR:-}"
+  _rplo_old_wy="${WORKSPACE_YAML:-}"
+  _rplo_old_wly="${WORKSPACE_LOCAL_YAML:-}"
+
+  # Set scoped configuration variables if explicit workspace root is passed
+  if [ -n "$_rplo_ws" ]; then
+    NEXUS_DIR="$_rplo_ws"
+    WORKSPACE_YAML="$_rplo_ws/${RNEX_CONFIG_FILE:-rnex.yaml}"
+    WORKSPACE_LOCAL_YAML="$_rplo_ws/${RNEX_LOCAL_CONFIG_FILE:-.local.rnex.yaml}"
+  fi
+
+  if command -v yaml_list_plugins >/dev/null 2>&1; then
+    yaml_list_plugins 2>/dev/null | while IFS= read -r _rplo_p || [ -n "$_rplo_p" ]; do
+      [ -n "$_rplo_p" ] || continue
+
+      # OWASP A03 / Path Traversal Guard: plugin name must strictly match ^[a-zA-Z0-9._-]+$
+      case "$_rplo_p" in
+        *[!a-zA-Z0-9._-]*|"")
+          continue
+          ;;
+        .|..)
+          continue
+          ;;
+      esac
+
+      # Filter out plugins that are disabled in merged configuration (.local.rnex.yaml > rnex.yaml)
+      if command -v yaml_plugin_enabled >/dev/null 2>&1; then
+        yaml_plugin_enabled "$_rplo_p" 2>/dev/null || continue
+      fi
+
+      printf '%s\n' "$_rplo_p"
+    done
+  fi
+
+  # Restore ambient configuration variables if overridden
+  if [ -n "$_rplo_ws" ]; then
+    NEXUS_DIR="$_rplo_old_nd"
+    WORKSPACE_YAML="$_rplo_old_wy"
+    WORKSPACE_LOCAL_YAML="$_rplo_old_wly"
+  fi
 }
 
 # ============================================================================
@@ -440,9 +528,13 @@ sync_plugin_bundle() {
       rm -rf "${_spb_dest:?}/$_sub"
     fi
   done
-  for _meta in plugin.yaml instructions.md README.md; do
+  _spb_ai_fn="${RNEX_PLUGIN_AI_FILENAME:-ai-instructions.md}"
+  for _meta in plugin.yaml instructions.md README.md "$_spb_ai_fn"; do
     if [ -f "$_spb_src/$_meta" ]; then
       cp "$_spb_src/$_meta" "$_spb_dest/$_meta"
+    elif [ "$_meta" = "$_spb_ai_fn" ]; then
+      # Prune stale projected ai-instructions.md if removed from source plugin
+      rm -f "${_spb_dest:?}/$_meta" 2>/dev/null || true
     fi
   done
 }
@@ -535,10 +627,13 @@ sync_plugins() {
     for _existing in "$NEXUS_DIR/.rnex/plugins"/*; do
       [ -d "$_existing" ] || continue
       _pname="$(basename "$_existing")"
+      case "$_pname" in
+        *[!a-zA-Z0-9._-]*|""|.|..) continue ;;
+      esac
       if ! yaml_plugin_enabled "$_pname"; then
         run_plugin_hook "$_pname" "before_plugin_disable"
         clean_plugin_user_skills "$_existing"
-        rm -rf "$_existing"
+        rm -rf "${_existing:?}"
         log_ok "Removed disabled plugin scope: .rnex/plugins/$_pname"
       fi
     done
@@ -548,6 +643,9 @@ sync_plugins() {
   # Run cleanup hook for any available plugin that is disabled but still has artifacts on disk
   for _pdir in $(list_all_available_plugin_dirs 2>/dev/null || true); do
     _pname="$(basename "$_pdir")"
+    case "$_pname" in
+      *[!a-zA-Z0-9._-]*|""|.|..) continue ;;
+    esac
     if ! yaml_plugin_enabled "$_pname" 2>/dev/null; then
       _p_out="$(plugin_manifest_get "$_pdir" "output_file" 2>/dev/null || true)"
       if [ -d "$NEXUS_DIR/.rnex/plugins/$_pname" ] || { [ -n "$_p_out" ] && [ -e "$NEXUS_DIR/$_p_out" ]; }; then
@@ -556,10 +654,22 @@ sync_plugins() {
     fi
   done
 
-  # 2. Sync enabled plugins
-  yaml_list_plugins | while read -r _pname; do
+  # 2. Sync enabled plugins in deterministic declared configuration order
+  rnex_plugins_list_ordered_active | while read -r _pname || [ -n "$_pname" ]; do
     [ -n "$_pname" ] || continue
-    yaml_plugin_enabled "$_pname" || continue
+
+    # OWASP A03 / Path Traversal Guard: plugin name must strictly match allowlist
+    case "$_pname" in
+      *[!a-zA-Z0-9._-]*|"")
+        log_warn "Skipping invalid plugin name containing disallowed characters: '$_pname'"
+        continue
+        ;;
+      .|..)
+        log_warn "Skipping invalid plugin name: '$_pname'"
+        continue
+        ;;
+    esac
+
     _pdir="$(plugin_resolve_dir "$_pname" 2>/dev/null || true)"
     [ -n "$_pdir" ] || _pdir="$(find_plugin_dir "$_pname" 2>/dev/null || true)"
     if [ -z "$_pdir" ]; then

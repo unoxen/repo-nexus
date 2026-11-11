@@ -97,8 +97,9 @@ Plugins can be authored directly within Repo Nexus as built-in plugins (`plugins
 ```text
 <plugin-dir>/ (e.g. plugins/<name>/ or <external-path>/)
 ├── plugin.yaml                  # Required: Plugin manifest & configuration schema
-├── instructions/                # Optional: Markdown context files compiled into .rnex/ai-instructions.md
+├── ai-instructions.md           # Optional: Mandatory AI instructions registered in Section 2
 ├── README.md                    # Optional: Plugin documentation & recipes
+├── instructions/                # Optional: Context documents synced to .rnex/plugins/<name>/instructions/
 ├── commands/                    # Optional: CLI subcommand scripts (*.sh)
 ├── hooks/                       # Optional: Lifecycle & Git event hooks
 │   ├── before_<cmd>.sh          # Executed before mutating command <cmd>
@@ -144,8 +145,12 @@ Plugins can define executable POSIX `/bin/sh` scripts under `hooks/` to intercep
   - `RNEX_ARGS`: Arguments passed to the command.
   - `RNEX_QUIET`: Set to `1` if `--quiet` / `-q` is active, otherwise `0`.
 
-### AI Instructions Fragments (`instructions/`)
-Instruction files listed under `instructions:` in `plugin.yaml` (or a fallback `instructions.md`) are automatically concatenated into `.rnex/ai-instructions.md` during `rnex sync` whenever the plugin is enabled.
+### AI Instructions Contract (`ai-instructions.md`)
+When a plugin provides `ai-instructions.md` in its root directory, `rnex sync` automatically registers a mandatory instruction in Section 2 of `.rnex/ai-instructions.md`:
+```markdown
+N. **Mandatory**: Read and follow `.rnex/plugins/<name>/ai-instructions.md`.
+```
+The registration order strictly follows the plugin's position in the merged workspace configuration (`rnex.yaml` declaration order, followed by any `.local.rnex.yaml` additions, with disabled plugins filtered out). Stale projections are automatically pruned when the source file is removed.
 
 ---
 

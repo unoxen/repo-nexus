@@ -38,6 +38,9 @@ _codex_block="$(awk '/<!-- REPO-NEXUS:START -->/,/<!-- REPO-NEXUS:END -->/' "$TE
 ! grep -q "OpenAI Codex Integration for Repo Nexus" "$TEST_CODEX_WS/.rnex/ai-instructions.md" || {
   fail "Codex integration instructions should not be compiled into .rnex/ai-instructions.md"; exit 1;
 }
+grep -q "No plugin AI instructions registered." "$TEST_CODEX_WS/.rnex/ai-instructions.md" || {
+  fail "Section 2 should indicate no plugin AI instructions registered for codex"; exit 1;
+}
 
 _status_out="$(cd "$TEST_CODEX_WS" && ./rnex status 2>&1)"
 echo "$_status_out" | grep -q "CODEX.md" || { fail "Status did not report CODEX.md: $_status_out"; exit 1; }

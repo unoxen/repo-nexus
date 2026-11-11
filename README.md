@@ -70,7 +70,7 @@ A lightweight, zero-dependency and AI-First **Nexus Repository (Virtual Meta Rep
    Member repositories are enabled by default. Developers can selectively disable specific repositories locally in `.local.rnex.yaml` (`enabled: false`) without mutating the shared `rnex.yaml`. Disabled repositories are skipped by `clone` and `exec`.
 
 4. **Routing-Only Top-Level AI Instructions (Context Sync)**:
-   Top-level instruction files (`AGENTS.md`, `CLAUDE.md`, `.cursorrules`, etc.) contain no inlined plugin rules or tool boilerplate. They act solely as lean navigation routers directing AI agents to `.rnex/ai-instructions.md`, configured plugins, and member repository contexts.
+   Top-level instruction files (`AGENTS.md`, `CLAUDE.md`, `.cursorrules`, etc.) contain no inlined plugin rules or tool boilerplate. They act solely as lean navigation routers directing AI agents to `.rnex/ai-instructions.md` (featuring the Execution Gate and ordered plugin routing) and `.rnex/repos-instructions.md` (repository access modes).
 
 5. **Strict File Encapsulation**:
    All `rnex`-managed internal files, caches, stamps, and plugin scopes live exclusively in the root `.rnex/` directory. Member repositories remain 100% clean and autonomous with zero `.rnex/` folders inside member trees.

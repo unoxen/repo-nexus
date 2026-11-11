@@ -82,6 +82,10 @@ grep -q '^[ ]*lint:' "$_yaml_file" || { fail "lint command missing in plugin.yam
 ! grep -q "ingest_member_readmes" "$_yaml_file" || { fail "ingest_member_readmes still present in plugin.yaml"; exit 1; }
 ! grep -q "hot_file" "$_yaml_file" || { fail "hot_file still present in plugin.yaml"; exit 1; }
 
+# Assert ai-instructions.md exists in plugin root
+[ -f "$_kl_pdir/ai-instructions.md" ] || { fail "ai-instructions.md missing in karpathy-llm root"; exit 1; }
+[ -s "$_kl_pdir/ai-instructions.md" ] || { fail "ai-instructions.md is empty in karpathy-llm root"; exit 1; }
+
 # Verify valid YAML parsing if ruby is available
 if command -v ruby >/dev/null 2>&1; then
   ruby -ryaml -e 'YAML.load_file(ARGV[0])' "$_yaml_file" || { fail "karpathy-llm plugin.yaml is not valid YAML"; exit 1; }
@@ -1648,6 +1652,37 @@ _out_heal3="$(cd "$TEST_IDEM_WS" && ./rnex plugin karpathy-llm lint)"
 echo "$_out_heal3" | grep -q "all existing docs and references in wiki are valid" || {
   fail "Third lint after healing gapped sub-shard still reported repairs: $_out_heal3"; exit 1;
 }
+pass
+
+# --------------------------------------------------------------------------
+# Test 30: AI instructions projection and Section 2 routing in .rnex/ai-instructions.md
+# --------------------------------------------------------------------------
+run_test "Karpathy-llm: ai-instructions.md projection and Section 2 routing contract"
+TEST_AI_INSTR_WS="$TEST_TMP/karpathy-ai-instr-ws"
+mkdir -p "$TEST_AI_INSTR_WS"
+setup_plugin_test_workspace karpathy-llm "$TEST_AI_INSTR_WS"
+(cd "$TEST_AI_INSTR_WS" && ./rnex init -y --karpathy "$TEST_AI_INSTR_WS" >/dev/null)
+(cd "$TEST_AI_INSTR_WS" && ./rnex sync -y --quiet)
+
+# 1. Verify projected ai-instructions.md in .rnex/plugins/karpathy-llm/
+_proj_ai="$TEST_AI_INSTR_WS/.rnex/plugins/karpathy-llm/ai-instructions.md"
+[ -f "$_proj_ai" ] || { fail ".rnex/plugins/karpathy-llm/ai-instructions.md was not projected"; exit 1; }
+grep -q "Karpathy LLM AI Instructions" "$_proj_ai" || { fail "Projected ai-instructions.md content corrupted"; exit 1; }
+
+# 2. Verify Section 2 in .rnex/ai-instructions.md contains mandatory reference
+_ai_instr="$TEST_AI_INSTR_WS/.rnex/ai-instructions.md"
+[ -f "$_ai_instr" ] || { fail ".rnex/ai-instructions.md missing after sync"; exit 1; }
+grep -qF "1. **Mandatory**: Read and follow \`.rnex/plugins/karpathy-llm/ai-instructions.md\`." "$_ai_instr" || {
+  fail "Missing karpathy-llm reference in Section 2 of ai-instructions.md"; exit 1;
+}
+
+# 3. Disable karpathy-llm and assert removal from ai-instructions.md and fallback message
+(cd "$TEST_AI_INSTR_WS" && ./rnex plugin disable karpathy-llm >/dev/null)
+! grep -qF "karpathy-llm" "$_ai_instr" || { fail "karpathy-llm reference not removed after plugin disable"; exit 1; }
+grep -qF "No plugin AI instructions registered." "$_ai_instr" || {
+  fail "Fallback message missing when no plugins registered in ai-instructions.md"; exit 1;
+}
+[ ! -f "$_proj_ai" ] || { fail "Projected ai-instructions.md was not pruned after disable"; exit 1; }
 pass
 
 if [ "${_STANDALONE_RUN:-0}" -eq 1 ]; then

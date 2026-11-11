@@ -1,6 +1,6 @@
 # Karpathy LLM Wiki Directives
 
-> Resolved `wiki_dir` and `sources` are compiled into `.rnex/ai-instructions.md` (Section 2). Do NOT read `rnex.yaml` or `.local.rnex.yaml`.
+> Follow the execution gate and routing directives in `.rnex/ai-instructions.md` and `.rnex/plugins/karpathy-llm/ai-instructions.md`.
 
 - **Behavioral Rules**: (1) State assumptions and surface trade-offs before coding; (2) Prefer minimal, non-speculative code; (3) Make surgical edits touching only required lines; (4) Verify changes against concrete goals.
 - **Wiki-First**: Follow the 3-step B-Tree retrieval protocol: (1) Read `<wiki_dir>/index.md` (bounded root router <= 80 lines); (2) Read the target index shard `<wiki_dir>/repo-nexus*.md` or `<wiki_dir>/repos-<member>*.md`; (3) Open only the authoritative source documents referenced by the shard.

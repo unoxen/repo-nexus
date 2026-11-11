@@ -56,7 +56,7 @@ rnex sync [options]
 ### Reconciliation Pipeline
 1. Upgrades configuration schema non-destructively if an older version is detected.
 2. Re-verifies `.gitignore` rules from `git.ignore` (ignoring recursive patterns `**/.rnex*`, `**/rnex*`, `<repos_dir>/`, while preserving `!rnex.yaml`), and ensures `.ignore` contains `!<repos_dir>/*`.
-3. Compiles `.rnex/ai-instructions.md` by combining the base template with active configuration and all enabled plugin instruction fragments. Writes single strict directive to top-level provider files (`AGENTS.md`, `CLAUDE.md`, `CODEX.md`, etc.).
+3. Compiles `.rnex/ai-instructions.md` (two-section router with Execution Gate and ordered plugin instructions) and `.rnex/repos-instructions.md` (active member repositories matrix with Path and Mode). Writes single strict directive to top-level provider files (`AGENTS.md`, `CLAUDE.md`, `CODEX.md`, etc.).
 4. Syncs core agentic skills from `skills/` to `.rnex/skills/` and generates zero-logic User Skills (`rnex-*`) in active AI provider directories.
 5. Re-syncs enabled plugin assets into `.rnex/plugins/` (member repositories remain completely clean with zero `.rnex/` folders).
 6. Dispatches lifecycle hooks (`before_sync`, `after_sync`).

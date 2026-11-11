@@ -37,6 +37,9 @@ _windsurf_block="$(awk '/<!-- REPO-NEXUS:START -->/,/<!-- REPO-NEXUS:END -->/' "
 ! grep -q "Windsurf IDE Integration for Repo Nexus" "$TEST_WINDSURF_WS/.rnex/ai-instructions.md" || {
   fail "Windsurf integration instructions should not be compiled into .rnex/ai-instructions.md"; exit 1;
 }
+grep -q "No plugin AI instructions registered." "$TEST_WINDSURF_WS/.rnex/ai-instructions.md" || {
+  fail "Section 2 should indicate no plugin AI instructions registered for windsurf"; exit 1;
+}
 
 _status_out="$(cd "$TEST_WINDSURF_WS" && ./rnex status 2>&1)"
 echo "$_status_out" | grep -q "\.windsurfrules" || { fail "Status did not report .windsurfrules: $_status_out"; exit 1; }

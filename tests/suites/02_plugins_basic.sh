@@ -53,12 +53,13 @@ cat <<'EOF_CUSTOM_INSTR' > "$_cmd_plugin_dir/instructions.md"
 # Custom Workflow Plugin Guidelines
 - Follow custom workflow verification before committing.
 EOF_CUSTOM_INSTR
+cp "$_cmd_plugin_dir/instructions.md" "$_cmd_plugin_dir/ai-instructions.md"
 chmod +x "$_cmd_plugin_dir/commands"/*
 
 # 1. Enable plugin and verify custom workflow plugin instructions are included in .rnex/ai-instructions.md
 "$TEST_WORKSPACE/rnex" plugin enable cmd-test >/dev/null
-grep -qF "### Plugin Directives (\`cmd-test\`)" "$TEST_WORKSPACE/.rnex/ai-instructions.md" || { fail "Custom workflow plugin header missing from ai-instructions.md"; exit 1; }
-grep -qF 'Follow custom workflow verification before committing.' "$TEST_WORKSPACE/.rnex/ai-instructions.md" || { fail "Custom workflow plugin instructions missing from ai-instructions.md"; exit 1; }
+grep -qF "1. **Mandatory**: Read and follow \`.rnex/plugins/cmd-test/ai-instructions.md\`." "$TEST_WORKSPACE/.rnex/ai-instructions.md" || { fail "Custom workflow plugin instruction link missing from ai-instructions.md"; exit 1; }
+[ -f "$TEST_WORKSPACE/.rnex/plugins/cmd-test/ai-instructions.md" ] || { fail "ai-instructions.md was not projected into .rnex/plugins/cmd-test/"; exit 1; }
 
 # Configure rnex_hooks for before_plugin_command and after_plugin_command via .local.rnex.yaml
 cat <<'EOF_HOOKS' > "$TEST_WORKSPACE/.local.rnex.yaml"
@@ -103,6 +104,7 @@ echo "$_err_out" | grep -q "Unknown command 'non-existent-command' for plugin 'c
 # 7. Disable plugin and verify invocation rejection and removal from ai-instructions.md
 "$TEST_WORKSPACE/rnex" plugin disable cmd-test >/dev/null
 ! grep -qF 'cmd-test' "$TEST_WORKSPACE/.rnex/ai-instructions.md" || { fail "Custom workflow plugin instructions not removed after disable"; exit 1; }
+grep -qF "No plugin AI instructions registered." "$TEST_WORKSPACE/.rnex/ai-instructions.md" || { fail "ai-instructions.md missing fallback text"; exit 1; }
 _dis_out="$("$TEST_WORKSPACE/rnex" plugin cmd-test hello 2>&1 || true)"
 echo "$_dis_out" | grep -q "Plugin 'cmd-test' is not enabled in workspace" || { fail "Expected disabled plugin error: $_dis_out"; exit 1; }
 
@@ -413,6 +415,167 @@ fi
 if grep -En 'yaml_(get_plugin_config|plugin_get).*["'"'"']dir["'"'"']' "$DIR/rnex" "$DIR/lib/" 2>/dev/null; then
   fail "Found yaml_get_plugin_config or yaml_plugin_get query for 'dir'"; exit 1
 fi
+pass
+
+# --------------------------------------------------------------------------
+run_test "Plugin engine: ordered active plugins discovery and ai-instructions.md sync contract"
+TEST_ORD_WS="$TEST_TMP/ordered-plugins-ws"
+mkdir -p "$TEST_ORD_WS"
+cp "$CLI" "$TEST_ORD_WS/rnex"
+chmod +x "$TEST_ORD_WS/rnex"
+cp "$DIR/package.json" "$TEST_ORD_WS/package.json"
+cp -r "$DIR/lib" "$TEST_ORD_WS/lib"
+cp -r "$DIR/templates" "$TEST_ORD_WS/templates"
+(cd "$TEST_ORD_WS" && ./rnex init -y >/dev/null)
+
+# 1. Assert core constant contracts from lib/core.sh
+. "$DIR/lib/core.sh"
+[ "$RNEX_AI_INSTRUCTIONS_RELPATH" = ".rnex/ai-instructions.md" ] || { fail "RNEX_AI_INSTRUCTIONS_RELPATH mismatch"; exit 1; }
+[ "$RNEX_REPOS_INSTRUCTIONS_RELPATH" = ".rnex/repos-instructions.md" ] || { fail "RNEX_REPOS_INSTRUCTIONS_RELPATH mismatch"; exit 1; }
+[ "$RNEX_PLUGIN_AI_FILENAME" = "ai-instructions.md" ] || { fail "RNEX_PLUGIN_AI_FILENAME mismatch"; exit 1; }
+
+# 2. Create three mock plugins with ai-instructions.md
+for _p in plugin-beta plugin-alpha plugin-gamma; do
+  mkdir -p "$TEST_ORD_WS/plugins/$_p"
+  cat <<EOF_P > "$TEST_ORD_WS/plugins/$_p/plugin.yaml"
+name: $_p
+version: 1.0.0
+description: Mock plugin $_p
+EOF_P
+  cat <<EOF_AI > "$TEST_ORD_WS/plugins/$_p/ai-instructions.md"
+# Instructions for $_p
+- Rule for $_p
+EOF_AI
+done
+
+# Declare order in rnex.yaml: plugin-beta, then plugin-alpha
+cat <<'EOF_ORD_YAML' >> "$TEST_ORD_WS/rnex.yaml"
+plugins:
+  plugin-beta:
+    path: "./plugins/plugin-beta"
+  plugin-alpha:
+    path: "./plugins/plugin-alpha"
+EOF_ORD_YAML
+
+# Declare .local.rnex.yaml: disable beta, add gamma, and inject unsafe traversal name
+cat <<'EOF_ORD_LOCAL' > "$TEST_ORD_WS/.local.rnex.yaml"
+plugins:
+  plugin-beta:
+    enabled: false
+  plugin-gamma:
+    path: "./plugins/plugin-gamma"
+  "../unsafe-plugin":
+    enabled: true
+EOF_ORD_LOCAL
+
+# 3. Test rnex_plugins_list_ordered_active resolution and ordering
+. "$DIR/lib/yaml.sh"
+. "$DIR/lib/plugins.sh"
+_ordered_active="$(rnex_plugins_list_ordered_active "$TEST_ORD_WS")"
+_first_p="$(printf '%s\n' "$_ordered_active" | head -n1)"
+_second_p="$(printf '%s\n' "$_ordered_active" | sed -n '2p')"
+_p_count="$(printf '%s\n' "$_ordered_active" | grep -c '[^[:space:]]' || true)"
+
+[ "$_first_p" = "plugin-alpha" ] || { fail "Expected first active plugin to be plugin-alpha, got: '$_first_p'"; exit 1; }
+[ "$_second_p" = "plugin-gamma" ] || { fail "Expected second active plugin to be plugin-gamma, got: '$_second_p'"; exit 1; }
+[ "$_p_count" -eq 2 ] || { fail "Expected exactly 2 active plugins, got count: $_p_count ($_ordered_active)"; exit 1; }
+! echo "$_ordered_active" | grep -q "plugin-beta" || { fail "Disabled plugin-beta unexpectedly in active list"; exit 1; }
+! echo "$_ordered_active" | grep -q "unsafe-plugin" || { fail "Unsafe path traversal plugin name was not rejected by allowlist"; exit 1; }
+
+# 4. Sync workspace and verify ai-instructions.md projection into .rnex/plugins/<name>/ and Section 2 routing
+(cd "$TEST_ORD_WS" && ./rnex sync --quiet)
+[ -f "$TEST_ORD_WS/.rnex/plugins/plugin-alpha/ai-instructions.md" ] || { fail "plugin-alpha ai-instructions.md not projected"; exit 1; }
+[ -f "$TEST_ORD_WS/.rnex/plugins/plugin-gamma/ai-instructions.md" ] || { fail "plugin-gamma ai-instructions.md not projected"; exit 1; }
+[ ! -d "$TEST_ORD_WS/.rnex/plugins/plugin-beta" ] || { fail "Disabled plugin-beta unexpectedly synced to .rnex/plugins/"; exit 1; }
+grep -q "Rule for plugin-alpha" "$TEST_ORD_WS/.rnex/plugins/plugin-alpha/ai-instructions.md" || { fail "Projected ai-instructions.md content corrupted"; exit 1; }
+
+_ord_ai="$TEST_ORD_WS/.rnex/ai-instructions.md"
+[ -f "$_ord_ai" ] || { fail "ai-instructions.md missing in ordered plugin test"; exit 1; }
+grep -qF "1. **Mandatory**: Read and follow \`.rnex/plugins/plugin-alpha/ai-instructions.md\`." "$_ord_ai" || { fail "Missing plugin-alpha in Section 2"; exit 1; }
+grep -qF "2. **Mandatory**: Read and follow \`.rnex/plugins/plugin-gamma/ai-instructions.md\`." "$_ord_ai" || { fail "Missing plugin-gamma in Section 2"; exit 1; }
+! grep -qF "plugin-beta" "$_ord_ai" || { fail "Disabled plugin-beta present in Section 2"; exit 1; }
+
+# 5. Remove ai-instructions.md from source and assert stale projection is pruned on next sync
+rm -f "$TEST_ORD_WS/plugins/plugin-alpha/ai-instructions.md"
+(cd "$TEST_ORD_WS" && ./rnex sync --quiet)
+[ ! -f "$TEST_ORD_WS/.rnex/plugins/plugin-alpha/ai-instructions.md" ] || { fail "Stale ai-instructions.md was not pruned after source removal"; exit 1; }
+[ -f "$TEST_ORD_WS/.rnex/plugins/plugin-alpha/plugin.yaml" ] || { fail "plugin.yaml was unexpectedly removed when pruning ai-instructions.md"; exit 1; }
+! grep -qF "plugin-alpha" "$_ord_ai" || { fail "Pruned plugin-alpha still in Section 2"; exit 1; }
+grep -qF "1. **Mandatory**: Read and follow \`.rnex/plugins/plugin-gamma/ai-instructions.md\`." "$_ord_ai" || { fail "Missing renumbered plugin-gamma in Section 2"; exit 1; }
+pass
+
+# --------------------------------------------------------------------------
+run_test "Plugin engine: multi-plugin ai-instructions.md ordering and dynamic reversal in rnex.yaml"
+TEST_REV_WS="$TEST_TMP/rev-plugins-ws"
+mkdir -p "$TEST_REV_WS"
+cp "$CLI" "$TEST_REV_WS/rnex"
+chmod +x "$TEST_REV_WS/rnex"
+cp "$DIR/package.json" "$TEST_REV_WS/package.json"
+cp -r "$DIR/lib" "$TEST_REV_WS/lib"
+cp -r "$DIR/templates" "$TEST_REV_WS/templates"
+
+mkdir -p "$TEST_REV_WS/plugins/plugin-a" "$TEST_REV_WS/plugins/plugin-b"
+cat <<'EOF_PA_CFG' > "$TEST_REV_WS/plugins/plugin-a/plugin.yaml"
+name: plugin-a
+version: 1.0.0
+EOF_PA_CFG
+cat <<'EOF_PB_CFG' > "$TEST_REV_WS/plugins/plugin-b/plugin.yaml"
+name: plugin-b
+version: 1.0.0
+EOF_PB_CFG
+
+echo "# Instructions A" > "$TEST_REV_WS/plugins/plugin-a/ai-instructions.md"
+echo "# Instructions B" > "$TEST_REV_WS/plugins/plugin-b/ai-instructions.md"
+
+# 1. Configure plugin-a first, then plugin-b in rnex.yaml
+cat <<'EOF_CFG_AB' > "$TEST_REV_WS/rnex.yaml"
+version: 1.0.0
+plugins:
+  plugin-a: {}
+  plugin-b: {}
+EOF_CFG_AB
+
+(cd "$TEST_REV_WS" && ./rnex sync --quiet)
+
+_rev_ai="$TEST_REV_WS/.rnex/ai-instructions.md"
+[ -f "$_rev_ai" ] || { fail "ai-instructions.md missing in rev-plugins-ws"; exit 1; }
+grep -qF "1. **Mandatory**: Read and follow \`.rnex/plugins/plugin-a/ai-instructions.md\`." "$_rev_ai" || {
+  fail "plugin-a was not item 1 in initial configuration: $(cat "$_rev_ai")"; exit 1;
+}
+grep -qF "2. **Mandatory**: Read and follow \`.rnex/plugins/plugin-b/ai-instructions.md\`." "$_rev_ai" || {
+  fail "plugin-b was not item 2 in initial configuration: $(cat "$_rev_ai")"; exit 1;
+}
+
+# 2. Reverse plugin order in rnex.yaml (plugin-b first, then plugin-a)
+cat <<'EOF_CFG_BA' > "$TEST_REV_WS/rnex.yaml"
+version: 1.0.0
+plugins:
+  plugin-b: {}
+  plugin-a: {}
+EOF_CFG_BA
+
+(cd "$TEST_REV_WS" && ./rnex sync --quiet)
+
+grep -qF "1. **Mandatory**: Read and follow \`.rnex/plugins/plugin-b/ai-instructions.md\`." "$_rev_ai" || {
+  fail "plugin-b was not item 1 after reversing configuration: $(cat "$_rev_ai")"; exit 1;
+}
+grep -qF "2. **Mandatory**: Read and follow \`.rnex/plugins/plugin-a/ai-instructions.md\`." "$_rev_ai" || {
+  fail "plugin-a was not item 2 after reversing configuration: $(cat "$_rev_ai")"; exit 1;
+}
+
+# 3. Add local override (.local.rnex.yaml) disabling plugin-b
+cat <<'EOF_LOCAL_DIS' > "$TEST_REV_WS/.local.rnex.yaml"
+plugins:
+  plugin-b:
+    enabled: false
+EOF_LOCAL_DIS
+
+(cd "$TEST_REV_WS" && ./rnex sync --quiet)
+
+! grep -qF "plugin-b" "$_rev_ai" || { fail "Disabled plugin-b still present after local disable"; exit 1; }
+grep -qF "1. **Mandatory**: Read and follow \`.rnex/plugins/plugin-a/ai-instructions.md\`." "$_rev_ai" || {
+  fail "plugin-a was not promoted to item 1 when plugin-b disabled"; exit 1;
+}
 pass
 
 if [ "${_STANDALONE_RUN:-0}" -eq 1 ]; then

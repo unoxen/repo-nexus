@@ -32,6 +32,9 @@ _claude_block="$(awk '/<!-- REPO-NEXUS:START -->/,/<!-- REPO-NEXUS:END -->/' "$T
 ! grep -q "Anthropic Claude Code Integration" "$TEST_CLAUDE_WS/.rnex/ai-instructions.md" || {
   fail "Claude integration instructions should not be compiled into .rnex/ai-instructions.md"; exit 1;
 }
+grep -q "No plugin AI instructions registered." "$TEST_CLAUDE_WS/.rnex/ai-instructions.md" || {
+  fail "Section 2 should indicate no plugin AI instructions registered for claude"; exit 1;
+}
 
 # Verify User Skills in .claude/skills/
 for _s in clone-sync batch-exec workspace-status; do

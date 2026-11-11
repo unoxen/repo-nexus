@@ -175,6 +175,15 @@ PLUGINS_DIR="${PLUGINS_DIR:-$RNEX_PLUGINS_DIR}"
 RNEX_SKILLS_DIR="${RNEX_SKILLS_DIR:-$(find_skills_dir 2>/dev/null || true)}"
 SKILLS_DIR="${SKILLS_DIR:-$RNEX_SKILLS_DIR}"
 
+# ==============================================================================
+# AI Context Compilation File Contracts
+# Architectural Layer: Core Configuration Constants
+# Responsibility: Single source of truth for compiled AI instruction filenames.
+# ==============================================================================
+RNEX_AI_INSTRUCTIONS_RELPATH=".rnex/ai-instructions.md"
+RNEX_REPOS_INSTRUCTIONS_RELPATH=".rnex/repos-instructions.md"
+RNEX_PLUGIN_AI_FILENAME="ai-instructions.md"
+
 # Compare two dot-separated version strings (e.g., "0.7.38" vs "0.7.39").
 # Returns:
 #   0 if $1 == $2

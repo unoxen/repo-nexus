@@ -98,7 +98,7 @@ Repo Nexus supports external and custom plugins located anywhere on the filesyst
 External plugins are configured canonicalizing the location via the per-plugin **`plugins.<name>.path`** setting in `rnex.yaml` or workstation-specific `.local.rnex.yaml`.
 
 ### How `plugins.<name>.path` Works
-When a plugin declares a `path`, Repo Nexus treats that directory as the plugin bundle's source of truth. Running `rnex sync` (or `rnex plugin enable <name>`) reads the plugin's `plugin.yaml` manifest, compiles its `instructions/` into `.rnex/ai-instructions.md`, links or copies its `skills/` to `.rnex/plugins/<name>/skills/`, hooks its CLI scripts into `rnex plugin <name> <cmd>`, and registers its lifecycle hooks.
+When a plugin declares a `path`, Repo Nexus treats that directory as the plugin bundle's source of truth. Running `rnex sync` (or `rnex plugin enable <name>`) reads the plugin's `plugin.yaml` manifest, projects its `ai-instructions.md` into `.rnex/plugins/<name>/ai-instructions.md` (registering it in Section 2 of `.rnex/ai-instructions.md`), links or copies its `skills/` to `.rnex/plugins/<name>/skills/`, hooks its CLI scripts into `rnex plugin <name> <cmd>`, and registers its lifecycle hooks.
 
 ### Team-Shared External Plugin (`rnex.yaml`)
 In shared team workspaces, commit external plugin references to `rnex.yaml` using relative paths or submodule locations:
@@ -161,17 +161,29 @@ A plugin bundle is structured as follows:
 my-plugin/
 ├── plugin.yaml              # Plugin manifest
 ├── README.md                # Documentation
+├── ai-instructions.md       # Mandatory AI instructions registered in Section 2
 ├── commands/                # Parameterized CLI executables
 │   └── mycmd.sh
 ├── hooks/                   # Lifecycle hook handlers
 │   ├── after_sync.sh
 │   └── before_plugin_disable.sh
-├── instructions/            # Instructions compiled into .rnex/ai-instructions.md
+├── instructions/            # Context documents synced to .rnex/plugins/my-plugin/instructions/
 │   └── my-plugin.md
 ├── rules/                   # Rules mirrored to IDEs
 ├── skills/                  # Domain skills copied to .rnex/plugins/my-plugin/skills/
 └── templates/               # Workspace template files (e.g. {wiki_dir}/...)
 ```
+
+### AI Instructions Contract (`ai-instructions.md`)
+
+When a plugin provides an `ai-instructions.md` file in its root directory, `rnex sync` automatically:
+1. Projects the file into `.rnex/plugins/<name>/ai-instructions.md`.
+2. Registers a mandatory execution instruction in **Section 2 (Plugin AI Instructions)** of `.rnex/ai-instructions.md`:
+   ```markdown
+   N. **Mandatory**: Read and follow `.rnex/plugins/<name>/ai-instructions.md`.
+   ```
+3. Orders plugin instructions strictly according to the plugin declaration sequence in `rnex.yaml` (with local additions from `.local.rnex.yaml` appended, and disabled plugins filtered out).
+4. Automatically prunes stale projections when `ai-instructions.md` is removed from the plugin source directory.
 
 ### Manifest Schema (`plugin.yaml`)
 
