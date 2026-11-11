@@ -13,7 +13,7 @@ if ! command -v clean_provider_user_skills >/dev/null 2>&1; then
 fi
 
 clean_provider_user_skills "$_root/.claude/skills"
-clean_provider_hooks "claude" "$_root/.claude" "$_root/.claude/settings.json"
+rnex_sdk_clean_provider_hooks "$_root" "claude"
 clean_rnex_instructions "$_root/CLAUDE.md"
 rm -rf "$_root/.claude/commands" "$_root/.claude/prompts" 2>/dev/null || true
 rmdir "$_root/.claude" 2>/dev/null || true

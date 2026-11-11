@@ -29,5 +29,5 @@ if ! provider_option_enabled "cursor" "skills" 2>/dev/null; then
   clean_provider_user_skills "$_root/.cursor/rules"
 fi
 
-sync_provider_hooks "cursor" "$_root/.cursor"
+rnex_sdk_sync_provider_hooks "$_root" "cursor"
 rmdir "$_root/.cursor" 2>/dev/null || true

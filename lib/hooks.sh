@@ -179,72 +179,140 @@ _run_hook_internal() {
     done
   fi
 
-  # 2. Execute configured commands from rnex_hooks.<event_name> (skipped if --ignore-hooks / RNEX_IGNORE_HOOKS=1)
+  # 2. Execute configured commands from rnex-hooks.<event_name> / rnex_hooks.<event_name>
   if [ -z "$_hook_target_plugin" ] && [ "${_RNEX_INTERNAL_PLUGIN_ONLY:-0}" != "1" ] && [ "$_ignore_hooks" != "1" ]; then
-    _hook_norm="$(printf '%s' "$_hook_phase_cmd" | tr '-' '_')"
-    case ":${RNEX_HOOK_ACTIVE:-}:" in
-      *":${_hook_norm}:"*)
-        # Re-entrant loop guard: skip re-entrant execution of this hook event
-        ;;
-      *)
-        _rnex_cmds="$(yaml_get_rnex_hook_commands "$_hook_norm" 2>/dev/null || true)"
-        if [ -n "$_rnex_cmds" ]; then
-          _prev_active="${RNEX_HOOK_ACTIVE:-}"
-          export RNEX_HOOK_ACTIVE="${RNEX_HOOK_ACTIVE:+${RNEX_HOOK_ACTIVE}:}${_hook_norm}"
-          _is_blocking=0
-          case "$_hook_norm" in
-            before_*) _is_blocking=1 ;;
-          esac
-          _old_ifs="$IFS"
-          IFS='
-'
-          for _rcmd in $_rnex_cmds; do
-            IFS="$_old_ifs"
-            [ -n "$_rcmd" ] || continue
-            if [ "$_is_blocking" -eq 1 ]; then
-              (
-                RNEX_ROOT="$_hook_root"
-                RNEX_CONFIG_MERGED="$_hook_config_merged"
-                RNEX_CMD="$_hook_cmd"
-                RNEX_ARGS="$_hook_args"
-                RNEX_HOOK_EVENT="$_hook_phase_cmd"
-                RNEX_HOOK_ARGS="$_hook_args"
-                RNEX_QUIET="$_hook_quiet"
-                RNEX_PROVIDER_SKILL_DIRS="$_skill_dirs"
-                export RNEX_ROOT RNEX_CONFIG_MERGED RNEX_CMD RNEX_ARGS RNEX_HOOK_EVENT RNEX_HOOK_ARGS RNEX_QUIET RNEX_PROVIDER_SKILL_DIRS RNEX_LIB_DIR NEXUS_DIR WORKSPACE_YAML WORKSPACE_LOCAL_YAML
-                _exec_hook_cmd "$_hook_root" "$_rcmd"
-              ) || {
-                _cmd_rc=$?
-                export RNEX_HOOK_ACTIVE="$_prev_active"
-                WORKSPACE_LOCAL_YAML="$_old_local_yaml"
-                WORKSPACE_YAML="$_old_yaml"
-                NEXUS_DIR="$_old_nexus"
-                return "$_cmd_rc"
-              }
-            else
-              (
-                RNEX_ROOT="$_hook_root"
-                RNEX_CONFIG_MERGED="$_hook_config_merged"
-                RNEX_CMD="$_hook_cmd"
-                RNEX_ARGS="$_hook_args"
-                RNEX_HOOK_EVENT="$_hook_phase_cmd"
-                RNEX_HOOK_ARGS="$_hook_args"
-                RNEX_QUIET="$_hook_quiet"
-                RNEX_PROVIDER_SKILL_DIRS="$_skill_dirs"
-                export RNEX_ROOT RNEX_CONFIG_MERGED RNEX_CMD RNEX_ARGS RNEX_HOOK_EVENT RNEX_HOOK_ARGS RNEX_QUIET RNEX_PROVIDER_SKILL_DIRS RNEX_LIB_DIR NEXUS_DIR WORKSPACE_YAML WORKSPACE_LOCAL_YAML
-                _exec_hook_cmd "$_hook_root" "$_rcmd"
-              ) || true
-            fi
-          done
-          IFS="$_old_ifs"
-          export RNEX_HOOK_ACTIVE="$_prev_active"
-        fi
-        ;;
-    esac
+    rnex_hooks_run_stage "$_hook_root" "$_hook_phase_cmd" "$@"
   fi
   WORKSPACE_LOCAL_YAML="$_old_local_yaml"
   WORKSPACE_YAML="$_old_yaml"
   NEXUS_DIR="$_old_nexus"
+}
+
+# ==============================================================================
+# rnex_hooks_run_stage
+#
+# Summary:
+#   Executes configured workspace lifecycle hook commands for a specified stage
+#   (e.g., pre_sync, post_sync, after_sync, before_sync, after_init) strictly
+#   declared in rnex.yaml or .local.rnex.yaml under rnex-hooks.<stage> (or
+#   legacy rnex_hooks.<stage>).
+#   Adheres to strict opt-in execution: if no hook commands are declared for
+#   the stage, zero commands are executed.
+#
+# Architectural Layer:
+#   Lifecycle & Git Hook Dispatcher
+#
+# Design Pattern:
+#   Strategy / Command Dispatcher
+#
+# Arguments:
+#   $1 - Workspace root directory or stage name.
+#   $2 - Stage name if $1 was workspace root directory.
+#
+# Returns:
+#   0 on success or if no hooks configured, non-zero if a blocking hook fails.
+#
+# Purity:
+#   @sideEffects Executes user-configured shell commands in workspace subshell.
+# ==============================================================================
+rnex_hooks_run_stage() {
+  if [ $# -ge 2 ] && [ -d "$1" ]; then
+    _rhrs_root="$1"
+    _rhrs_stage="$2"
+    shift 2
+  else
+    # shellcheck disable=SC2031
+    _rhrs_root="${NEXUS_DIR:-${RNEX_ROOT:-.}}"
+    _rhrs_stage="${1:-}"
+    shift 2>/dev/null || true
+  fi
+  [ -n "$_rhrs_stage" ] || return 0
+
+  # Check global hook suppression
+  # shellcheck disable=SC2031
+  [ "${RNEX_IGNORE_HOOKS:-0}" = "1" ] && return 0
+
+  _stage_norm="$(printf '%s' "$_rhrs_stage" | tr '-' '_')"
+
+  # Re-entrant loop guard: skip re-entrant execution of this hook event
+  case ":${RNEX_HOOK_ACTIVE:-}:" in
+    *":${_stage_norm}:"*) return 0 ;;
+  esac
+
+  _stage_cmds=""
+  if command -v rnex_yaml_get_rnex_hooks >/dev/null 2>&1; then
+    _stage_cmds="$(rnex_yaml_get_rnex_hooks "$_rhrs_root" "$_stage_norm" 2>/dev/null || true)"
+  elif command -v yaml_get_rnex_hook_commands >/dev/null 2>&1; then
+    _stage_cmds="$(yaml_get_rnex_hook_commands "$_stage_norm" 2>/dev/null || true)"
+  fi
+
+  [ -n "$_stage_cmds" ] || return 0
+
+  _prev_active="${RNEX_HOOK_ACTIVE:-}"
+  export RNEX_HOOK_ACTIVE="${RNEX_HOOK_ACTIVE:+${RNEX_HOOK_ACTIVE}:}${_stage_norm}"
+
+  _is_blocking=0
+  case "$_stage_norm" in
+    before_*|pre_*) _is_blocking=1 ;;
+  esac
+
+  # shellcheck disable=SC2031
+  _rhrs_args="$*"
+  # shellcheck disable=SC2031
+  if [ -z "$_rhrs_args" ] && [ -n "${RNEX_ARGS:-}" ]; then
+    _rhrs_args="$RNEX_ARGS"
+  fi
+  # shellcheck disable=SC2031
+  _rhrs_cmd="${RNEX_CMD:-${_stage_norm#*_}}"
+  # shellcheck disable=SC2031
+  _rhrs_config="${RNEX_CONFIG_MERGED:-$_rhrs_root/rnex.yaml}"
+  # shellcheck disable=SC2031
+  _rhrs_quiet="${RNEX_QUIET:-${_sync_quiet:-0}}"
+  # shellcheck disable=SC2031
+  _rhrs_skill_dirs="${RNEX_PROVIDER_SKILL_DIRS:-}"
+  [ -n "$_rhrs_skill_dirs" ] || _rhrs_skill_dirs="$(get_active_provider_skill_dirs 2>/dev/null || true)"
+
+  _old_ifs="$IFS"
+  IFS='
+'
+  for _rcmd in $_stage_cmds; do
+    IFS="$_old_ifs"
+    [ -n "$_rcmd" ] || continue
+    if [ "$_is_blocking" -eq 1 ]; then
+      (
+        RNEX_ROOT="$_rhrs_root"
+        RNEX_CONFIG_MERGED="$_rhrs_config"
+        RNEX_CMD="$_rhrs_cmd"
+        RNEX_ARGS="$_rhrs_args"
+        RNEX_HOOK_EVENT="$_stage_norm"
+        RNEX_HOOK_ARGS="$_rhrs_args"
+        RNEX_QUIET="$_rhrs_quiet"
+        RNEX_PROVIDER_SKILL_DIRS="$_rhrs_skill_dirs"
+        export RNEX_ROOT RNEX_CONFIG_MERGED RNEX_CMD RNEX_ARGS RNEX_HOOK_EVENT RNEX_HOOK_ARGS RNEX_QUIET RNEX_PROVIDER_SKILL_DIRS RNEX_LIB_DIR NEXUS_DIR WORKSPACE_YAML WORKSPACE_LOCAL_YAML
+        _exec_hook_cmd "$_rhrs_root" "$_rcmd"
+      ) || {
+        _cmd_rc=$?
+        export RNEX_HOOK_ACTIVE="$_prev_active"
+        return "$_cmd_rc"
+      }
+    else
+      (
+        RNEX_ROOT="$_rhrs_root"
+        RNEX_CONFIG_MERGED="$_rhrs_config"
+        RNEX_CMD="$_rhrs_cmd"
+        RNEX_ARGS="$_rhrs_args"
+        RNEX_HOOK_EVENT="$_stage_norm"
+        RNEX_HOOK_ARGS="$_rhrs_args"
+        RNEX_QUIET="$_rhrs_quiet"
+        RNEX_PROVIDER_SKILL_DIRS="$_rhrs_skill_dirs"
+        export RNEX_ROOT RNEX_CONFIG_MERGED RNEX_CMD RNEX_ARGS RNEX_HOOK_EVENT RNEX_HOOK_ARGS RNEX_QUIET RNEX_PROVIDER_SKILL_DIRS RNEX_LIB_DIR NEXUS_DIR WORKSPACE_YAML WORKSPACE_LOCAL_YAML
+        _exec_hook_cmd "$_rhrs_root" "$_rcmd"
+      ) || true
+    fi
+  done
+  IFS="$_old_ifs"
+  export RNEX_HOOK_ACTIVE="$_prev_active"
+  return 0
 }
 
 run_hook() {
@@ -520,16 +588,42 @@ hooks_verify_all() {
   return 0
 }
 
-# Backward compatibility wrapper for install_git_hooks
+# ==============================================================================
+# rnex_hooks_sync_git
+#
+# Summary:
+#   Synchronizes Git hook wrappers in .git/hooks based strictly on configured
+#   git.hooks in rnex.yaml or .local.rnex.yaml. If git.hooks is absent, empty,
+#   or has all hooks disabled, zero wrappers are installed and any stale
+#   Repo Nexus wrappers are cleaned up.
+#
+# Architectural Layer:
+#   Lifecycle & Git Hook Dispatcher
+#
+# Design Pattern:
+#   Facade / Reconciler
+#
+# Arguments:
+#   $1 - Optional workspace root directory (defaults to NEXUS_DIR or .).
+#
+# Returns:
+#   0 on success.
+#
+# Purity:
+#   @sideEffects Reconciles .git/hooks directory files.
+# ==============================================================================
+rnex_hooks_sync_git() {
+  _rhsg_ws="${1:-${NEXUS_DIR:-.}}"
+  hooks_sync_all "$_rhsg_ws"
+}
+
+# Backward compatibility wrapper for rnex_hooks_sync_git
 install_git_hooks() {
   _ws_dir="${1:-${NEXUS_DIR:-.}}"
   if ! git -C "$_ws_dir" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     return 0
   fi
-  for _imh in $RNEX_MANAGED_GIT_HOOKS; do
-    hooks_install_wrapper "$_imh" "$_ws_dir"
-  done
-  hooks_sync_all "$_ws_dir"
+  rnex_hooks_sync_git "$_ws_dir"
 }
 
 # Delegate to repository-owned hook in scripts/githooks/<hook> or .githooks/<hook>
@@ -573,9 +667,6 @@ run_git_hook() {
   _is_blocking=0
   case "$_hook_name" in
     pre-commit|pre-push) _is_blocking=1 ;;
-    post-merge|post-checkout)
-      build_ai_instructions "$NEXUS_DIR" 2>/dev/null || true
-      ;;
   esac
 
   _stdin_data=""
@@ -601,11 +692,14 @@ run_git_hook() {
     IFS="$_old_ifs"
   fi
 
-  # 2. Plugin git hooks
-  if [ -n "$_stdin_data" ]; then
-    printf '%s\n' "$_stdin_data" | run_plugin_git_hooks "$_hook_name" "$@"
-  else
-    run_plugin_git_hooks "$_hook_name" "$@"
+  # 2. Plugin git hooks (only if hook is configured in workspace git.hooks)
+  _configured_git_hooks="$(yaml_get_git_hooks 2>/dev/null || true)"
+  if [ -n "$_configured_git_hooks" ] && printf '%s\n' "$_configured_git_hooks" | grep -qx "$_hook_name"; then
+    if [ -n "$_stdin_data" ]; then
+      printf '%s\n' "$_stdin_data" | run_plugin_git_hooks "$_hook_name" "$@"
+    else
+      run_plugin_git_hooks "$_hook_name" "$@"
+    fi
   fi
 
   # 3. Delegate to repository-owned githook in scripts/githooks or .githooks

@@ -22,10 +22,10 @@ if ! provider_option_enabled "gemini" "skills" 2>/dev/null; then
   clean_provider_user_skills "$_root/.agents/skills"
 fi
 
-sync_provider_hooks "gemini" "$_root/.agents" "$_root/.agents/hooks.json"
-
 if [ -d "$_root/.gemini/skills" ]; then
   clean_provider_user_skills "$_root/.gemini/skills"
   rmdir "$_root/.gemini/skills" 2>/dev/null || true
   rmdir "$_root/.gemini" 2>/dev/null || true
 fi
+
+rnex_sdk_sync_provider_hooks "$_root" "gemini"

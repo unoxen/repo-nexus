@@ -125,6 +125,30 @@ rnex plugin karpathy-llm ingest --file docs/architecture.md
 rnex plugin karpathy-llm lint
 ```
 
+### Automated Synchronization Hooks (Strictly Opt-In)
+
+Repo Nexus enforces a strict **zero-hidden-hooks** architecture: `rnex sync` reconciles workspace state and projects user skills into configured AI assistants, but **never** runs automatic or implicit document ingestion without explicit user declaration.
+
+To execute wiki ingestion automatically at the end of each `rnex sync`, declare the lifecycle hook in `rnex.yaml` or `.local.rnex.yaml`:
+
+```yaml
+# ==============================================================================
+# RNEX Lifecycle Hooks (Strictly Opt-In — Zero Defaults)
+# ==============================================================================
+rnex-hooks:
+  after_sync:
+    - "rnex plugin karpathy-llm ingest"
+
+# ==============================================================================
+# Workspace Plugins
+# ==============================================================================
+plugins:
+  karpathy-llm:
+    sources:
+      - docs
+      - "repos/**/README.md"
+```
+
 ### Retrieval Protocol: How AI Agents Query the Wiki
 
 AI coding assistants navigate the wiki using a deterministic 3-step retrieval protocol:

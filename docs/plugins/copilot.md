@@ -13,6 +13,7 @@ GitHub Copilot operates natively within VS Code, Visual Studio, JetBrains, and G
 - **Universal Routing (`AGENTS.md`)**: GitHub Copilot natively reads `AGENTS.md` at the workspace root.
 - **Custom Instructions (`.github/copilot-instructions.md`)**: When enabled, Repo Nexus injects its non-destructive routing block inside `<!-- REPO-NEXUS:START -->` and `<!-- REPO-NEXUS:END -->`. Custom developer rules outside these markers are strictly preserved.
 - **User Skills (`.github/skills/`)**: When `skills: true`, Repo Nexus generates native `SKILL.md` directory bundles (`.github/skills/rnex-<name>/SKILL.md`) with YAML frontmatter, making them automatically discoverable in VS Code and Copilot Chat skill-pickers while redirecting to the underlying agentic skills under `.rnex/skills/` and active plugins.
+- **Lifecycle Hooks (`.github/hooks/rnex.json`)**: When `hooks:` is declared, Repo Nexus projects hooks into `.github/hooks/rnex.json` (e.g. mapping `SessionStart` to `sessionStart`). Hooks are strictly opt-in and cleaned up automatically when omitted.
 
 ## Configuration
 
@@ -21,8 +22,18 @@ Enable in `rnex.yaml`:
 ```yaml
 plugins:
   copilot:
+    enabled: true
     skills: true         # Generate user skills in .github/skills/
+    hooks:               # Strictly opt-in lifecycle hooks
+      SessionStart:
+        - "rnex sync --quiet"
 ```
+
+| Option | Type | Default | Description |
+|:---|:---|:---|:---|
+| `skills` | boolean | `true` | Generate user skills in `.github/skills/`. |
+| `hooks` | map | *(none)* | Strictly opt-in lifecycle hooks projected into `.github/hooks/rnex.json` (e.g. `SessionStart: ["rnex sync --quiet"]`). Cleanly removed when unconfigured. |
+| `enabled` | boolean | `true` | Enable or disable the plugin. Overridable in `.local.rnex.yaml`. |
 
 To disable locally without altering team configuration, add to `.local.rnex.yaml`:
 

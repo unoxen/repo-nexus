@@ -60,11 +60,69 @@ echo "$_pinfo_out" | grep -q "codex" || { fail "Codex missing from plugin info: 
 echo "$_pinfo_out" | grep -q "\.codex/skills/" || { fail "skill_dir .codex/skills missing from plugin info: $_pinfo_out"; exit 1; }
 echo "$_pinfo_out" | grep -q "skills" || { fail "skills option missing from plugin info: $_pinfo_out"; exit 1; }
 echo "$_pinfo_out" | grep -q "hooks" || { fail "hooks option missing from plugin info: $_pinfo_out"; exit 1; }
-[ -x "$TEST_CODEX_WS/.codex/hooks/rnex-hook-session-start.sh" ] || { fail ".codex/hooks/rnex-hook-session-start.sh missing"; exit 1; }
-[ -f "$TEST_CODEX_WS/.codex/hooks/rnex-hooks.json" ] || { fail ".codex/hooks/rnex-hooks.json missing"; exit 1; }
-grep -q "\.rnex/plugins/codex/hooks/rnex-hook-session-start\.sh" "$TEST_CODEX_WS/.codex/hooks/rnex-hook-session-start.sh" || {
-  fail ".codex/hooks/rnex-hook-session-start.sh does not reference .rnex working script"; exit 1;
-}
+pass
+
+# --------------------------------------------------------------------------
+run_test "Codex plugin: zero default hooks on init, strict opt-in projection, and hooks.json cleanup"
+# 1. Zero default hooks invariant: no hook file created after init
+[ ! -f "$TEST_CODEX_WS/.codex/hooks.json" ] || { fail ".codex/hooks.json should not exist by default (zero default hooks)"; exit 1; }
+[ ! -d "$TEST_CODEX_WS/.codex/hooks" ] || { fail ".codex/hooks directory should not exist by default"; exit 1; }
+
+# 2. Explicitly configure hooks in rnex.yaml
+cat <<'EOF_CFG' > "$TEST_CODEX_WS/rnex.yaml"
+version: 1.0.0
+plugins:
+  codex:
+    skills: true
+    hooks:
+      SessionStart:
+        - "rnex sync --quiet"
+repos:
+EOF_CFG
+(cd "$TEST_CODEX_WS" && ./rnex sync -y >/dev/null)
+
+[ -f "$TEST_CODEX_WS/.codex/hooks.json" ] || { fail ".codex/hooks.json missing after configuring hooks"; exit 1; }
+grep -q '"SessionStart"' "$TEST_CODEX_WS/.codex/hooks.json" || { fail "SessionStart hook missing in hooks.json"; exit 1; }
+grep -q '"type": "command"' "$TEST_CODEX_WS/.codex/hooks.json" || { fail "type: command missing in hooks.json"; exit 1; }
+grep -q '"command": "rnex sync --quiet"' "$TEST_CODEX_WS/.codex/hooks.json" || { fail "SessionStart command missing in hooks.json"; exit 1; }
+
+# 3. Disable hooks (hooks: false) in rnex.yaml
+cat <<'EOF_CFG2' > "$TEST_CODEX_WS/rnex.yaml"
+version: 1.0.0
+plugins:
+  codex:
+    skills: true
+    hooks: false
+repos:
+EOF_CFG2
+(cd "$TEST_CODEX_WS" && ./rnex sync -y >/dev/null)
+
+[ ! -f "$TEST_CODEX_WS/.codex/hooks.json" ] || { fail ".codex/hooks.json should be removed when hooks: false"; exit 1; }
+
+# 4. Re-enable with hooks map
+cat <<'EOF_CFG3' > "$TEST_CODEX_WS/rnex.yaml"
+version: 1.0.0
+plugins:
+  codex:
+    skills: true
+    hooks:
+      SessionStart:
+        - "rnex sync --quiet"
+repos:
+EOF_CFG3
+(cd "$TEST_CODEX_WS" && ./rnex sync -y >/dev/null)
+[ -f "$TEST_CODEX_WS/.codex/hooks.json" ] || { fail ".codex/hooks.json not restored"; exit 1; }
+
+# 5. Clean removal when hooks omitted from rnex.yaml
+cat <<'EOF_CFG4' > "$TEST_CODEX_WS/rnex.yaml"
+version: 1.0.0
+plugins:
+  codex:
+    skills: true
+repos:
+EOF_CFG4
+(cd "$TEST_CODEX_WS" && ./rnex sync -y >/dev/null)
+[ ! -f "$TEST_CODEX_WS/.codex/hooks.json" ] || { fail ".codex/hooks.json should be removed when hooks omitted"; exit 1; }
 pass
 
 # --------------------------------------------------------------------------

@@ -64,33 +64,20 @@ echo "$_pinfo_out" | grep -q "skills" || { fail "skills option missing from plug
 pass
 
 # --------------------------------------------------------------------------
-run_test "Claude plugin: hooks configuration in .claude/hooks/rnex-hook-*.sh, .rnex/plugins/claude/hooks/, and .claude/settings.json"
-[ -f "$TEST_CLAUDE_WS/.claude/settings.json" ] || { fail ".claude/settings.json missing"; exit 1; }
-[ -x "$TEST_CLAUDE_WS/.claude/hooks/rnex-hook-session-start.sh" ] || { fail ".claude/hooks/rnex-hook-session-start.sh missing or not executable"; exit 1; }
-[ -x "$TEST_CLAUDE_WS/.rnex/plugins/claude/hooks/rnex-hook-session-start.sh" ] || { fail ".rnex/plugins/claude/hooks/rnex-hook-session-start.sh missing or not executable"; exit 1; }
-grep -q "\.rnex/plugins/claude/hooks/rnex-hook-session-start\.sh" "$TEST_CLAUDE_WS/.claude/hooks/rnex-hook-session-start.sh" || {
-  fail ".claude/hooks/rnex-hook-session-start.sh does not reference .rnex working script"; exit 1;
-}
-grep -q '"SessionStart"' "$TEST_CLAUDE_WS/.claude/settings.json" || { fail "SessionStart hook missing in settings.json"; exit 1; }
-grep -q '"command"[ ]*:[ ]*"\.claude/hooks/rnex-hook-session-start\.sh"' "$TEST_CLAUDE_WS/.claude/settings.json" || {
-  fail "rnex-hook-session-start.sh command missing in settings.json"; exit 1;
+run_test "Claude plugin: zero default hooks on init, strict opt-in projection, and settings cleanup"
+# 1. Zero default hooks invariant: no hook file or settings.json created after init
+[ ! -f "$TEST_CLAUDE_WS/.claude/settings.json" ] || { fail ".claude/settings.json should not exist by default (zero default hooks)"; exit 1; }
+[ ! -d "$TEST_CLAUDE_WS/.claude/hooks" ] || { fail ".claude/hooks directory should not exist by default"; exit 1; }
+! ls "$TEST_CLAUDE_WS/.rnex/plugins/claude/hooks"/rnex-hook-*.sh >/dev/null 2>&1 || {
+  fail "No rnex-hook-*.sh scripts should exist in .rnex/plugins/claude/hooks by default"; exit 1;
 }
 
-# Disable hooks: false in rnex.yaml
+# 2. Add non-hook setting to .claude/settings.json to verify merge preservation
+mkdir -p "$TEST_CLAUDE_WS/.claude"
+printf '{\n  "theme": "dark"\n}\n' > "$TEST_CLAUDE_WS/.claude/settings.json"
+
+# 3. Explicitly configure hooks in rnex.yaml
 cat <<'EOF_CFG' > "$TEST_CLAUDE_WS/rnex.yaml"
-version: 1.0.0
-plugins:
-  claude:
-    skills: true
-    hooks: false
-repos:
-EOF_CFG
-(cd "$TEST_CLAUDE_WS" && ./rnex sync -y >/dev/null)
-[ ! -f "$TEST_CLAUDE_WS/.claude/settings.json" ] || { fail ".claude/settings.json should be removed when empty"; exit 1; }
-[ ! -f "$TEST_CLAUDE_WS/.claude/hooks/rnex-hook-session-start.sh" ] || { fail ".claude/hooks/rnex-hook-session-start.sh should be removed when hooks: false"; exit 1; }
-
-# Re-enable with custom hooks map (SessionStart + Stop)
-cat <<'EOF_CFG2' > "$TEST_CLAUDE_WS/rnex.yaml"
 version: 1.0.0
 plugins:
   claude:
@@ -101,14 +88,56 @@ plugins:
       Stop:
         - "echo 'CLAUDE_STOP_HOOK' > stop_marker"
 repos:
+EOF_CFG
+(cd "$TEST_CLAUDE_WS" && ./rnex sync -y >/dev/null)
+
+[ -f "$TEST_CLAUDE_WS/.claude/settings.json" ] || { fail ".claude/settings.json missing after configuring hooks"; exit 1; }
+grep -q '"theme": "dark"' "$TEST_CLAUDE_WS/.claude/settings.json" || { fail "Custom theme setting lost after syncing hooks"; exit 1; }
+grep -q '"SessionStart"' "$TEST_CLAUDE_WS/.claude/settings.json" || { fail "SessionStart hook missing in settings.json"; exit 1; }
+grep -q '"type": "command"' "$TEST_CLAUDE_WS/.claude/settings.json" || { fail "type: command missing in settings.json"; exit 1; }
+grep -q '"command": "rnex sync --quiet"' "$TEST_CLAUDE_WS/.claude/settings.json" || { fail "SessionStart command missing in settings.json"; exit 1; }
+grep -q '"Stop"' "$TEST_CLAUDE_WS/.claude/settings.json" || { fail "Stop hook missing in settings.json"; exit 1; }
+
+# 4. Disable hooks (hooks: false) in rnex.yaml
+cat <<'EOF_CFG2' > "$TEST_CLAUDE_WS/rnex.yaml"
+version: 1.0.0
+plugins:
+  claude:
+    skills: true
+    hooks: false
+repos:
 EOF_CFG2
 (cd "$TEST_CLAUDE_WS" && ./rnex sync -y >/dev/null)
-[ -f "$TEST_CLAUDE_WS/.claude/settings.json" ] || { fail ".claude/settings.json not restored with hooks map"; exit 1; }
-[ -x "$TEST_CLAUDE_WS/.claude/hooks/rnex-hook-stop.sh" ] || { fail "rnex-hook-stop.sh not generated for Stop event"; exit 1; }
-grep -q '"Stop"' "$TEST_CLAUDE_WS/.claude/settings.json" || { fail "Stop hook missing in settings.json"; exit 1; }
-(cd "$TEST_CLAUDE_WS" && ./.claude/hooks/rnex-hook-stop.sh)
-[ -f "$TEST_CLAUDE_WS/stop_marker" ] || { fail "Executing .claude/hooks/rnex-hook-stop.sh did not run working script"; exit 1; }
-rm -f "$TEST_CLAUDE_WS/stop_marker"
+
+[ -f "$TEST_CLAUDE_WS/.claude/settings.json" ] || { fail ".claude/settings.json missing (theme should be preserved)"; exit 1; }
+grep -q '"theme": "dark"' "$TEST_CLAUDE_WS/.claude/settings.json" || { fail "theme: dark lost after disabling hooks"; exit 1; }
+! grep -q '"hooks"' "$TEST_CLAUDE_WS/.claude/settings.json" || { fail "hooks block still present after hooks: false"; exit 1; }
+
+# 5. Clean removal when settings.json has only hooks
+rm -f "$TEST_CLAUDE_WS/.claude/settings.json"
+cat <<'EOF_CFG3' > "$TEST_CLAUDE_WS/rnex.yaml"
+version: 1.0.0
+plugins:
+  claude:
+    skills: true
+    hooks:
+      SessionStart:
+        - "rnex sync --quiet"
+repos:
+EOF_CFG3
+(cd "$TEST_CLAUDE_WS" && ./rnex sync -y >/dev/null)
+[ -f "$TEST_CLAUDE_WS/.claude/settings.json" ] || { fail ".claude/settings.json not created"; exit 1; }
+
+# Now remove hooks declaration completely
+cat <<'EOF_CFG4' > "$TEST_CLAUDE_WS/rnex.yaml"
+version: 1.0.0
+plugins:
+  claude:
+    skills: true
+repos:
+EOF_CFG4
+(cd "$TEST_CLAUDE_WS" && ./rnex sync -y >/dev/null)
+[ ! -f "$TEST_CLAUDE_WS/.claude/settings.json" ] || { fail ".claude/settings.json should be removed when no other settings remain"; exit 1; }
 pass
 
 # --------------------------------------------------------------------------

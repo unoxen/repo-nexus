@@ -54,14 +54,14 @@ git:
     pre-push:
       - "rnex plugin karpathy-llm lint --strict"
 
-# Lifecycle Hooks (Map of RNEX events to command lists)
-rnex_hooks:
+# Lifecycle Hooks (Map of RNEX events to command lists; strictly opt-in)
+rnex-hooks:
   before_init: []
   after_init:
     - "echo 'Workspace initialized'"
   before_sync: []
   after_sync:
-    - "rnex plugin karpathy-llm ingest --quiet"
+    - "rnex plugin karpathy-llm ingest"
   before_clone: []
   after_clone:
     - "rnex exec npm install"
@@ -103,25 +103,43 @@ repos:
 
 # Scoped Plugins & AI Providers
 plugins:
-  # Built-in AI provider plugins
+  # Built-in AI provider plugins (hooks are strictly opt-in)
   claude:
     enabled: true
     skills: true
+    hooks:
+      SessionStart:
+        - "rnex sync --quiet"
   cursor:
     enabled: true
     skills: true
+    hooks:
+      SessionStart:
+        - "rnex sync --quiet"
   codex:
     enabled: true
     skills: true
+    hooks:
+      SessionStart:
+        - "rnex sync --quiet"
   gemini:
     enabled: false
     skills: true
+    hooks:
+      SessionStart:
+        - "rnex sync --quiet"
   windsurf:
     enabled: false
     skills: true
+    hooks:
+      SessionStart:
+        - "rnex sync --quiet"
   copilot:
     enabled: false
     skills: true
+    hooks:
+      SessionStart:
+        - "rnex sync --quiet"
 
   # External / Custom Plugin (loaded via explicit directory or manifest path)
   acme-workflow:
@@ -157,9 +175,9 @@ plugins:
 * `git.ignore`: List of directories or file patterns appended to `.gitignore`. Files and directories starting with `.rnex` or `rnex` (`**/.rnex*`, `**/rnex*`) are recursively ignored by default, while `rnex.yaml` (`!rnex.yaml`, `!**/rnex.yaml`) is excluded and tracked.
 * `git.hooks`: Map of Git hook names (`post-merge`, `post-checkout`, `pre-commit`, `pre-push`) to lists of shell commands executed when the hook fires.
 
-### Lifecycle Hooks (`rnex_hooks`)
+### Lifecycle Hooks (`rnex-hooks`)
 
-Map of workspace lifecycle event names (`before_sync`, `after_sync`, `after_clone`, etc.) to lists of shell commands executed by the RNEX dispatcher.
+Map of workspace lifecycle event names (`before_sync`, `after_sync`, `after_clone`, etc.) to lists of shell commands executed by the RNEX dispatcher (strictly opt-in, zero defaults; `rnex_hooks` is accepted as a backwards-compatible alias).
 
 ### Member Repositories (`repos`)
 
@@ -178,6 +196,7 @@ Plugins provide specialized AI assistant integration, agentic skills, and domain
 | `plugins.<name>.enabled` | boolean | `false` | Enables or disables the plugin for the workspace (`rnex sync` installs enabled plugins into `.rnex/plugins/<name>/`). |
 | **`plugins.<name>.path`** | string | *(built-in)* | **External plugin location.** Relative (to workspace root) or absolute path to an external plugin directory (or its `plugin.yaml` manifest). Overrides built-in `plugins/<name>`. |
 | `plugins.<name>.skills` | boolean | `true` | Controls whether AI provider plugins generate user skill/rule pointers (`rnex-*`) for active skills. |
+| `plugins.<name>.hooks` | map | *(none)* | Strictly opt-in lifecycle hooks projected into provider manifests (`.claude/settings.json`, `.codex/hooks.json`, `.cursor/hooks.json`, `.gemini/settings.json`, `.github/hooks/rnex.json`, `.windsurf/hooks.json`). Canonical events like `SessionStart` are normalized automatically per provider schema. Cleanly removed when unconfigured. |
 | `plugins.<name>.<option>` | any | `config_defaults` | Plugin-specific configuration options defined in the plugin's `plugin.yaml` (e.g., `wiki_dir` and `sources` for `karpathy-llm`). |
 
 #### External Plugin Resolution (`plugins.<name>.path`)

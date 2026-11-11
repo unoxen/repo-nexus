@@ -57,6 +57,69 @@ _pinfo_out="$(cd "$TEST_WINDSURF_WS" && ./rnex plugin info windsurf 2>&1)"
 echo "$_pinfo_out" | grep -q "windsurf" || { fail "Windsurf missing from plugin info: $_pinfo_out"; exit 1; }
 echo "$_pinfo_out" | grep -q "\.windsurf/rules/" || { fail "skill_dir .windsurf/rules missing from plugin info: $_pinfo_out"; exit 1; }
 echo "$_pinfo_out" | grep -q "skills" || { fail "skills option missing from plugin info: $_pinfo_out"; exit 1; }
+echo "$_pinfo_out" | grep -q "hooks" || { fail "hooks option missing from plugin info: $_pinfo_out"; exit 1; }
+pass
+
+# --------------------------------------------------------------------------
+run_test "Windsurf plugin: zero default hooks on init, strict opt-in projection, and hooks.json cleanup"
+# 1. Zero default hooks invariant: no hook file created after init
+[ ! -f "$TEST_WINDSURF_WS/.windsurf/hooks.json" ] || { fail ".windsurf/hooks.json should not exist by default (zero default hooks)"; exit 1; }
+[ ! -d "$TEST_WINDSURF_WS/.windsurf/hooks" ] || { fail ".windsurf/hooks directory should not exist by default"; exit 1; }
+
+# 2. Explicitly configure hooks in rnex.yaml
+cat <<'EOF_CFG' > "$TEST_WINDSURF_WS/rnex.yaml"
+version: 1.0.0
+plugins:
+  windsurf:
+    skills: true
+    hooks:
+      SessionStart:
+        - "rnex sync --quiet"
+repos:
+EOF_CFG
+(cd "$TEST_WINDSURF_WS" && ./rnex sync -y >/dev/null)
+
+[ -f "$TEST_WINDSURF_WS/.windsurf/hooks.json" ] || { fail ".windsurf/hooks.json missing after configuring hooks"; exit 1; }
+grep -q '"pre_user_prompt"' "$TEST_WINDSURF_WS/.windsurf/hooks.json" || { fail "pre_user_prompt hook missing in hooks.json"; exit 1; }
+grep -q '"command": "rnex sync --quiet"' "$TEST_WINDSURF_WS/.windsurf/hooks.json" || { fail "command field missing in hooks.json"; exit 1; }
+
+# 3. Disable hooks (hooks: false) in rnex.yaml
+cat <<'EOF_CFG2' > "$TEST_WINDSURF_WS/rnex.yaml"
+version: 1.0.0
+plugins:
+  windsurf:
+    skills: true
+    hooks: false
+repos:
+EOF_CFG2
+(cd "$TEST_WINDSURF_WS" && ./rnex sync -y >/dev/null)
+
+[ ! -f "$TEST_WINDSURF_WS/.windsurf/hooks.json" ] || { fail ".windsurf/hooks.json should be removed when hooks: false"; exit 1; }
+
+# 4. Re-enable with hooks map
+cat <<'EOF_CFG3' > "$TEST_WINDSURF_WS/rnex.yaml"
+version: 1.0.0
+plugins:
+  windsurf:
+    skills: true
+    hooks:
+      SessionStart:
+        - "rnex sync --quiet"
+repos:
+EOF_CFG3
+(cd "$TEST_WINDSURF_WS" && ./rnex sync -y >/dev/null)
+[ -f "$TEST_WINDSURF_WS/.windsurf/hooks.json" ] || { fail ".windsurf/hooks.json not restored"; exit 1; }
+
+# 5. Clean removal when hooks omitted from rnex.yaml
+cat <<'EOF_CFG4' > "$TEST_WINDSURF_WS/rnex.yaml"
+version: 1.0.0
+plugins:
+  windsurf:
+    skills: true
+repos:
+EOF_CFG4
+(cd "$TEST_WINDSURF_WS" && ./rnex sync -y >/dev/null)
+[ ! -f "$TEST_WINDSURF_WS/.windsurf/hooks.json" ] || { fail ".windsurf/hooks.json should be removed when hooks omitted"; exit 1; }
 pass
 
 # --------------------------------------------------------------------------

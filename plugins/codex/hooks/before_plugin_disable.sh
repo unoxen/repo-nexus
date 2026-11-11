@@ -13,7 +13,7 @@ if ! command -v clean_provider_user_skills >/dev/null 2>&1; then
 fi
 
 clean_provider_user_skills "$_root/.codex/skills"
-clean_provider_hooks "codex" "$_root/.codex"
+rnex_sdk_clean_provider_hooks "$_root" "codex"
 clean_provider_agents "$_root/.codex/agents" ".agent.md"
 clean_rnex_instructions "$_root/CODEX.md"
 rmdir "$_root/.codex" 2>/dev/null || true

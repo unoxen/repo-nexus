@@ -69,40 +69,18 @@ echo "$_pinfo_out" | grep -q "skills" || { fail "skills option missing from plug
 pass
 
 # --------------------------------------------------------------------------
-run_test "Gemini plugin: hooks configuration in .agents/hooks/rnex-hook-*.sh, .agents/hooks.json, and rnex-env.sh check"
-[ -f "$TEST_GEMINI_WS/.agents/hooks.json" ] || { fail ".agents/hooks.json missing"; exit 1; }
-[ -x "$TEST_GEMINI_WS/.agents/hooks/rnex-hook-session-start.sh" ] || { fail ".agents/hooks/rnex-hook-session-start.sh missing or not executable"; exit 1; }
-[ -x "$TEST_GEMINI_WS/.rnex/plugins/gemini/hooks/rnex-hook-session-start.sh" ] || { fail ".rnex/plugins/gemini/hooks/rnex-hook-session-start.sh missing or not executable"; exit 1; }
-grep -q "\.rnex/plugins/gemini/hooks/rnex-hook-session-start\.sh" "$TEST_GEMINI_WS/.agents/hooks/rnex-hook-session-start.sh" || {
-  fail ".agents/hooks/rnex-hook-session-start.sh does not reference .rnex working script"; exit 1;
-}
-grep -q '"rnex-hook-session-start"' "$TEST_GEMINI_WS/.agents/hooks.json" || { fail "rnex-hook-session-start missing in hooks.json"; exit 1; }
-grep -q '"SessionStart"' "$TEST_GEMINI_WS/.agents/hooks.json" || { fail "SessionStart hook missing in hooks.json"; exit 1; }
-grep -q '"command"[ ]*:[ ]*"\.agents/hooks/rnex-hook-session-start\.sh"' "$TEST_GEMINI_WS/.agents/hooks.json" || {
-  fail "rnex-hook-session-start.sh command missing in hooks.json"; exit 1;
-}
+run_test "Gemini plugin: zero default hooks on init, strict opt-in projection, and settings cleanup"
+# 1. Zero default hooks invariant: no hook file created after init
+[ ! -f "$TEST_GEMINI_WS/.gemini/settings.json" ] || { fail ".gemini/settings.json should not exist by default (zero default hooks)"; exit 1; }
+[ ! -f "$TEST_GEMINI_WS/.agents/hooks.json" ] || { fail ".agents/hooks.json should not exist by default"; exit 1; }
+[ ! -d "$TEST_GEMINI_WS/.agents/hooks" ] || { fail ".agents/hooks directory should not exist by default"; exit 1; }
 
-# Verify generated .rnex/bin/rnex-env.sh does not contain legacy .gemini check
-# shellcheck disable=SC2016
-! grep -q '\[ -d "\$RNEX_ROOT/\.gemini" \]' "$TEST_GEMINI_WS/.rnex/bin/rnex-env.sh" || {
-  fail ".rnex/bin/rnex-env.sh still contains .gemini check"; exit 1;
-}
+# 2. Add non-hook setting to .gemini/settings.json to verify merge preservation
+mkdir -p "$TEST_GEMINI_WS/.gemini"
+printf '{\n  "model": "gemini-2.0"\n}\n' > "$TEST_GEMINI_WS/.gemini/settings.json"
 
-# Disable hooks: false in rnex.yaml
+# 3. Explicitly configure hooks in rnex.yaml
 cat <<'EOF_CFG' > "$TEST_GEMINI_WS/rnex.yaml"
-version: 1.0.0
-plugins:
-  gemini:
-    skills: true
-    hooks: false
-repos:
-EOF_CFG
-(cd "$TEST_GEMINI_WS" && ./rnex sync -y >/dev/null)
-[ ! -f "$TEST_GEMINI_WS/.agents/hooks.json" ] || { fail ".agents/hooks.json should be removed when empty"; exit 1; }
-[ ! -f "$TEST_GEMINI_WS/.agents/hooks/rnex-hook-session-start.sh" ] || { fail ".agents/hooks/rnex-hook-session-start.sh should be removed when hooks: false"; exit 1; }
-
-# Re-enable with hooks map
-cat <<'EOF_CFG2' > "$TEST_GEMINI_WS/rnex.yaml"
 version: 1.0.0
 plugins:
   gemini:
@@ -111,9 +89,55 @@ plugins:
       SessionStart:
         - "rnex sync --quiet"
 repos:
+EOF_CFG
+(cd "$TEST_GEMINI_WS" && ./rnex sync -y >/dev/null)
+
+[ -f "$TEST_GEMINI_WS/.gemini/settings.json" ] || { fail ".gemini/settings.json missing after configuring hooks"; exit 1; }
+grep -q '"model": "gemini-2.0"' "$TEST_GEMINI_WS/.gemini/settings.json" || { fail "Custom model setting lost after syncing hooks"; exit 1; }
+grep -q '"SessionStart"' "$TEST_GEMINI_WS/.gemini/settings.json" || { fail "SessionStart hook missing in settings.json"; exit 1; }
+grep -q '"type": "command"' "$TEST_GEMINI_WS/.gemini/settings.json" || { fail "type: command missing in settings.json"; exit 1; }
+grep -q '"command": "rnex sync --quiet"' "$TEST_GEMINI_WS/.gemini/settings.json" || { fail "SessionStart command missing in settings.json"; exit 1; }
+
+# 4. Disable hooks (hooks: false) in rnex.yaml
+cat <<'EOF_CFG2' > "$TEST_GEMINI_WS/rnex.yaml"
+version: 1.0.0
+plugins:
+  gemini:
+    skills: true
+    hooks: false
+repos:
 EOF_CFG2
 (cd "$TEST_GEMINI_WS" && ./rnex sync -y >/dev/null)
-[ -f "$TEST_GEMINI_WS/.agents/hooks.json" ] || { fail ".agents/hooks.json not restored with hooks"; exit 1; }
+
+[ -f "$TEST_GEMINI_WS/.gemini/settings.json" ] || { fail ".gemini/settings.json missing (model should be preserved)"; exit 1; }
+grep -q '"model": "gemini-2.0"' "$TEST_GEMINI_WS/.gemini/settings.json" || { fail "model setting lost after disabling hooks"; exit 1; }
+! grep -q '"hooks"' "$TEST_GEMINI_WS/.gemini/settings.json" || { fail "hooks block still present after hooks: false"; exit 1; }
+
+# 5. Clean removal when settings.json has only hooks
+rm -f "$TEST_GEMINI_WS/.gemini/settings.json"
+cat <<'EOF_CFG3' > "$TEST_GEMINI_WS/rnex.yaml"
+version: 1.0.0
+plugins:
+  gemini:
+    skills: true
+    hooks:
+      SessionStart:
+        - "rnex sync --quiet"
+repos:
+EOF_CFG3
+(cd "$TEST_GEMINI_WS" && ./rnex sync -y >/dev/null)
+[ -f "$TEST_GEMINI_WS/.gemini/settings.json" ] || { fail ".gemini/settings.json not created"; exit 1; }
+
+# Now remove hooks declaration completely
+cat <<'EOF_CFG4' > "$TEST_GEMINI_WS/rnex.yaml"
+version: 1.0.0
+plugins:
+  gemini:
+    skills: true
+repos:
+EOF_CFG4
+(cd "$TEST_GEMINI_WS" && ./rnex sync -y >/dev/null)
+[ ! -f "$TEST_GEMINI_WS/.gemini/settings.json" ] || { fail ".gemini/settings.json should be removed when no other settings remain"; exit 1; }
 pass
 
 # --------------------------------------------------------------------------

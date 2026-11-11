@@ -1,5 +1,5 @@
 name: cursor
-version: 0.9.20
+version: 0.9.21
 description: Cursor IDE integration (maintains .cursorrules and generates user skills in .cursor/rules/)
 author: unoxen
 homepage: https://github.com/unoxen/repo-nexus
@@ -7,13 +7,10 @@ skill_dir: .cursor/rules
 
 config_defaults:
   skills: true
-  hooks:
-    SessionStart:
-      - "rnex sync --quiet"
 
 config_descriptions:
   skills: "true|false        (generate user skills in {skill_dir})"
-  hooks: "event map|false   (configure AI provider lifecycle hooks, e.g. SessionStart)"
+  hooks: "event map         (configure AI provider lifecycle hooks, e.g. SessionStart)"
 
 instructions:
   - instructions/rnex-cursor-integration.md: .rnex/plugins/cursor/instructions/rnex-cursor-integration.md

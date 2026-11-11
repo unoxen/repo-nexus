@@ -995,20 +995,87 @@ _yaml_rnex_hook_commands_from_file() {
   ' "$_yrhc_f"
 }
 
-# Read command list for a specific hook under rnex_hooks.<event_name>
-# supporting both underscore and hyphenated event keys (e.g. after_sync and after-sync),
-# with .local.rnex.yaml override priority.
+# ==============================================================================
+# rnex_yaml_get_rnex_hooks
+#
+# Summary:
+#   Reads lifecycle hook commands for a specified stage from rnex-hooks.<stage>
+#   (with backward-compatible fallback to legacy rnex_hooks.<stage>) with strict
+#   .local.rnex.yaml override priority over rnex.yaml.
+#   Adheres to strict opt-in execution: if the stage is not explicitly configured
+#   or is set to an empty list / false, zero commands are returned.
+#
+# Architectural Layer:
+#   Configuration Parser Layer (YAML Reader)
+#
+# Design Pattern:
+#   Strategy / Information Expert (reads parsed YAML models deterministically)
+#
+# Arguments:
+#   $1 - Optional workspace root directory (defaults to NEXUS_DIR or .).
+#   $2 - Lifecycle stage name (e.g. "pre_sync", "post_sync", "after_sync", "before_sync").
+#
+# Returns:
+#   Outputs newline-delimited hook command strings to stdout.
+#   Returns 0 on success.
+#
+# Purity:
+#   @pure (stateless file inspection, zero side effects)
+# ==============================================================================
+rnex_yaml_get_rnex_hooks() {
+  _rygh_ws="${1:-${NEXUS_DIR:-${RNEX_ROOT:-.}}}"
+  _rygh_stage="${2:-}"
+  [ -n "$_rygh_stage" ] || return 0
+
+  _rygh_stage_norm="$(printf '%s' "$_rygh_stage" | tr '-' '_')"
+
+  # Stage aliases: pre_sync <-> before_sync; post_sync <-> after_sync
+  _rygh_alias=""
+  case "$_rygh_stage_norm" in
+    pre_sync)    _rygh_alias="before_sync" ;;
+    before_sync) _rygh_alias="pre_sync" ;;
+    post_sync)   _rygh_alias="after_sync" ;;
+    after_sync)  _rygh_alias="post_sync" ;;
+  esac
+
+  if [ -n "${1:-}" ]; then
+    _rygh_wly="$_rygh_ws/${RNEX_LOCAL_CONFIG_FILE:-.local.rnex.yaml}"
+    _rygh_wy="$_rygh_ws/${RNEX_CONFIG_FILE:-rnex.yaml}"
+  else
+    _rygh_wly="${WORKSPACE_LOCAL_YAML:-$_rygh_ws/${RNEX_LOCAL_CONFIG_FILE:-.local.rnex.yaml}}"
+    _rygh_wy="${WORKSPACE_YAML:-$_rygh_ws/${RNEX_CONFIG_FILE:-rnex.yaml}}"
+  fi
+
+  # 1. Check .local.rnex.yaml (highest priority)
+  if [ -f "$_rygh_wly" ]; then
+    _local_stages="$(_yaml_rnex_hooks_list_from_file "$_rygh_wly")"
+    if printf '%s\n' "$_local_stages" | grep -qx "$_rygh_stage_norm"; then
+      _yaml_rnex_hook_commands_from_file "$_rygh_wly" "$_rygh_stage_norm"
+      return 0
+    elif [ -n "$_rygh_alias" ] && printf '%s\n' "$_local_stages" | grep -qx "$_rygh_alias"; then
+      _yaml_rnex_hook_commands_from_file "$_rygh_wly" "$_rygh_alias"
+      return 0
+    fi
+  fi
+
+  # 2. Fall back to rnex.yaml
+  if [ -f "$_rygh_wy" ]; then
+    _base_stages="$(_yaml_rnex_hooks_list_from_file "$_rygh_wy")"
+    if printf '%s\n' "$_base_stages" | grep -qx "$_rygh_stage_norm"; then
+      _yaml_rnex_hook_commands_from_file "$_rygh_wy" "$_rygh_stage_norm"
+      return 0
+    elif [ -n "$_rygh_alias" ] && printf '%s\n' "$_base_stages" | grep -qx "$_rygh_alias"; then
+      _yaml_rnex_hook_commands_from_file "$_rygh_wy" "$_rygh_alias"
+      return 0
+    fi
+  fi
+
+  return 0
+}
+
+# Backward compatibility wrapper for rnex_yaml_get_rnex_hooks
 yaml_get_rnex_hook_commands() {
-  _event_name="$1"
-  _event_norm="$(printf '%s' "$_event_name" | tr '-' '_')"
-  _yaml_resolve_files
-  if [ -f "$_wly" ] && _yaml_rnex_hooks_list_from_file "$_wly" | grep -qx "$_event_norm"; then
-    _yaml_rnex_hook_commands_from_file "$_wly" "$_event_norm"
-    return 0
-  fi
-  if [ -f "$_wy" ]; then
-    _yaml_rnex_hook_commands_from_file "$_wy" "$_event_norm"
-  fi
+  rnex_yaml_get_rnex_hooks "${NEXUS_DIR:-${RNEX_ROOT:-.}}" "$1"
 }
 
 # ---- Plugin Configuration Operations ---------------------------------------
@@ -1683,7 +1750,7 @@ _yaml_plugin_hook_commands_from_file() {
       sub(/:.*/, "", k)
       gsub(/^["\047]|["\047]$/, "", k)
       gsub(/[[:space:]]/, "", k)
-      if (k == target_event && trimmed ~ /:[ \t]*/) {
+      if ((k == target_event || tolower(k) == tolower(target_event)) && trimmed ~ /:[ \t]*/) {
         event_indent = indent
         val = trimmed
         sub(/^[^:]*:[ \t]*/, "", val)
@@ -1764,7 +1831,7 @@ _yaml_plugin_manifest_hook_commands() {
       sub(/:.*/, "", k)
       gsub(/^["\047]|["\047]$/, "", k)
       gsub(/[[:space:]]/, "", k)
-      if (k == target_event && trimmed ~ /:[ \t]*/) {
+      if ((k == target_event || tolower(k) == tolower(target_event)) && trimmed ~ /:[ \t]*/) {
         event_indent = indent
         val = trimmed
         sub(/^[^:]*:[ \t]*/, "", val)
@@ -1817,67 +1884,144 @@ _yaml_resolve_plugin_manifest_path() {
   return 1
 }
 
-# List configured hook events for a plugin (with .local.rnex.yaml > rnex.yaml > plugin.yaml precedence).
-yaml_list_plugin_hooks() {
-  _ylph_p="$1"
-  _yaml_resolve_files
-  _ylph_local="${NEXUS_LOCAL_CONFIG:-$_wly}"
-  _ylph_main="${NEXUS_CONFIG:-$_wy}"
+# ==============================================================================
+# rnex_yaml_get_plugin_hook_events
+#
+# Summary:
+#   Extracts list of hook event names declared strictly under
+#   plugins.<plugin_name>.hooks from rnex.yaml or .local.rnex.yaml.
+#   Adheres to strict opt-in execution: NEVER merges or falls back to
+#   plugin.yaml manifest defaults. If no hooks are explicitly declared,
+#   returns nothing.
+#
+# Architectural Layer:
+#   Configuration Parser Layer (YAML Reader)
+#
+# Design Pattern:
+#   Strategy / Information Expert
+#
+# Arguments:
+#   $1 - Optional workspace root directory (defaults to NEXUS_DIR or .).
+#   $2 - Plugin identifier name (e.g. "claude", "copilot", "karpathy-llm").
+#
+# Returns:
+#   Outputs newline-delimited hook event names to stdout.
+#
+# Purity:
+#   @pure (stateless file inspection, zero side effects)
+# ==============================================================================
+rnex_yaml_get_plugin_hook_events() {
+  _rygpe_ws="${1:-${NEXUS_DIR:-${RNEX_ROOT:-.}}}"
+  _rygpe_plugin="${2:-}"
+  [ -n "$_rygpe_plugin" ] || return 0
 
-  # If hooks scalar is explicitly set to false/off/none/[]/{}, return empty
-  if [ -f "$_ylph_local" ] && _yaml_plugin_hooks_defined_in_file "$_ylph_local" "$_ylph_p"; then
-    _scalar_h="$(_yaml_plugin_get_from_file "$_ylph_local" "$_ylph_p" "hooks")"
+  if [ -n "${1:-}" ]; then
+    _rygpe_wly="$_rygpe_ws/${RNEX_LOCAL_CONFIG_FILE:-.local.rnex.yaml}"
+    _rygpe_wy="$_rygpe_ws/${RNEX_CONFIG_FILE:-rnex.yaml}"
+  else
+    _rygpe_wly="${WORKSPACE_LOCAL_YAML:-$_rygpe_ws/${RNEX_LOCAL_CONFIG_FILE:-.local.rnex.yaml}}"
+    _rygpe_wy="${WORKSPACE_YAML:-$_rygpe_ws/${RNEX_CONFIG_FILE:-rnex.yaml}}"
+  fi
+
+  # 1. Check .local.rnex.yaml (local override)
+  if [ -f "$_rygpe_wly" ] && _yaml_plugin_hooks_defined_in_file "$_rygpe_wly" "$_rygpe_plugin"; then
+    _scalar_h="$(_yaml_plugin_get_from_file "$_rygpe_wly" "$_rygpe_plugin" "hooks")"
     case "$_scalar_h" in
       false|off|none|0|"{}"|"[]") return 0 ;;
     esac
-    _yaml_plugin_hooks_list_from_file "$_ylph_local" "$_ylph_p"
+    _yaml_plugin_hooks_list_from_file "$_rygpe_wly" "$_rygpe_plugin"
     return 0
   fi
 
-  if [ -f "$_ylph_main" ] && _yaml_plugin_hooks_defined_in_file "$_ylph_main" "$_ylph_p"; then
-    _scalar_h="$(_yaml_plugin_get_from_file "$_ylph_main" "$_ylph_p" "hooks")"
+  # 2. Fall back to rnex.yaml
+  if [ -f "$_rygpe_wy" ] && _yaml_plugin_hooks_defined_in_file "$_rygpe_wy" "$_rygpe_plugin"; then
+    _scalar_h="$(_yaml_plugin_get_from_file "$_rygpe_wy" "$_rygpe_plugin" "hooks")"
     case "$_scalar_h" in
       false|off|none|0|"{}"|"[]") return 0 ;;
     esac
-    _yaml_plugin_hooks_list_from_file "$_ylph_main" "$_ylph_p"
+    _yaml_plugin_hooks_list_from_file "$_rygpe_wy" "$_rygpe_plugin"
     return 0
   fi
 
-  _ylph_manifest="$(_yaml_resolve_plugin_manifest_path "$_ylph_p" || true)"
-  if [ -n "$_ylph_manifest" ]; then
-    _yaml_plugin_manifest_hooks_list "$_ylph_manifest"
-  fi
+  # 3. Strict opt-in invariant: zero fallback to plugin.yaml manifest
+  return 0
 }
 
-# Get command list for a plugin hook event (with .local.rnex.yaml > rnex.yaml > plugin.yaml precedence).
+# Backward compatibility alias for rnex_yaml_get_plugin_hook_events
+yaml_list_plugin_hooks() {
+  _ylph_p="$1"
+  rnex_yaml_get_plugin_hook_events "${NEXUS_DIR:-${RNEX_ROOT:-.}}" "$_ylph_p"
+}
+
+# ==============================================================================
+# rnex_yaml_get_plugin_hook_commands
+#
+# Summary:
+#   Extracts command list for plugins.<plugin_name>.hooks.<event_name> strictly
+#   from rnex.yaml or .local.rnex.yaml.
+#   Adheres to strict opt-in execution: NEVER merges or falls back to
+#   plugin.yaml manifest defaults. If the event is not explicitly configured,
+#   returns nothing.
+#
+# Architectural Layer:
+#   Configuration Parser Layer (YAML Reader)
+#
+# Design Pattern:
+#   Strategy / Information Expert
+#
+# Arguments:
+#   $1 - Optional workspace root directory (defaults to NEXUS_DIR or .).
+#   $2 - Plugin identifier name.
+#   $3 - Hook event name (e.g. "SessionStart", "sessionStart").
+#
+# Returns:
+#   Outputs newline-delimited command strings to stdout.
+#
+# Purity:
+#   @pure (stateless file inspection, zero side effects)
+# ==============================================================================
+rnex_yaml_get_plugin_hook_commands() {
+  _rygpc_ws="${1:-${NEXUS_DIR:-${RNEX_ROOT:-.}}}"
+  _rygpc_plugin="${2:-}"
+  _rygpc_event="${3:-}"
+  [ -n "$_rygpc_plugin" ] && [ -n "$_rygpc_event" ] || return 0
+
+  if [ -n "${1:-}" ]; then
+    _rygpc_wly="$_rygpc_ws/${RNEX_LOCAL_CONFIG_FILE:-.local.rnex.yaml}"
+    _rygpc_wy="$_rygpc_ws/${RNEX_CONFIG_FILE:-rnex.yaml}"
+  else
+    _rygpc_wly="${WORKSPACE_LOCAL_YAML:-$_rygpc_ws/${RNEX_LOCAL_CONFIG_FILE:-.local.rnex.yaml}}"
+    _rygpc_wy="${WORKSPACE_YAML:-$_rygpc_ws/${RNEX_CONFIG_FILE:-rnex.yaml}}"
+  fi
+
+  # 1. Check .local.rnex.yaml (local override)
+  if [ -f "$_rygpc_wly" ] && _yaml_plugin_hooks_defined_in_file "$_rygpc_wly" "$_rygpc_plugin"; then
+    _scalar_h="$(_yaml_plugin_get_from_file "$_rygpc_wly" "$_rygpc_plugin" "hooks")"
+    case "$_scalar_h" in
+      false|off|none|0|"{}"|"[]") return 0 ;;
+    esac
+    _yaml_plugin_hook_commands_from_file "$_rygpc_wly" "$_rygpc_plugin" "$_rygpc_event"
+    return 0
+  fi
+
+  # 2. Fall back to rnex.yaml
+  if [ -f "$_rygpc_wy" ] && _yaml_plugin_hooks_defined_in_file "$_rygpc_wy" "$_rygpc_plugin"; then
+    _scalar_h="$(_yaml_plugin_get_from_file "$_rygpc_wy" "$_rygpc_plugin" "hooks")"
+    case "$_scalar_h" in
+      false|off|none|0|"{}"|"[]") return 0 ;;
+    esac
+    _yaml_plugin_hook_commands_from_file "$_rygpc_wy" "$_rygpc_plugin" "$_rygpc_event"
+    return 0
+  fi
+
+  # 3. Strict opt-in invariant: zero fallback to plugin.yaml manifest
+  return 0
+}
+
+# Backward compatibility alias for rnex_yaml_get_plugin_hook_commands
 yaml_get_plugin_hook_commands() {
   _ygphc_p="$1"; _ygphc_ev="$2"
-  _yaml_resolve_files
-  _ygphc_local="${NEXUS_LOCAL_CONFIG:-$_wly}"
-  _ygphc_main="${NEXUS_CONFIG:-$_wy}"
-
-  if [ -f "$_ygphc_local" ] && _yaml_plugin_hooks_defined_in_file "$_ygphc_local" "$_ygphc_p"; then
-    _scalar_h="$(_yaml_plugin_get_from_file "$_ygphc_local" "$_ygphc_p" "hooks")"
-    case "$_scalar_h" in
-      false|off|none|0|"{}"|"[]") return 0 ;;
-    esac
-    _yaml_plugin_hook_commands_from_file "$_ygphc_local" "$_ygphc_p" "$_ygphc_ev"
-    return 0
-  fi
-
-  if [ -f "$_ygphc_main" ] && _yaml_plugin_hooks_defined_in_file "$_ygphc_main" "$_ygphc_p"; then
-    _scalar_h="$(_yaml_plugin_get_from_file "$_ygphc_main" "$_ygphc_p" "hooks")"
-    case "$_scalar_h" in
-      false|off|none|0|"{}"|"[]") return 0 ;;
-    esac
-    _yaml_plugin_hook_commands_from_file "$_ygphc_main" "$_ygphc_p" "$_ygphc_ev"
-    return 0
-  fi
-
-  _ygphc_manifest="$(_yaml_resolve_plugin_manifest_path "$_ygphc_p" || true)"
-  if [ -n "$_ygphc_manifest" ]; then
-    _yaml_plugin_manifest_hook_commands "$_ygphc_manifest" "$_ygphc_ev"
-  fi
+  rnex_yaml_get_plugin_hook_commands "${NEXUS_DIR:-${RNEX_ROOT:-.}}" "$_ygphc_p" "$_ygphc_ev"
 }
 
 yaml_has_plugin() {

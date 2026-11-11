@@ -16,7 +16,7 @@ clean_provider_ignore "$_root/.geminiignore"
 clean_rnex_instructions "$_root/GEMINI.md"
 clean_provider_user_skills "$_root/.agents/skills"
 clean_provider_user_skills "$_root/.gemini/skills"
-clean_provider_hooks "gemini" "$_root/.agents" "$_root/.agents/hooks.json"
+rnex_sdk_clean_provider_hooks "$_root" "gemini"
 rm -rf "$_root/.gemini/prompts" 2>/dev/null || true
 rmdir "$_root/.gemini" 2>/dev/null || true
 rmdir "$_root/.agents" 2>/dev/null || true

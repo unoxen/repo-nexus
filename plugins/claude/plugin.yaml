@@ -1,5 +1,5 @@
 name: claude
-version: 0.9.20
+version: 0.9.21
 description: Anthropic Claude Code integration (maintains CLAUDE.md instructions and generates user skills in .claude/skills/)
 author: unoxen
 homepage: https://github.com/unoxen/repo-nexus
@@ -7,13 +7,10 @@ skill_dir: .claude/skills
 
 config_defaults:
   skills: true
-  hooks:
-    SessionStart:
-      - "rnex sync --quiet"
 
 config_descriptions:
   skills: "true|false        (generate user skills in {skill_dir})"
-  hooks: "event map|false   (configure AI provider lifecycle hooks, e.g. SessionStart)"
+  hooks: "event map         (configure AI provider lifecycle hooks, e.g. SessionStart)"
 
 instructions:
   - instructions/rnex-claude-integration.md: .rnex/plugins/claude/instructions/rnex-claude-integration.md

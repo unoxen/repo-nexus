@@ -578,6 +578,211 @@ grep -qF "1. **Mandatory**: Read and follow \`.rnex/plugins/plugin-a/ai-instruct
 }
 pass
 
+# --------------------------------------------------------------------------
+run_test "Plugin SDK: universal AI provider hook projection and zero-hook cleanup"
+TEST_SDK_WS="$TEST_TMP/sdk-hooks-ws"
+rm -rf "$TEST_SDK_WS"
+mkdir -p "$TEST_SDK_WS"
+cp "$CLI" "$TEST_SDK_WS/rnex"
+chmod +x "$TEST_SDK_WS/rnex"
+cp "$DIR/package.json" "$TEST_SDK_WS/package.json"
+cp -r "$DIR/lib" "$TEST_SDK_WS/lib"
+cp -r "$DIR/templates" "$TEST_SDK_WS/templates"
+
+# 1. Verify pure helpers: rnex_sdk_escape_json_string and rnex_sdk_map_hook_event
+. "$TEST_SDK_WS/lib/yaml.sh"
+. "$TEST_SDK_WS/lib/sdk.sh"
+
+_raw_cmd='echo "hello\world" && rnex sync --quiet "arg with quotes"'
+_esc_cmd="$(rnex_sdk_escape_json_string "$_raw_cmd")"
+python3 -c "import sys, json; assert json.loads('\"' + sys.argv[1] + '\"') == sys.argv[2]" "$_esc_cmd" "$_raw_cmd" || {
+  fail "rnex_sdk_escape_json_string failed to escape string safely for JSON"; exit 1;
+}
+
+[ "$(rnex_sdk_map_hook_event copilot SessionStart)" = "sessionStart" ] || { fail "copilot SessionStart map mismatch"; exit 1; }
+[ "$(rnex_sdk_map_hook_event copilot Stop)" = "agentStop" ] || { fail "copilot Stop map mismatch"; exit 1; }
+[ "$(rnex_sdk_map_hook_event cursor SessionStart)" = "sessionStart" ] || { fail "cursor SessionStart map mismatch"; exit 1; }
+[ "$(rnex_sdk_map_hook_event cursor UserPromptSubmit)" = "beforeSubmitPrompt" ] || { fail "cursor UserPromptSubmit map mismatch"; exit 1; }
+[ "$(rnex_sdk_map_hook_event cursor Stop)" = "stop" ] || { fail "cursor Stop map mismatch"; exit 1; }
+[ "$(rnex_sdk_map_hook_event windsurf SessionStart)" = "pre_user_prompt" ] || { fail "windsurf SessionStart map mismatch"; exit 1; }
+[ "$(rnex_sdk_map_hook_event windsurf PreToolUse)" = "pre_run_command" ] || { fail "windsurf PreToolUse map mismatch"; exit 1; }
+[ "$(rnex_sdk_map_hook_event claude sessionStart)" = "SessionStart" ] || { fail "claude sessionStart map mismatch"; exit 1; }
+[ "$(rnex_sdk_map_hook_event codex SessionStart)" = "SessionStart" ] || { fail "codex SessionStart map mismatch"; exit 1; }
+[ "$(rnex_sdk_map_hook_event gemini SessionStart)" = "SessionStart" ] || { fail "gemini SessionStart map mismatch"; exit 1; }
+
+# 2. Configure hooks across all 6 providers in rnex.yaml
+cat <<'EOF_ALL_HOOKS_YAML' > "$TEST_SDK_WS/rnex.yaml"
+version: 1.0.0
+plugins:
+  copilot:
+    enabled: true
+    hooks:
+      SessionStart:
+        - "rnex sync --quiet"
+  cursor:
+    enabled: true
+    hooks:
+      SessionStart:
+        - "rnex sync --quiet"
+  windsurf:
+    enabled: true
+    hooks:
+      SessionStart:
+        - "rnex sync --quiet"
+  codex:
+    enabled: true
+    hooks:
+      SessionStart:
+        - "rnex sync --quiet"
+  claude:
+    enabled: true
+    hooks:
+      SessionStart:
+        - "rnex sync --quiet"
+  gemini:
+    enabled: true
+    hooks:
+      SessionStart:
+        - "rnex sync --quiet"
+EOF_ALL_HOOKS_YAML
+
+# 3. Project hooks for each provider and verify native contracts
+for _p in copilot cursor windsurf codex claude gemini; do
+  rnex_sdk_sync_provider_hooks "$TEST_SDK_WS" "$_p"
+done
+
+# Copilot assertion (.github/hooks/rnex.json)
+[ -f "$TEST_SDK_WS/.github/hooks/rnex.json" ] || { fail ".github/hooks/rnex.json missing"; exit 1; }
+python3 -c "
+import json
+d = json.load(open('$TEST_SDK_WS/.github/hooks/rnex.json'))
+assert d['version'] == 1
+assert len(d['hooks']['sessionStart']) == 1
+entry = d['hooks']['sessionStart'][0]
+assert entry['type'] == 'command'
+assert entry['bash'] == 'rnex sync --quiet'
+assert entry['command'] == 'rnex sync --quiet'
+" || { fail "copilot hook JSON invalid schema"; exit 1; }
+
+# Cursor assertion (.cursor/hooks.json)
+[ -f "$TEST_SDK_WS/.cursor/hooks.json" ] || { fail ".cursor/hooks.json missing"; exit 1; }
+python3 -c "
+import json
+d = json.load(open('$TEST_SDK_WS/.cursor/hooks.json'))
+assert d['version'] == 1
+assert len(d['hooks']['sessionStart']) == 1
+entry = d['hooks']['sessionStart'][0]
+assert entry['command'] == 'rnex sync --quiet'
+" || { fail "cursor hook JSON invalid schema"; exit 1; }
+
+# Windsurf assertion (.windsurf/hooks.json)
+[ -f "$TEST_SDK_WS/.windsurf/hooks.json" ] || { fail ".windsurf/hooks.json missing"; exit 1; }
+python3 -c "
+import json
+d = json.load(open('$TEST_SDK_WS/.windsurf/hooks.json'))
+assert len(d['hooks']['pre_user_prompt']) == 1
+entry = d['hooks']['pre_user_prompt'][0]
+assert entry['command'] == 'rnex sync --quiet'
+" || { fail "windsurf hook JSON invalid schema"; exit 1; }
+
+# Codex assertion (.codex/hooks.json)
+[ -f "$TEST_SDK_WS/.codex/hooks.json" ] || { fail ".codex/hooks.json missing"; exit 1; }
+python3 -c "
+import json
+d = json.load(open('$TEST_SDK_WS/.codex/hooks.json'))
+assert len(d['hooks']['SessionStart']) == 1
+envelope = d['hooks']['SessionStart'][0]
+assert len(envelope['hooks']) == 1
+inner = envelope['hooks'][0]
+assert inner['type'] == 'command'
+assert inner['command'] == 'rnex sync --quiet'
+" || { fail "codex hook JSON invalid schema"; exit 1; }
+
+# Claude assertion (.claude/settings.json)
+[ -f "$TEST_SDK_WS/.claude/settings.json" ] || { fail ".claude/settings.json missing"; exit 1; }
+python3 -c "
+import json
+d = json.load(open('$TEST_SDK_WS/.claude/settings.json'))
+assert len(d['hooks']['SessionStart']) == 1
+inner = d['hooks']['SessionStart'][0]['hooks'][0]
+assert inner['type'] == 'command'
+assert inner['command'] == 'rnex sync --quiet'
+" || { fail "claude hook JSON invalid schema"; exit 1; }
+
+# Gemini assertion (.gemini/settings.json)
+[ -f "$TEST_SDK_WS/.gemini/settings.json" ] || { fail ".gemini/settings.json missing"; exit 1; }
+python3 -c "
+import json
+d = json.load(open('$TEST_SDK_WS/.gemini/settings.json'))
+assert len(d['hooks']['SessionStart']) == 1
+inner = d['hooks']['SessionStart'][0]['hooks'][0]
+assert inner['type'] == 'command'
+assert inner['command'] == 'rnex sync --quiet'
+" || { fail "gemini hook JSON invalid schema"; exit 1; }
+
+# 4. Settings merge test: Preserve existing user settings in .claude/settings.json
+python3 -c "
+import json
+p = '$TEST_SDK_WS/.claude/settings.json'
+d = json.load(open(p))
+d['theme'] = 'dark'
+d['editor.fontSize'] = 14
+json.dump(d, open(p, 'w'))
+"
+rnex_sdk_sync_provider_hooks "$TEST_SDK_WS" "claude"
+python3 -c "
+import json
+d = json.load(open('$TEST_SDK_WS/.claude/settings.json'))
+assert d['theme'] == 'dark'
+assert d['editor.fontSize'] == 14
+assert 'SessionStart' in d['hooks']
+" || { fail "claude settings merge did not preserve user settings"; exit 1; }
+
+# 5. Zero-Hook Invariant: Remove hooks and verify clean removal
+cat <<'EOF_ZERO_HOOKS_YAML' > "$TEST_SDK_WS/rnex.yaml"
+version: 1.0.0
+plugins:
+  copilot:
+    enabled: true
+  cursor:
+    enabled: true
+  windsurf:
+    enabled: true
+  codex:
+    enabled: true
+  claude:
+    enabled: true
+  gemini:
+    enabled: true
+EOF_ZERO_HOOKS_YAML
+
+for _p in copilot cursor windsurf codex claude gemini; do
+  rnex_sdk_sync_provider_hooks "$TEST_SDK_WS" "$_p"
+done
+
+[ ! -f "$TEST_SDK_WS/.github/hooks/rnex.json" ] || { fail ".github/hooks/rnex.json not cleaned up"; exit 1; }
+[ ! -f "$TEST_SDK_WS/.cursor/hooks.json" ] || { fail ".cursor/hooks.json not cleaned up"; exit 1; }
+[ ! -f "$TEST_SDK_WS/.windsurf/hooks.json" ] || { fail ".windsurf/hooks.json not cleaned up"; exit 1; }
+[ ! -f "$TEST_SDK_WS/.codex/hooks.json" ] || { fail ".codex/hooks.json not cleaned up"; exit 1; }
+[ ! -f "$TEST_SDK_WS/.gemini/settings.json" ] || { fail ".gemini/settings.json not cleaned up"; exit 1; }
+
+# Claude still has custom settings (theme, fontSize) so file remains, but hooks block is gone
+[ -f "$TEST_SDK_WS/.claude/settings.json" ] || { fail ".claude/settings.json unexpectedly deleted while containing custom settings"; exit 1; }
+python3 -c "
+import json
+d = json.load(open('$TEST_SDK_WS/.claude/settings.json'))
+assert 'hooks' not in d
+assert d.get('theme') == 'dark'
+assert d.get('editor.fontSize') == 14
+" || { fail "claude settings did not cleanly remove hooks block"; exit 1; }
+
+# Remove custom settings from Claude settings.json and verify entire file is deleted on zero hooks
+echo "{}" > "$TEST_SDK_WS/.claude/settings.json"
+rnex_sdk_clean_provider_hooks "$TEST_SDK_WS" "claude"
+[ ! -f "$TEST_SDK_WS/.claude/settings.json" ] || { fail ".claude/settings.json not deleted when empty"; exit 1; }
+
+pass
+
 if [ "${_STANDALONE_RUN:-0}" -eq 1 ]; then
   report_results
 fi

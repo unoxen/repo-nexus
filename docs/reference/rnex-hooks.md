@@ -5,7 +5,11 @@ description: Complete reference for lifecycle hooks, event triggers, configurati
 
 # Lifecycle Hooks
 
-Repo Nexus includes a built-in event-driven lifecycle hook system configured under the top-level `rnex_hooks:` block in `rnex.yaml` or `.local.rnex.yaml`.
+Repo Nexus includes a built-in event-driven lifecycle hook system configured under the top-level `rnex-hooks:` block (or legacy `rnex_hooks:`) in `rnex.yaml` or `.local.rnex.yaml`.
+
+::: tip Zero Default & Zero Hidden Hooks (Strict Opt-In)
+Repo Nexus enforces a strict **opt-in** contract: **zero default or hidden lifecycle hooks exist**. No commands run during any lifecycle stage unless explicitly declared in `rnex.yaml` or `.local.rnex.yaml`.
+:::
 
 ---
 
@@ -14,10 +18,10 @@ Repo Nexus includes a built-in event-driven lifecycle hook system configured und
 Hooks are defined as a mapping from lifecycle event names to lists of shell commands:
 
 ```yaml
-rnex_hooks:
+rnex-hooks:
   before_sync: []
   after_sync:
-    - "rnex plugin karpathy-llm ingest --quiet"
+    - "rnex plugin karpathy-llm ingest"
     - "echo 'Workspace synchronized successfully'"
 
   before_clone: []
@@ -33,7 +37,7 @@ rnex_hooks:
     - "echo 'Finished command:' $RNEX_PLUGIN_COMMAND"
 ```
 
-Workstation-specific overrides can be added to `.local.rnex.yaml`. If an event list is specified in `.local.rnex.yaml`, its command list takes precedence and overrides that event's commands in `rnex.yaml` (both underscore `after_sync` and hyphenated `after-sync` keys are supported).
+Workstation-specific overrides can be added to `.local.rnex.yaml`. If an event list is specified in `.local.rnex.yaml`, its command list takes precedence and overrides that event's commands in `rnex.yaml` (both underscore `after_sync` and hyphenated `after-sync` keys are supported, under `rnex-hooks:` or `rnex_hooks:`).
 
 ---
 
@@ -79,5 +83,5 @@ Hooks execute within a standard subshell (`/bin/sh -e`) inside the workspace roo
 
 ### Recursion Prevention (`--ignore-hooks` / `-H`)
 To prevent recursive hook execution across nested or consequential commands:
-* Pass `--ignore-hooks` or `-H` to any `rnex` command (or set `RNEX_IGNORE_HOOKS=1`) to skip all user-configured `rnex_hooks` and `git.hooks`.
+* Pass `--ignore-hooks` or `-H` to any `rnex` command (or set `RNEX_IGNORE_HOOKS=1`) to skip all user-configured `rnex-hooks` and `git.hooks`.
 * Whenever `rnex` executes a command from a lifecycle hook or Git hook, it automatically injects `--ignore-hooks` into `rnex` invocations and exports `RNEX_IGNORE_HOOKS=1` in the hook subshell so triggered commands and any consequential subcommands never recurse into user hooks.

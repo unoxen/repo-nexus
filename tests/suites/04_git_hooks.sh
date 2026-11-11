@@ -682,6 +682,237 @@ _sync_cnt="$(grep -c "AFTER_SYNC_FIRED" "$TEST_IGNORE_HOOKS_WS/ignore_hook_log" 
 [ -f "$TEST_IGNORE_HOOKS_WS/.rnex/wiki/index.md" ] || { fail ".rnex/wiki/index.md was not created by ingest hook"; exit 1; }
 pass
 
+# --------------------------------------------------------------------------
+run_test "rnex-hooks: strict opt-in parsing, after_sync stage dispatch, and zero execution when unconfigured"
+# shellcheck source=lib/core.sh
+. "$DIR/lib/core.sh"
+# shellcheck source=lib/workspace.sh
+. "$DIR/lib/workspace.sh"
+# shellcheck source=lib/yaml.sh
+. "$DIR/lib/yaml.sh"
+# shellcheck source=lib/hooks.sh
+. "$DIR/lib/hooks.sh"
+
+TEST_STRICT_HOOKS_WS="$TEST_TMP/strict-opt-in-hooks-ws"
+mkdir -p "$TEST_STRICT_HOOKS_WS"
+cp "$CLI" "$TEST_STRICT_HOOKS_WS/rnex"
+chmod +x "$TEST_STRICT_HOOKS_WS/rnex"
+link_dir_contents "$DIR/plugins" "$TEST_STRICT_HOOKS_WS/plugins"
+link_dir_contents "$DIR/skills" "$TEST_STRICT_HOOKS_WS/skills"
+cp "$DIR/package.json" "$TEST_STRICT_HOOKS_WS/package.json"
+git -C "$TEST_STRICT_HOOKS_WS" init -q
+
+# 1. Workspace with rnex-hooks.after_sync and git.hooks.pre-commit
+cat <<'STRICT_YAML' > "$TEST_STRICT_HOOKS_WS/rnex.yaml"
+version: 1.0.0
+rnex-hooks:
+  pre_sync:
+    - "echo 'PRE_SYNC_FIRED' >> strict_hook_log"
+  after_sync:
+    - "echo 'AFTER_SYNC_FIRED' >> strict_hook_log"
+git:
+  hooks:
+    pre-commit:
+      - "echo 'PRE_COMMIT'"
+repos:
+plugins:
+STRICT_YAML
+
+(cd "$TEST_STRICT_HOOKS_WS" && ./rnex sync --quiet)
+[ -f "$TEST_STRICT_HOOKS_WS/strict_hook_log" ] || { fail "rnex-hooks log missing after sync"; exit 1; }
+grep -q "PRE_SYNC_FIRED" "$TEST_STRICT_HOOKS_WS/strict_hook_log" || { fail "pre_sync did not fire"; exit 1; }
+grep -q "AFTER_SYNC_FIRED" "$TEST_STRICT_HOOKS_WS/strict_hook_log" || { fail "after_sync did not fire"; exit 1; }
+[ -x "$TEST_STRICT_HOOKS_WS/.git/hooks/pre-commit" ] || { fail "pre-commit git wrapper not installed"; exit 1; }
+[ ! -f "$TEST_STRICT_HOOKS_WS/.git/hooks/post-merge" ] || { fail "post-merge git wrapper installed when omitted from config"; exit 1; }
+
+# 2. Workspace with NO rnex-hooks and NO git.hooks must execute zero commands and install zero git wrappers
+TEST_ZERO_HOOKS_WS="$TEST_TMP/zero-hooks-ws"
+mkdir -p "$TEST_ZERO_HOOKS_WS"
+cp "$CLI" "$TEST_ZERO_HOOKS_WS/rnex"
+chmod +x "$TEST_ZERO_HOOKS_WS/rnex"
+link_dir_contents "$DIR/plugins" "$TEST_ZERO_HOOKS_WS/plugins"
+link_dir_contents "$DIR/skills" "$TEST_ZERO_HOOKS_WS/skills"
+cp "$DIR/package.json" "$TEST_ZERO_HOOKS_WS/package.json"
+git -C "$TEST_ZERO_HOOKS_WS" init -q
+
+cat <<'ZERO_YAML' > "$TEST_ZERO_HOOKS_WS/rnex.yaml"
+version: 1.0.0
+repos:
+plugins:
+ZERO_YAML
+
+(cd "$TEST_ZERO_HOOKS_WS" && ./rnex sync --quiet)
+for _zh_h in pre-commit post-merge post-checkout post-commit pre-push; do
+  [ ! -f "$TEST_ZERO_HOOKS_WS/.git/hooks/$_zh_h" ] || { fail "Git wrapper $_zh_h was installed in zero-hooks workspace"; exit 1; }
+done
+[ ! -f "$TEST_ZERO_HOOKS_WS/strict_hook_log" ] || { fail "Lifecycle command ran in zero-hooks workspace"; exit 1; }
+
+# 3. Verify rnex_yaml_get_plugin_hook_events and rnex_yaml_get_plugin_hook_commands zero manifest fallback
+_pevents="$(rnex_yaml_get_plugin_hook_events "$TEST_ZERO_HOOKS_WS" "claude" 2>/dev/null || true)"
+[ -z "$_pevents" ] || { fail "rnex_yaml_get_plugin_hook_events returned manifest default hooks: $_pevents"; exit 1; }
+
+_pcmds="$(rnex_yaml_get_plugin_hook_commands "$TEST_ZERO_HOOKS_WS" "claude" "SessionStart" 2>/dev/null || true)"
+[ -z "$_pcmds" ] || { fail "rnex_yaml_get_plugin_hook_commands returned manifest default commands: $_pcmds"; exit 1; }
+
+# 4. Verify explicit plugin hooks in rnex.yaml are correctly retrieved
+cat <<'PLUGIN_HOOKS_YAML' > "$TEST_ZERO_HOOKS_WS/rnex.yaml"
+version: 1.0.0
+plugins:
+  claude:
+    hooks:
+      SessionStart:
+        - "rnex sync --quiet"
+repos:
+PLUGIN_HOOKS_YAML
+
+_pevents_exp="$(rnex_yaml_get_plugin_hook_events "$TEST_ZERO_HOOKS_WS" "claude" 2>/dev/null || true)"
+[ "$_pevents_exp" = "SessionStart" ] || { fail "Expected SessionStart, got: $_pevents_exp"; exit 1; }
+
+_pcmds_exp="$(rnex_yaml_get_plugin_hook_commands "$TEST_ZERO_HOOKS_WS" "claude" "SessionStart" 2>/dev/null || true)"
+[ "$_pcmds_exp" = "rnex sync --quiet" ] || { fail "Expected 'rnex sync --quiet', got: $_pcmds_exp"; exit 1; }
+
+# Case-insensitive event query support
+_pcmds_ci="$(rnex_yaml_get_plugin_hook_commands "$TEST_ZERO_HOOKS_WS" "claude" "sessionStart" 2>/dev/null || true)"
+[ "$_pcmds_ci" = "rnex sync --quiet" ] || { fail "Expected 'rnex sync --quiet' via case-insensitive query, got: $_pcmds_ci"; exit 1; }
+
+# 5. Local override in .local.rnex.yaml takes precedence
+cat <<'LOCAL_OVERRIDE_YAML' > "$TEST_ZERO_HOOKS_WS/.local.rnex.yaml"
+plugins:
+  claude:
+    hooks:
+      SessionStart:
+        - "echo 'LOCAL_CLAUDE_HOOK'"
+rnex-hooks:
+  after_sync:
+    - "echo 'LOCAL_AFTER_SYNC' > local_after_sync_marker"
+LOCAL_OVERRIDE_YAML
+
+_pcmds_loc="$(rnex_yaml_get_plugin_hook_commands "$TEST_ZERO_HOOKS_WS" "claude" "SessionStart" 2>/dev/null || true)"
+[ "$_pcmds_loc" = "echo 'LOCAL_CLAUDE_HOOK'" ] || { fail "Expected local override, got: $_pcmds_loc"; exit 1; }
+
+(cd "$TEST_ZERO_HOOKS_WS" && ./rnex sync --quiet)
+[ -f "$TEST_ZERO_HOOKS_WS/local_after_sync_marker" ] || { fail "Local after_sync hook did not execute"; exit 1; }
+grep -q "LOCAL_AFTER_SYNC" "$TEST_ZERO_HOOKS_WS/local_after_sync_marker" || { fail "Marker missing LOCAL_AFTER_SYNC content"; exit 1; }
+pass
+
+# --------------------------------------------------------------------------
+# Test 15: Zero default or hidden hooks invariant across all built-in plugins
+# --------------------------------------------------------------------------
+run_test "Lifecycle hooks: zero default or hidden hooks invariant across all built-in plugins"
+TEST_ALL_ZERO_WS="$TEST_TMP/all-plugins-zero-hooks-ws"
+mkdir -p "$TEST_ALL_ZERO_WS"
+cp "$CLI" "$TEST_ALL_ZERO_WS/rnex"
+chmod +x "$TEST_ALL_ZERO_WS/rnex"
+link_dir_contents "$DIR/plugins" "$TEST_ALL_ZERO_WS/plugins"
+link_dir_contents "$DIR/skills" "$TEST_ALL_ZERO_WS/skills"
+cp "$DIR/package.json" "$TEST_ALL_ZERO_WS/package.json"
+git -C "$TEST_ALL_ZERO_WS" init -q
+
+# Initialize workspace with all plugins enabled, but ZERO hooks declared
+mkdir -p "$TEST_ALL_ZERO_WS/docs"
+printf '# Un-ingested Doc\nThis document must not be auto-ingested.\n' > "$TEST_ALL_ZERO_WS/docs/sample.md"
+
+cat <<'ALL_ZERO_YAML' > "$TEST_ALL_ZERO_WS/rnex.yaml"
+version: 1.0.0
+plugins:
+  claude:
+    enabled: true
+    skills: true
+  codex:
+    enabled: true
+    skills: true
+  cursor:
+    enabled: true
+    skills: true
+  gemini:
+    enabled: true
+    skills: true
+  copilot:
+    enabled: true
+    skills: true
+  windsurf:
+    enabled: true
+    skills: true
+  karpathy-llm:
+    enabled: true
+    sources:
+      - docs
+repos:
+ALL_ZERO_YAML
+
+(cd "$TEST_ALL_ZERO_WS" && ./rnex sync --quiet)
+
+# 1. Assert that ZERO provider hook files exist
+[ ! -f "$TEST_ALL_ZERO_WS/.claude/settings.json" ] || { fail ".claude/settings.json created when zero hooks configured"; exit 1; }
+[ ! -f "$TEST_ALL_ZERO_WS/.codex/hooks.json" ] || { fail ".codex/hooks.json created when zero hooks configured"; exit 1; }
+[ ! -f "$TEST_ALL_ZERO_WS/.cursor/hooks.json" ] || { fail ".cursor/hooks.json created when zero hooks configured"; exit 1; }
+[ ! -f "$TEST_ALL_ZERO_WS/.gemini/settings.json" ] || { fail ".gemini/settings.json created when zero hooks configured"; exit 1; }
+[ ! -f "$TEST_ALL_ZERO_WS/.github/hooks/rnex.json" ] || { fail ".github/hooks/rnex.json created when zero hooks configured"; exit 1; }
+[ ! -f "$TEST_ALL_ZERO_WS/.windsurf/hooks.json" ] || { fail ".windsurf/hooks.json created when zero hooks configured"; exit 1; }
+
+# 2. Assert that karpathy-llm ingest did NOT execute
+[ ! -f "$TEST_ALL_ZERO_WS/.rnex/wiki/repo-nexus-docs.md" ] || { fail "karpathy-llm auto-ingested docs without explicit hook"; exit 1; }
+if [ -d "$TEST_ALL_ZERO_WS/.rnex/wiki" ]; then
+  ! grep -q "Un-ingested Doc" "$TEST_ALL_ZERO_WS/.rnex/wiki"/*.md 2>/dev/null || {
+    fail "Sample doc content found in wiki without explicit hook"; exit 1;
+  }
+fi
+
+# 3. Assert that ZERO git hook wrappers were installed
+for _zh_h in pre-commit post-merge post-checkout post-commit pre-push; do
+  [ ! -f "$TEST_ALL_ZERO_WS/.git/hooks/$_zh_h" ] || { fail "Git wrapper $_zh_h installed without configuration"; exit 1; }
+done
+pass
+
+# --------------------------------------------------------------------------
+# Test 16: rnex-hooks: after_sync execution of karpathy-llm ingest runs exactly once
+# --------------------------------------------------------------------------
+run_test "Lifecycle hooks: after_sync execution of karpathy-llm ingest runs exactly once without recursion"
+TEST_AFTER_SYNC_WS="$TEST_TMP/after-sync-ingest-ws"
+mkdir -p "$TEST_AFTER_SYNC_WS"
+cp "$CLI" "$TEST_AFTER_SYNC_WS/rnex"
+chmod +x "$TEST_AFTER_SYNC_WS/rnex"
+link_dir_contents "$DIR/plugins" "$TEST_AFTER_SYNC_WS/plugins"
+link_dir_contents "$DIR/skills" "$TEST_AFTER_SYNC_WS/skills"
+cp "$DIR/package.json" "$TEST_AFTER_SYNC_WS/package.json"
+git -C "$TEST_AFTER_SYNC_WS" init -q
+
+mkdir -p "$TEST_AFTER_SYNC_WS/docs"
+printf '# Architecture Overview\nSystem architecture details.\n' > "$TEST_AFTER_SYNC_WS/docs/overview.md"
+
+cat <<'AFTER_SYNC_YAML' > "$TEST_AFTER_SYNC_WS/rnex.yaml"
+version: 1.0.0
+rnex-hooks:
+  after_sync:
+    - "echo 'AFTER_SYNC_INVOCATION' >> after_sync_run.log"
+    - "rnex plugin karpathy-llm ingest"
+plugins:
+  karpathy-llm:
+    enabled: true
+    sources:
+      - docs
+repos:
+AFTER_SYNC_YAML
+
+(cd "$TEST_AFTER_SYNC_WS" && ./rnex sync --quiet)
+
+# Assert after_sync executed exactly once
+[ -f "$TEST_AFTER_SYNC_WS/after_sync_run.log" ] || { fail "after_sync_run.log missing after sync"; exit 1; }
+_invocations="$(wc -l < "$TEST_AFTER_SYNC_WS/after_sync_run.log" | tr -d ' ')"
+[ "$_invocations" -eq 1 ] || { fail "Expected exactly 1 after_sync invocation, got: $_invocations"; exit 1; }
+
+# Assert karpathy-llm ingest executed deterministically
+[ -f "$TEST_AFTER_SYNC_WS/.rnex/wiki/repo-nexus-docs.md" ] || { fail "repo-nexus-docs.md not created by after_sync ingest"; exit 1; }
+grep -q "Architecture Overview" "$TEST_AFTER_SYNC_WS/.rnex/wiki/repo-nexus-docs.md" || {
+  fail "Architecture Overview missing in repo-nexus-docs.md"; exit 1;
+}
+
+# Run sync a second time and assert exactly 2 invocations (one per sync, zero recursion)
+(cd "$TEST_AFTER_SYNC_WS" && ./rnex sync --quiet)
+_invocations2="$(wc -l < "$TEST_AFTER_SYNC_WS/after_sync_run.log" | tr -d ' ')"
+[ "$_invocations2" -eq 2 ] || { fail "Expected exactly 2 after_sync invocations after second sync, got: $_invocations2"; exit 1; }
+pass
+
 if [ "${_STANDALONE_RUN:-0}" -eq 1 ]; then
   report_results
 fi

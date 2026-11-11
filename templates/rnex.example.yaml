@@ -37,8 +37,12 @@ git:
     pre-push:
       - "rnex plugin karpathy-llm lint --strict"
 
-# Lifecycle Hooks (Map of RNEX events to command lists)
-rnex_hooks:
+# ==============================================================================
+# RNEX Lifecycle Hooks (Strictly Opt-In — Nothing Enabled by Default)
+# ==============================================================================
+# Zero hidden hooks: Repo Nexus never executes lifecycle actions unless explicitly
+# declared in rnex.yaml or .local.rnex.yaml.
+rnex-hooks:
   before_init: []
   after_init:
     - "echo 'Workspace initialized'"
@@ -85,25 +89,46 @@ repos:
     description: "Read-only OpenAPI & Protobuf schemas"
 
 # Scoped Plugins & AI Providers
+# AI provider hooks are strictly opt-in. Declaring hooks.SessionStart synchronizes
+# the workspace at assistant session startup. Omitting hooks leaves native manifests
+# completely untouched or cleans up managed hook entries.
 plugins:
   claude:
     enabled: true
     skills: true
+    hooks:
+      SessionStart:
+        - "rnex sync --quiet"
   cursor:
     enabled: true
     skills: true
+    hooks:
+      SessionStart:
+        - "rnex sync --quiet"
   codex:
     enabled: true
     skills: true
+    hooks:
+      SessionStart:
+        - "rnex sync --quiet"
   gemini:
     enabled: false
     skills: true
+    hooks:
+      SessionStart:
+        - "rnex sync --quiet"
   windsurf:
     enabled: false
     skills: true
+    hooks:
+      SessionStart:
+        - "rnex sync --quiet"
   copilot:
     enabled: false
     skills: true
+    hooks:
+      SessionStart:
+        - "rnex sync --quiet"
   # External / Custom Plugin (supports relative directory or plugin.yaml manifest path)
   my-plugin:
     enabled: true

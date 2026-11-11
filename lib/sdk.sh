@@ -599,7 +599,580 @@ clean_provider_agents() {
   rmdir "$_ag_dir" 2>/dev/null || true
 }
 
-# ---- AI Provider Hooks Management (Two-Tier .rnex/ Working Files + rnex-* Pointers) ----
+# ============================================================================
+# AI Provider Lifecycle Hooks SDK (Universal Native Configuration Projection)
+# ============================================================================
+
+# ============================================================================
+# rnex_sdk_escape_json_string
+# ============================================================================
+# Safely escapes characters in an arbitrary string for embedding in a JSON
+# string literal per RFC 8259 and OWASP Top 10 A03 (Injection Prevention).
+# Escapes backslashes (\), double quotes ("), tabs (\t), line breaks (\r, \n),
+# form feeds (\f), and backspaces (\b).
+#
+# @param raw_str (string) - Raw command or configuration string
+# @returns (string) - JSON-escaped string without enclosing quotes
+# @pure Pure function (zero external state, zero side effects)
+# ============================================================================
+rnex_sdk_escape_json_string() {
+  printf '%s' "$1" | awk '
+    BEGIN { first = 1 }
+    {
+      if (!first) printf "\\n"
+      first = 0
+      gsub(/\\/, "\\\\")
+      gsub(/"/, "\\\"")
+      gsub(/\t/, "\\t")
+      gsub(/\r/, "\\r")
+      gsub(/\f/, "\\f")
+      gsub(/\b/, "\\b")
+      printf "%s", $0
+    }
+  '
+}
+
+# ============================================================================
+# rnex_sdk_map_hook_event
+# ============================================================================
+# Canonical event normalizer (Adapter Strategy) mapping canonical lifecycle
+# event names (such as SessionStart) to provider-specific native event keys.
+#
+# Provider Mappings:
+#   - claude, codex, gemini: Canonical PascalCase names (SessionStart, Stop, etc.)
+#   - copilot: camelCase event names (sessionStart, userPromptSubmitted, agentStop)
+#   - cursor: camelCase event names (sessionStart, beforeSubmitPrompt, stop)
+#   - windsurf: snake_case cascade event names (pre_user_prompt, pre_run_command, etc.)
+#   - unmapped / provider-specific events: Passed through verbatim to allow extensibility.
+#
+# @param provider (string) - Target AI provider name (e.g. copilot, cursor, claude)
+# @param event_name (string) - Event name configured in rnex.yaml
+# @returns (string) - Normalized provider-native event identifier
+# @pure Pure function
+# ============================================================================
+rnex_sdk_map_hook_event() {
+  _provider="$1"
+  _event="$2"
+  case "$_provider" in
+    copilot)
+      case "$_event" in
+        SessionStart|sessionStart) printf 'sessionStart\n' ;;
+        SessionEnd|sessionEnd) printf 'sessionEnd\n' ;;
+        UserPromptSubmit|userPromptSubmit|userPromptSubmitted) printf 'userPromptSubmitted\n' ;;
+        PreToolUse|preToolUse) printf 'preToolUse\n' ;;
+        PostToolUse|postToolUse) printf 'postToolUse\n' ;;
+        Stop|stop|agentStop) printf 'agentStop\n' ;;
+        *) printf '%s\n' "$_event" ;;
+      esac
+      ;;
+    cursor)
+      case "$_event" in
+        SessionStart|sessionStart) printf 'sessionStart\n' ;;
+        SessionEnd|sessionEnd) printf 'sessionEnd\n' ;;
+        UserPromptSubmit|userPromptSubmit|beforeSubmitPrompt) printf 'beforeSubmitPrompt\n' ;;
+        PreToolUse|preToolUse) printf 'preToolUse\n' ;;
+        PostToolUse|postToolUse) printf 'postToolUse\n' ;;
+        Stop|stop) printf 'stop\n' ;;
+        *) printf '%s\n' "$_event" ;;
+      esac
+      ;;
+    windsurf)
+      case "$_event" in
+        SessionStart|sessionStart|UserPromptSubmit|userPromptSubmit|pre_user_prompt) printf 'pre_user_prompt\n' ;;
+        PreToolUse|preToolUse|pre_run_command) printf 'pre_run_command\n' ;;
+        PostToolUse|postToolUse|post_run_command) printf 'post_run_command\n' ;;
+        *) printf '%s\n' "$_event" ;;
+      esac
+      ;;
+    claude|codex|gemini|*)
+      case "$_event" in
+        sessionStart|SessionStart) printf 'SessionStart\n' ;;
+        sessionEnd|SessionEnd) printf 'SessionEnd\n' ;;
+        userPromptSubmit|UserPromptSubmit) printf 'UserPromptSubmit\n' ;;
+        preToolUse|PreToolUse) printf 'PreToolUse\n' ;;
+        postToolUse|PostToolUse) printf 'PostToolUse\n' ;;
+        stop|Stop) printf 'Stop\n' ;;
+        *) printf '%s\n' "$_event" ;;
+      esac
+      ;;
+  esac
+}
+
+# ============================================================================
+# _sdk_clean_json_hooks
+# ============================================================================
+# Strips the top-level "hooks": { ... } block from a settings.json file.
+# If no other settings keys remain in the root JSON object, deletes the file
+# completely to prevent leaving empty or orphaned configuration files.
+#
+# @param file (string) - Path to settings.json file
+# @sideEffects Modifies or deletes the target file on disk
+# ============================================================================
+_sdk_clean_json_hooks() {
+  _scjh_file="$1"
+  [ -f "$_scjh_file" ] || return 0
+  _scjh_initial_clean="$(tr -d ' \t\r\n{}' < "$_scjh_file")"
+  if [ -z "$_scjh_initial_clean" ]; then
+    rm -f "$_scjh_file"
+    return 0
+  fi
+  if grep -q '"hooks"' "$_scjh_file" 2>/dev/null; then
+    _scjh_tmp="$(mktemp)"
+    awk '
+      BEGIN {
+        in_str = 0; esc = 0; obj_d = 0; arr_d = 0; skip_h = 0; h_d = 0; skip_c = 0; buf = ""
+      }
+      {
+        len = length($0)
+        for (i = 1; i <= len; i++) {
+          c = substr($0, i, 1)
+          if (esc) {
+            if (!skip_h) buf = buf c
+            esc = 0
+            continue
+          }
+          if (c == "\\") {
+            if (!skip_h) buf = buf c
+            esc = 1
+            continue
+          }
+          if (c == "\"") {
+            in_str = !in_str
+            if (!skip_h) buf = buf c
+            continue
+          }
+          if (in_str) {
+            if (!skip_h) buf = buf c
+            continue
+          }
+
+          if (c == "{") {
+            obj_d++
+            if (skip_h) { h_d++; continue }
+          } else if (c == "}") {
+            if (skip_h) {
+              h_d--
+              if (h_d == 0) {
+                skip_h = 0
+                skip_c = 1
+              }
+              continue
+            }
+            obj_d--
+          } else if (c == "[") {
+            arr_d++
+            if (skip_h) continue
+          } else if (c == "]") {
+            arr_d--
+            if (skip_h) continue
+          }
+
+          if (skip_c) {
+            if (c == " " || c == "\t" || c == "\n" || c == "\r") continue
+            if (c == ",") {
+              skip_c = 0
+              continue
+            }
+            skip_c = 0
+          }
+
+          if (skip_h) continue
+
+          if (obj_d == 1 && c == ":") {
+            match(buf, /"hooks"[ \t\r\n]*$/)
+            if (RSTART > 0) {
+              buf = substr(buf, 1, RSTART - 1)
+              sub(/[ \t\r\n]*$/, "", buf)
+              skip_h = 1
+              h_d = 0
+              continue
+            }
+          }
+
+          buf = buf c
+        }
+        buf = buf "\n"
+      }
+      END {
+        gsub(/\{[ \t\r\n]*,/, "{", buf)
+        gsub(/,[ \t\r\n]*\}/, "}", buf)
+        printf "%s", buf
+      }
+    ' "$_scjh_file" > "$_scjh_tmp"
+    _scjh_clean="$(tr -d ' \t\r\n{}' < "$_scjh_tmp")"
+    if [ -z "$_scjh_clean" ]; then
+      rm -f "$_scjh_tmp" "$_scjh_file"
+    else
+      mv "$_scjh_tmp" "$_scjh_file"
+    fi
+  fi
+}
+
+# ============================================================================
+# _sdk_merge_settings_json
+# ============================================================================
+# Merges a generated "hooks": { ... } block into an existing settings.json file,
+# preserving all non-hook user settings. If the file does not exist, creates
+# a new root JSON object.
+#
+# @param file (string) - Path to target settings.json
+# @param block_file (string) - Path to file containing "hooks": { ... } block
+# @param ws_root (string) - Workspace root directory
+# @sideEffects Creates or modifies settings.json atomically via .rnex/tmp/
+# ============================================================================
+_sdk_merge_settings_json() {
+  _smj_file="$1"
+  _smj_block_file="$2"
+  _smj_ws="$3"
+  _sdk_clean_json_hooks "$_smj_file"
+  if [ -f "$_smj_file" ]; then
+    mkdir -p "$_smj_ws/.rnex/tmp"
+    _smj_tmp="$_smj_ws/.rnex/tmp/settings_merge_$$.tmp"
+    awk -v hfile="$_smj_block_file" '
+      BEGIN {
+        inserted = 0
+        hooks_text = ""
+        while ((getline line < hfile) > 0) {
+          hooks_text = hooks_text (hooks_text == "" ? "" : "\n") line
+        }
+        close(hfile)
+      }
+      {
+        if (!inserted && match($0, /\{/)) {
+          before = substr($0, 1, RSTART)
+          after = substr($0, RSTART + 1)
+          if (after ~ /^[ \t]*$/) {
+            printf "%s\n%s,\n", before, hooks_text
+          } else {
+            printf "%s\n%s,\n%s\n", before, hooks_text, after
+          }
+          inserted = 1
+          next
+        }
+        print
+      }
+    ' "$_smj_file" > "$_smj_tmp" && mv "$_smj_tmp" "$_smj_file"
+  else
+    mkdir -p "$(dirname "$_smj_file")"
+    {
+      printf '{\n'
+      cat "$_smj_block_file"
+      printf '}\n'
+    } > "$_smj_file"
+  fi
+}
+
+# ============================================================================
+# rnex_sdk_clean_provider_hooks
+# ============================================================================
+# Removes native hook manifests and hook configuration blocks for a given
+# AI provider. Enforces the Zero-Hook Invariant: member trees and provider
+# directories remain 100% clean when zero hooks are configured.
+#
+# @param ws_root (string) - Path to workspace root directory
+# @param provider (string) - Provider identifier (copilot, cursor, windsurf, codex, claude, gemini)
+# @sideEffects Deletes managed hook files and empty parent directories
+# ============================================================================
+rnex_sdk_clean_provider_hooks() {
+  _scph_ws="${1:-${RNEX_ROOT:-${NEXUS_DIR:-$PWD}}}"
+  _scph_provider="$2"
+
+  rm -f "$_scph_ws/.rnex/plugins/$_scph_provider/hooks"/rnex-hook-*.sh 2>/dev/null || true
+  rmdir "$_scph_ws/.rnex/plugins/$_scph_provider/hooks" 2>/dev/null || true
+  rmdir "$_scph_ws/.rnex/plugins/$_scph_provider" 2>/dev/null || true
+
+  case "$_scph_provider" in
+    copilot)
+      rm -f "$_scph_ws/.github/hooks/rnex.json"
+      rm -f "$_scph_ws/.github/hooks"/rnex-hook-*.sh "$_scph_ws/.github/hooks/rnex-hooks.json" 2>/dev/null || true
+      rmdir "$_scph_ws/.github/hooks" 2>/dev/null || true
+      rmdir "$_scph_ws/.github" 2>/dev/null || true
+      ;;
+    cursor)
+      rm -f "$_scph_ws/.cursor/hooks.json"
+      rm -f "$_scph_ws/.cursor/hooks"/rnex-hook-*.sh "$_scph_ws/.cursor/hooks/rnex-hooks.json" 2>/dev/null || true
+      rmdir "$_scph_ws/.cursor/hooks" 2>/dev/null || true
+      rmdir "$_scph_ws/.cursor" 2>/dev/null || true
+      ;;
+    windsurf)
+      rm -f "$_scph_ws/.windsurf/hooks.json"
+      rm -f "$_scph_ws/.windsurf/hooks"/rnex-hook-*.sh "$_scph_ws/.windsurf/hooks/rnex-hooks.json" 2>/dev/null || true
+      rmdir "$_scph_ws/.windsurf/hooks" 2>/dev/null || true
+      rmdir "$_scph_ws/.windsurf" 2>/dev/null || true
+      ;;
+    codex)
+      rm -f "$_scph_ws/.codex/hooks.json"
+      rm -f "$_scph_ws/.codex/hooks"/rnex-hook-*.sh "$_scph_ws/.codex/hooks/rnex-hooks.json" 2>/dev/null || true
+      rmdir "$_scph_ws/.codex/hooks" 2>/dev/null || true
+      rmdir "$_scph_ws/.codex" 2>/dev/null || true
+      ;;
+    claude)
+      _sdk_clean_json_hooks "$_scph_ws/.claude/settings.json"
+      rm -f "$_scph_ws/.claude/hooks"/rnex-hook-*.sh "$_scph_ws/.claude/hooks/rnex-hooks.json" 2>/dev/null || true
+      rmdir "$_scph_ws/.claude/hooks" 2>/dev/null || true
+      rmdir "$_scph_ws/.claude" 2>/dev/null || true
+      ;;
+    gemini)
+      _sdk_clean_json_hooks "$_scph_ws/.gemini/settings.json"
+      rmdir "$_scph_ws/.gemini" 2>/dev/null || true
+      if [ -f "$_scph_ws/.agents/hooks.json" ]; then
+        _clean_agents_rnex_hooks "$_scph_ws/.agents/hooks.json" 2>/dev/null || true
+        rmdir "$_scph_ws/.agents" 2>/dev/null || true
+      fi
+      rm -f "$_scph_ws/.agents/hooks"/rnex-hook-*.sh "$_scph_ws/.agents/hooks/rnex-hooks.json" 2>/dev/null || true
+      rmdir "$_scph_ws/.agents/hooks" 2>/dev/null || true
+      ;;
+  esac
+}
+
+# ============================================================================
+# rnex_sdk_sync_provider_hooks
+# ============================================================================
+# Universal AI provider hook projection engine. Translates declarative hook
+# specifications from rnex.yaml / .local.rnex.yaml into native hook configuration
+# files across all 6 supported AI providers.
+#
+# Supported Native Hook Targets:
+#   - copilot:  .github/hooks/rnex.json (version 1 schema with bash and command)
+#   - cursor:   .cursor/hooks.json (version 1 schema)
+#   - windsurf: .windsurf/hooks.json (Cascade schema)
+#   - codex:    .codex/hooks.json (Envelope schema)
+#   - claude:   .claude/settings.json (Envelope schema merged with existing settings)
+#   - gemini:   .gemini/settings.json (Envelope schema merged with existing settings)
+#
+# Zero-Hook Invariant:
+#   If no hooks are declared, managed files and hooks blocks are removed.
+#
+# @param ws_root (string) - Path to workspace root directory
+# @param provider (string) - Provider identifier (copilot, cursor, windsurf, codex, claude, gemini)
+# @returns 0 on success
+# @sideEffects Writes or removes provider hook files via atomic temp files
+# ============================================================================
+rnex_sdk_sync_provider_hooks() {
+  _sph_ws="${1:-${RNEX_ROOT:-${NEXUS_DIR:-$PWD}}}"
+  _sph_provider="$2"
+
+  _sph_events=""
+  if command -v rnex_yaml_get_plugin_hook_events >/dev/null 2>&1; then
+    _sph_events="$(rnex_yaml_get_plugin_hook_events "$_sph_ws" "$_sph_provider" 2>/dev/null || true)"
+  elif command -v yaml_list_plugin_hooks >/dev/null 2>&1; then
+    _sph_events="$(yaml_list_plugin_hooks "$_sph_provider" 2>/dev/null || true)"
+  elif command -v provider_hooks_list >/dev/null 2>&1; then
+    _sph_events="$(provider_hooks_list "$_sph_provider" 2>/dev/null || true)"
+  fi
+
+  _sph_tmp_dir="$_sph_ws/.rnex/tmp/sdk_hooks_${_sph_provider}_$$"
+  mkdir -p "$_sph_tmp_dir"
+
+  _sph_total_cmds=0
+  _sph_target_events=""
+
+  for _sph_raw_ev in $_sph_events; do
+    [ -n "$_sph_raw_ev" ] || continue
+    _sph_mapped_ev="$(rnex_sdk_map_hook_event "$_sph_provider" "$_sph_raw_ev")"
+    [ -n "$_sph_mapped_ev" ] || continue
+
+    _sph_cmds=""
+    if command -v rnex_yaml_get_plugin_hook_commands >/dev/null 2>&1; then
+      _sph_cmds="$(rnex_yaml_get_plugin_hook_commands "$_sph_ws" "$_sph_provider" "$_sph_raw_ev" 2>/dev/null || true)"
+    elif command -v yaml_get_plugin_hook_commands >/dev/null 2>&1; then
+      _sph_cmds="$(yaml_get_plugin_hook_commands "$_sph_provider" "$_sph_raw_ev" 2>/dev/null || true)"
+    elif command -v provider_hook_commands >/dev/null 2>&1; then
+      _sph_cmds="$(provider_hook_commands "$_sph_provider" "$_sph_raw_ev" 2>/dev/null || true)"
+    fi
+    [ -n "$_sph_cmds" ] || continue
+
+    if [ ! -f "$_sph_tmp_dir/ev_${_sph_mapped_ev}.cmds" ]; then
+      _sph_target_events="${_sph_target_events:+$_sph_target_events }$_sph_mapped_ev"
+      : > "$_sph_tmp_dir/ev_${_sph_mapped_ev}.cmds"
+    fi
+
+    _sph_old_ifs="$IFS"
+    IFS='
+'
+    for _sph_cmd in $_sph_cmds; do
+      IFS="$_sph_old_ifs"
+      [ -n "$_sph_cmd" ] || continue
+      printf '%s\n' "$_sph_cmd" >> "$_sph_tmp_dir/ev_${_sph_mapped_ev}.cmds"
+      _sph_total_cmds=$(( _sph_total_cmds + 1 ))
+    done
+    IFS="$_sph_old_ifs"
+  done
+
+  # Zero-Hook Invariant: if zero commands configured, clean up managed files and return 0
+  if [ "$_sph_total_cmds" -eq 0 ]; then
+    rm -rf "$_sph_tmp_dir"
+    rnex_sdk_clean_provider_hooks "$_sph_ws" "$_sph_provider"
+    return 0
+  fi
+
+  case "$_sph_provider" in
+    copilot)
+      _sph_target_file="$_sph_ws/.github/hooks/rnex.json"
+      _sph_tmp_out="$_sph_ws/.rnex/tmp/copilot_hooks_$$.tmp"
+      mkdir -p "$_sph_ws/.github/hooks" "$_sph_ws/.rnex/tmp"
+      {
+        printf '{\n'
+        printf '  "version": 1,\n'
+        printf '  "hooks": {\n'
+        _first_ev=1
+        for _tev in $_sph_target_events; do
+          [ "$_first_ev" -eq 0 ] && printf ',\n'
+          _first_ev=0
+          printf '    "%s": [\n' "$_tev"
+          _first_cmd=1
+          while IFS= read -r _cmd || [ -n "$_cmd" ]; do
+            [ -n "$_cmd" ] || continue
+            [ "$_first_cmd" -eq 0 ] && printf ',\n'
+            _first_cmd=0
+            _esc_cmd="$(rnex_sdk_escape_json_string "$_cmd")"
+            printf '      {\n'
+            printf '        "type": "command",\n'
+            printf '        "bash": "%s",\n' "$_esc_cmd"
+            printf '        "command": "%s"\n' "$_esc_cmd"
+            printf '      }'
+          done < "$_sph_tmp_dir/ev_${_tev}.cmds"
+          printf '\n    ]'
+        done
+        printf '\n  }\n}\n'
+      } > "$_sph_tmp_out"
+      mv "$_sph_tmp_out" "$_sph_target_file"
+      ;;
+    cursor)
+      _sph_target_file="$_sph_ws/.cursor/hooks.json"
+      _sph_tmp_out="$_sph_ws/.rnex/tmp/cursor_hooks_$$.tmp"
+      mkdir -p "$_sph_ws/.cursor" "$_sph_ws/.rnex/tmp"
+      {
+        printf '{\n'
+        printf '  "version": 1,\n'
+        printf '  "hooks": {\n'
+        _first_ev=1
+        for _tev in $_sph_target_events; do
+          [ "$_first_ev" -eq 0 ] && printf ',\n'
+          _first_ev=0
+          printf '    "%s": [\n' "$_tev"
+          _first_cmd=1
+          while IFS= read -r _cmd || [ -n "$_cmd" ]; do
+            [ -n "$_cmd" ] || continue
+            [ "$_first_cmd" -eq 0 ] && printf ',\n'
+            _first_cmd=0
+            _esc_cmd="$(rnex_sdk_escape_json_string "$_cmd")"
+            printf '      {\n'
+            printf '        "command": "%s"\n' "$_esc_cmd"
+            printf '      }'
+          done < "$_sph_tmp_dir/ev_${_tev}.cmds"
+          printf '\n    ]'
+        done
+        printf '\n  }\n}\n'
+      } > "$_sph_tmp_out"
+      mv "$_sph_tmp_out" "$_sph_target_file"
+      ;;
+    windsurf)
+      _sph_target_file="$_sph_ws/.windsurf/hooks.json"
+      _sph_tmp_out="$_sph_ws/.rnex/tmp/windsurf_hooks_$$.tmp"
+      mkdir -p "$_sph_ws/.windsurf" "$_sph_ws/.rnex/tmp"
+      {
+        printf '{\n'
+        printf '  "hooks": {\n'
+        _first_ev=1
+        for _tev in $_sph_target_events; do
+          [ "$_first_ev" -eq 0 ] && printf ',\n'
+          _first_ev=0
+          printf '    "%s": [\n' "$_tev"
+          _first_cmd=1
+          while IFS= read -r _cmd || [ -n "$_cmd" ]; do
+            [ -n "$_cmd" ] || continue
+            [ "$_first_cmd" -eq 0 ] && printf ',\n'
+            _first_cmd=0
+            _esc_cmd="$(rnex_sdk_escape_json_string "$_cmd")"
+            printf '      {\n'
+            printf '        "command": "%s"\n' "$_esc_cmd"
+            printf '      }'
+          done < "$_sph_tmp_dir/ev_${_tev}.cmds"
+          printf '\n    ]'
+        done
+        printf '\n  }\n}\n'
+      } > "$_sph_tmp_out"
+      mv "$_sph_tmp_out" "$_sph_target_file"
+      ;;
+    codex)
+      _sph_target_file="$_sph_ws/.codex/hooks.json"
+      _sph_tmp_out="$_sph_ws/.rnex/tmp/codex_hooks_$$.tmp"
+      mkdir -p "$_sph_ws/.codex" "$_sph_ws/.rnex/tmp"
+      {
+        printf '{\n'
+        printf '  "hooks": {\n'
+        _first_ev=1
+        for _tev in $_sph_target_events; do
+          [ "$_first_ev" -eq 0 ] && printf ',\n'
+          _first_ev=0
+          printf '    "%s": [\n' "$_tev"
+          printf '      {\n'
+          printf '        "hooks": [\n'
+          _first_cmd=1
+          while IFS= read -r _cmd || [ -n "$_cmd" ]; do
+            [ -n "$_cmd" ] || continue
+            [ "$_first_cmd" -eq 0 ] && printf ',\n'
+            _first_cmd=0
+            _esc_cmd="$(rnex_sdk_escape_json_string "$_cmd")"
+            printf '          {\n'
+            printf '            "type": "command",\n'
+            printf '            "command": "%s"\n' "$_esc_cmd"
+            printf '          }'
+          done < "$_sph_tmp_dir/ev_${_tev}.cmds"
+          printf '\n        ]\n'
+          printf '      }\n'
+          printf '    ]'
+        done
+        printf '\n  }\n}\n'
+      } > "$_sph_tmp_out"
+      mv "$_sph_tmp_out" "$_sph_target_file"
+      ;;
+    claude|gemini)
+      _sph_block_tmp="$_sph_ws/.rnex/tmp/${_sph_provider}_block_$$.tmp"
+      mkdir -p "$_sph_ws/.rnex/tmp"
+      {
+        printf '  "hooks": {\n'
+        _first_ev=1
+        for _tev in $_sph_target_events; do
+          [ "$_first_ev" -eq 0 ] && printf ',\n'
+          _first_ev=0
+          printf '    "%s": [\n' "$_tev"
+          printf '      {\n'
+          printf '        "hooks": [\n'
+          _first_cmd=1
+          while IFS= read -r _cmd || [ -n "$_cmd" ]; do
+            [ -n "$_cmd" ] || continue
+            [ "$_first_cmd" -eq 0 ] && printf ',\n'
+            _first_cmd=0
+            _esc_cmd="$(rnex_sdk_escape_json_string "$_cmd")"
+            printf '          {\n'
+            printf '            "type": "command",\n'
+            printf '            "command": "%s"\n' "$_esc_cmd"
+            printf '          }'
+          done < "$_sph_tmp_dir/ev_${_tev}.cmds"
+          printf '\n        ]\n'
+          printf '      }\n'
+          printf '    ]'
+        done
+        printf '\n  }\n'
+      } > "$_sph_block_tmp"
+
+      if [ "$_sph_provider" = "claude" ]; then
+        _sph_target_file="$_sph_ws/.claude/settings.json"
+      else
+        _sph_target_file="$_sph_ws/.gemini/settings.json"
+      fi
+      _sdk_merge_settings_json "$_sph_target_file" "$_sph_block_tmp" "$_sph_ws"
+      rm -f "$_sph_block_tmp"
+      ;;
+  esac
+
+  rm -rf "$_sph_tmp_dir"
+  return 0
+}
+
+# ---- Legacy AI Provider Hooks Management (Two-Tier .rnex/ Working Files + rnex-* Pointers) ----
 
 _sdk_inject_ignore_hooks() {
   printf '%s\n' "$1" | sed -e 's|^\([ \t]*\)\./rnex\([ \t]\)|\1./rnex --ignore-hooks\2|g' \
@@ -759,188 +1332,16 @@ _clean_agents_rnex_hooks() {
   fi
 }
 
-# Synchronize configurable AI provider hooks following RNEX principles:
-# 1. Generates deterministic working hook script at .rnex/plugins/<provider>/hooks/rnex-hook-<event>.sh
-# 2. Generates deterministic rnex-* pointer script at <provider_dir>/hooks/rnex-hook-<event>.sh referencing the .rnex/ working script
-# 3. Generates deterministic <provider_dir>/hooks/rnex-hooks.json manifest (and updates native .claude/settings.json or .agents/hooks.json if specified)
+# ---- AI Provider Hooks Compatibility Delegates ----------------------------
+
 sync_provider_hooks() {
   _sph_provider="$1"
-  _sph_pdir="$2"
-  _sph_native_json="${3:-}"
   _sph_ws="${RNEX_ROOT:-${NEXUS_DIR:-$PWD}}"
-
-  _sph_rel_pdir="${_sph_pdir#"$_sph_ws"/}"
-  _sph_rel_pdir="${_sph_rel_pdir#./}"
-  _sph_rel_pdir="${_sph_rel_pdir%/}"
-  _sph_abs_pdir="$_sph_ws/$_sph_rel_pdir"
-
-  _sph_work_dir="$_sph_ws/.rnex/plugins/$_sph_provider/hooks"
-  _sph_ptr_dir="$_sph_abs_pdir/hooks"
-
-  # Remove stale generated rnex-hook-* scripts before regenerating active ones
-  rm -f "$_sph_work_dir"/rnex-hook-*.sh 2>/dev/null || true
-  rm -f "$_sph_ptr_dir"/rnex-hook-*.sh "$_sph_ptr_dir/rnex-hooks.json" 2>/dev/null || true
-  if [ -n "$_sph_native_json" ]; then
-    case "$_sph_provider" in
-      claude) _clean_claude_rnex_hooks "$_sph_native_json" ;;
-      gemini) _clean_agents_rnex_hooks "$_sph_native_json" ;;
-    esac
-  fi
-
-  provider_plugin_enabled "$_sph_provider" 2>/dev/null || {
-    rmdir "$_sph_ptr_dir" 2>/dev/null || true
-    rmdir "$_sph_abs_pdir" 2>/dev/null || true
-    return 0
-  }
-
-  _sph_events="$(provider_hooks_list "$_sph_provider" 2>/dev/null || true)"
-  _sph_active_events=""
-
-  for _sph_ev in $_sph_events; do
-    [ -n "$_sph_ev" ] || continue
-    _sph_cmds="$(provider_hook_commands "$_sph_provider" "$_sph_ev" 2>/dev/null || true)"
-    [ -n "$_sph_cmds" ] || continue
-
-    _sph_ev_slug="$(printf '%s' "$_sph_ev" | sed -e 's/\([a-z0-9]\)\([A-Z]\)/\1-\2/g' -e 's/[_ ]/-/g' | tr '[:upper:]' '[:lower:]')"
-    mkdir -p "$_sph_work_dir" "$_sph_ptr_dir"
-    _sph_work_file="$_sph_work_dir/rnex-hook-${_sph_ev_slug}.sh"
-    _sph_ptr_file="$_sph_ptr_dir/rnex-hook-${_sph_ev_slug}.sh"
-
-    # 1. Write deterministic working hook script inside .rnex/plugins/<provider>/hooks/
-    {
-      printf '#!/bin/sh\n'
-      printf '# Managed by Repo Nexus (rnex) — Working hook script for %s (%s)\n' "$_sph_provider" "$_sph_ev"
-      cat <<'WORK_HDR_EOF'
-set -e
-RNEX_IGNORE_HOOKS=1
-export RNEX_IGNORE_HOOKS
-_ws="$(cd "$(dirname "$0")/../../../.." 2>/dev/null && pwd -P)"
-[ -n "$_ws" ] && cd "$_ws" 2>/dev/null || true
-rnex() {
-  if [ -x "$_ws/rnex" ]; then
-    "$_ws/rnex" --ignore-hooks "$@"
-  elif command -v rnex >/dev/null 2>&1; then
-    command rnex --ignore-hooks "$@"
-  fi
-}
-WORK_HDR_EOF
-      _old_ifs="$IFS"
-      IFS='
-'
-      for _sph_c in $_sph_cmds; do
-        IFS="$_old_ifs"
-        [ -n "$_sph_c" ] || continue
-        _sdk_inject_ignore_hooks "$_sph_c"
-      done
-      IFS="$_old_ifs"
-    } > "$_sph_work_file"
-    chmod +x "$_sph_work_file"
-
-    # 2. Write deterministic rnex-* pointer script in provider hooks directory referencing .rnex/ working script
-    cat > "$_sph_ptr_file" <<PTR_EOF
-#!/bin/sh
-# Managed by Repo Nexus (rnex) — Pointer to .rnex/plugins/${_sph_provider}/hooks/rnex-hook-${_sph_ev_slug}.sh
-_ws="\$(cd "\$(dirname "\$0")/../.." 2>/dev/null && pwd -P)"
-exec sh "\$_ws/.rnex/plugins/${_sph_provider}/hooks/rnex-hook-${_sph_ev_slug}.sh" "\$@"
-PTR_EOF
-    chmod +x "$_sph_ptr_file"
-
-    _sph_active_events="${_sph_active_events:+$_sph_active_events }$_sph_ev"
-  done
-
-  if [ -z "$_sph_active_events" ]; then
-    rmdir "$_sph_ptr_dir" 2>/dev/null || true
-    rmdir "$_sph_abs_pdir" 2>/dev/null || true
-    return 0
-  fi
-
-  # 3. Write deterministic rnex-hooks.json manifest in provider hooks directory referencing .rnex/ working files
-  _sph_json_manifest="$_sph_ptr_dir/rnex-hooks.json"
-  {
-    printf '{\n  "hooks": {\n'
-    _first_ev=1
-    for _sph_ev in $_sph_active_events; do
-      _sph_ev_slug="$(printf '%s' "$_sph_ev" | sed -e 's/\([a-z0-9]\)\([A-Z]\)/\1-\2/g' -e 's/[_ ]/-/g' | tr '[:upper:]' '[:lower:]')"
-      if [ "$_first_ev" -eq 0 ]; then
-        printf ',\n'
-      fi
-      _first_ev=0
-      printf '    "%s": [\n      {\n        "name": "rnex-hook-%s",\n        "type": "command",\n        "command": "%s/hooks/rnex-hook-%s.sh",\n        "working_file": ".rnex/plugins/%s/hooks/rnex-hook-%s.sh"\n      }\n    ]' \
-        "$_sph_ev" "$_sph_ev_slug" "$_sph_rel_pdir" "$_sph_ev_slug" "$_sph_provider" "$_sph_ev_slug"
-    done
-    printf '\n  }\n}\n'
-  } > "$_sph_json_manifest"
-
-  # 4. Sync native provider settings file if applicable (.claude/settings.json or .agents/hooks.json)
-  if [ -n "$_sph_native_json" ]; then
-    case "$_sph_provider" in
-      claude)
-        for _sph_ev in $_sph_active_events; do
-          _sph_ev_slug="$(printf '%s' "$_sph_ev" | sed -e 's/\([a-z0-9]\)\([A-Z]\)/\1-\2/g' -e 's/[_ ]/-/g' | tr '[:upper:]' '[:lower:]')"
-          _sync_claude_rnex_hook_event "$_sph_native_json" "$_sph_ev" "${_sph_rel_pdir}/hooks/rnex-hook-${_sph_ev_slug}.sh"
-        done
-        ;;
-      gemini)
-        _sph_block_tmp="$(mktemp)"
-        {
-          printf '  "rnex-hooks": {\n'
-          _first_ev=1
-          for _sph_ev in $_sph_active_events; do
-            _sph_ev_slug="$(printf '%s' "$_sph_ev" | sed -e 's/\([a-z0-9]\)\([A-Z]\)/\1-\2/g' -e 's/[_ ]/-/g' | tr '[:upper:]' '[:lower:]')"
-            if [ "$_first_ev" -eq 0 ]; then
-              printf ',\n'
-            fi
-            _first_ev=0
-            printf '    "%s": [\n      {\n        "name": "rnex-hook-%s",\n        "type": "command",\n        "command": "%s/hooks/rnex-hook-%s.sh",\n        "working_file": ".rnex/plugins/%s/hooks/rnex-hook-%s.sh"\n      }\n    ]' \
-              "$_sph_ev" "$_sph_ev_slug" "$_sph_rel_pdir" "$_sph_ev_slug" "$_sph_provider" "$_sph_ev_slug"
-          done
-          printf '\n  }'
-        } > "$_sph_block_tmp"
-        if [ ! -f "$_sph_native_json" ]; then
-          mkdir -p "$(dirname "$_sph_native_json")"
-          {
-            printf '{\n'
-            cat "$_sph_block_tmp"
-            printf '\n}\n'
-          } > "$_sph_native_json"
-        else
-          _tmp="$(mktemp)"
-          awk -v bfile="$_sph_block_tmp" '
-            /^[ \t]*\{/ && !done {
-              print
-              while ((getline line < bfile) > 0) print line ","
-              close(bfile)
-              done = 1
-              next
-            }
-            { print }
-          ' "$_sph_native_json" > "$_tmp" && mv "$_tmp" "$_sph_native_json"
-        fi
-        rm -f "$_sph_block_tmp"
-        ;;
-    esac
-  fi
+  rnex_sdk_sync_provider_hooks "$_sph_ws" "$_sph_provider"
 }
 
 clean_provider_hooks() {
   _cph_provider="$1"
-  _cph_pdir="$2"
-  _cph_native_json="${3:-}"
   _cph_ws="${RNEX_ROOT:-${NEXUS_DIR:-$PWD}}"
-
-  _cph_rel_pdir="${_cph_pdir#"$_cph_ws"/}"
-  _cph_rel_pdir="${_cph_rel_pdir#./}"
-  _cph_rel_pdir="${_cph_rel_pdir%/}"
-  _cph_abs_pdir="$_cph_ws/$_cph_rel_pdir"
-
-  rm -f "$_cph_ws/.rnex/plugins/$_cph_provider/hooks"/rnex-hook-*.sh 2>/dev/null || true
-  rm -f "$_cph_abs_pdir/hooks"/rnex-hook-*.sh "$_cph_abs_pdir/hooks/rnex-hooks.json" 2>/dev/null || true
-  if [ -n "$_cph_native_json" ]; then
-    case "$_cph_provider" in
-      claude) _clean_claude_rnex_hooks "$_cph_native_json" ;;
-      gemini) _clean_agents_rnex_hooks "$_cph_native_json" ;;
-    esac
-  fi
-  rmdir "$_cph_abs_pdir/hooks" 2>/dev/null || true
-  rmdir "$_cph_abs_pdir" 2>/dev/null || true
+  rnex_sdk_clean_provider_hooks "$_cph_ws" "$_cph_provider"
 }

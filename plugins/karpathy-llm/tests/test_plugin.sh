@@ -1685,6 +1685,86 @@ grep -qF "No plugin AI instructions registered." "$_ai_instr" || {
 [ ! -f "$_proj_ai" ] || { fail "Projected ai-instructions.md was not pruned after disable"; exit 1; }
 pass
 
+# --------------------------------------------------------------------------
+# Test 31: Zero hidden hooks on sync & deterministic opt-in via rnex-hooks.after_sync
+# --------------------------------------------------------------------------
+run_test "Karpathy-llm: zero hidden hooks invariant on sync and deterministic explicit after_sync execution"
+TEST_HOOKS_WS="$TEST_TMP/karpathy-hooks-ws"
+mkdir -p "$TEST_HOOKS_WS"
+setup_plugin_test_workspace karpathy-llm "$TEST_HOOKS_WS"
+cd "$TEST_HOOKS_WS"
+"$TEST_HOOKS_WS/rnex" init -y --karpathy "$TEST_HOOKS_WS" >/dev/null
+
+mkdir -p "$TEST_HOOKS_WS/docs"
+cat <<'EOF_DOC' > "$TEST_HOOKS_WS/docs/guide.md"
+# Getting Started Guide
+This is the workspace getting started guide.
+EOF_DOC
+
+# 1. Configure karpathy-llm with NO hooks: sync must NOT run ingest
+cat <<'EOF_CFG_NOHOOK' > "$TEST_HOOKS_WS/rnex.yaml"
+version: 1.0.0
+plugins:
+  karpathy-llm:
+    wiki_dir: ".rnex/wiki"
+    sources:
+      - docs
+repos:
+EOF_CFG_NOHOOK
+
+(cd "$TEST_HOOKS_WS" && ./rnex sync -y >/dev/null)
+
+# Assert that no wiki shards were created for docs/guide.md
+[ ! -f "$TEST_HOOKS_WS/.rnex/wiki/repo-nexus-docs.md" ] || {
+  fail "Hidden hook violation: wiki shard created automatically on rnex sync without explicit hook"; exit 1;
+}
+if [ -d "$TEST_HOOKS_WS/.rnex/wiki" ]; then
+  ! grep -q "guide" "$TEST_HOOKS_WS/.rnex/wiki"/*.md 2>/dev/null || {
+    fail "Hidden hook violation: guide content found in wiki after sync without explicit hook"; exit 1;
+  }
+fi
+
+# 2. Configure explicit rnex-hooks.after_sync: sync must run ingest deterministically
+cat <<'EOF_CFG_HOOK' > "$TEST_HOOKS_WS/rnex.yaml"
+version: 1.0.0
+rnex-hooks:
+  after_sync:
+    - "rnex plugin karpathy-llm ingest"
+plugins:
+  karpathy-llm:
+    wiki_dir: ".rnex/wiki"
+    sources:
+      - docs
+repos:
+EOF_CFG_HOOK
+
+(cd "$TEST_HOOKS_WS" && ./rnex sync -y >/dev/null)
+
+# Assert that wiki shard was created and contains guide
+[ -f "$TEST_HOOKS_WS/.rnex/wiki/repo-nexus-docs.md" ] || {
+  fail "Wiki shard repo-nexus-docs.md missing after sync with explicit after_sync hook"; exit 1;
+}
+grep -q "guide" "$TEST_HOOKS_WS/.rnex/wiki/repo-nexus-docs.md" || {
+  fail "guide doc missing in repo-nexus-docs.md after sync with explicit after_sync hook"; exit 1;
+}
+
+# 3. Test priority override via .local.rnex.yaml
+cat <<'EOF_LOCAL_HOOK' > "$TEST_HOOKS_WS/.local.rnex.yaml"
+rnex-hooks:
+  after_sync:
+    - "printf 'OVERRIDDEN_HOOK\\n' > .rnex/hook_test.log"
+EOF_LOCAL_HOOK
+
+(cd "$TEST_HOOKS_WS" && ./rnex sync -y >/dev/null)
+[ -f "$TEST_HOOKS_WS/.rnex/hook_test.log" ] || {
+  fail ".local.rnex.yaml after_sync hook was not executed"; exit 1;
+}
+grep -q "OVERRIDDEN_HOOK" "$TEST_HOOKS_WS/.rnex/hook_test.log" || {
+  fail "Unexpected output from .local.rnex.yaml after_sync hook"; exit 1;
+}
+rm -f "$TEST_HOOKS_WS/.local.rnex.yaml" "$TEST_HOOKS_WS/.rnex/hook_test.log"
+pass
+
 if [ "${_STANDALONE_RUN:-0}" -eq 1 ]; then
   report_results
 fi

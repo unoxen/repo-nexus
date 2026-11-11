@@ -18,5 +18,5 @@ if ! provider_option_enabled "windsurf" "skills" 2>/dev/null; then
   clean_provider_user_skills "$_root/.windsurf/rules"
 fi
 
-sync_provider_hooks "windsurf" "$_root/.windsurf"
+rnex_sdk_sync_provider_hooks "$_root" "windsurf"
 rmdir "$_root/.windsurf" 2>/dev/null || true

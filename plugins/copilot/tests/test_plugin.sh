@@ -62,6 +62,71 @@ _pinfo_out="$(cd "$TEST_COPILOT_WS" && ./rnex plugin info copilot 2>&1)"
 echo "$_pinfo_out" | grep -q "copilot" || { fail "Copilot missing from plugin info: $_pinfo_out"; exit 1; }
 echo "$_pinfo_out" | grep -q "\.github/skills/" || { fail "skill_dir .github/skills missing from plugin info: $_pinfo_out"; exit 1; }
 echo "$_pinfo_out" | grep -q "skills" || { fail "skills option missing from plugin info: $_pinfo_out"; exit 1; }
+echo "$_pinfo_out" | grep -q "hooks" || { fail "hooks option missing from plugin info: $_pinfo_out"; exit 1; }
+pass
+
+# --------------------------------------------------------------------------
+run_test "Copilot plugin: zero default hooks on init, strict opt-in projection, and rnex.json cleanup"
+# 1. Zero default hooks invariant: no hook file created after init
+[ ! -f "$TEST_COPILOT_WS/.github/hooks/rnex.json" ] || { fail ".github/hooks/rnex.json should not exist by default (zero default hooks)"; exit 1; }
+[ ! -d "$TEST_COPILOT_WS/.github/hooks" ] || { fail ".github/hooks directory should not exist by default"; exit 1; }
+
+# 2. Explicitly configure hooks in rnex.yaml
+cat <<'EOF_CFG' > "$TEST_COPILOT_WS/rnex.yaml"
+version: 1.0.0
+plugins:
+  copilot:
+    skills: true
+    hooks:
+      SessionStart:
+        - "rnex sync --quiet"
+repos:
+EOF_CFG
+(cd "$TEST_COPILOT_WS" && ./rnex sync -y >/dev/null)
+
+[ -f "$TEST_COPILOT_WS/.github/hooks/rnex.json" ] || { fail ".github/hooks/rnex.json missing after configuring hooks"; exit 1; }
+grep -q '"version": 1' "$TEST_COPILOT_WS/.github/hooks/rnex.json" || { fail "version 1 missing in rnex.json"; exit 1; }
+grep -q '"sessionStart"' "$TEST_COPILOT_WS/.github/hooks/rnex.json" || { fail "sessionStart hook missing in rnex.json"; exit 1; }
+grep -q '"bash": "rnex sync --quiet"' "$TEST_COPILOT_WS/.github/hooks/rnex.json" || { fail "bash command missing in rnex.json"; exit 1; }
+grep -q '"command": "rnex sync --quiet"' "$TEST_COPILOT_WS/.github/hooks/rnex.json" || { fail "command field missing in rnex.json"; exit 1; }
+
+# 3. Disable hooks (hooks: false) in rnex.yaml
+cat <<'EOF_CFG2' > "$TEST_COPILOT_WS/rnex.yaml"
+version: 1.0.0
+plugins:
+  copilot:
+    skills: true
+    hooks: false
+repos:
+EOF_CFG2
+(cd "$TEST_COPILOT_WS" && ./rnex sync -y >/dev/null)
+
+[ ! -f "$TEST_COPILOT_WS/.github/hooks/rnex.json" ] || { fail ".github/hooks/rnex.json should be removed when hooks: false"; exit 1; }
+
+# 4. Re-enable with hooks map
+cat <<'EOF_CFG3' > "$TEST_COPILOT_WS/rnex.yaml"
+version: 1.0.0
+plugins:
+  copilot:
+    skills: true
+    hooks:
+      SessionStart:
+        - "rnex sync --quiet"
+repos:
+EOF_CFG3
+(cd "$TEST_COPILOT_WS" && ./rnex sync -y >/dev/null)
+[ -f "$TEST_COPILOT_WS/.github/hooks/rnex.json" ] || { fail ".github/hooks/rnex.json not restored"; exit 1; }
+
+# 5. Clean removal when hooks omitted from rnex.yaml
+cat <<'EOF_CFG4' > "$TEST_COPILOT_WS/rnex.yaml"
+version: 1.0.0
+plugins:
+  copilot:
+    skills: true
+repos:
+EOF_CFG4
+(cd "$TEST_COPILOT_WS" && ./rnex sync -y >/dev/null)
+[ ! -f "$TEST_COPILOT_WS/.github/hooks/rnex.json" ] || { fail ".github/hooks/rnex.json should be removed when hooks omitted"; exit 1; }
 pass
 
 # --------------------------------------------------------------------------

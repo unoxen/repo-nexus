@@ -29,6 +29,10 @@ Operational skills, rules, and subagents remain cleanly encapsulated within `.rn
    - Plugin skills reside under `.rnex/plugins/<plugin>/skills/`.
    - Subagents reside under `.rnex/agents/` and `.rnex/plugins/<plugin>/agents/` and are invoked as subagents without external mirroring.
 
+4. **Lifecycle Hooks Integration (`.codex/hooks.json`)**:
+   - Projects user-configured hooks from `rnex.yaml` into `.codex/hooks.json` using Codex's native hook schema (e.g. `SessionStart`).
+   - Hooks are strictly opt-in; omitting `hooks` ensures `.codex/hooks.json` remains clean or is deleted if empty.
+
 ---
 
 ## Enabling the Plugin
@@ -60,6 +64,9 @@ plugins:
   codex:
     skills: true         # Generate user skills in .codex/skills/ (default: true)
     instructions: true   # Maintain routing instructions in CODEX.md (default: true)
+    hooks:               # Strictly opt-in AI lifecycle hooks
+      SessionStart:
+        - "rnex sync --quiet"
     enabled: true        # Set to false to disable
 ```
 
@@ -67,6 +74,7 @@ plugins:
 |:---|:---|:---|:---|
 | `skills` | boolean | `true` | Generate user skill pointers in `.codex/skills/rnex-*/SKILL.md`. |
 | `instructions` | boolean | `true` | Maintain routing directive in `CODEX.md`. |
+| `hooks` | map | *(none)* | Strictly opt-in lifecycle hooks projected into `.codex/hooks.json` (e.g. `SessionStart: ["rnex sync --quiet"]`). Cleanly removed when unconfigured. |
 | `enabled` | boolean | `true` | Enable or disable the plugin. Overridable in `.local.rnex.yaml`. |
 
 ---

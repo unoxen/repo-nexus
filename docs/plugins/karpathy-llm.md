@@ -151,6 +151,30 @@ rnex plugin karpathy-llm ingest --quiet
 | `--quiet, -q` | boolean | `false` | Suppress non-essential informational output. |
 | `-h, --help` | boolean | `false` | Display command usage and options. |
 
+### Automated Ingestion via Workspace Lifecycle Hooks (Strictly Opt-In)
+
+Repo Nexus enforces a strict **zero-hidden-hooks** architecture: `rnex sync` reconciles workspace state and projects user skills into configured AI assistants, but **never** runs automatic or implicit document ingestion without explicit user declaration.
+
+To execute wiki ingestion automatically at the end of each `rnex sync`, declare the lifecycle hook under `rnex-hooks.after_sync` in `rnex.yaml` or `.local.rnex.yaml`:
+
+```yaml
+# ==============================================================================
+# RNEX Lifecycle Hooks (Strictly Opt-In — Zero Defaults)
+# ==============================================================================
+rnex-hooks:
+  after_sync:
+    - "rnex plugin karpathy-llm ingest"
+
+# ==============================================================================
+# Workspace Plugins
+# ==============================================================================
+plugins:
+  karpathy-llm:
+    sources:
+      - docs
+      - "repos/**/README.md"
+```
+
 ### `rnex plugin karpathy-llm lint`
 
 Standalone structural, reference, and sorting audit for the wiki. Inspects directory structures, auto-heals and recursively subdivides oversized shards exceeding `btree_shard_max_entries` (max 100 records per leaf shard; splits infinitely by letters, first 2 letters, first 3 letters, etc. without error), verifies link targets, checks sorting order (`LC_ALL=C`), asserts zero symbolic links, and verifies the $\le 80$ line ceiling on `index.md`:

@@ -28,6 +28,10 @@ Operational skills, rules, and subagents remain cleanly encapsulated within `.rn
    - Plugin skills reside under `.rnex/plugins/<plugin>/skills/`.
    - Subagents reside under `.rnex/agents/` and `.rnex/plugins/<plugin>/agents/` and are invoked as subagents without external mirroring.
 
+4. **Lifecycle Hooks Integration (`.gemini/settings.json`)**:
+   - Projects user-configured hooks from `rnex.yaml` into `.gemini/settings.json` using Gemini's native hook schema (e.g. `SessionStart`).
+   - Hooks are strictly opt-in; omitting `hooks` ensures `.gemini/settings.json` remains clean or has managed hook entries pruned immediately.
+
 ---
 
 ## Enabling the Plugin
@@ -58,7 +62,7 @@ Configure options under `plugins.gemini` in `rnex.yaml` or `.local.rnex.yaml`:
 plugins:
   gemini:
     skills: true         # Generate user skills in .agents/skills/ (default: true)
-    hooks:               # Configure AI provider lifecycle hooks (or false to disable)
+    hooks:               # Strictly opt-in AI lifecycle hooks
       SessionStart:
         - "rnex sync --quiet"
     enabled: true        # Set to false to disable
@@ -67,7 +71,7 @@ plugins:
 | Option | Type | Default | Description |
 |:---|:---|:---|:---|
 | `skills` | boolean | `true` | Generate user skill pointers in `.agents/skills/rnex-*/SKILL.md`. |
-| `hooks` | map/boolean | `SessionStart: ["rnex sync --quiet"]` | Lifecycle hooks generated in `.agents/hooks/rnex-hook-<event>.sh` (pointing to `.rnex/plugins/gemini/hooks/rnex-hook-<event>.sh`) and registered in `.agents/hooks.json` (or `false` to disable). |
+| `hooks` | map | *(none)* | Strictly opt-in lifecycle hooks projected into `.gemini/settings.json` (e.g. `SessionStart: ["rnex sync --quiet"]`). Cleanly removed when unconfigured. |
 | `enabled` | boolean | `true` | Enable or disable the plugin. Overridable in `.local.rnex.yaml`. |
 
 ---

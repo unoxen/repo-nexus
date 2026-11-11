@@ -18,5 +18,5 @@ if ! provider_option_enabled "claude" "skills" 2>/dev/null; then
   clean_provider_user_skills "$_root/.claude/skills"
 fi
 
-sync_provider_hooks "claude" "$_root/.claude" "$_root/.claude/settings.json"
+rnex_sdk_sync_provider_hooks "$_root" "claude"
 rmdir "$_root/.claude" 2>/dev/null || true

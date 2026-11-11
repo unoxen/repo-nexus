@@ -28,6 +28,10 @@ Operational skills, rules, and subagents remain cleanly encapsulated within `.rn
    - Plugin skills reside under `.rnex/plugins/<plugin>/skills/`.
    - Subagents reside under `.rnex/agents/` and `.rnex/plugins/<plugin>/agents/` and are invoked as subagents without external mirroring.
 
+4. **Lifecycle Hooks Integration (`.windsurf/hooks.json`)**:
+   - Projects user-configured hooks from `rnex.yaml` into `.windsurf/hooks.json` (normalizing `SessionStart` to `pre_user_prompt`).
+   - Hooks are strictly opt-in; omitting `hooks` ensures `.windsurf/hooks.json` remains clean or is deleted if empty.
+
 ---
 
 ## Enabling the Plugin
@@ -58,12 +62,16 @@ Configure options under `plugins.windsurf` in `rnex.yaml` or `.local.rnex.yaml`:
 plugins:
   windsurf:
     skills: true         # Generate user skills in .windsurf/rules/ (default: true)
+    hooks:               # Strictly opt-in AI lifecycle hooks
+      SessionStart:
+        - "rnex sync --quiet"
     enabled: true        # Set to false to disable
 ```
 
 | Option | Type | Default | Description |
 |:---|:---|:---|:---|
 | `skills` | boolean | `true` | Generate user skill pointers in `.windsurf/rules/rnex-*.md`. |
+| `hooks` | map | *(none)* | Strictly opt-in lifecycle hooks projected into `.windsurf/hooks.json` (e.g. `SessionStart: ["rnex sync --quiet"]`). Cleanly removed when unconfigured. |
 | `enabled` | boolean | `true` | Enable or disable the plugin. Overridable in `.local.rnex.yaml`. |
 
 ---
