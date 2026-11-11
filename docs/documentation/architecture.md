@@ -88,7 +88,7 @@ Repo Nexus injects workspace routing rules into developer instruction files (`AG
 
 ```markdown
 <!-- REPO-NEXUS:START -->
-CRITICAL: You MUST read and strictly follow all instructions in `.rnex/ai-instructions.md` before executing any task or answering any query in this workspace.
+CRITICAL: If `.rnex/ai-instructions.md` exists, you MUST read and strictly follow all instructions in `.rnex/ai-instructions.md` before executing any task or answering any query in this workspace. If `.rnex/ai-instructions.md` does not exist, disregard this instruction and proceed normally.
 <!-- REPO-NEXUS:END -->
 ```
 

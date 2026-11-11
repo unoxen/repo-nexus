@@ -30,7 +30,7 @@ grep -q '!repos/\*' "$TEST_GEMINI_WS/.geminiignore" || { fail "!repos/* missing 
 
 _expected_3line_block="$(printf '%s\n%s\n%s' \
   "<!-- REPO-NEXUS:START -->" \
-  "CRITICAL: You MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\` before executing any task or answering any query in this workspace." \
+  "CRITICAL: If \`.rnex/ai-instructions.md\` exists, you MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\` before executing any task or answering any query in this workspace. If \`.rnex/ai-instructions.md\` does not exist, disregard this instruction and proceed normally." \
   "<!-- REPO-NEXUS:END -->")"
 _gemini_block="$(awk '/<!-- REPO-NEXUS:START -->/,/<!-- REPO-NEXUS:END -->/' "$TEST_GEMINI_WS/GEMINI.md")"
 [ "$_gemini_block" = "$_expected_3line_block" ] || { fail "GEMINI.md block did not match expected 3-line block: $_gemini_block"; exit 1; }

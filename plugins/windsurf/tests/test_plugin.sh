@@ -22,7 +22,7 @@ run_test "Windsurf plugin: init --windsurf provisions .windsurfrules and rules w
 
 _expected_3line_block="$(printf '%s\n%s\n%s' \
   "<!-- REPO-NEXUS:START -->" \
-  "CRITICAL: You MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\` before executing any task or answering any query in this workspace." \
+  "CRITICAL: If \`.rnex/ai-instructions.md\` exists, you MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\` before executing any task or answering any query in this workspace. If \`.rnex/ai-instructions.md\` does not exist, disregard this instruction and proceed normally." \
   "<!-- REPO-NEXUS:END -->")"
 _windsurf_block="$(awk '/<!-- REPO-NEXUS:START -->/,/<!-- REPO-NEXUS:END -->/' "$TEST_WINDSURF_WS/.windsurfrules")"
 [ "$_windsurf_block" = "$_expected_3line_block" ] || { fail ".windsurfrules block did not match expected 3-line block: $_windsurf_block"; exit 1; }

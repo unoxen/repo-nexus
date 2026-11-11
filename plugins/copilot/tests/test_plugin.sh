@@ -24,7 +24,7 @@ run_test "Copilot plugin: init --copilot provisions instructions and User Skills
 
 _expected_3line_block="$(printf '%s\n%s\n%s' \
   "<!-- REPO-NEXUS:START -->" \
-  "CRITICAL: You MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\` before executing any task or answering any query in this workspace." \
+  "CRITICAL: If \`.rnex/ai-instructions.md\` exists, you MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\` before executing any task or answering any query in this workspace. If \`.rnex/ai-instructions.md\` does not exist, disregard this instruction and proceed normally." \
   "<!-- REPO-NEXUS:END -->")"
 _copilot_block="$(awk '/<!-- REPO-NEXUS:START -->/,/<!-- REPO-NEXUS:END -->/' "$TEST_COPILOT_WS/.github/copilot-instructions.md")"
 [ "$_copilot_block" = "$_expected_3line_block" ] || { fail "copilot-instructions.md block did not match expected 3-line block: $_copilot_block"; exit 1; }
@@ -138,7 +138,7 @@ _sync_out="$(env -i PATH="$PATH" HOME="$HOME" RNEX_ROOT="$TEST_COPILOT_WS" sh "$
   fail "after_sync.sh failed in unpreloaded subshell: $_sync_out"; exit 1;
 }
 [ -f "$TEST_COPILOT_WS/.github/copilot-instructions.md" ] || { fail "copilot-instructions.md not created by standalone after_sync hook"; exit 1; }
-grep -q "CRITICAL: You MUST read and strictly follow all instructions" "$TEST_COPILOT_WS/.github/copilot-instructions.md" || {
+grep -q "CRITICAL: If \`.rnex/ai-instructions.md\` exists, you MUST read and strictly follow all instructions" "$TEST_COPILOT_WS/.github/copilot-instructions.md" || {
   fail "Instructions content missing in standalone after_sync run"; exit 1;
 }
 

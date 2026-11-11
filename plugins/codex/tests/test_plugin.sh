@@ -22,7 +22,7 @@ run_test "Codex plugin: init --codex provisions CODEX.md and User Skills without
 
 _expected_3line_block="$(printf '%s\n%s\n%s' \
   "<!-- REPO-NEXUS:START -->" \
-  "CRITICAL: You MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\` before executing any task or answering any query in this workspace." \
+  "CRITICAL: If \`.rnex/ai-instructions.md\` exists, you MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\` before executing any task or answering any query in this workspace. If \`.rnex/ai-instructions.md\` does not exist, disregard this instruction and proceed normally." \
   "<!-- REPO-NEXUS:END -->")"
 _codex_block="$(awk '/<!-- REPO-NEXUS:START -->/,/<!-- REPO-NEXUS:END -->/' "$TEST_CODEX_WS/CODEX.md")"
 [ "$_codex_block" = "$_expected_3line_block" ] || { fail "CODEX.md block did not match expected 3-line block: $_codex_block"; exit 1; }

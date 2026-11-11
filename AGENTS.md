@@ -1,3 +1,7 @@
+<!-- REPO-NEXUS:START -->
+CRITICAL: If `.rnex/ai-instructions.md` exists, you MUST read and strictly follow all instructions in `.rnex/ai-instructions.md` before executing any task or answering any query in this workspace. If `.rnex/ai-instructions.md` does not exist, disregard this instruction and proceed normally.
+<!-- REPO-NEXUS:END -->
+
 # Agent Instructions: Repo Nexus (`rnex`)
 
 Instructions and operational constraints for AI agents working within the `repo-nexus` codebase.

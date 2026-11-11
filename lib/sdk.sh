@@ -168,7 +168,7 @@ AI_MARKER_END="<!-- REPO-NEXUS:END -->"
 # Emit the single critical routing directive for initial provider instruction files.
 # All detailed execution rules, constraints, and workspace context reside in .rnex/ai-instructions.md.
 get_rnex_instructions() {
-  printf "CRITICAL: You MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\` before executing any task or answering any query in this workspace.\n"
+  printf "CRITICAL: If \`.rnex/ai-instructions.md\` exists, you MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\` before executing any task or answering any query in this workspace. If \`.rnex/ai-instructions.md\` does not exist, disregard this instruction and proceed normally.\n"
 }
 
 # Safely merge delimited Repo Nexus routing instructions (<!-- REPO-NEXUS:START -->)
@@ -190,7 +190,7 @@ merge_rnex_instructions() {
     return 0
   fi
 
-  if grep -q "CRITICAL: You MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\`" "$_dst" 2>/dev/null && ! grep -qF "$AI_MARKER_START" "$_dst" 2>/dev/null; then
+  if grep -q "CRITICAL: .* \`.rnex/ai-instructions.md\`" "$_dst" 2>/dev/null && ! grep -qF "$AI_MARKER_START" "$_dst" 2>/dev/null; then
     {
       printf '%s\n' "$AI_MARKER_START"
       cat "$_body_tmp"
@@ -309,14 +309,14 @@ clean_rnex_instructions() {
     return 0
   fi
 
-  if grep -q "CRITICAL: You MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\`" "$_dst" 2>/dev/null; then
-    _non_rnex="$(grep -v "CRITICAL: You MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\`" "$_dst" 2>/dev/null | grep -v "Multi-Repo AI Workspace Context" | sed -e '/^[[:space:]]*$/d')"
+  if grep -q "CRITICAL: .* \`.rnex/ai-instructions.md\`" "$_dst" 2>/dev/null; then
+    _non_rnex="$(grep -v "CRITICAL: .* \`.rnex/ai-instructions.md\`" "$_dst" 2>/dev/null | grep -v "Multi-Repo AI Workspace Context" | sed -e '/^[[:space:]]*$/d')"
     if [ -z "$_non_rnex" ]; then
       rm -f "$_dst"
       [ "${RNEX_QUIET:-0}" -eq 0 ] && [ "${_sync_quiet:-0}" -eq 0 ] && log_ok "Removed $(basename "$_dst")"
     else
       _tmp="$(mktemp)"
-      grep -v "CRITICAL: You MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\`" "$_dst" > "$_tmp" && mv "$_tmp" "$_dst"
+      grep -v "CRITICAL: .* \`.rnex/ai-instructions.md\`" "$_dst" > "$_tmp" && mv "$_tmp" "$_dst"
       [ "${RNEX_QUIET:-0}" -eq 0 ] && [ "${_sync_quiet:-0}" -eq 0 ] && log_ok "Removed Repo Nexus routing instructions from $(basename "$_dst")"
     fi
   fi

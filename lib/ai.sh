@@ -15,7 +15,7 @@ AI_MARKER_END="<!-- REPO-NEXUS:END -->"
 # All detailed execution rules, constraints, and workspace context reside in .rnex/ai-instructions.md.
 if ! command -v get_rnex_instructions >/dev/null 2>&1; then
   get_rnex_instructions() {
-    printf "CRITICAL: You MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\` before executing any task or answering any query in this workspace.\n"
+    printf "CRITICAL: If \`.rnex/ai-instructions.md\` exists, you MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\` before executing any task or answering any query in this workspace. If \`.rnex/ai-instructions.md\` does not exist, disregard this instruction and proceed normally.\n"
   }
 fi
 
@@ -248,7 +248,7 @@ file_has_user_content() {
       !in_b { print }
     ' "$_fhuc_file" | sed -e '/^[[:space:]]*$/d')"
   else
-    _content="$(grep -v "CRITICAL: You MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\`" "$_fhuc_file" 2>/dev/null | grep -v "Multi-Repo AI Workspace Context" | sed -e '/^[[:space:]]*$/d')"
+    _content="$(grep -v "CRITICAL: .* \`.rnex/ai-instructions.md\`" "$_fhuc_file" 2>/dev/null | grep -v "Multi-Repo AI Workspace Context" | sed -e '/^[[:space:]]*$/d')"
   fi
   [ -n "$_content" ]
 }
