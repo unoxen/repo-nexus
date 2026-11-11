@@ -89,9 +89,7 @@ my-workspace/
 │       │   └── SKILL.md
 │       ├── rnex-karpathy-llm-wiki-ingest/
 │       │   └── SKILL.md
-│       ├── rnex-karpathy-llm-wiki-lint/
-│       │   └── SKILL.md
-│       └── rnex-karpathy-llm-wiki-query/
+│       └── rnex-karpathy-llm-wiki-lint/
 │           └── SKILL.md
 ├── .rnex/
 │   ├── skills/                        # Core workspace agentic skills

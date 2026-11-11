@@ -10,4 +10,4 @@
 - **Zero Ad-Hoc Edits**: Never edit `.rnex/wiki/` shards manually or create ad-hoc files inside the wiki directory.
 - **Ingestion**: Run `rnex plugin karpathy-llm ingest` (or shorthand `rnex plugin ingest`) to index missing sources or update documentation.
 - **Linting & Auto-Healing**: Run `rnex plugin karpathy-llm lint` (or shorthand `rnex plugin lint`) to validate shard bounds, cross-references, and alphabetical sorting.
-- **Agent Skills**: Load skills from `.rnex/plugins/karpathy-llm/skills/` (`wiki-query.md`, `wiki-ingest.md`, `wiki-lint.md`) only when performing corresponding wiki tasks.
+- **Agent Skills**: Load skills from `.rnex/plugins/karpathy-llm/skills/` (`wiki-ingest.md`, `wiki-lint.md`) only when performing corresponding wiki tasks.

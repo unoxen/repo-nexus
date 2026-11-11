@@ -53,8 +53,6 @@ A self-healing, agent-maintained knowledge base structured directly under `.rnex
   - Enforces zero symbolic links across the `.rnex/wiki/` directory.
   - Enforces the $\le 80$ line budget on root `.rnex/wiki/index.md`.
   - Conditional audit logging: mutates `log.md` only when repairs are made; zero changes on clean runs.
-- **`wiki-query.md` (3-Step Retrieval Protocol)**:
-  - Guides AI agents through deterministic knowledge lookup: Root Router (`index.md`) $\to$ Domain Shard (`<shard>.md`) $\to$ In-Place Source Document.
 
 ---
 
@@ -239,8 +237,7 @@ my-workspace/
 │           │   └── behavioral.md
 │           ├── skills/
 │           │   ├── wiki-ingest.md
-│           │   ├── wiki-lint.md
-│           │   └── wiki-query.md
+│           │   └── wiki-lint.md
 │           ├── bin/
 │           │   ├── ingest.sh
 │           │   └── lint.sh
@@ -260,9 +257,8 @@ my-workspace/
 The `karpathy-llm` plugin encapsulates its agentic skills in `.rnex/plugins/karpathy-llm/skills/`:
 - `wiki-ingest.md`
 - `wiki-lint.md`
-- `wiki-query.md`
 
-During `rnex sync`, its `after_sync.sh` lifecycle hook automatically registers zero-logic User Skill pointers (`rnex-karpathy-llm-wiki-ingest`, `rnex-karpathy-llm-wiki-lint`, and `rnex-karpathy-llm-wiki-query`) across all enabled AI provider directories (`.cursor/rules/`, `.claude/skills/`, `.agents/skills/`, `.codex/skills/`, `.github/skills/`, `.windsurf/rules/`).
+During `rnex sync`, its `after_sync.sh` lifecycle hook automatically registers zero-logic User Skill pointers (`rnex-karpathy-llm-wiki-ingest` and `rnex-karpathy-llm-wiki-lint`) across all enabled AI provider directories (`.cursor/rules/`, `.claude/skills/`, `.agents/skills/`, `.codex/skills/`, `.github/skills/`, `.windsurf/rules/`).
 
 When running `rnex plugin disable karpathy-llm`, its lifecycle hook automatically unregisters the User Skills from all provider directories, while keeping user data in `.rnex/wiki/` (or custom `wiki_dir`) intact.
 

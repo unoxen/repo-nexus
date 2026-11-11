@@ -30,7 +30,6 @@ Reference specification: [setup-karpathy-wiki.md](https://github.com/unoxen/ai-t
 ### 4. Standardized Agent Skills (`skills/`)
 * **`wiki-ingest.md` (User Skill: `rnex-karpathy-llm-wiki-ingest`):** Guides deterministic CLI missing-source ingestion, flat B-Tree leaf shard updates, root router compilation, and audit log updates.
 * **`wiki-lint.md` (User Skill: `rnex-karpathy-llm-wiki-lint`):** Standalone integrity audit protocol to validate existing wiki files, assert zero symlinks, verify shard links and workspace doc references, and check root router bounds ($\le 80$ lines).
-* **`wiki-query.md` (User Skill: `rnex-karpathy-llm-wiki-query`):** Guides 3-step zero-token-bloat context retrieval from the root router to leaf shards and authoritative sources.
 
 ---
 
@@ -60,8 +59,7 @@ my-workspace/
 │           │   └── behavioral.md
 │           ├── skills/
 │           │   ├── wiki-ingest.md
-│           │   ├── wiki-lint.md
-│           │   └── wiki-query.md
+│           │   └── wiki-lint.md
 │           ├── bin/
 │           │   ├── ingest.sh
 │           │   └── lint.sh

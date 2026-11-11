@@ -82,8 +82,7 @@ my-workspace/
 │       ├── rnex-batch-exec.md
 │       ├── rnex-workspace-status.md
 │       ├── rnex-karpathy-llm-wiki-ingest.md
-│       ├── rnex-karpathy-llm-wiki-lint.md
-│       └── rnex-karpathy-llm-wiki-query.md
+│       └── rnex-karpathy-llm-wiki-lint.md
 ├── .rnex/
 │   ├── skills/                        # Core workspace agentic skills
 │   └── plugins/
