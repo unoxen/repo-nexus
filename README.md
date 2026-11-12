@@ -19,7 +19,7 @@ A lightweight, zero-dependency and AI-First **Nexus Repository (Virtual Meta Rep
 - **Two-Level Configuration as Source of Truth**: Shared team manifest in `rnex.yaml` with machine-specific overrides in `.local.rnex.yaml` (highest priority).
 - **One Command Team Onboarding**: Teammates clone the **meta repository** (**meta repo** / **nexus repo**) and run `rnex clone` to clone and configure all member repositories in seconds.
 - **Cross-Repo Batch Operations**: Run arbitrary commands across all active repositories with `rnex exec <command>`.
-- **Scoped Plugins & Context Packs**: Modular plugin packages scoped under `.rnex/plugins/<plugin-name>/` with support for domain directories (e.g. `.rnex/wiki/` and `./docs` for `karpathy-llm`).
+- **Scoped Plugins & Context Packs**: Modular plugin packages scoped under `.rnex/plugins/<plugin-name>/` with support for domain directories (e.g. `.rnex/wiki/` and `./docs` for `llm-wiki`).
 - **Zero Dependencies**: Pure POSIX shell CLI (`rnex`). Works out of the box across macOS, Linux, and Windows (WSL/Git Bash).
 
 > 📖 **[Documentation & Guides](https://unoxen.github.io/repo-nexus/)**
@@ -27,7 +27,7 @@ A lightweight, zero-dependency and AI-First **Nexus Repository (Virtual Meta Rep
 > - 🚀 **[Getting Started](https://unoxen.github.io/repo-nexus/introduction/quick-start)** — Step-by-step onboarding walkthrough and workspace setup
 > - 📐 **[Architecture](https://unoxen.github.io/repo-nexus/documentation/architecture)** & **[Why Repo Nexus?](https://unoxen.github.io/repo-nexus/introduction/why-rnex)** — Virtual Meta-Repo model, directory layout, and design rationale
 > - 💻 **[CLI Reference](https://unoxen.github.io/repo-nexus/reference/cli)** — Complete command syntax, global flags, batch execution (`rnex exec`), and Git hooks
-> - 🧩 **[Plugins Guide](https://unoxen.github.io/repo-nexus/documentation/plugin-ecosystem)** — AI provider integrations (Claude, Codex, Copilot, Cursor, Gemini, Windsurf) and Karpathy LLM Wiki
+> - 🧩 **[Plugins Guide](https://unoxen.github.io/repo-nexus/documentation/plugin-ecosystem)** — AI provider integrations (Claude, Codex, Copilot, Cursor, Gemini, Windsurf) and LLM Wiki
 > - ⚙️ **[Configuration Schema](https://unoxen.github.io/repo-nexus/documentation/configuration)** — Two-level `rnex.yaml` and `.local.rnex.yaml` specification
 > - ❓ **[Frequently Asked Questions (FAQ)](https://unoxen.github.io/repo-nexus/faq/general)** — Common questions, Git submodule differences, and context strategies
 

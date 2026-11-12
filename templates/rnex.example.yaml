@@ -33,9 +33,9 @@ git:
     post-checkout:
       - "rnex sync --quiet"
     pre-commit:
-      - "rnex plugin karpathy-llm lint"
+      - "rnex plugin llm-wiki lint"
     pre-push:
-      - "rnex plugin karpathy-llm lint --strict"
+      - "rnex plugin llm-wiki lint --strict"
 
 # ==============================================================================
 # RNEX Lifecycle Hooks (Strictly Opt-In — Nothing Enabled by Default)
@@ -48,7 +48,7 @@ rnex-hooks:
     - "echo 'Workspace initialized'"
   before_sync: []
   after_sync:
-    - "rnex plugin karpathy-llm ingest"
+    - "rnex plugin llm-wiki ingest"
   before_clone: []
   after_clone:
     - "rnex exec npm install"
@@ -133,7 +133,7 @@ plugins:
   my-plugin:
     enabled: true
     path: "./custom-plugins/my-plugin"
-  karpathy-llm:
+  llm-wiki:
     enabled: true
     wiki_dir: ".rnex/wiki"
     index_file: "index.md"

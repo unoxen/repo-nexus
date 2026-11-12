@@ -32,7 +32,7 @@ rnex init [options] [directory]
 | `--codex` | | boolean | `false` | Enable OpenAI Codex plugin (`CODEX.md`, `.codex/skills/`). |
 | `--gemini` | | boolean | `false` | Enable Google Gemini plugin (`GEMINI.md`, `.agents/skills/`). |
 | `--windsurf` | | boolean | `false` | Enable Windsurf plugin (`.windsurfrules`, `.windsurf/rules/`). |
-| `--karpathy` | | boolean | `false` | Enable Karpathy LLM Wiki plugin (`wiki/`, `docs/`). |
+| `--llm-wiki` | | boolean | `false` | Enable LLM Wiki plugin (`wiki/`, `docs/`). |
 | `--plugin <name>` | | string | | Enable any specified plugin during initialization (repeatable). |
 
 ---

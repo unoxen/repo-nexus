@@ -74,7 +74,7 @@ You can run individual modular test suites or plugin suites:
 
 # Run a specific plugin test suite:
 ./tests/test_cli.sh claude
-./tests/test_cli.sh karpathy-llm
+./tests/test_cli.sh llm-wiki
 
 # Run a plugin test suite completely standalone:
 sh plugins/claude/tests/test_plugin.sh
@@ -166,7 +166,7 @@ Core skills provide fundamental meta-repo workflows and workspace automation:
 
 ### 2. Plugin-Owned Agentic Skills (`plugins/<plugin>/skills/`)
 Functional plugins encapsulate their own agentic skills:
-- Placed in `plugins/<plugin>/skills/<skill-name>.md` (e.g. `wiki-ingest.md`, `wiki-lint.md`).
+- Placed in `plugins/<plugin>/skills/<skill-name>.md` (e.g. `ingest.md`, `lint.md`).
 - During `rnex sync`, copied exclusively to `.rnex/plugins/<plugin>/skills/<skill-name>.md`.
 
 ### 3. User Skill Generator & Plugin Contract API

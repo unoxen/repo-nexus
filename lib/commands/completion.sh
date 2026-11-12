@@ -31,7 +31,7 @@ _rnex_completions() {
       return 0
       ;;
     init)
-      COMPREPLY=( $(compgen -W "-y --yes --repos-dir --code-workspace --hooks --no-hooks -H --ignore-hooks --copilot --claude --gemini --codex --cursor --windsurf --karpathy" -- "$cur") )
+      COMPREPLY=( $(compgen -W "-y --yes --repos-dir --code-workspace --hooks --no-hooks -H --ignore-hooks --copilot --claude --gemini --codex --cursor --windsurf --llm-wiki" -- "$cur") )
       return 0
       ;;
     sync)
@@ -129,7 +129,7 @@ _rnex() {
           ;;
         init)
           local -a init_opts
-          init_opts=('(-y --yes)'{-y,--yes}'[Automatically answer yes to prompts]' '--repos-dir[Directory for member repository clones]:dir:_files -/' '--code-workspace[Configure multi-root workspace file]' '--hooks[Configure automated git hooks]' '--no-hooks[Disable automated git hooks]' '--copilot[Enable Copilot plugin]' '--claude[Enable Claude plugin]' '--gemini[Enable Gemini plugin]' '--codex[Enable Codex plugin]' '--cursor[Enable Cursor plugin]' '--windsurf[Enable Windsurf plugin]' '--karpathy[Enable Karpathy LLM Wiki plugin]')
+          init_opts=('(-y --yes)'{-y,--yes}'[Automatically answer yes to prompts]' '--repos-dir[Directory for member repository clones]:dir:_files -/' '--code-workspace[Configure multi-root workspace file]' '--hooks[Configure automated git hooks]' '--no-hooks[Disable automated git hooks]' '--copilot[Enable Copilot plugin]' '--claude[Enable Claude plugin]' '--gemini[Enable Gemini plugin]' '--codex[Enable Codex plugin]' '--cursor[Enable Cursor plugin]' '--windsurf[Enable Windsurf plugin]' '--llm-wiki[Enable LLM Wiki plugin]')
           _describe -t init_opts 'init option' init_opts
           ;;
         sync)

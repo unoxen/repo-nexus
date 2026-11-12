@@ -85,7 +85,7 @@ export default defineConfig({
               items: [
                 { text: 'Multi-Repo Microservices', link: '/introduction/examples/microservices' },
                 { text: 'Full-Stack AI Context', link: '/introduction/examples/fullstack-ai' },
-                { text: 'Karpathy LLM Wiki', link: '/introduction/examples/llm-wiki' },
+                { text: 'LLM Wiki', link: '/introduction/examples/llm-wiki' },
                 { text: 'Selective Checkout', link: '/introduction/examples/selective-checkout' }
               ]
             }
@@ -116,7 +116,7 @@ export default defineConfig({
           text: 'Plugins',
           activeMatch: '^/plugins/',
           items: [
-            { text: 'Karpathy LLM Wiki', link: '/plugins/karpathy-llm' },
+            { text: 'LLM Wiki', link: '/plugins/llm-wiki' },
             { text: 'Claude Code', link: '/plugins/claude' },
             { text: 'OpenAI Codex', link: '/plugins/codex' },
             { text: 'Cursor', link: '/plugins/cursor' },
@@ -149,7 +149,7 @@ export default defineConfig({
               items: [
                 { text: 'Multi-Repo Microservices', link: '/introduction/examples/microservices' },
                 { text: 'Full-Stack AI Context', link: '/introduction/examples/fullstack-ai' },
-                { text: 'Karpathy LLM Wiki', link: '/introduction/examples/llm-wiki' },
+                { text: 'LLM Wiki', link: '/introduction/examples/llm-wiki' },
                 { text: 'Selective Checkout', link: '/introduction/examples/selective-checkout' }
               ]
             }
@@ -180,7 +180,7 @@ export default defineConfig({
           text: 'Plugins',
           collapsed: false,
           items: [
-            { text: 'Karpathy LLM Wiki', link: '/plugins/karpathy-llm' },
+            { text: 'LLM Wiki', link: '/plugins/llm-wiki' },
             { text: 'Claude Code (CLAUDE.md)', link: '/plugins/claude' },
             { text: 'OpenAI Codex (CODEX.md)', link: '/plugins/codex' },
             { text: 'Cursor (.cursorrules)', link: '/plugins/cursor' },

@@ -1,13 +1,13 @@
 ---
-title: "Example: Automated Karpathy LLM Wiki Setup | Meta Repo & Nexus Repository"
-description: Concrete copy-pasteable setup for Andrej Karpathy's LLM Wiki architecture in a Repo Nexus meta repository (meta repo) and nexus repository (nexus repo).
+title: "Example: Automated LLM Wiki Setup | Meta Repo & Nexus Repository"
+description: Concrete copy-pasteable setup for the LLM Wiki architecture in a Repo Nexus meta repository (meta repo) and nexus repository (nexus repo).
 head:
   - - meta
     - name: keywords
-      content: nexus repository, meta repository, nexus repo, meta repo, karpathy llm wiki, ai knowledge graph, rnex
+      content: nexus repository, meta repository, nexus repo, meta repo, llm wiki, ai knowledge graph, rnex
 ---
 
-# Automated Karpathy LLM Wiki Setup
+# Automated LLM Wiki Setup
 
 ## Manifest (`rnex.yaml`)
 
@@ -25,13 +25,13 @@ git:
     - "!**/rnex.yaml"
   hooks:
     pre-commit:
-      - "rnex plugin karpathy-llm lint"
+      - "rnex plugin llm-wiki lint"
     pre-push:
-      - "rnex plugin karpathy-llm lint --strict"
+      - "rnex plugin llm-wiki lint --strict"
 
 rnex_hooks:
   after_sync:
-    - "rnex plugin karpathy-llm ingest --quiet"
+    - "rnex plugin llm-wiki ingest --quiet"
 
 repos:
   core-engine:
@@ -41,7 +41,7 @@ repos:
     readonly: false
 
 plugins:
-  karpathy-llm:
+  llm-wiki:
     wiki_dir: "wiki"
     sources:
       - "docs"
@@ -58,8 +58,8 @@ rnex init -y
 # 2. Add member repository
 rnex repo add git@github.com:acme/core-engine.git --name core-engine
 
-# 3. Enable Karpathy LLM Wiki plugin
-rnex plugin enable karpathy-llm
+# 3. Enable LLM Wiki plugin
+rnex plugin enable llm-wiki
 
 # 4. Synchronize workspace to generate wiki/ templates and git hooks
 rnex sync
@@ -69,15 +69,15 @@ rnex sync
 
 ```bash
 # Ingest all intake sources and member repository documentation in place
-rnex plugin karpathy-llm ingest
+rnex plugin llm-wiki ingest
 
 # Ingest a specific research document or design spec in place
-rnex plugin karpathy-llm ingest specs/architecture.md
+rnex plugin llm-wiki ingest specs/architecture.md
 # Or using the --file flag
-rnex plugin karpathy-llm ingest --file specs/architecture.md
+rnex plugin llm-wiki ingest --file specs/architecture.md
 
 # Validate wiki structure, line budget, and zero-symlink invariants
-rnex plugin karpathy-llm lint
+rnex plugin llm-wiki lint
 ```
 
 ## Knowledge Base Navigation Architecture

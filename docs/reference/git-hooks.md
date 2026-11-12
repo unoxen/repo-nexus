@@ -27,9 +27,9 @@ git:
     post-checkout:
       - "rnex sync --quiet"
     pre-commit:
-      - "rnex plugin karpathy-llm lint"
+      - "rnex plugin llm-wiki lint"
     pre-push:
-      - "rnex plugin karpathy-llm lint --strict"
+      - "rnex plugin llm-wiki lint --strict"
 ```
 
 ---

@@ -52,7 +52,7 @@ A lightweight, zero-dependency and AI-First Nexus Repository (Virtual Meta Repos
   </div>
   <div class="rnex-feature-card">
     <div class="rnex-feature-icon">🧠</div>
-    <h3>Karpathy LLM Wiki Architecture</h3>
+    <h3>LLM Wiki Architecture</h3>
     <p>Built-in zero-dependency flat B-Tree index (<code>wiki/*.md</code>) with bounded root router (<code>wiki/index.md</code>), chronological audit log (<code>wiki/log.md</code>), automated in-place ingest, and lint verification for autonomous AI agents.</p>
   </div>
   <div class="rnex-feature-card">
@@ -111,5 +111,5 @@ rnex --version
 * **[Introduction](./introduction/why-rnex)**: Understand why the Virtual Meta-Repo model succeeds where monorepos and Git submodules fall short, follow the quick start tutorial, and inspect practical examples.
 * **[Documentation](./documentation/architecture)**: Deep dive into the architecture, configuration schema, workflows, workspace lifecycle, and plugin ecosystem.
 * **[Reference](./reference/cli)**: Complete syntax and options for `rnex` CLI commands, lifecycle hooks (`rnex_hooks`), Git hooks (`git.hooks`), and environment variables.
-* **[Plugins](./plugins/karpathy-llm)**: Explore first-class plugins for the Karpathy LLM Wiki, Claude Code, OpenAI Codex, Cursor, Gemini, Copilot, and Windsurf.
+* **[Plugins](./plugins/llm-wiki)**: Explore first-class plugins for the LLM Wiki, Claude Code, OpenAI Codex, Cursor, Gemini, Copilot, and Windsurf.
 * **[FAQ](./faq/general)**: Review frequently asked questions, comparisons with Git submodules/monorepos, and troubleshooting tips.

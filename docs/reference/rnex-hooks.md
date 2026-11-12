@@ -21,7 +21,7 @@ Hooks are defined as a mapping from lifecycle event names to lists of shell comm
 rnex-hooks:
   before_sync: []
   after_sync:
-    - "rnex plugin karpathy-llm ingest"
+    - "rnex plugin llm-wiki ingest"
     - "echo 'Workspace synchronized successfully'"
 
   before_clone: []

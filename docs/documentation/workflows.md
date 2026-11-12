@@ -75,15 +75,15 @@ git:
     post-checkout:
       - "rnex sync --quiet"
     pre-commit:
-      - "rnex plugin karpathy-llm lint"
+      - "rnex plugin llm-wiki lint"
     pre-push:
-      - "rnex plugin karpathy-llm lint --strict"
+      - "rnex plugin llm-wiki lint --strict"
 ```
 
 ### Automated Lifecycle Events
 1. **`post-merge`**: When you pull updates to the meta-repo (`git pull`), the hook automatically executes `rnex sync --quiet` if `rnex.yaml` changed, reconciling repositories, instructions, and plugins.
 2. **`post-checkout`**: Ensures workspace state reflects branch transitions.
-3. **`pre-commit` & `pre-push`**: Run automated verifications before commits or pushes, such as `rnex plugin karpathy-llm lint`.
+3. **`pre-commit` & `pre-push`**: Run automated verifications before commits or pushes, such as `rnex plugin llm-wiki lint`.
 
 ---
 

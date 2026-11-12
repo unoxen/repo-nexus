@@ -189,8 +189,7 @@ migrate_legacy_plugin_config() {
   _mkc_f="$1"
   [ -f "$_mkc_f" ] || return 0
 
-  _mkc_prefix="karpathy"
-  _mkc_target="${_mkc_prefix}-llm"
+  _mkc_target="llm-wiki"
   _mkc_has_sources=0
   if command -v _yaml_plugin_list_from_file >/dev/null 2>&1; then
     [ -n "$(_yaml_plugin_list_from_file "$_mkc_f" "$_mkc_target" "sources")" ] && _mkc_has_sources=1

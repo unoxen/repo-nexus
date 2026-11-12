@@ -8,11 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.8.34] - 2026-11-06
 
 ### Added
-- **Karpathy LLM Wiki B-Tree & Sorted TSV Property Graph Architecture**:
+- **LLM Wiki B-Tree & Sorted TSV Property Graph Architecture**:
   - Implemented 2-level B-Tree sharded index (`_index/*.md`) and plain-text sorted TSV property graph (`_graph/nodes.tsv`, `edges_out.tsv`, `edges_in.tsv`) maintaining strict `LC_ALL=C` collation order.
-  - Implemented \(O(\log N)\) binary search prefix query engine (`rnex plugin karpathy-llm search <prefix>`) using BSD `look` with POSIX `awk` early-exit fallback.
-  - Added ego-subgraph traversal CLI command (`rnex plugin karpathy-llm graph <node_id> [--depth 1|2]`) displaying node metadata, 1-hop outbound dependencies, and 1-hop inbound backlinks.
-  - Added deterministic full graph and index compilation command (`rnex plugin karpathy-llm index --rebuild`) maintaining a bounded \(\le 80\) line ceiling on `wiki/index.md`.
+  - Implemented \(O(\log N)\) binary search prefix query engine (`rnex plugin llm-wiki search <prefix>`) using BSD `look` with POSIX `awk` early-exit fallback.
+  - Added ego-subgraph traversal CLI command (`rnex plugin llm-wiki graph <node_id> [--depth 1|2]`) displaying node metadata, 1-hop outbound dependencies, and 1-hop inbound backlinks.
+  - Added deterministic full graph and index compilation command (`rnex plugin llm-wiki index --rebuild`) maintaining a bounded \(\le 80\) line ceiling on `wiki/index.md`.
   - Added automatic B-Tree shard splitting when domain partitions exceed `btree_shard_max_entries` (e.g. splitting `concepts.md` into `concepts-a-m.md` and `concepts-n-z.md`).
 
 ### Removed
@@ -43,9 +43,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added `rnex plugin <name> <command> [options...]` dispatcher (with shorthand fallback `rnex plugin <cmd>`).
   - Added command discovery and formatted tree branches in `rnex plugin list`.
   - Bound execution to `before_plugin_command` and `after_plugin_command` lifecycle hooks.
-- **Karpathy LLM Wiki Subcommands & Config Cleanup**:
+- **LLM Wiki Subcommands & Config Cleanup**:
   - Defaulted `wiki_dir` to `wiki` at workspace root and removed legacy `lint_trigger` and `notify_on_changes`.
-  - Shipped `rnex plugin karpathy-llm ingest [options]` and `rnex plugin karpathy-llm lint [options]`.
+  - Shipped `rnex plugin llm-wiki ingest [options]` and `rnex plugin llm-wiki lint [options]`.
 - **Documentation Site Overhaul (GitHub Pages / VitePress)**:
   - Responsive full-width layout with `--vp-layout-max-width: 100%`.
   - Always-visible left sidebar across all documentation pages (including Welcome via `layout: doc`).
@@ -73,7 +73,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Decoupled two-tier skills architecture: core agentic skills in `toolkit/skills/` and domain plugin skills in `toolkit/plugins/<plugin>/skills/`.
 - Dual-format User Skill generator emitting `SKILL.md` bundles for Claude, Copilot, Codex, Gemini, and flat rule files for Cursor and Windsurf.
-- Multi-source intake configuration (`sources`) supporting directory paths and recursive globs for the Karpathy LLM Wiki plugin.
+- Multi-source intake configuration (`sources`) supporting directory paths and recursive globs for the LLM Wiki plugin.
 - Event-driven auto-sync engine with checksum-based drift detection (`.rnex/sync_stamp`).
 
 ---

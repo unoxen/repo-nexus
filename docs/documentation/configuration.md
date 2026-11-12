@@ -50,9 +50,9 @@ git:
     post-checkout:
       - "rnex sync --quiet"
     pre-commit:
-      - "rnex plugin karpathy-llm lint"
+      - "rnex plugin llm-wiki lint"
     pre-push:
-      - "rnex plugin karpathy-llm lint --strict"
+      - "rnex plugin llm-wiki lint --strict"
 
 # Lifecycle Hooks (Map of RNEX events to command lists; strictly opt-in)
 rnex-hooks:
@@ -61,7 +61,7 @@ rnex-hooks:
     - "echo 'Workspace initialized'"
   before_sync: []
   after_sync:
-    - "rnex plugin karpathy-llm ingest"
+    - "rnex plugin llm-wiki ingest"
   before_clone: []
   after_clone:
     - "rnex exec npm install"
@@ -148,7 +148,7 @@ plugins:
     skills: true
 
   # Built-in LLM Knowledge Base plugin
-  karpathy-llm:
+  llm-wiki:
     enabled: true
     wiki_dir: ".rnex/wiki"
     sources:
@@ -197,7 +197,7 @@ Plugins provide specialized AI assistant integration, agentic skills, and domain
 | **`plugins.<name>.path`** | string | *(built-in)* | **External plugin location.** Relative (to workspace root) or absolute path to an external plugin directory (or its `plugin.yaml` manifest). Overrides built-in `plugins/<name>`. |
 | `plugins.<name>.skills` | boolean | `true` | Controls whether AI provider plugins generate user skill/rule pointers (`rnex-*`) for active skills. |
 | `plugins.<name>.hooks` | map | *(none)* | Strictly opt-in lifecycle hooks projected into provider manifests (`.claude/settings.json`, `.codex/hooks.json`, `.cursor/hooks.json`, `.gemini/settings.json`, `.github/hooks/rnex.json`, `.windsurf/hooks.json`). Canonical events like `SessionStart` are normalized automatically per provider schema. Cleanly removed when unconfigured. |
-| `plugins.<name>.<option>` | any | `config_defaults` | Plugin-specific configuration options defined in the plugin's `plugin.yaml` (e.g., `wiki_dir` and `sources` for `karpathy-llm`). |
+| `plugins.<name>.<option>` | any | `config_defaults` | Plugin-specific configuration options defined in the plugin's `plugin.yaml` (e.g., `wiki_dir` and `sources` for `llm-wiki`). |
 
 #### External Plugin Resolution (`plugins.<name>.path`)
 

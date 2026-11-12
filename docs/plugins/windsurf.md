@@ -7,7 +7,7 @@ description: Integrate Windsurf IDE and Cascade with Repo Nexus, generating zero
 
 The **`windsurf`** plugin integrates Codeium's Windsurf IDE and Cascade into a Repo Nexus Virtual Meta-Repo.
 
-All AI assistants in Repo Nexus share `AGENTS.md` at the workspace root as the single universal source of truth for routing. When enabled, the `windsurf` plugin generates zero-logic User Skill pointers into `.windsurf/rules/` (e.g. `rnex-clone-sync.md`, `rnex-batch-exec.md`, `rnex-karpathy-llm-wiki-ingest.md`).
+All AI assistants in Repo Nexus share `AGENTS.md` at the workspace root as the single universal source of truth for routing. When enabled, the `windsurf` plugin generates zero-logic User Skill pointers into `.windsurf/rules/` (e.g. `rnex-clone-sync.md`, `rnex-batch-exec.md`, `rnex-llm-wiki-ingest.md`).
 
 Operational skills, rules, and subagents remain cleanly encapsulated within `.rnex/skills/` and active plugin directories (`.rnex/plugins/<plugin-name>/`).
 
@@ -78,7 +78,7 @@ plugins:
 
 ## Generated Directory Structure
 
-When `windsurf` is enabled with functional plugins like `karpathy-llm`, it generates:
+When `windsurf` is enabled with functional plugins like `llm-wiki`, it generates:
 
 ```text
 my-workspace/
@@ -89,12 +89,12 @@ my-workspace/
 │       ├── rnex-clone-sync.md
 │       ├── rnex-batch-exec.md
 │       ├── rnex-workspace-status.md
-│       ├── rnex-karpathy-llm-wiki-ingest.md
-│       └── rnex-karpathy-llm-wiki-lint.md
+│       ├── rnex-llm-wiki-ingest.md
+│       └── rnex-llm-wiki-lint.md
 ├── .rnex/
 │   ├── skills/                        # Core workspace agentic skills
 │   └── plugins/
-│       └── karpathy-llm/              # Scoped plugin skills and rules
+│       └── llm-wiki/              # Scoped plugin skills and rules
 └── rnex.yaml
 ```
 

@@ -118,17 +118,17 @@ Yes, core routing files like `AGENTS.md` are established during `rnex init`. Spe
 
 ---
 
-## Karpathy LLM Wiki (`karpathy-llm`)
+## LLM Wiki (`llm-wiki`)
 
-### How does the Karpathy LLM Wiki differ from traditional RAG?
+### How does the LLM Wiki differ from traditional RAG?
 Traditional Retrieval-Augmented Generation (RAG) splits raw documents into arbitrary text chunks and dynamically retrieves top-k matches to synthesize answers from scratch on every query.
 
-In contrast, the **Karpathy LLM Wiki** architecture:
+In contrast, the **LLM Wiki** architecture:
 - **Synthesizes Once on Ingest**: Source documents and member repository documentation are compiled into atomic, structured Markdown pages under your configured wiki directory (default `.rnex/wiki/`).
 - **Knowledge Compounding**: Curated pages link to related concepts using standard Markdown links (`[Title](./page.md)`) and typed frontmatter graphs (`sources`, `related`, `extends`), allowing knowledge quality to compound over time as the codebase evolves.
 - **Deterministic Navigation**: Agents navigate compiled domain knowledge systematically via the B-Tree root table (`index.md`) and flat domain shards (`repo-nexus*.md`, `repos-<member>*.md`) without exploratory trial-and-error searches.
 
-### What is the structure of the flat B-Tree Karpathy LLM Wiki?
+### What is the structure of the flat B-Tree LLM Wiki?
 Each core wiki asset has a distinct architectural responsibility directly under `.rnex/wiki/` (or custom configured `wiki_dir`):
 - **`index.md` (B-Tree Root Router)**: Strictly bounded under 80 lines with zero YAML frontmatter. Contains a compact routing table mapping domain key ranges to flat leaf shards in `.rnex/wiki/`.
 - **`repo-nexus*.md` & `repos-<member>*.md` (Sorted Flat Leaf Shards)**: Domain-partitioned catalogs sorted in strict `LC_ALL=C` order. Automatically splits into alphabetical sub-shards (e.g. `repo-nexus-a-m.md`, `repo-nexus-n-z.md`) when entry thresholds are exceeded.
@@ -145,12 +145,12 @@ Plain TSV graphs (`nodes.tsv`, `edges_out.tsv`, `edges_in.tsv`) and nested direc
 Yes. The `ingest` command supports granular targeting and processes only missing sources by default:
 ```bash
 # Ingest a single source document
-rnex plugin karpathy-llm ingest docs/spec.md
+rnex plugin llm-wiki ingest docs/spec.md
 # Or using the --file flag
-rnex plugin karpathy-llm ingest --file docs/spec.md
+rnex plugin llm-wiki ingest --file docs/spec.md
 
 # Batch-ingest all configured sources
-rnex plugin karpathy-llm ingest
+rnex plugin llm-wiki ingest
 ```
 
 ---

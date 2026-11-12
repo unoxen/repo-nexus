@@ -575,7 +575,7 @@ grep -q "USER_HOOK_EXECUTED" "$TEST_USER_HOOKS_WS/.git/hooks/pre-commit" || {
 pass
 
 # --------------------------------------------------------------------------
-run_test "Lifecycle hooks: after_clone with bare 'rnex plugin karpathy-llm ingest' and top-level / hooks: blocks"
+run_test "Lifecycle hooks: after_clone with bare 'rnex plugin llm-wiki ingest' and top-level / hooks: blocks"
 TEST_AFTER_CLONE_WS="$TEST_TMP/after-clone-hook-ws"
 mkdir -p "$TEST_AFTER_CLONE_WS"
 cp "$CLI" "$TEST_AFTER_CLONE_WS/rnex"
@@ -585,7 +585,7 @@ link_dir_contents "$DIR/skills" "$TEST_AFTER_CLONE_WS/skills"
 cp "$DIR/package.json" "$TEST_AFTER_CLONE_WS/package.json"
 git -C "$TEST_AFTER_CLONE_WS" init -q
 
-"$TEST_AFTER_CLONE_WS/rnex" init -y --karpathy "$TEST_AFTER_CLONE_WS" >/dev/null
+"$TEST_AFTER_CLONE_WS/rnex" init -y --llm-wiki "$TEST_AFTER_CLONE_WS" >/dev/null
 
 # Top-level after_clone configuration (even when rnex_hooks: after_clone: [] also exists)
 cat <<AFTER_CLONE_YAML > "$TEST_AFTER_CLONE_WS/rnex.yaml"
@@ -596,10 +596,10 @@ git:
 rnex_hooks:
   after_clone: []
 after_clone:
-  - "rnex plugin karpathy-llm ingest --quiet"
+  - "rnex plugin llm-wiki ingest --quiet"
   - "echo 'AFTER_CLONE_INGEST_RAN' >> clone_hook_marker"
 plugins:
-  karpathy-llm:
+  llm-wiki:
 repos:
   dummy-svc:
     url: $TEST_DUMMY_REMOTE
@@ -609,7 +609,7 @@ AFTER_CLONE_YAML
 # 1. Test rnex clone triggers after_clone with bare 'rnex' command
 (cd "$TEST_AFTER_CLONE_WS" && ./rnex clone >/dev/null)
 [ -f "$TEST_AFTER_CLONE_WS/clone_hook_marker" ] || { fail "after_clone did not run on rnex clone"; exit 1; }
-[ -f "$TEST_AFTER_CLONE_WS/.rnex/wiki/repos-dummy-svc.md" ] || { fail "rnex plugin karpathy-llm ingest did not run on after_clone"; exit 1; }
+[ -f "$TEST_AFTER_CLONE_WS/.rnex/wiki/repos-dummy-svc.md" ] || { fail "rnex plugin llm-wiki ingest did not run on after_clone"; exit 1; }
 [ -f "$TEST_AFTER_CLONE_WS/.rnex/wiki/index.md" ] || { fail "wiki/index.md missing on after_clone"; exit 1; }
 [ -f "$TEST_AFTER_CLONE_WS/.rnex/wiki/log.md" ] || { fail "wiki/log.md missing on after_clone"; exit 1; }
 [ ! -d "$TEST_AFTER_CLONE_WS/.rnex/wiki/_graph" ] || { fail "wiki/_graph present on after_clone"; exit 1; }
@@ -621,7 +621,7 @@ AFTER_CLONE_YAML
 rm -f "$TEST_AFTER_CLONE_WS/clone_hook_marker"
 (cd "$TEST_AFTER_CLONE_WS" && ./rnex repo add "$TEST_DUMMY_REMOTE" --name added-svc --branch master >/dev/null)
 [ -f "$TEST_AFTER_CLONE_WS/clone_hook_marker" ] || { fail "after_clone did not run on rnex repo add"; exit 1; }
-[ -f "$TEST_AFTER_CLONE_WS/.rnex/wiki/repos-added-svc.md" ] || { fail "rnex plugin karpathy-llm ingest did not ingest added-svc on after_clone"; exit 1; }
+[ -f "$TEST_AFTER_CLONE_WS/.rnex/wiki/repos-added-svc.md" ] || { fail "rnex plugin llm-wiki ingest did not ingest added-svc on after_clone"; exit 1; }
 [ ! -e "$TEST_AFTER_CLONE_WS/.rnex/wiki/hot.md" ] || { fail "hot.md was created after repo add in after_clone test"; exit 1; }
 pass
 
@@ -636,7 +636,7 @@ link_dir_contents "$DIR/skills" "$TEST_IGNORE_HOOKS_WS/skills"
 cp "$DIR/package.json" "$TEST_IGNORE_HOOKS_WS/package.json"
 git -C "$TEST_IGNORE_HOOKS_WS" init -q
 
-"$TEST_IGNORE_HOOKS_WS/rnex" init -y --karpathy "$TEST_IGNORE_HOOKS_WS" >/dev/null
+"$TEST_IGNORE_HOOKS_WS/rnex" init -y --llm-wiki "$TEST_IGNORE_HOOKS_WS" >/dev/null
 
 cat <<'IGNORE_HOOKS_YAML' > "$TEST_IGNORE_HOOKS_WS/rnex.yaml"
 version: 1.0.0
@@ -648,14 +648,14 @@ rnex_hooks:
     - "echo 'BEFORE_SYNC_FIRED' >> ignore_hook_log"
   after_sync:
     - "echo 'AFTER_SYNC_FIRED' >> ignore_hook_log"
-    - "rnex plugin karpathy-llm ingest --quiet"
+    - "rnex plugin llm-wiki ingest --quiet"
   before_plugin_command:
     - "echo 'BEFORE_PLUGIN_CMD_FIRED' >> ignore_hook_log"
     - "rnex sync --quiet"
   after_plugin_command:
     - "echo 'AFTER_PLUGIN_CMD_FIRED' >> ignore_hook_log"
 plugins:
-  karpathy-llm:
+  llm-wiki:
 repos:
 IGNORE_HOOKS_YAML
 
@@ -667,7 +667,7 @@ rm -f "$TEST_IGNORE_HOOKS_WS/ignore_hook_log"
 (cd "$TEST_IGNORE_HOOKS_WS" && ./rnex -H sync --quiet)
 [ ! -f "$TEST_IGNORE_HOOKS_WS/ignore_hook_log" ] || { fail "-H did not suppress hooks"; exit 1; }
 
-# 2. Normal sync runs before_sync and after_sync, which calls 'rnex plugin karpathy-llm ingest',
+# 2. Normal sync runs before_sync and after_sync, which calls 'rnex plugin llm-wiki ingest',
 #    which must receive --ignore-hooks / RNEX_IGNORE_HOOKS=1 and NOT fire before_plugin_command or recurse into rnex sync!
 (cd "$TEST_IGNORE_HOOKS_WS" && ./rnex sync --quiet)
 [ -f "$TEST_IGNORE_HOOKS_WS/ignore_hook_log" ] || { fail "Normal sync did not fire hooks"; exit 1; }
@@ -833,7 +833,7 @@ plugins:
   windsurf:
     enabled: true
     skills: true
-  karpathy-llm:
+  llm-wiki:
     enabled: true
     sources:
       - docs
@@ -850,8 +850,8 @@ ALL_ZERO_YAML
 [ ! -f "$TEST_ALL_ZERO_WS/.github/hooks/rnex.json" ] || { fail ".github/hooks/rnex.json created when zero hooks configured"; exit 1; }
 [ ! -f "$TEST_ALL_ZERO_WS/.windsurf/hooks.json" ] || { fail ".windsurf/hooks.json created when zero hooks configured"; exit 1; }
 
-# 2. Assert that karpathy-llm ingest did NOT execute
-[ ! -f "$TEST_ALL_ZERO_WS/.rnex/wiki/repo-nexus-docs.md" ] || { fail "karpathy-llm auto-ingested docs without explicit hook"; exit 1; }
+# 2. Assert that llm-wiki ingest did NOT execute
+[ ! -f "$TEST_ALL_ZERO_WS/.rnex/wiki/repo-nexus-docs.md" ] || { fail "llm-wiki auto-ingested docs without explicit hook"; exit 1; }
 if [ -d "$TEST_ALL_ZERO_WS/.rnex/wiki" ]; then
   ! grep -q "Un-ingested Doc" "$TEST_ALL_ZERO_WS/.rnex/wiki"/*.md 2>/dev/null || {
     fail "Sample doc content found in wiki without explicit hook"; exit 1;
@@ -865,9 +865,9 @@ done
 pass
 
 # --------------------------------------------------------------------------
-# Test 16: rnex-hooks: after_sync execution of karpathy-llm ingest runs exactly once
+# Test 16: rnex-hooks: after_sync execution of llm-wiki ingest runs exactly once
 # --------------------------------------------------------------------------
-run_test "Lifecycle hooks: after_sync execution of karpathy-llm ingest runs exactly once without recursion"
+run_test "Lifecycle hooks: after_sync execution of llm-wiki ingest runs exactly once without recursion"
 TEST_AFTER_SYNC_WS="$TEST_TMP/after-sync-ingest-ws"
 mkdir -p "$TEST_AFTER_SYNC_WS"
 cp "$CLI" "$TEST_AFTER_SYNC_WS/rnex"
@@ -885,9 +885,9 @@ version: 1.0.0
 rnex-hooks:
   after_sync:
     - "echo 'AFTER_SYNC_INVOCATION' >> after_sync_run.log"
-    - "rnex plugin karpathy-llm ingest"
+    - "rnex plugin llm-wiki ingest"
 plugins:
-  karpathy-llm:
+  llm-wiki:
     enabled: true
     sources:
       - docs
@@ -901,7 +901,7 @@ AFTER_SYNC_YAML
 _invocations="$(wc -l < "$TEST_AFTER_SYNC_WS/after_sync_run.log" | tr -d ' ')"
 [ "$_invocations" -eq 1 ] || { fail "Expected exactly 1 after_sync invocation, got: $_invocations"; exit 1; }
 
-# Assert karpathy-llm ingest executed deterministically
+# Assert llm-wiki ingest executed deterministically
 [ -f "$TEST_AFTER_SYNC_WS/.rnex/wiki/repo-nexus-docs.md" ] || { fail "repo-nexus-docs.md not created by after_sync ingest"; exit 1; }
 grep -q "Architecture Overview" "$TEST_AFTER_SYNC_WS/.rnex/wiki/repo-nexus-docs.md" || {
   fail "Architecture Overview missing in repo-nexus-docs.md"; exit 1;

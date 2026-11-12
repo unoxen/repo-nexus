@@ -54,7 +54,7 @@ Plugins are not limited to built-in packages. Any external plugin directory on d
 
 | Plugin | Category | Description | Documentation |
 |:---|:---|:---|:---|
-| [`karpathy-llm`](../plugins/karpathy-llm) | Knowledge & Rules | Andrej Karpathy's 4 cardinal principles for coding agents, multi-repo context engineering standards, and autonomous zero-dependency LLM Wiki architecture. | [Read Guide](../plugins/karpathy-llm) |
+| [`llm-wiki`](../plugins/llm-wiki) | Knowledge & Rules | The 4 cardinal principles for coding agents, multi-repo context engineering standards, and autonomous zero-dependency LLM Wiki architecture. | [Read Guide](../plugins/llm-wiki) |
 | [`claude`](../plugins/claude) | AI Provider | Anthropic Claude Code integration: maintains `CLAUDE.md` and generates user skills in `.claude/skills/`. | [Read Guide](../plugins/claude) |
 | [`codex`](../plugins/codex) | AI Provider | OpenAI Codex integration: maintains `CODEX.md` and generates user skills in `.codex/skills/`. | [Read Guide](../plugins/codex) |
 | [`cursor`](../plugins/cursor) | AI Provider | Cursor IDE integration: maintains `.cursorrules`, `.cursorignore`, and generates user skills in `.cursor/rules/`. | [Read Guide](../plugins/cursor) |

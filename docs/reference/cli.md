@@ -47,7 +47,7 @@ rnex init [options] [directory]
 * `--codex`: Enable OpenAI Codex plugin (`CODEX.md`, `.codex/skills/`).
 * `--gemini`: Enable Google Gemini plugin (`GEMINI.md`, `.agents/skills/`).
 * `--windsurf`: Enable Windsurf plugin (`.windsurfrules`, `.windsurf/rules/`).
-* `--karpathy`: Enable Karpathy LLM Wiki plugin (`wiki/`, `docs/`).
+* `--llm-wiki`: Enable LLM Wiki plugin (`wiki/`, `docs/`).
 * `--plugin <name>`: Enable any specified plugin during initialization (repeatable).
 
 ### `rnex sync`
@@ -219,11 +219,11 @@ Executes a subcommand exposed by an enabled plugin:
 rnex plugin <name> <command> [options...]
 ```
 
-* Example: `rnex plugin karpathy-llm ingest`
-* Example: `rnex plugin karpathy-llm ingest docs/notes.md`
-* Example: `rnex plugin karpathy-llm ingest --file docs/notes.md`
-* Example: `rnex plugin karpathy-llm lint`
+* Example: `rnex plugin llm-wiki ingest`
+* Example: `rnex plugin llm-wiki ingest docs/notes.md`
+* Example: `rnex plugin llm-wiki ingest --file docs/notes.md`
+* Example: `rnex plugin llm-wiki lint`
 * Shorthand execution: `rnex plugin <command> [options...]` when `<command>` is unique across enabled plugins (e.g. `rnex plugin ingest`).
 
 > [!NOTE]
-> Plugin commands such as `karpathy-llm ingest` and `karpathy-llm lint` automatically initialize directory structures, maintain flat B-Tree leaf shards directly in `.rnex/wiki/*.md` (or custom configured `wiki_dir`), compile the bounded root router `.rnex/wiki/index.md` ($\le 80$ lines), and track chronological changes in `.rnex/wiki/log.md` with zero symlinks and zero property graph dependencies. Autonomous agents navigate the structure via a 3-step retrieval protocol without requiring external databases or proprietary MCPs.
+> Plugin commands such as `llm-wiki ingest` and `llm-wiki lint` automatically initialize directory structures, maintain flat B-Tree leaf shards directly in `.rnex/wiki/*.md` (or custom configured `wiki_dir`), compile the bounded root router `.rnex/wiki/index.md` ($\le 80$ lines), and track chronological changes in `.rnex/wiki/log.md` with zero symlinks and zero property graph dependencies. Autonomous agents navigate the structure via a 3-step retrieval protocol without requiring external databases or proprietary MCPs.

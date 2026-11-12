@@ -30,7 +30,7 @@ When `rnex exec` iterates through member repositories, it sets:
 * `RNEX_HOOK_ACTIVE`: Guard variable indicating active hook execution (prevents recursive loops).
 
 ### Plugin Execution Variables (`rnex plugin`)
-* `RNEX_PLUGIN_NAME`: Target plugin name (e.g. `karpathy-llm`).
+* `RNEX_PLUGIN_NAME`: Target plugin name (e.g. `llm-wiki`).
 * `RNEX_PLUGIN_COMMAND`: Subcommand name (e.g. `ingest` or `lint`).
 * `RNEX_PLUGIN_ARGS`: String of arguments passed to the plugin command.
 

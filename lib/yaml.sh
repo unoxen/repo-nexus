@@ -1090,7 +1090,7 @@ yaml_list_plugins() {
     _yaml_list_plugins_from_file "$_wy"
     _yaml_list_plugins_from_file "$_wly"
     if [ -n "$(_yaml_top_level_from_file "$_wly" "wiki_dir")" ] || [ -n "$(_yaml_top_level_from_file "$_wy" "wiki_dir")" ]; then
-      _p_k="karpathy"; printf '%s-llm\n' "$_p_k"
+      printf "llm-wiki\n"
     fi
   } | awk '!seen[$0]++'
 }
@@ -1147,8 +1147,7 @@ yaml_get_plugin_config() {
   fi
 
   # 3. Special case backwards compatibility for wiki plugin top-level wiki_dir
-  _p_k="karpathy"
-  if [ "$_ygpc_plugin" = "${_p_k}-llm" ] && [ "$_ygpc_key" = "wiki_dir" ]; then
+  if [ "$_ygpc_plugin" = "llm-wiki" ] && [ "$_ygpc_key" = "wiki_dir" ]; then
     _top_wd="$(yaml_get_top_level "wiki_dir")"
     if [ -n "$_top_wd" ]; then
       printf '%s' "$_top_wd"
@@ -1902,7 +1901,7 @@ _yaml_resolve_plugin_manifest_path() {
 #
 # Arguments:
 #   $1 - Optional workspace root directory (defaults to NEXUS_DIR or .).
-#   $2 - Plugin identifier name (e.g. "claude", "copilot", "karpathy-llm").
+#   $2 - Plugin identifier name (e.g. "claude", "copilot", "llm-wiki").
 #
 # Returns:
 #   Outputs newline-delimited hook event names to stdout.
