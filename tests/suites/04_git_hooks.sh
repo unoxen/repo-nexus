@@ -913,6 +913,66 @@ _invocations2="$(wc -l < "$TEST_AFTER_SYNC_WS/after_sync_run.log" | tr -d ' ')"
 [ "$_invocations2" -eq 2 ] || { fail "Expected exactly 2 after_sync invocations after second sync, got: $_invocations2"; exit 1; }
 pass
 
+# --------------------------------------------------------------------------
+run_test "Maintainer git hooks: merge and amend operations prevent double version bumps and tag updates"
+TEST_MAINT_WS="$TEST_TMP/maintainer-hooks-ws"
+mkdir -p "$TEST_MAINT_WS/scripts/githooks"
+cp "$DIR/scripts/githooks"/* "$TEST_MAINT_WS/scripts/githooks/"
+chmod +x "$TEST_MAINT_WS/scripts/githooks"/*
+git -C "$TEST_MAINT_WS" init -q
+git -C "$TEST_MAINT_WS" config core.hooksPath scripts/githooks
+
+cat << 'EOF_PKG' > "$TEST_MAINT_WS/package.json"
+{
+  "name": "test-repo",
+  "version": "1.0.0"
+}
+EOF_PKG
+git -C "$TEST_MAINT_WS" add package.json
+git -C "$TEST_MAINT_WS" commit -m "initial commit" >/dev/null
+
+# 1. Normal commit must auto-bump patch version and create git tag
+sleep 1
+echo "feat 1" > "$TEST_MAINT_WS/f1.txt"
+git -C "$TEST_MAINT_WS" add f1.txt
+git -C "$TEST_MAINT_WS" commit -m "feat: file 1" >/dev/null
+_v1="$(awk '/^[ ]*"version"[ ]*:[ ]*"[0-9]/ { sub(/.*"version"[ ]*:[ ]*"/, ""); sub(/".*/, ""); print; exit }' "$TEST_MAINT_WS/package.json")"
+[ "$_v1" = "1.0.1" ] || { fail "Expected version 1.0.1 after normal commit, got: $_v1"; exit 1; }
+git -C "$TEST_MAINT_WS" rev-parse -q --verify "refs/tags/v1.0.1" >/dev/null || { fail "Git tag v1.0.1 missing after normal commit"; exit 1; }
+
+# 2. Amend commit must NOT bump version again and must update tag to point to amended commit
+echo "feat 1 amended" > "$TEST_MAINT_WS/f1.txt"
+git -C "$TEST_MAINT_WS" add f1.txt
+git -C "$TEST_MAINT_WS" commit --amend -m "feat: file 1 amended" >/dev/null
+_v_amend="$(awk '/^[ ]*"version"[ ]*:[ ]*"[0-9]/ { sub(/.*"version"[ ]*:[ ]*"/, ""); sub(/".*/, ""); print; exit }' "$TEST_MAINT_WS/package.json")"
+[ "$_v_amend" = "1.0.1" ] || { fail "Amend incorrectly bumped version to: $_v_amend"; exit 1; }
+_head_sha="$(git -C "$TEST_MAINT_WS" rev-parse HEAD)"
+_tag_sha="$(git -C "$TEST_MAINT_WS" rev-parse -q --verify "refs/tags/v1.0.1^{commit}")"
+[ "$_head_sha" = "$_tag_sha" ] || { fail "Tag v1.0.1 was not updated to amended HEAD commit"; exit 1; }
+
+# 3. Merge commit must NEVER auto-bump version or create spurious release tags
+git -C "$TEST_MAINT_WS" branch feature-branch
+sleep 1
+echo "master update" > "$TEST_MAINT_WS/master.txt"
+git -C "$TEST_MAINT_WS" add master.txt
+git -C "$TEST_MAINT_WS" commit -m "feat: master update" >/dev/null
+_v_master="$(awk '/^[ ]*"version"[ ]*:[ ]*"[0-9]/ { sub(/.*"version"[ ]*:[ ]*"/, ""); sub(/".*/, ""); print; exit }' "$TEST_MAINT_WS/package.json")"
+[ "$_v_master" = "1.0.2" ] || { fail "Expected version 1.0.2 on master commit, got: $_v_master"; exit 1; }
+
+git -C "$TEST_MAINT_WS" checkout feature-branch >/dev/null 2>&1
+sleep 1
+echo "feature update" > "$TEST_MAINT_WS/feat.txt"
+git -C "$TEST_MAINT_WS" add feat.txt
+git -C "$TEST_MAINT_WS" commit -m "feat: feature update" >/dev/null
+git -C "$TEST_MAINT_WS" checkout master >/dev/null 2>&1
+
+git -C "$TEST_MAINT_WS" merge feature-branch -m "Merge feature branch" >/dev/null
+_v_merge="$(awk '/^[ ]*"version"[ ]*:[ ]*"[0-9]/ { sub(/.*"version"[ ]*:[ ]*"/, ""); sub(/".*/, ""); print; exit }' "$TEST_MAINT_WS/package.json")"
+[ "$_v_merge" = "1.0.2" ] || { fail "Merge incorrectly bumped version to: $_v_merge"; exit 1; }
+! git -C "$TEST_MAINT_WS" rev-parse -q --verify "refs/tags/v1.0.3" >/dev/null 2>&1 || { fail "Merge created spurious tag v1.0.3"; exit 1; }
+git -C "$TEST_MAINT_WS" diff --quiet package.json || { fail "package.json left dirty after merge commit"; exit 1; }
+pass
+
 if [ "${_STANDALONE_RUN:-0}" -eq 1 ]; then
   report_results
 fi

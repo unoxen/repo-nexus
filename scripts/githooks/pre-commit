@@ -23,6 +23,15 @@ if [ ! -f "$PKG_JSON" ]; then
   exit 0
 fi
 
+GIT_DIR="$(git rev-parse --git-dir 2>/dev/null || echo "$REPO_ROOT/.git")"
+
+# Never bump version during a merge, rebase, cherry-pick, or revert operation
+if [ -f "$GIT_DIR/MERGE_HEAD" ] || [ -f "$GIT_DIR/MERGE_MSG" ] || \
+   [ -d "$GIT_DIR/rebase-merge" ] || [ -d "$GIT_DIR/rebase-apply" ] || \
+   [ -f "$GIT_DIR/CHERRY_PICK_HEAD" ] || [ -f "$GIT_DIR/REVERT_HEAD" ]; then
+  exit 0
+fi
+
 # Do not bump if nothing is staged in git
 if git diff --cached --quiet; then
   exit 0
@@ -48,7 +57,35 @@ if git diff --cached "$PKG_JSON" 2>/dev/null | grep -q '^[+][ ]*"version"[ ]*:[ 
   CUR_VERSION="$(awk '/^[ ]*"version"[ ]*:[ ]*"[0-9]/ { sub(/.*"version"[ ]*:[ ]*"/, ""); sub(/".*/, ""); print; exit }' "$PKG_JSON")"
   if [ -n "$CUR_VERSION" ]; then
     sync_plugin_versions "$CUR_VERSION"
-    GIT_DIR="$(git rev-parse --git-dir 2>/dev/null || echo "$REPO_ROOT/.git")"
+    printf 'v%s\n' "$CUR_VERSION" > "$GIT_DIR/PENDING_VERSION_TAG"
+  fi
+  exit 0
+fi
+
+# Detect git commit --amend across Linux /proc, POSIX ps, and Git author date invariance
+_is_amend=0
+if [ -f "/proc/$PPID/cmdline" ]; then
+  case "$(tr '\0' ' ' < "/proc/$PPID/cmdline" 2>/dev/null)" in
+    *--amend*) _is_amend=1 ;;
+  esac
+fi
+if [ "$_is_amend" -eq 0 ] && command -v ps >/dev/null 2>&1; then
+  _parent_cmd="$(ps -o args= -p "$PPID" 2>/dev/null || ps -o command= -p "$PPID" 2>/dev/null || true)"
+  case "$_parent_cmd" in
+    *--amend*) _is_amend=1 ;;
+  esac
+fi
+if [ "$_is_amend" -eq 0 ] && [ -n "$GIT_AUTHOR_DATE" ] && git rev-parse --verify HEAD >/dev/null 2>&1; then
+  _head_raw="$(git log -1 --format=%ad --date=raw HEAD 2>/dev/null || true)"
+  if [ -n "$_head_raw" ] && [ "$GIT_AUTHOR_DATE" = "@$_head_raw" ]; then
+    _is_amend=1
+  fi
+fi
+
+if [ "$_is_amend" -eq 1 ]; then
+  CUR_VERSION="$(awk '/^[ ]*"version"[ ]*:[ ]*"[0-9]/ { sub(/.*"version"[ ]*:[ ]*"/, ""); sub(/".*/, ""); print; exit }' "$PKG_JSON")"
+  if [ -n "$CUR_VERSION" ]; then
+    sync_plugin_versions "$CUR_VERSION"
     printf 'v%s\n' "$CUR_VERSION" > "$GIT_DIR/PENDING_VERSION_TAG"
   fi
   exit 0
@@ -78,7 +115,6 @@ fi
 sync_plugin_versions "$NEW_VERSION"
 
 # Queue version git tag to be created on the commit by post-commit hook
-GIT_DIR="$(git rev-parse --git-dir 2>/dev/null || echo "$REPO_ROOT/.git")"
 printf 'v%s\n' "$NEW_VERSION" > "$GIT_DIR/PENDING_VERSION_TAG"
 
 printf '[repo-nexus] Auto-bumped patch version to %s (tag v%s queued)\n' "$NEW_VERSION" "$NEW_VERSION"

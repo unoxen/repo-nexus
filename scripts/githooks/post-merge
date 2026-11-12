@@ -1,7 +1,10 @@
 #!/bin/sh
 # shellcheck shell=sh
+# ============================================================================
+# scripts/githooks/post-merge — Maintainer Post-Merge Hook
+#
+# Pulling or merging changes must never auto-create release tags.
+# ============================================================================
 set -e
-HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
-if [ -x "$HOOK_DIR/post-commit" ]; then
-  exec "$HOOK_DIR/post-commit" "$@"
-fi
+
+exit 0

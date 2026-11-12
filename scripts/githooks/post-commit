@@ -36,9 +36,15 @@ if [ -z "$TAG_NAME" ] && [ -f "$REPO_ROOT/package.json" ]; then
 fi
 
 if [ -n "$TAG_NAME" ]; then
-  # Only create tag if it does not already exist
-  if ! git rev-parse -q --verify "refs/tags/$TAG_NAME" >/dev/null 2>&1; then
+  _head_sha="$(git rev-parse HEAD 2>/dev/null || true)"
+  _tag_sha="$(git rev-parse -q --verify "refs/tags/$TAG_NAME^{commit}" 2>/dev/null || true)"
+
+  if [ -z "$_tag_sha" ]; then
     git tag -a "$TAG_NAME" -m "Release $TAG_NAME" 2>/dev/null || git tag "$TAG_NAME"
     printf '[repo-nexus] Created git tag %s on commit %s\n' "$TAG_NAME" "$(git rev-parse --short HEAD)"
+  elif [ "$_tag_sha" != "$_head_sha" ]; then
+    # Tag exists but points to a different commit (e.g. following git commit --amend)
+    git tag -f -a "$TAG_NAME" -m "Release $TAG_NAME" 2>/dev/null || git tag -f "$TAG_NAME"
+    printf '[repo-nexus] Updated git tag %s to amended commit %s\n' "$TAG_NAME" "$(git rev-parse --short HEAD)"
   fi
 fi

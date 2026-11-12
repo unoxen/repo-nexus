@@ -1,7 +1,10 @@
 #!/bin/sh
 # shellcheck shell=sh
+# ============================================================================
+# scripts/githooks/pre-merge-commit — Maintainer Pre-Merge Hook
+#
+# Merge commits must never auto-bump versions or queue release tags.
+# ============================================================================
 set -e
-HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
-if [ -x "$HOOK_DIR/pre-commit" ]; then
-  exec "$HOOK_DIR/pre-commit" "$@"
-fi
+
+exit 0
