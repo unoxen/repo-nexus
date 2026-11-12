@@ -36,7 +36,7 @@ A self-healing, agent-maintained knowledge base structured directly under `.rnex
   - Zero duplicate file copies and zero symbolic links (`concepts/` and `repos/` subdirectories inside wiki are completely eradicated).
   - Intake sources are fully configurable via `sources` under `plugins.llm-wiki`.
 - **`.rnex/wiki/index.md` B-Tree Root Router**:
-  - Compact, strictly bounded routing table ($\le 80$ lines, zero YAML frontmatter) organizing domain shards with key ranges and entry counts.
+  - Compact, strictly bounded routing table (maximum allowed lines, zero YAML frontmatter) organizing domain shards with key ranges and entry counts.
 - **`.rnex/wiki/repo-nexus*.md` & `.rnex/wiki/repos-*.md` Flat Leaf Shards**:
   - Lexicographically sorted domain leaf pages (`repo-nexus.md`, `repos-<member-repo>.md`, `repos-<member-repo>-<subscope>.md`). Automatically split into alphabetical sub-shards (e.g. `repo-nexus-a-m.md`, `repo-nexus-n-z.md`) when exceeding capacity thresholds.
 - **`.rnex/wiki/log.md` Operational Audit Trail**:
@@ -49,9 +49,9 @@ A self-healing, agent-maintained knowledge base structured directly under `.rnex
 - **`lint.md` (Integrity Audit Protocol)**:
   - Standalone structural and reference audit without running ingestion or mutating source files.
   - Auto-heals directory structures, links orphan shards, prunes dead references, and re-sorts catalog entries in `LC_ALL=C` order.
-  - Purges deprecated legacy files (`hot.md`, `_index.md`, `_log.md`) and subdirectories (`_graph/`, `_index/`).
+  - Purges deprecated legacy files and subdirectories.
   - Enforces zero symbolic links across the `.rnex/wiki/` directory.
-  - Enforces the $\le 80$ line budget on root `.rnex/wiki/index.md`.
+  - Enforces the maximum allowed lines in root `.rnex/wiki/index.md`.
   - Conditional audit logging: mutates `log.md` only when repairs are made; zero changes on clean runs.
 
 ---
