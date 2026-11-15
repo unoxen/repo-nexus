@@ -5,7 +5,7 @@ description: Complete reference for lifecycle hooks, event triggers, configurati
 
 # Lifecycle Hooks
 
-Repo Nexus includes a built-in event-driven lifecycle hook system configured under the top-level `rnex-hooks:` block (or legacy `rnex_hooks:`) in `rnex.yaml` or `.local.rnex.yaml`.
+Repo Nexus includes a built-in event-driven lifecycle hook system configured under the top-level `rnex-hooks:` block in `rnex.yaml` or `.local.rnex.yaml`.
 
 ::: tip Zero Default & Zero Hidden Hooks (Strict Opt-In)
 Repo Nexus enforces a strict **opt-in** contract: **zero default or hidden lifecycle hooks exist**. No commands run during any lifecycle stage unless explicitly declared in `rnex.yaml` or `.local.rnex.yaml`.
@@ -37,7 +37,7 @@ rnex-hooks:
     - "echo 'Finished command:' $RNEX_PLUGIN_COMMAND"
 ```
 
-Workstation-specific overrides can be added to `.local.rnex.yaml`. If an event list is specified in `.local.rnex.yaml`, its command list takes precedence and overrides that event's commands in `rnex.yaml` (both underscore `after_sync` and hyphenated `after-sync` keys are supported, under `rnex-hooks:` or `rnex_hooks:`).
+Workstation-specific overrides can be added to `.local.rnex.yaml`. If an event list is specified in `.local.rnex.yaml`, its command list takes precedence and overrides that event's commands in `rnex.yaml` (both underscore `after_sync` and hyphenated `after-sync` keys are supported under `rnex-hooks:`).
 
 ---
 

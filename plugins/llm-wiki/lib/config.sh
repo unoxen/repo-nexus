@@ -25,6 +25,13 @@ if [ "${RNEX_LLM_WIKI_CONFIG_SH_SOURCED:-0}" = "1" ]; then
 fi
 RNEX_LLM_WIKI_CONFIG_SH_SOURCED=1
 
+# Ensure pure utilities are loaded for compute_upward_rel_prefix
+if ! command -v compute_upward_rel_prefix >/dev/null 2>&1; then
+    _cfg_script_dir="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
+    # shellcheck source=plugins/llm-wiki/lib/utils.sh
+    . "${_cfg_script_dir}/utils.sh"
+fi
+
 # -----------------------------------------------------------------------------
 # _lookup_llm_wiki_cfg
 # Summary: Looks up a configuration key for the llm-wiki plugin from the
@@ -134,20 +141,7 @@ load_wiki_config_contract() {
     RNEX_WIKI_LOG_FILE="${RNEX_WIKI_ROOT}/${_log_name}"
 
     # Compute upward relative prefix from wiki directory to workspace root
-    if command -v compute_upward_rel_prefix >/dev/null 2>&1; then
-        RNEX_WIKI_UP_PREFIX="$(compute_upward_rel_prefix "$RNEX_WIKI_REL_DIR")"
-    else
-        _clean_dir="$(printf '%s' "$RNEX_WIKI_REL_DIR" | sed 's#^\./##; s#/$##')"
-        RNEX_WIKI_UP_PREFIX="$(printf '%s' "$_clean_dir" | LC_ALL=C awk -F'/' '{
-            prefix = ""
-            for (i = 1; i <= NF; i++) {
-                if ($i != "" && $i != ".") {
-                    prefix = prefix "../"
-                }
-            }
-            print prefix
-        }')"
-    fi
+    RNEX_WIKI_UP_PREFIX="$(compute_upward_rel_prefix "$RNEX_WIKI_REL_DIR")"
 
     # Capacity constraints: maximum root lines and maximum shard entries
     if [ -n "${RNEX_CFG_BTREE_ROOT_MAX_LINES:-}" ]; then
@@ -199,14 +193,10 @@ load_wiki_config_contract() {
             ;;
     esac
 
-    # Preserve backwards compatibility variable aliases
-    RNEX_WIKI_BTREE_ROOT_MAX_LINES="$RNEX_WIKI_BTREE_MAX_ROOT_LINES"
-
     export RNEX_WORKSPACE_ROOT RNEX_WIKI_REL_DIR RNEX_WIKI_ROOT \
            RNEX_WIKI_INDEX_FILE RNEX_WIKI_LOG_FILE RNEX_WIKI_UP_PREFIX \
            RNEX_WIKI_BTREE_MAX_ROOT_LINES RNEX_WIKI_BTREE_SHARD_MAX_ENTRIES \
-           RNEX_WIKI_BTREE_ROOT_MAX_LINES RNEX_WIKI_RELATIVE_LINKS \
-           RNEX_WIKI_LOG_MAX_RECORDS
+           RNEX_WIKI_RELATIVE_LINKS RNEX_WIKI_LOG_MAX_RECORDS
 
     return 0
 }
@@ -244,45 +234,4 @@ is_repo_enabled() {
         fi
     done
     return 0
-}
-
-# -----------------------------------------------------------------------------
-# discover_enabled_member_repos
-# Summary: Discovers active, enabled member repository names from ./repos/*
-#          and the manifest rnex.yaml so flat B-Tree shards (repos-*.md)
-#          are maintained per active member repo.
-# @returns: Newline-delimited list of canonical member repo names on stdout.
-# @sideEffects: Inspects filesystem ./repos/ directory and rnex.yaml manifest.
-# -----------------------------------------------------------------------------
-discover_enabled_member_repos() {
-    _repos_base="${RNEX_WORKSPACE_ROOT}/${RNEX_CFG_REPOS_DIR:-repos}"
-    _manifest="${RNEX_WORKSPACE_ROOT}/rnex.yaml"
-
-    {
-        if [ -d "$_repos_base" ]; then
-            for _d in "$_repos_base"/*; do
-                [ -d "$_d" ] || continue
-                _b="$(basename "$_d")"
-                [ "$_b" != "*" ] && [ "$_b" != ".gitkeep" ] && printf '%s\n' "$_b"
-            done
-        fi
-
-        if [ -f "$_manifest" ]; then
-            LC_ALL=C awk '
-                /^repos:[[:space:]]*$/ { in_repos=1; next }
-                in_repos && /^[^[:space:]#]/ { in_repos=0 }
-                in_repos && /^[[:space:]]{2}[a-zA-Z0-9._-]+:[[:space:]]*$/ {
-                    key = $1
-                    sub(/:$/, "", key)
-                    if (key != "hooks" && key != "enabled" && key != "url" && key != "path" && key != "branch") {
-                        print key
-                    }
-                }
-            ' "$_manifest"
-        fi
-    } | LC_ALL=C sort -u | while IFS= read -r _cand; do
-        [ -n "$_cand" ] || continue
-        is_repo_enabled "$_cand" || continue
-        printf '%s\n' "$_cand"
-    done
 }

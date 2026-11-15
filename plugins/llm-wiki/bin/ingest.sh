@@ -35,6 +35,16 @@ esac
 # shellcheck source=plugins/llm-wiki/lib/btree_helpers.sh
 . "${PLUGIN_ROOT}/lib/btree_helpers.sh"
 
+# -----------------------------------------------------------------------------
+# main_ingest
+# Summary: Entrypoint for the `rnex plugin llm-wiki ingest` CLI command.
+#          Parses CLI arguments, loads the wiki configuration contract,
+#          resolves missing source files, and ingests them into B-Tree shards.
+# @param $@: CLI arguments ([<source_path>], --file/-f, --rewrite-links,
+#            --strip-links, --quiet/-q, --help/-h).
+# @returns: 0 on successful ingestion; 1 on configuration or source error.
+# @sideEffects: Mutates configured wiki_dir shards, index_file, and log_file.
+# -----------------------------------------------------------------------------
 main_ingest() {
     _ws_root="${RNEX_WORKSPACE_ROOT:-${RNEX_ROOT:-$(pwd)}}"
     load_wiki_config_contract "$_ws_root" || exit 1
@@ -52,11 +62,6 @@ main_ingest() {
                     exit 1
                 fi
                 shift
-                ;;
-            --repo|-r)
-                # Accepted for backwards compatibility
-                shift
-                [ $# -gt 0 ] && shift
                 ;;
             --quiet|-q)
                 _quiet=1

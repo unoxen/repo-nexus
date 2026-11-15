@@ -1,16 +1,22 @@
 #!/bin/sh
 # shellcheck shell=sh
 # ============================================================================
-# lib/workspace.sh — Workspace detection, context loading, and configuration upgrade
+# File: lib/workspace.sh
+# Architectural Layer: Core Workspace Management
+# Single Responsibility: Workspace root discovery, configuration context
+# initialization, sync stamp checksum verification, and auto-reconciliation.
 # ============================================================================
 
 RNEX_CONFIG_FILE="rnex.yaml"
 RNEX_LOCAL_CONFIG_FILE=".local.rnex.yaml"
 
-# ---- Workspace Detection (Context-Aware) ----------------------------------
-
-# Search upwards from current directory to filesystem root for rnex.yaml or .rnex.yaml.
-# Returns the absolute path of the containing workspace root, or non-zero if not found.
+# ----------------------------------------------------------------------------
+# find_workspace_dir
+# Summary: Searches upwards from the current working directory to the
+#          filesystem root for rnex.yaml or .rnex.yaml.
+# @returns: Absolute path of workspace root on stdout, or returns 1 if absent.
+# @pure (Read-only filesystem traversal)
+# ----------------------------------------------------------------------------
 find_workspace_dir() {
   _curr="$(pwd -P 2>/dev/null || pwd)"
   while [ -n "$_curr" ] && [ "$_curr" != "/" ]; do
@@ -27,9 +33,14 @@ find_workspace_dir() {
   return 1
 }
 
-# ---- Config Checksum & Sync Stamp -----------------------------------------
-
-# Compute a combined checksum of rnex.yaml and .local.rnex.yaml to detect configuration changes.
+# ----------------------------------------------------------------------------
+# get_config_sum
+# Summary: Computes a combined POSIX cksum digest of rnex.yaml and
+#          .local.rnex.yaml to detect configuration drift.
+# @param $1: ws_dir - Optional workspace directory (defaults to NEXUS_DIR).
+# @returns: Checksum string on stdout.
+# @pure
+# ----------------------------------------------------------------------------
 get_config_sum() {
   _dir="${1:-${NEXUS_DIR:-.}}"
   _yaml="rnex.yaml"
@@ -41,27 +52,33 @@ get_config_sum() {
   ( cd "$_dir" 2>/dev/null && cksum "$_yaml" .local.rnex.yaml 2>/dev/null | cksum | awk '{print $1, $2}' )
 }
 
-# Update the workspace sync stamp (.rnex/sync_stamp) with current config checksum.
+# ----------------------------------------------------------------------------
+# update_sync_stamp
+# Summary: Updates .rnex/sync_stamp with the current configuration checksum
+#          and ensures sync_stamp is listed in .rnex/.gitignore.
+# @param $1: ws_dir - Optional workspace directory (defaults to NEXUS_DIR).
+# @returns: 0 on success.
+# @sideEffects: Writes .rnex/sync_stamp and .rnex/.gitignore.
+# ----------------------------------------------------------------------------
 update_sync_stamp() {
   _dir="${1:-${NEXUS_DIR:-.}}"
   mkdir -p "$_dir/.rnex"
   if [ ! -f "$_dir/.rnex/.gitignore" ]; then
     printf "sync_stamp\n" > "$_dir/.rnex/.gitignore"
-  else
-    if grep -q "^\.sync_stamp" "$_dir/.rnex/.gitignore" 2>/dev/null; then
-      _tmp_gi="$(mktemp)"
-      grep -v "^\.sync_stamp" "$_dir/.rnex/.gitignore" > "$_tmp_gi" && mv "$_tmp_gi" "$_dir/.rnex/.gitignore"
-    fi
-    if ! grep -q "^sync_stamp" "$_dir/.rnex/.gitignore" 2>/dev/null; then
-      printf "sync_stamp\n" >> "$_dir/.rnex/.gitignore"
-    fi
+  elif ! grep -q "^sync_stamp" "$_dir/.rnex/.gitignore" 2>/dev/null; then
+    printf "sync_stamp\n" >> "$_dir/.rnex/.gitignore"
   fi
   _csum="$(get_config_sum "$_dir")"
   printf '%s\n' "$_csum" > "$_dir/.rnex/sync_stamp"
-  rm -f "$_dir/.rnex/.sync_stamp"
 }
 
-# Compare current config checksum against .rnex/sync_stamp and trigger silent sync if stale.
+# ----------------------------------------------------------------------------
+# check_auto_sync
+# Summary: Compares the current configuration checksum against .rnex/sync_stamp
+#          and triggers a silent reconciliation (`cmd_sync -y --quiet`) if stale.
+# @returns: 0 on success.
+# @sideEffects: May invoke cmd_sync if configuration checksum changed.
+# ----------------------------------------------------------------------------
 check_auto_sync() {
   _ws="${NEXUS_DIR:-}"
   if [ -z "$_ws" ]; then
@@ -97,6 +114,13 @@ auto_sync_if_needed() {
   check_auto_sync "$@"
 }
 
+# ----------------------------------------------------------------------------
+# require_workspace
+# Summary: Resolves and validates the active Repo Nexus workspace root and
+#          exports NEXUS_DIR, RNEX_ROOT, WORKSPACE_YAML, and REPOS_DIR.
+# @throws: Terminates with exit status 1 if no workspace configuration exists.
+# @sideEffects: Exports workspace environment variables.
+# ----------------------------------------------------------------------------
 require_workspace() {
   if [ -n "$CUSTOM_CONFIG" ]; then
     _cfg_path="$(resolve_path "$CUSTOM_CONFIG")"
@@ -146,13 +170,7 @@ require_workspace() {
 }
 
 _init_local_yaml() {
-  if [ -f "$NEXUS_DIR/$RNEX_LOCAL_CONFIG_FILE" ]; then
-    WORKSPACE_LOCAL_YAML="$NEXUS_DIR/$RNEX_LOCAL_CONFIG_FILE"
-  elif [ -f "$NEXUS_DIR/.rnex.local.yaml" ]; then
-    WORKSPACE_LOCAL_YAML="$NEXUS_DIR/.rnex.local.yaml"
-  else
-    WORKSPACE_LOCAL_YAML="$NEXUS_DIR/$RNEX_LOCAL_CONFIG_FILE"
-  fi
+  WORKSPACE_LOCAL_YAML="$NEXUS_DIR/$RNEX_LOCAL_CONFIG_FILE"
 }
 
 _load_workspace_version() {
@@ -167,7 +185,7 @@ _load_repos_dir() {
 
 _load_code_workspace() {
   _cw="${1:-}"
-  [ -n "$_cw" ] || _cw="$(yaml_get_top_level "code_workspace|vscode_workspace")"
+  [ -n "$_cw" ] || _cw="$(yaml_get_top_level "code_workspace")"
   case "$_cw" in
     true|yes|1)
       _ws_basename="$(basename "$NEXUS_DIR")"
@@ -183,255 +201,4 @@ _load_code_workspace() {
       esac
       ;;
   esac
-}
-
-migrate_legacy_plugin_config() {
-  _mkc_f="$1"
-  [ -f "$_mkc_f" ] || return 0
-
-  _mkc_target="llm-wiki"
-  _mkc_has_sources=0
-  if command -v _yaml_plugin_list_from_file >/dev/null 2>&1; then
-    [ -n "$(_yaml_plugin_list_from_file "$_mkc_f" "$_mkc_target" "sources")" ] && _mkc_has_sources=1
-  elif grep -q '^[ \t]*sources:[ \t]*' "$_mkc_f" 2>/dev/null; then
-    _mkc_has_sources=1
-  fi
-
-  _mkc_tmp="$(mktemp)"
-  awk -v has_sources="$_mkc_has_sources" -v target_p="$_mkc_target" '
-    /^[ \t]*plugins:[ \t]*(#.*)?$/ { in_plugins=1; in_target=0; plugin_indent=-1; print; next }
-    in_plugins && /^[^ \t#]/ { in_plugins=0; in_target=0 }
-    {
-      match($0, /^[ \t]*/)
-      indent = RLENGTH
-      trimmed = substr($0, indent + 1)
-    }
-    trimmed ~ /^ingest_member_readmes:[ \t]*/ {
-      next
-    }
-    !in_plugins || trimmed ~ /^([#]|$)/ {
-      print
-      next
-    }
-
-    in_target && (indent <= plugin_indent) {
-      in_target=0
-    }
-
-    !in_target {
-      k = trimmed
-      sub(/:.*/, "", k)
-      gsub(/^["\047]|["\047]$/, "", k)
-      gsub(/[[:space:]]/, "", k)
-      if (k == target_p && trimmed ~ /:[ \t]*(#.*)?$/) {
-        in_target=1
-        plugin_indent=indent
-      }
-      print
-      next
-    }
-
-    in_target && (indent > plugin_indent) {
-      k = trimmed
-      sub(/:.*/, "", k)
-      gsub(/^["\047]|["\047]$/, "", k)
-      gsub(/[[:space:]]/, "", k)
-      if (k == "raw_dir" && trimmed ~ /:[ \t]*/) {
-        if (has_sources == 1) {
-          next
-        }
-        val = trimmed
-        sub(/^[^:]*:[ \t]*/, "", val)
-        if (val ~ /^"[^"]*"/) {
-          match(val, /^"[^"]*"/)
-          val = substr(val, 2, RLENGTH - 2)
-        } else if (val ~ /^\047[^\047]*\047/) {
-          match(val, /^\047[^\047]*\047/)
-          val = substr(val, 2, RLENGTH - 2)
-        } else {
-          sub(/[ \t]*#.*$/, "", val)
-          sub(/[ \t]+$/, "", val)
-        }
-        while (sub(/^\.\//, "", val)) {}
-        if (val != "." && val != "/") {
-          sub(/\/+$/, "", val)
-        }
-        if (length(val) == 0) val = "docs"
-        ind = substr($0, 1, indent)
-        if (val ~ /[*?\[]|[ \t]/) {
-          printf "%ssources:\n%s  - \"%s\"\n", ind, ind, val
-        } else {
-          printf "%ssources:\n%s  - %s\n", ind, ind, val
-        }
-        has_sources=1
-        next
-      }
-    }
-    { print }
-  ' "$_mkc_f" > "$_mkc_tmp"
-
-  if ! cmp -s "$_mkc_f" "$_mkc_tmp"; then
-    mv "$_mkc_tmp" "$_mkc_f"
-  else
-    rm -f "$_mkc_tmp"
-  fi
-}
-
-upgrade_workspace_config() {
-  _f="$1"
-  _ver="$2"
-  [ -f "$_f" ] || return 0
-
-  _tmp="$(mktemp)"
-
-  # 1. Update or insert version
-  if grep -q '^[ ]*version:' "$_f" 2>/dev/null; then
-    awk -v ver="$_ver" '
-      /^[ ]*version:[ ]*/ { print "version: " ver; next }
-      { print }
-    ' "$_f" > "$_tmp" && mv "$_tmp" "$_f"
-  else
-    awk -v ver="$_ver" '
-      BEGIN { inserted=0 }
-      /^[^#]/ && !inserted {
-        print "# Workspace version"
-        print "version: " ver
-        print ""
-        inserted=1
-      }
-      { print }
-      END {
-        if (!inserted) {
-          print ""
-          print "# Workspace version"
-          print "version: " ver
-        }
-      }
-    ' "$_f" > "$_tmp" && mv "$_tmp" "$_f"
-  fi
-
-  # 2. Check for legacy ai_instructions: if set, migrate to provider plugin and remove
-  if grep -q '^[ ]*\(ai_instructions\|ai_instructions_file\):' "$_f" 2>/dev/null; then
-    _old_aif="$(awk '/^[ ]*(ai_instructions|ai_instructions_file):/ { sub(/^[a-zA-Z0-9_]+:[ ]*/, ""); sub(/[ ]*#.*/, ""); val=$0 } END { if (val) print val }' "$_f" | tr -d " \t\r\n'\"")"
-    case "$_old_aif" in
-      CLAUDE.md|claude)
-        yaml_enable_plugin "claude" "$_f"
-        ;;
-      GEMINI.md|gemini)
-        yaml_enable_plugin "gemini" "$_f"
-        ;;
-      .cursorrules|cursor)
-        yaml_enable_plugin "cursor" "$_f"
-        ;;
-    esac
-    awk '!/^[ ]*(ai_instructions|ai_instructions_file):/' "$_f" > "$_tmp" && mv "$_tmp" "$_f"
-  fi
-
-  # 3. Add code_workspace if missing
-  if ! grep -q '^[ ]*\(code_workspace\|vscode_workspace\):' "$_f" 2>/dev/null; then
-    awk '
-      BEGIN { inserted=0 }
-      /^[ ]*(plugins|repos):/ && !inserted {
-        print "# VS Code / Cursor multi-root workspace file (default: false; e.g. true or workspace.code-workspace)"
-        print "code_workspace: false"
-        print ""
-        inserted=1
-      }
-      { print }
-      END {
-        if (!inserted) {
-          print ""
-          print "code_workspace: false"
-        }
-      }
-    ' "$_f" > "$_tmp" && mv "$_tmp" "$_f"
-  fi
-
-  # 4. Migrate legacy top-level hooks: to rnex_hooks:, remove legacy git_hooks: and obsolete auto_sync_on:, and add structured git: section if missing
-  if grep -qE '^(git_hooks|hooks):' "$_f" 2>/dev/null || grep -qE '^[ \t]*(auto_sync_on|autoSyncOn):' "$_f" 2>/dev/null; then
-    _has_rnex_hooks=0
-    grep -qE '^[ \t]*(rnex_hooks|rnex-hooks):' "$_f" 2>/dev/null && _has_rnex_hooks=1
-    _tmp="$(mktemp)"
-    awk -v has_rh="$_has_rnex_hooks" '
-      /^[ ]*#.*[aA]utomated workspace Git hooks/ { next }
-      /^git_hooks:/ { next }
-      /^[ \t]*(auto_sync_on|autoSyncOn):/ { next }
-      /^hooks:[ \t]*(#.*)?$/ {
-        if (has_rh == 0) {
-          print "rnex_hooks:"
-          has_rh = 1
-        }
-        next
-      }
-      { print }
-    ' "$_f" > "$_tmp" && mv "$_tmp" "$_f"
-  fi
-
-  if ! grep -q '^[ ]*git:[ ]*$' "$_f" 2>/dev/null; then
-    _ard="$(yaml_get_repos_dir 2>/dev/null || printf 'repos')"
-    [ -n "$_ard" ] || _ard="repos"
-    _tmp="$(mktemp)"
-    awk -v ard="$_ard" '
-      BEGIN { inserted=0 }
-      /^[ ]*(plugins|repos):/ && !inserted {
-        print "# Git Integration (Ignore rules & Git hooks)"
-        print "git:"
-        print "  ignore:"
-        print "    - \"" ard "/\""
-        print "    - \"**/.rnex*\""
-        print "    - \"**/rnex*\""
-        print "    - \"!rnex.yaml\""
-        print "    - \"!**/rnex.yaml\""
-        print "  hooks:"
-        print "    post-merge:"
-        print "      - \"rnex sync --quiet\""
-        print "    post-checkout:"
-        print "      - \"rnex sync --quiet\""
-        print "    pre-commit: []"
-        print "    pre-push: []"
-        print ""
-        print "# Lifecycle Hooks"
-        print "rnex_hooks:"
-        print "  before_sync: []"
-        print "  after_sync: []"
-        print "  before_clone: []"
-        print "  after_clone: []"
-        print ""
-        inserted=1
-      }
-      { print }
-      END {
-        if (!inserted) {
-          print ""
-          print "# Git Integration (Ignore rules & Git hooks)"
-          print "git:"
-          print "  ignore:"
-          print "    - \"" ard "/\""
-          print "    - \"**/.rnex*\""
-          print "    - \"**/rnex*\""
-          print "    - \"!rnex.yaml\""
-          print "    - \"!**/rnex.yaml\""
-          print "  hooks:"
-          print "    post-merge:"
-          print "      - \"rnex sync --quiet\""
-          print "    post-checkout:"
-          print "      - \"rnex sync --quiet\""
-          print "    pre-commit: []"
-          print "    pre-push: []"
-          print ""
-          print "# Lifecycle Hooks"
-          print "rnex_hooks:"
-          print "  before_sync: []"
-          print "  after_sync: []"
-          print "  before_clone: []"
-          print "  after_clone: []"
-        }
-      }
-    ' "$_f" > "$_tmp" && mv "$_tmp" "$_f"
-  fi
-
-  # 5. Migrate legacy plugin raw_dir to sources and strip obsolete ingest_member_readmes
-  migrate_legacy_plugin_config "$_f"
-
-  rm -f "$_tmp"
 }

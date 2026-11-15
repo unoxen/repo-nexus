@@ -579,26 +579,6 @@ clean_plugin_user_skills() {
   fi
 }
 
-clean_provider_agents() {
-  _ag_dir="$1"
-  _ext="${2:-.md}"
-  _r="${NEXUS_DIR:-${RNEX_ROOT:-.}}"
-  [ -d "$_ag_dir" ] || return 0
-
-  for _pdir in "${SCRIPT_LOCATION:-$_r}/plugins"/* "$_r/plugins"/* "$_r/.rnex/plugins"/*; do
-    [ -d "$_pdir" ] || continue
-    [ -d "$_pdir/agents" ] || continue
-    for _afile in "$_pdir/agents"/*.md; do
-      [ -f "$_afile" ] || continue
-      _aname="$(basename "$_afile" .agent.md)"
-      _aname="$(basename "$_aname" .md)"
-      rm -f "$_ag_dir/${_aname}${_ext}" 2>/dev/null || true
-    done
-  done
-
-  rmdir "$_ag_dir" 2>/dev/null || true
-}
-
 # ============================================================================
 # AI Provider Lifecycle Hooks SDK (Universal Native Configuration Projection)
 # ============================================================================
@@ -877,50 +857,31 @@ rnex_sdk_clean_provider_hooks() {
   _scph_ws="${1:-${RNEX_ROOT:-${NEXUS_DIR:-$PWD}}}"
   _scph_provider="$2"
 
-  rm -f "$_scph_ws/.rnex/plugins/$_scph_provider/hooks"/rnex-hook-*.sh 2>/dev/null || true
-  rmdir "$_scph_ws/.rnex/plugins/$_scph_provider/hooks" 2>/dev/null || true
-  rmdir "$_scph_ws/.rnex/plugins/$_scph_provider" 2>/dev/null || true
-
   case "$_scph_provider" in
     copilot)
       rm -f "$_scph_ws/.github/hooks/rnex.json"
-      rm -f "$_scph_ws/.github/hooks"/rnex-hook-*.sh "$_scph_ws/.github/hooks/rnex-hooks.json" 2>/dev/null || true
       rmdir "$_scph_ws/.github/hooks" 2>/dev/null || true
       rmdir "$_scph_ws/.github" 2>/dev/null || true
       ;;
     cursor)
       rm -f "$_scph_ws/.cursor/hooks.json"
-      rm -f "$_scph_ws/.cursor/hooks"/rnex-hook-*.sh "$_scph_ws/.cursor/hooks/rnex-hooks.json" 2>/dev/null || true
-      rmdir "$_scph_ws/.cursor/hooks" 2>/dev/null || true
       rmdir "$_scph_ws/.cursor" 2>/dev/null || true
       ;;
     windsurf)
       rm -f "$_scph_ws/.windsurf/hooks.json"
-      rm -f "$_scph_ws/.windsurf/hooks"/rnex-hook-*.sh "$_scph_ws/.windsurf/hooks/rnex-hooks.json" 2>/dev/null || true
-      rmdir "$_scph_ws/.windsurf/hooks" 2>/dev/null || true
       rmdir "$_scph_ws/.windsurf" 2>/dev/null || true
       ;;
     codex)
       rm -f "$_scph_ws/.codex/hooks.json"
-      rm -f "$_scph_ws/.codex/hooks"/rnex-hook-*.sh "$_scph_ws/.codex/hooks/rnex-hooks.json" 2>/dev/null || true
-      rmdir "$_scph_ws/.codex/hooks" 2>/dev/null || true
       rmdir "$_scph_ws/.codex" 2>/dev/null || true
       ;;
     claude)
       _sdk_clean_json_hooks "$_scph_ws/.claude/settings.json"
-      rm -f "$_scph_ws/.claude/hooks"/rnex-hook-*.sh "$_scph_ws/.claude/hooks/rnex-hooks.json" 2>/dev/null || true
-      rmdir "$_scph_ws/.claude/hooks" 2>/dev/null || true
       rmdir "$_scph_ws/.claude" 2>/dev/null || true
       ;;
     gemini)
       _sdk_clean_json_hooks "$_scph_ws/.gemini/settings.json"
       rmdir "$_scph_ws/.gemini" 2>/dev/null || true
-      if [ -f "$_scph_ws/.agents/hooks.json" ]; then
-        _clean_agents_rnex_hooks "$_scph_ws/.agents/hooks.json" 2>/dev/null || true
-        rmdir "$_scph_ws/.agents" 2>/dev/null || true
-      fi
-      rm -f "$_scph_ws/.agents/hooks"/rnex-hook-*.sh "$_scph_ws/.agents/hooks/rnex-hooks.json" 2>/dev/null || true
-      rmdir "$_scph_ws/.agents/hooks" 2>/dev/null || true
       ;;
   esac
 }
@@ -1172,164 +1133,141 @@ rnex_sdk_sync_provider_hooks() {
   return 0
 }
 
-# ---- Legacy AI Provider Hooks Management (Two-Tier .rnex/ Working Files + rnex-* Pointers) ----
-
-_sdk_inject_ignore_hooks() {
-  printf '%s\n' "$1" | sed -e 's|^\([ \t]*\)\./rnex\([ \t]\)|\1./rnex --ignore-hooks\2|g' \
-                           -e 's|^\([ \t]*\)rnex\([ \t]\)|\1rnex --ignore-hooks\2|g' \
-                           -e 's|\([;&|][ \t]*\)\./rnex\([ \t]\)|\1./rnex --ignore-hooks\2|g' \
-                           -e 's|\([;&|][ \t]*\)rnex\([ \t]\)|\1rnex --ignore-hooks\2|g'
-}
-
-_clean_claude_rnex_hooks() {
-  _settings="$1"
-  [ -f "$_settings" ] || return 0
-  if grep -qE '(auto-sync\.sh|rnex-hook-)' "$_settings" 2>/dev/null; then
-    _tmp="$(mktemp)"
-    awk '
-      /\{[ \t]*"command"[ \t]*:[ \t]*"[^"]*(auto-sync\.sh|rnex-hook-)[^"]*"[ \t]*\}/ { next }
-      /"command"[ \t]*:[ \t]*"[^"]*(auto-sync\.sh|rnex-hook-)[^"]*"/ { next }
-      { print }
-    ' "$_settings" > "$_tmp"
-    # Remove any empty event arrays like "SessionStart": [ ]
-    _tmp2="$(mktemp)"
-    awk '
-      { lines[NR] = $0 }
-      END {
-        for (i = 1; i <= NR; i++) {
-          if (lines[i] ~ /"[a-zA-Z0-9_.-]+"[ \t]*:[ \t]*\[[ \t]*\][ \t]*,?[ \t]*$/) continue
-          if (lines[i] ~ /"[a-zA-Z0-9_.-]+"[ \t]*:[ \t]*\[[ \t]*$/) {
-            j = i + 1
-            while (j <= NR && lines[j] ~ /^[ \t]*$/) j++
-            if (j <= NR && lines[j] ~ /^[ \t]*\][ \t]*,?[ \t]*$/) {
-              i = j
-              continue
-            }
-          }
-          out[++m] = lines[i]
-        }
-        for (i = 1; i <= m; i++) print out[i]
-      }
-    ' "$_tmp" > "$_tmp2"
-    rm -f "$_tmp"
-    _clean="$(sed -e 's/"hooks"//g' < "$_tmp2" | tr -d ' \t\r\n[]{}:,"')"
-    if [ -z "$_clean" ]; then
-      rm -f "$_tmp2" "$_settings"
-    else
-      awk '
-        { lines[NR] = $0 }
-        END {
-          for (i = 1; i <= NR; i++) {
-            if (i < NR && lines[i] ~ /,[ \t]*$/) {
-              next_is_bracket = 0
-              for (j = i + 1; j <= NR; j++) {
-                if (lines[j] ~ /^[ \t]*$/) continue
-                if (lines[j] ~ /^[ \t]*[\]\}]/) next_is_bracket = 1
-                break
-              }
-              if (next_is_bracket) {
-                sub(/,[ \t]*$/, "", lines[i])
-              }
-            }
-            print lines[i]
-          }
-        }
-      ' "$_tmp2" > "$_settings"
-      rm -f "$_tmp2"
-    fi
+# ============================================================================
+# _sdk_get_provider_manifest_field
+# ============================================================================
+# Resolves a top-level metadata key (e.g., instruction_file, skill_dir,
+# ignore_file) from a provider plugin's plugin.yaml manifest.
+#
+# @param ws_root  (string) - Workspace root directory
+# @param provider (string) - Provider plugin identifier
+# @param field    (string) - Top-level manifest field name
+# @returns (string) - Resolved manifest value on stdout
+# @pure Read-only manifest inspection
+# ============================================================================
+_sdk_get_provider_manifest_field() {
+  _sgm_ws="$1"
+  _sgm_prov="$2"
+  _sgm_key="$3"
+  _sgm_yaml=""
+  if command -v _get_plugin_yaml_path >/dev/null 2>&1; then
+    _sgm_yaml="$(_get_plugin_yaml_path "$_sgm_prov" 2>/dev/null || true)"
   fi
+  if [ -z "$_sgm_yaml" ] || [ ! -f "$_sgm_yaml" ]; then
+    for _sgm_cand in \
+      "${RNEX_PLUGINS_DIR:-}/${_sgm_prov}/plugin.yaml" \
+      "${SCRIPT_LOCATION:-$_sgm_ws}/plugins/${_sgm_prov}/plugin.yaml" \
+      "${_sgm_ws}/plugins/${_sgm_prov}/plugin.yaml"; do
+      if [ -f "$_sgm_cand" ]; then
+        _sgm_yaml="$_sgm_cand"
+        break
+      fi
+    done
+  fi
+  [ -n "$_sgm_yaml" ] && [ -f "$_sgm_yaml" ] || return 0
+  awk -v k="$_sgm_key" '
+    $0 ~ ("^" k ":[ ]*") {
+      val = $0
+      sub("^" k ":[ ]*", "", val)
+      sub(/[ ]*#.*$/, "", val)
+      gsub(/^["'\'']|["'\'']$/, "", val)
+      gsub(/^[ \t]+|[ \t]+$/, "", val)
+      print val
+      exit
+    }
+  ' "$_sgm_yaml"
 }
 
-_sync_claude_rnex_hook_event() {
-  _settings="$1"
-  _ev="$2"
-  _cmd_path="$3"
-  mkdir -p "$(dirname "$_settings")"
-  if [ ! -f "$_settings" ]; then
-    cat > "$_settings" <<EOF
-{
-  "hooks": {
-    "$_ev": [
-      { "command": "$_cmd_path" }
-    ]
-  }
-}
-EOF
-  elif ! grep -qF "$_cmd_path" "$_settings" 2>/dev/null; then
-    if grep -q "\"$_ev\"" "$_settings" 2>/dev/null; then
-      _tmp="$(mktemp)"
-      awk -v ev="\"$_ev\"" -v cmd="$_cmd_path" '
-        $0 ~ (ev "[ ]*:[ ]*\\[") {
-          print
-          print "      { \"command\": \"" cmd "\" },"
-          next
-        }
-        { print }
-      ' "$_settings" > "$_tmp" && mv "$_tmp" "$_settings"
-    elif grep -q '"hooks"' "$_settings" 2>/dev/null; then
-      _tmp="$(mktemp)"
-      awk -v ev="$_ev" -v cmd="$_cmd_path" '
-        /"hooks"[ ]*:[ ]*\{/ {
-          print
-          print "    \"" ev "\": [ { \"command\": \"" cmd "\" } ],"
-          next
-        }
-        { print }
-      ' "$_settings" > "$_tmp" && mv "$_tmp" "$_settings"
-    fi
+# ============================================================================
+# rnex_sdk_sync_provider
+# ============================================================================
+# Contract-driven synchronization template method for AI provider plugins.
+# Reads instruction_file, skill_dir, and ignore_file from plugin.yaml and
+# reconciles ignore rules, instruction markers, skill projections, and hooks.
+#
+# @param ws_root  (string) - Workspace root directory
+# @param provider (string) - Provider plugin identifier
+# @returns 0 on success
+# @sideEffects Updates provider instruction file, ignore file, skills, and hooks
+# ============================================================================
+rnex_sdk_sync_provider() {
+  _ssp_ws="${1:-${RNEX_ROOT:-${NEXUS_DIR:-$PWD}}}"
+  _ssp_prov="$2"
+
+  _ssp_ign="$(_sdk_get_provider_manifest_field "$_ssp_ws" "$_ssp_prov" "ignore_file")"
+  if [ -n "$_ssp_ign" ]; then
+    _ssp_ign_cmt="$(_sdk_get_provider_manifest_field "$_ssp_ws" "$_ssp_prov" "ignore_comment")"
+    _ssp_ign_msg="$(_sdk_get_provider_manifest_field "$_ssp_ws" "$_ssp_prov" "ignore_message")"
+    ensure_provider_ignore "$_ssp_ws/$_ssp_ign" "$_ssp_ign_cmt" "$_ssp_ign_msg"
   fi
+
+  _ssp_instr="$(_sdk_get_provider_manifest_field "$_ssp_ws" "$_ssp_prov" "instruction_file")"
+  if [ -n "$_ssp_instr" ]; then
+    mkdir -p "$(dirname "$_ssp_ws/$_ssp_instr")"
+    merge_rnex_instructions "$_ssp_ws/$_ssp_instr"
+  fi
+
+  _ssp_sk_dir="$(_sdk_get_provider_manifest_field "$_ssp_ws" "$_ssp_prov" "skill_dir")"
+  if [ -n "$_ssp_sk_dir" ] && ! provider_option_enabled "$_ssp_prov" "skills" 2>/dev/null; then
+    clean_provider_user_skills "$_ssp_ws/$_ssp_sk_dir"
+  fi
+
+  rnex_sdk_sync_provider_hooks "$_ssp_ws" "$_ssp_prov"
+
+  if [ -n "$_ssp_sk_dir" ]; then
+    _ssp_parent="$(dirname "$_ssp_sk_dir")"
+    [ "$_ssp_parent" != "." ] && rmdir "$_ssp_ws/$_ssp_parent" 2>/dev/null || true
+  fi
+  if [ -n "$_ssp_instr" ]; then
+    _ssp_iparent="$(dirname "$_ssp_instr")"
+    [ "$_ssp_iparent" != "." ] && rmdir "$_ssp_ws/$_ssp_iparent" 2>/dev/null || true
+  fi
+  return 0
 }
 
-_clean_agents_rnex_hooks() {
-  _hooks="$1"
-  [ -f "$_hooks" ] || return 0
-  if grep -qE '"(rnex-auto-sync|rnex-hooks)"' "$_hooks" 2>/dev/null; then
-    _tmp="$(mktemp)"
-    awk '
-      BEGIN { skip=0; depth=0 }
-      /"(rnex-auto-sync|rnex-hooks)"[ \t]*:[ \t]*\{/ { skip=1; depth=1; next }
-      skip {
-        for (i=1; i<=length($0); i++) {
-          c = substr($0, i, 1)
-          if (c == "{") depth++
-          if (c == "}") {
-            depth--
-            if (depth == 0) {
-              skip = 0
-              next
-            }
-          }
-        }
-        next
-      }
-      { print }
-    ' "$_hooks" > "$_tmp"
-    _clean="$(tr -d " \t\r\n{}" < "$_tmp")"
-    if [ -z "$_clean" ]; then
-      rm -f "$_tmp" "$_hooks"
-    else
-      awk '
-        { lines[NR] = $0 }
-        END {
-          for (i = 1; i <= NR; i++) {
-            if (i < NR && lines[i] ~ /,[ \t]*$/) {
-              next_is_brace = 0
-              for (j = i + 1; j <= NR; j++) {
-                if (lines[j] ~ /^[ \t]*$/) continue
-                if (lines[j] ~ /^[ \t]*\}/) next_is_brace = 1
-                break
-              }
-              if (next_is_brace) {
-                sub(/,[ \t]*$/, "", lines[i])
-              }
-            }
-            print lines[i]
-          }
-        }
-      ' "$_tmp" > "$_hooks"
-      rm -f "$_tmp"
-    fi
+# ============================================================================
+# rnex_sdk_disable_provider
+# ============================================================================
+# Contract-driven cleanup template method for AI provider plugins on disable.
+# Reads instruction_file, skill_dir, and ignore_file from plugin.yaml and
+# removes managed skills, hooks, ignore blocks, and instruction blocks.
+#
+# @param ws_root  (string) - Workspace root directory
+# @param provider (string) - Provider plugin identifier
+# @returns 0 on success
+# @sideEffects Removes managed provider artifacts and empty directories
+# ============================================================================
+rnex_sdk_disable_provider() {
+  _sdp_ws="${1:-${RNEX_ROOT:-${NEXUS_DIR:-$PWD}}}"
+  _sdp_prov="$2"
+
+  _sdp_ign="$(_sdk_get_provider_manifest_field "$_sdp_ws" "$_sdp_prov" "ignore_file")"
+  if [ -n "$_sdp_ign" ]; then
+    clean_provider_ignore "$_sdp_ws/$_sdp_ign"
   fi
+
+  _sdp_sk_dir="$(_sdk_get_provider_manifest_field "$_sdp_ws" "$_sdp_prov" "skill_dir")"
+  if [ -n "$_sdp_sk_dir" ]; then
+    clean_provider_user_skills "$_sdp_ws/$_sdp_sk_dir"
+  fi
+
+  rnex_sdk_clean_provider_hooks "$_sdp_ws" "$_sdp_prov"
+
+  _sdp_instr="$(_sdk_get_provider_manifest_field "$_sdp_ws" "$_sdp_prov" "instruction_file")"
+  if [ -n "$_sdp_instr" ]; then
+    clean_rnex_instructions "$_sdp_ws/$_sdp_instr"
+  fi
+
+  if [ -n "$_sdp_sk_dir" ]; then
+    rmdir "$_sdp_ws/$_sdp_sk_dir" 2>/dev/null || true
+    _sdp_parent="$(dirname "$_sdp_sk_dir")"
+    [ "$_sdp_parent" != "." ] && rmdir "$_sdp_ws/$_sdp_parent" 2>/dev/null || true
+  fi
+  if [ -n "$_sdp_instr" ]; then
+    _sdp_iparent="$(dirname "$_sdp_instr")"
+    [ "$_sdp_iparent" != "." ] && rmdir "$_sdp_ws/$_sdp_iparent" 2>/dev/null || true
+  fi
+  return 0
 }
 
 # ---- AI Provider Hooks Compatibility Delegates ----------------------------

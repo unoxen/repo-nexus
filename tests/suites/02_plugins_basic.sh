@@ -61,9 +61,9 @@ chmod +x "$_cmd_plugin_dir/commands"/*
 grep -qF "1. **Mandatory**: Read and follow \`.rnex/plugins/cmd-test/ai-instructions.md\`." "$TEST_WORKSPACE/.rnex/ai-instructions.md" || { fail "Custom workflow plugin instruction link missing from ai-instructions.md"; exit 1; }
 [ -f "$TEST_WORKSPACE/.rnex/plugins/cmd-test/ai-instructions.md" ] || { fail "ai-instructions.md was not projected into .rnex/plugins/cmd-test/"; exit 1; }
 
-# Configure rnex_hooks for before_plugin_command and after_plugin_command via .local.rnex.yaml
+# Configure rnex-hooks for before_plugin_command and after_plugin_command via .local.rnex.yaml
 cat <<'EOF_HOOKS' > "$TEST_WORKSPACE/.local.rnex.yaml"
-rnex_hooks:
+rnex-hooks:
   before_plugin_command:
     - "echo BEFORE_CMD: $RNEX_ARGS >> hook_cmd.log"
   after_plugin_command:
@@ -405,7 +405,7 @@ _ver_local="$(cd "$TEST_EXT_WS" && ./rnex plugin info acme-plugin | sed -n 's/.*
 pass
 
 # --------------------------------------------------------------------------
-run_test "Plugin engine invariant: zero references to plugins_dir or plugins.<name>.dir"
+run_test "Plugin engine invariant: zero references to plugins_dir, plugins.<name>.dir, or cross-plugin coupling"
 if grep -rn "plugins_dir" "$DIR/rnex" "$DIR/lib/" "$DIR/docs/" "$DIR/templates/" "$DIR/README.md" "$DIR/CONTRIBUTION.md" 2>/dev/null; then
   fail "Found stale plugins_dir references"; exit 1
 fi
@@ -414,6 +414,9 @@ if grep -rn "plugins\.<name>\.dir\|plugin\.<name>\.dir" "$DIR/rnex" "$DIR/lib/" 
 fi
 if grep -En 'yaml_(get_plugin_config|plugin_get).*["'"'"']dir["'"'"']' "$DIR/rnex" "$DIR/lib/" 2>/dev/null; then
   fail "Found yaml_get_plugin_config or yaml_plugin_get query for 'dir'"; exit 1
+fi
+if grep -rn "llm-wiki" "$DIR/lib/"*.sh "$DIR/lib/commands/init.sh" "$DIR/lib/commands/sync.sh" "$DIR/lib/commands/status.sh" "$DIR/lib/commands/plugin.sh" "$DIR/lib/commands/repo.sh" "$DIR/plugins/claude/" "$DIR/plugins/codex/" "$DIR/plugins/copilot/" "$DIR/plugins/cursor/" "$DIR/plugins/gemini/" "$DIR/plugins/windsurf/" "$DIR/docs/plugins/claude.md" "$DIR/docs/plugins/codex.md" "$DIR/docs/plugins/copilot.md" "$DIR/docs/plugins/cursor.md" "$DIR/docs/plugins/gemini.md" "$DIR/docs/plugins/windsurf.md" 2>/dev/null; then
+  fail "Found cross-plugin coupling to llm-wiki in core lib or provider plugins/docs"; exit 1
 fi
 pass
 

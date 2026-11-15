@@ -136,9 +136,6 @@ cmd_repo_add() {
       --branch=*)
         _branch="${1#*=}"
         ;;
-      --no-rnex-dir|--rnex-dir=false|--rnex-dir|--rnex-dir=true)
-        # Obsolete flag ignored after transition to on-demand member .rnex
-        ;;
       -*)
         die "Unknown option: $1"
         ;;
@@ -202,7 +199,6 @@ cmd_repo_add() {
     [ -n "$_branch" ] && yaml_set_local "$_name" "branch" "$_branch"
     [ "$_readonly" = "true" ] && yaml_set_local "$_name" "readonly" "true"
     [ "$_enabled" = "false" ] && yaml_set_local "$_name" "enabled" "false"
-    sync_repo_rnex "$_name"
     build_ai_instructions "$NEXUS_DIR"
     sync_code_workspace
     update_sync_stamp "$NEXUS_DIR"
@@ -221,7 +217,6 @@ cmd_repo_add() {
       [ -n "$_branch" ] && yaml_set "$_name" "branch" "$_branch"
       [ "$_readonly" = "true" ] && yaml_set "$_name" "readonly" "true"
       [ "$_enabled" = "false" ] && yaml_set "$_name" "enabled" "false"
-      sync_repo_rnex "$_name"
       build_ai_instructions "$NEXUS_DIR"
       sync_code_workspace
       update_sync_stamp "$NEXUS_DIR"
@@ -232,7 +227,6 @@ cmd_repo_add() {
   fi
 
   yaml_add_repo "$_name" "$_url" "$_enabled" "$_readonly" "$_branch"
-  sync_repo_rnex "$_name"
   build_ai_instructions "$NEXUS_DIR"
   sync_code_workspace
   update_sync_stamp "$NEXUS_DIR"
@@ -369,9 +363,6 @@ cmd_repo_set() {
     fi
   fi
 
-  if [ "$_enable_val" = "true" ]; then
-    sync_repo_rnex "$_name"
-  fi
   build_ai_instructions "$NEXUS_DIR"
   sync_code_workspace
   update_sync_stamp "$NEXUS_DIR"
@@ -404,7 +395,6 @@ cmd_repo_clone() {
     log_info "Cloning $_name (branch: $_branch) from $_url into $_dest..."
     if git clone -b "$_branch" "$_url" "$_dest"; then
       log_ok "Successfully cloned '$_name'"
-      sync_repo_rnex "$_name"
       sync_code_workspace
       update_sync_stamp "$NEXUS_DIR"
     else
@@ -414,7 +404,6 @@ cmd_repo_clone() {
     log_info "Cloning $_name from $_url into $_dest..."
     if git clone "$_url" "$_dest"; then
       log_ok "Successfully cloned '$_name'"
-      sync_repo_rnex "$_name"
       sync_code_workspace
       update_sync_stamp "$NEXUS_DIR"
     else
@@ -523,7 +512,6 @@ cmd_clone() {
         log_info "Cloning $_name (branch: $_branch) from $_url..."
         if git clone -b "$_branch" "$_url" "$_dest"; then
           log_ok "Successfully cloned '$_name'"
-          sync_repo_rnex "$_name"
         else
           log_err "Failed to clone '$_name' from $_url"
         fi
@@ -531,7 +519,6 @@ cmd_clone() {
         log_info "Cloning $_name from $_url..."
         if git clone "$_url" "$_dest"; then
           log_ok "Successfully cloned '$_name'"
-          sync_repo_rnex "$_name"
         else
           log_err "Failed to clone '$_name' from $_url"
         fi

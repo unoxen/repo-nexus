@@ -805,9 +805,9 @@ yaml_get_git_hook_commands() {
   fi
 }
 
-# ---- Lifecycle Hooks Configuration Operations (rnex_hooks) -------------
+# ---- Lifecycle Hooks Configuration Operations (rnex-hooks) -------------
 
-# Extract list of hook/event names defined under rnex_hooks (or legacy hooks / top-level lifecycle keys) from a YAML file.
+# Extract list of hook/event names defined under rnex-hooks from a YAML file.
 _yaml_rnex_hooks_list_from_file() {
   _yrhl_f="$1"
   [ -f "$_yrhl_f" ] || return 0
@@ -820,20 +820,10 @@ _yaml_rnex_hooks_list_from_file() {
     }
     trimmed ~ /^([#]|$)/ { next }
 
-    # Detect top-level section headers
-    indent == 0 && trimmed ~ /^(rnex_hooks|rnex-hooks|hooks):[ \t]*(#.*)?$/ {
+    # Detect top-level rnex-hooks section header
+    indent == 0 && trimmed ~ /^rnex-hooks:[ \t]*(#.*)?$/ {
       in_hooks = 1
       hooks_indent = indent
-      next
-    }
-    indent == 0 && trimmed ~ /^(before|after)_(init|sync|clone|repo|repo_add|repo_remove|repo_set|plugin|plugin_enable|plugin_disable|plugin_command|exec|status|list):/ {
-      in_hooks = 0
-      k = trimmed
-      sub(/:.*/, "", k)
-      gsub(/^["\047]|["\047]$/, "", k)
-      gsub(/[[:space:]]/, "", k)
-      gsub(/-/, "_", k)
-      if (length(k) > 0) print k
       next
     }
     indent == 0 && trimmed ~ /^[a-zA-Z0-9_.-]+:/ {
@@ -860,7 +850,7 @@ _yaml_rnex_hooks_list_from_file() {
   ' "$_yrhl_f" | awk '!seen[$0]++'
 }
 
-# Enumerate configured hook names under rnex_hooks merged from rnex.yaml and .local.rnex.yaml.
+# Enumerate configured hook names under rnex-hooks merged from rnex.yaml and .local.rnex.yaml.
 yaml_list_rnex_hooks() {
   _yaml_resolve_files
   {
@@ -869,9 +859,8 @@ yaml_list_rnex_hooks() {
   } | awk '!seen[$0]++'
 }
 
-# Extract command list for a specific hook under rnex_hooks.<event_name> from a YAML file.
-# Supports both underscore and hyphenated keys (e.g. after_sync or after-sync),
-# as well as top-level before_*/after_* keys or multiple declarations in the same file.
+# Extract command list for a specific hook under rnex-hooks.<event_name> from a YAML file.
+# Supports both underscore and hyphenated keys (e.g. after_sync or after-sync).
 _yaml_rnex_hook_commands_from_file() {
   _yrhc_f="$1"; _yrhc_hook="$2"
   [ -f "$_yrhc_f" ] || return 0
@@ -914,41 +903,9 @@ _yaml_rnex_hook_commands_from_file() {
       in_hook_cmds = 0
     }
 
-    indent == 0 && trimmed ~ /^(rnex_hooks|rnex-hooks|hooks):[ \t]*(#.*)?$/ {
+    indent == 0 && trimmed ~ /^rnex-hooks:[ \t]*(#.*)?$/ {
       in_hooks = 1
       hooks_indent = indent
-      next
-    }
-
-    indent == 0 && trimmed ~ /^(before|after)_(init|sync|clone|repo|repo_add|repo_remove|repo_set|plugin|plugin_enable|plugin_disable|plugin_command|exec|status|list):/ {
-      in_hooks = 0
-      k = trimmed
-      sub(/:.*/, "", k)
-      gsub(/^["\047]|["\047]$/, "", k)
-      gsub(/[[:space:]]/, "", k)
-      k_norm = k
-      gsub(/-/, "_", k_norm)
-      if (k_norm == target_norm) {
-        target_indent = indent
-        val = trimmed
-        sub(/^[^:]*:[ \t]*/, "", val)
-        if (val ~ /^(#.*)?$/) {
-          in_hook_cmds = 1
-          next
-        }
-        if (val ~ /^\[/) {
-          sub(/^\[/, "", val)
-          sub(/\][ \t]*(#.*)?$/, "", val)
-          n = split(val, parts, ",")
-          for (i = 1; i <= n; i++) {
-            item = unquote(parts[i])
-            if (length(item) > 0) print item
-          }
-          next
-        }
-        item = unquote(val)
-        if (length(item) > 0) print item
-      }
       next
     }
 
@@ -1089,9 +1046,6 @@ yaml_list_plugins() {
   {
     _yaml_list_plugins_from_file "$_wy"
     _yaml_list_plugins_from_file "$_wly"
-    if [ -n "$(_yaml_top_level_from_file "$_wly" "wiki_dir")" ] || [ -n "$(_yaml_top_level_from_file "$_wy" "wiki_dir")" ]; then
-      printf "llm-wiki\n"
-    fi
   } | awk '!seen[$0]++'
 }
 
@@ -1121,14 +1075,9 @@ yaml_get_plugin_config() {
   _ygpc_local="${NEXUS_LOCAL_CONFIG:-$_wly}"
   _ygpc_main="${NEXUS_CONFIG:-$_wy}"
 
-  _ygpc_alt=""
-  _ygpc_alt2=""
-
   # 1. Query .local.rnex.yaml first
   if [ -f "$_ygpc_local" ]; then
     _val="$(_yaml_plugin_get_from_file "$_ygpc_local" "$_ygpc_plugin" "$_ygpc_key")"
-    [ -n "$_val" ] || [ -z "$_ygpc_alt" ] || _val="$(_yaml_plugin_get_from_file "$_ygpc_local" "$_ygpc_plugin" "$_ygpc_alt")"
-    [ -n "$_val" ] || [ -z "$_ygpc_alt2" ] || _val="$(_yaml_plugin_get_from_file "$_ygpc_local" "$_ygpc_plugin" "$_ygpc_alt2")"
     if [ -n "$_val" ]; then
       printf '%s' "$_val"
       return 0
@@ -1138,24 +1087,13 @@ yaml_get_plugin_config() {
   # 2. Query rnex.yaml next
   if [ -f "$_ygpc_main" ]; then
     _val="$(_yaml_plugin_get_from_file "$_ygpc_main" "$_ygpc_plugin" "$_ygpc_key")"
-    [ -n "$_val" ] || [ -z "$_ygpc_alt" ] || _val="$(_yaml_plugin_get_from_file "$_ygpc_main" "$_ygpc_plugin" "$_ygpc_alt")"
-    [ -n "$_val" ] || [ -z "$_ygpc_alt2" ] || _val="$(_yaml_plugin_get_from_file "$_ygpc_main" "$_ygpc_plugin" "$_ygpc_alt2")"
     if [ -n "$_val" ]; then
       printf '%s' "$_val"
       return 0
     fi
   fi
 
-  # 3. Special case backwards compatibility for wiki plugin top-level wiki_dir
-  if [ "$_ygpc_plugin" = "llm-wiki" ] && [ "$_ygpc_key" = "wiki_dir" ]; then
-    _top_wd="$(yaml_get_top_level "wiki_dir")"
-    if [ -n "$_top_wd" ]; then
-      printf '%s' "$_top_wd"
-      return 0
-    fi
-  fi
-
-  # 4. Fall back to resolved plugin directory plugin.yaml config_defaults
+  # 3. Fall back to resolved plugin directory plugin.yaml config_defaults
   # Do not recurse if querying "path"
   if [ "$_ygpc_key" != "path" ]; then
     _ygpc_pdir=""
@@ -1166,10 +1104,10 @@ yaml_get_plugin_config() {
     fi
 
     if [ -n "$_ygpc_pdir" ] && [ -f "$_ygpc_pdir/plugin.yaml" ]; then
-      _def_val="$(awk -v k="$_ygpc_key" -v alt="$_ygpc_alt" '
+      _def_val="$(awk -v k="$_ygpc_key" '
         /^config_defaults:[ ]*$/ || /^config_defaults:[ ]*#/ { in_c=1; next }
         in_c && /^[^ #]/ { exit }
-        in_c && ($0 ~ ("^[ ]*" k ":") || (length(alt) > 0 && $0 ~ ("^[ ]*" alt ":"))) {
+        in_c && ($0 ~ ("^[ ]*" k ":")) {
           line = $0
           sub(/^[ ]*[a-zA-Z0-9_.-]+:[ ]*/, "", line)
           sub(/[ ]*#.*/, "", line)
@@ -1477,41 +1415,9 @@ yaml_get_plugin_list() {
 }
 
 # Get a list-valued plugin setting as newline-separated items.
-# Precedence: .local.rnex.yaml (if non-empty) overrides the entire list in rnex.yaml.
-# For "sources": falls back to the legacy scalar raw_dir (with a
-# deprecation warning on stderr), then to the defaults "docs" and "repos/**/README.md".
+# Precedence: .local.rnex.yaml > rnex.yaml > plugin.yaml config_defaults.
 get_plugin_config_list() {
-  _gpl_plugin="$1"; _gpl_key="$2"
-  _yaml_resolve_files
-
-  _gpl_items="$(_yaml_plugin_list_from_file "$_wly" "$_gpl_plugin" "$_gpl_key")"
-  [ -n "$_gpl_items" ] || _gpl_items="$(_yaml_plugin_list_from_file "$_wy" "$_gpl_plugin" "$_gpl_key")"
-  if [ -n "$_gpl_items" ]; then
-    printf '%s\n' "$_gpl_items"
-    return 0
-  fi
-
-  case "$_gpl_key" in
-    sources)
-      _gpl_raw="$(plugin_legacy_raw_dir "$_gpl_plugin")"
-      if [ -n "$_gpl_raw" ]; then
-        log_warn "plugins.$_gpl_plugin.raw_dir is deprecated; run 'rnex sync' to rewrite it to 'sources' in ${RNEX_CONFIG_FILE:-rnex.yaml}." >&2
-        printf '%s\n' "$_gpl_raw"
-      else
-        printf '%s\n' "docs" "repos/**/README.md"
-      fi
-      ;;
-  esac
-}
-
-# Print the legacy scalar raw_dir value when it is still in effect, i.e. when no
-# 'sources' list is configured in either config file. Prints nothing otherwise.
-plugin_legacy_raw_dir() {
-  _plr_plugin="$1"
-  _yaml_resolve_files
-  [ -n "$(_yaml_plugin_list_from_file "$_wly" "$_plr_plugin" "sources")" ] && return 0
-  [ -n "$(_yaml_plugin_list_from_file "$_wy" "$_plr_plugin" "sources")" ] && return 0
-  yaml_plugin_get "$_plr_plugin" "raw_dir" 2>/dev/null || true
+  yaml_get_plugin_list "$1" "$2" 2>/dev/null || true
 }
 
 # Emit a plugin's config_defaults block from plugin.yaml, re-indented for insertion
@@ -1901,7 +1807,7 @@ _yaml_resolve_plugin_manifest_path() {
 #
 # Arguments:
 #   $1 - Optional workspace root directory (defaults to NEXUS_DIR or .).
-#   $2 - Plugin identifier name (e.g. "claude", "copilot", "llm-wiki").
+#   $2 - Plugin identifier name (e.g. "<plugin>").
 #
 # Returns:
 #   Outputs newline-delimited hook event names to stdout.
@@ -2349,10 +2255,7 @@ yaml_get_merged_plugin_config() {
   _yaml_resolve_files
   _ygmp_val="$(_yaml_plugin_list_from_file "$_wly" "$_ygmp_p" "$_ygmp_k")"
   [ -n "$_ygmp_val" ] || _ygmp_val="$(_yaml_plugin_list_from_file "$_wy" "$_ygmp_p" "$_ygmp_k")"
-  [ -n "$_ygmp_val" ] || _ygmp_val="$(yaml_plugin_get "$_ygmp_p" "$_ygmp_k")"
-  if [ -z "$_ygmp_val" ] && [ "$_ygmp_k" = "sources" ]; then
-    _ygmp_val="$(plugin_legacy_raw_dir "$_ygmp_p")"
-  fi
+  [ -n "$_ygmp_val" ] || _ygmp_val="$(yaml_plugin_get "$_ygmp_p" "$_ygmp_k" 2>/dev/null || true)"
   if [ -z "$_ygmp_val" ]; then
     _ygmp_dir="$(find_plugin_dir "$_ygmp_p" 2>/dev/null || true)"
     [ -z "$_ygmp_dir" ] || _ygmp_val="$(_yaml_plugin_default_from_manifest "$_ygmp_dir/plugin.yaml" "$_ygmp_k")"

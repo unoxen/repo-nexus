@@ -43,7 +43,6 @@ rnex*
 
 # Local machine-specific configuration
 $RNEX_LOCAL_CONFIG_FILE
-.rnex.local.yaml
 GI_SECTION_EOF
 
   _custom_ignores="$(yaml_get_git_ignore 2>/dev/null || true)"
@@ -57,7 +56,7 @@ GI_SECTION_EOF
         "**/.rnex*"|"**/rnex*"|".rnex*"|"rnex*"|\
         "**/.rnex*/"|"**/rnex*/"|".rnex*/"|"rnex*/"|\
         "!rnex.yaml"|"!**/rnex.yaml"|\
-        "$RNEX_LOCAL_CONFIG_FILE"|".rnex.local.yaml")
+        "$RNEX_LOCAL_CONFIG_FILE")
           continue
           ;;
       esac
@@ -98,14 +97,7 @@ reconcile_gitignore() {
     mv "$_sec_tmp" "$_gi"
     log_ok "Created .gitignore (ignoring ${_active_repos_dir}/, recursive .rnex directories, and $RNEX_LOCAL_CONFIG_FILE)"
   else
-    # 1. Strip any legacy lint_trigger_counter entries if present
-    if grep -q "lint_trigger_counter" "$_gi" 2>/dev/null; then
-      _tmp="$(mktemp)"
-      grep -v "lint_trigger_counter" "$_gi" > "$_tmp" && mv "$_tmp" "$_gi"
-      log_ok "Removed legacy lint trigger counter entries from .gitignore"
-    fi
-
-    # 2. If delimited section exists, replace it in-place with the newly synced section
+    # 1. If delimited section exists, replace it in-place with the newly synced section
     if grep -qFx -- "$GITIGNORE_MARKER_START" "$_gi" 2>/dev/null; then
       _tmp="$(mktemp)"
       awk -v s="$GITIGNORE_MARKER_START" -v e="$GITIGNORE_MARKER_END" -v src="$_sec_tmp" '
@@ -123,7 +115,7 @@ reconcile_gitignore() {
       ' "$_gi" > "$_tmp" && mv "$_tmp" "$_gi"
       rm -f "$_sec_tmp"
     else
-      # 3. Upgrade legacy un-delimited .gitignore or append managed section to existing user .gitignore
+      # 2. Append managed section to existing user .gitignore
       _user_tmp="$(mktemp)"
       awk -v local_cfg="$RNEX_LOCAL_CONFIG_FILE" -v ard="$_active_repos_dir" '
         /^[ ]*#[ ]*Member repos \(managed by rnex/ { next }
@@ -137,7 +129,7 @@ reconcile_gitignore() {
         $0 == "**/.rnex*" || $0 == "**/rnex*" || $0 == ".rnex*" || $0 == "rnex*" { next }
         $0 == "!rnex.yaml" || $0 == "!**/rnex.yaml" { next }
         $0 == ".rnex" || $0 == "rnex" { next }
-        $0 == local_cfg || $0 == ".rnex.local.yaml" { next }
+        $0 == local_cfg { next }
         { lines[++n] = $0 }
         END {
           start = 1
@@ -194,7 +186,7 @@ clean_rnex_gitignore() {
 
 # ---- AI Instructions Compilation (.rnex/ai-instructions.md) ----------------
 
-# Resolve the primary instruction file for an AI provider plugin
+# Resolve the primary instruction file for an AI provider plugin from plugin.yaml
 plugin_get_instruction_file() {
   _pif_name="$1"
   _pif_pdir="${2:-}"
@@ -203,17 +195,6 @@ plugin_get_instruction_file() {
   _pif_file=""
   if [ -n "$_pif_pdir" ]; then
     _pif_file="$(plugin_get_field "$_pif_pdir" "instruction_file" 2>/dev/null || true)"
-  fi
-  if [ -z "$_pif_file" ]; then
-    case "$_pif_name" in
-      claude)   _pif_file="CLAUDE.md" ;;
-      gemini)   _pif_file="GEMINI.md" ;;
-      cursor)   _pif_file=".cursorrules" ;;
-      windsurf) _pif_file=".windsurfrules" ;;
-      codex)    _pif_file="CODEX.md" ;;
-      copilot)  _pif_file=".github/copilot-instructions.md" ;;
-      agents|agent) _pif_file="AGENTS.md" ;;
-    esac
   fi
   printf '%s' "$_pif_file"
 }
@@ -254,7 +235,7 @@ file_has_user_content() {
 }
 
 # Reconcile AI provider instruction files:
-# - When provider plugins are enabled (e.g. Gemini, Claude), creates/updates their specific instruction files (GEMINI.md, CLAUDE.md)
+# - When provider plugins are enabled, creates/updates their declared instruction_file
 # - Only creates AGENTS.md if it is the main instructions file for an enabled AI provider or no provider plugins are enabled
 # - Cleans up instruction files that have no user content when their provider is disabled or inactive
 reconcile_ai_instructions_files() {
@@ -282,9 +263,11 @@ reconcile_ai_instructions_files() {
     merge_rnex_instructions "$_raif_dir/AGENTS.md"
   fi
 
-  # For any existing instruction files on disk that are NOT currently active:
+  # For any existing provider instruction files on disk that are NOT currently active:
   # Clean rnex instructions (removing file if empty outside block, or stripping rnex block)
-  for _if in CLAUDE.md GEMINI.md CODEX.md .cursorrules .windsurfrules .github/copilot-instructions.md; do
+  for _pdir in $(list_all_available_plugin_dirs 2>/dev/null || true); do
+    _if="$(plugin_get_field "$_pdir" "instruction_file" 2>/dev/null || true)"
+    [ -n "$_if" ] || continue
     case " $_active_files " in
       *" $_if "*) ;;
       *)
@@ -718,9 +701,6 @@ sync_rnex_base_assets() {
   elif [ -d "${RNEX_ROOT:-}/skills" ]; then
     _src_skills="${RNEX_ROOT:-}/skills"
   fi
-
-  # Purge obsolete .rnex/prompts/ and .rnex/workflows/
-  rm -rf "$NEXUS_DIR/.rnex/prompts" "$NEXUS_DIR/.rnex/workflows" 2>/dev/null || true
 
   # Ensure .rnex/skills exists
   mkdir -p "$NEXUS_DIR/.rnex/skills"

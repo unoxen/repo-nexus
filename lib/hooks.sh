@@ -179,7 +179,7 @@ _run_hook_internal() {
     done
   fi
 
-  # 2. Execute configured commands from rnex-hooks.<event_name> / rnex_hooks.<event_name>
+  # 2. Execute configured commands from rnex-hooks.<event_name>
   if [ -z "$_hook_target_plugin" ] && [ "${_RNEX_INTERNAL_PLUGIN_ONLY:-0}" != "1" ] && [ "$_ignore_hooks" != "1" ]; then
     rnex_hooks_run_stage "$_hook_root" "$_hook_phase_cmd" "$@"
   fi
@@ -194,8 +194,7 @@ _run_hook_internal() {
 # Summary:
 #   Executes configured workspace lifecycle hook commands for a specified stage
 #   (e.g., pre_sync, post_sync, after_sync, before_sync, after_init) strictly
-#   declared in rnex.yaml or .local.rnex.yaml under rnex-hooks.<stage> (or
-#   legacy rnex_hooks.<stage>).
+#   declared in rnex.yaml or .local.rnex.yaml under rnex-hooks.<stage>.
 #   Adheres to strict opt-in execution: if no hook commands are declared for
 #   the stage, zero commands are executed.
 #

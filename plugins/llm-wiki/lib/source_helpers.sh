@@ -5,13 +5,14 @@
 # File: plugins/llm-wiki/lib/source_helpers.sh
 # Architectural Layer: Domain Helpers (helpers/)
 # Single Responsibility: Discover candidate Markdown source files from an
-# explicit CLI source argument or configured `sources` in rnex YAML configs,
-# and filter them against existing .rnex/wiki/*.md shards so ONLY missing
-# sources are ingested into the B-Tree knowledge store.
+# explicit CLI source argument or configured `plugins.llm-wiki.sources` in
+# rnex YAML configs, and filter them against existing wiki shards so ONLY
+# missing sources are ingested into the B-Tree knowledge store.
 #
 # Design Patterns & Principles:
 #   - Information Expert (GRASP): Encapsulates knowledge of source file
-#     discovery, glob matching, and shard ID derivation.
+#     discovery, glob matching, member repository enablement filtering, and
+#     shard ID derivation.
 #   - Strategy Pattern (GoF): Supports multiple source discovery strategies
 #     (explicit file, directory scan, globstar recursion, YAML configuration).
 #   - Filter Pipeline: Candidate paths are discovered, deduplicated, and
@@ -32,9 +33,10 @@ RNEX_LLM_WIKI_SOURCE_HELPERS_SH_SOURCED=1
 
 # -----------------------------------------------------------------------------
 # parse_configured_workspace_sources
-# Summary: Parses the `sources` list from .local.rnex.yaml (Priority 1) or
-#          rnex.yaml (Priority 2), or plugin configuration. Supports both
-#          YAML block sequences (`- item`) and inline arrays (`sources: [...]`).
+# Summary: Parses the `plugins.llm-wiki.sources` list from .local.rnex.yaml
+#          (Priority 1) or rnex.yaml (Priority 2). Supports both YAML block
+#          sequences (`- item`) and inline arrays (`sources: [...]`).
+#          Falls back to default sources when unconfigured.
 # @param $1: workspace_root - Absolute path to workspace root.
 # @returns: Newline-delimited source specifications on stdout.
 # @pure (Read-only configuration inspection)
@@ -55,13 +57,13 @@ parse_configured_workspace_sources() {
                 }
                 return s
             }
-            function emit_inline(raw, prefix,   n, i, parts, tok) {
+            function emit_inline(raw,   n, i, parts, tok) {
                 sub(/^[[:space:]]*\[/, "", raw)
                 sub(/\][[:space:]]*$/, "", raw)
                 n = split(raw, parts, ",")
                 for (i = 1; i <= n; i++) {
                     tok = clean_token(parts[i])
-                    if (tok != "") print (prefix != "" ? prefix "/" tok : tok)
+                    if (tok != "") print tok
                 }
             }
             /^[[:space:]]*#/ || /^[[:space:]]*$/ { next }
@@ -71,47 +73,24 @@ parse_configured_workspace_sources() {
                 line = substr($0, indent + 1)
 
                 if (indent == 0) {
-                    in_repos = (line ~ /^repos:[[:space:]]*$/)
                     in_plugins = (line ~ /^plugins:[[:space:]]*$/)
-                    curr_repo = ""
-                    in_repo_sources = 0
-                    in_top_sources = 0
                     in_llm_wiki = 0
                     in_llm_wiki_sources = 0
-                    if (line ~ /^sources:[[:space:]]*\[.*\][[:space:]]*$/) {
-                        sub(/^sources:[[:space:]]*/, "", line)
-                        emit_inline(line, "")
-                        found_top_sources = 1
-                    } else if (line ~ /^sources:[[:space:]]*$/) {
-                        in_top_sources = 1
-                        found_top_sources = 1
-                    }
-                    next
-                }
-                if (in_top_sources) {
-                    if (line ~ /^-[[:space:]]+/) {
-                        sub(/^-[[:space:]]+/, "", line)
-                        tok = clean_token(line)
-                        if (tok != "") print tok
-                    } else if (indent == 0) {
-                        in_top_sources = 0
-                    }
                     next
                 }
                 if (in_plugins) {
-                    if (line ~ /^llm-wiki:[[:space:]]*$/) {
-                        in_llm_wiki = 1
+                    if (indent == 2 && line ~ /^[^[:space:]-][^:]*:/) {
+                        in_llm_wiki = (line ~ /^llm-wiki:[[:space:]]*$/)
                         in_llm_wiki_sources = 0
                         next
                     }
                     if (in_llm_wiki) {
                         if (line ~ /^sources:[[:space:]]*\[.*\][[:space:]]*$/) {
                             sub(/^sources:[[:space:]]*/, "", line)
-                            emit_inline(line, "")
-                            found_top_sources = 1
+                            emit_inline(line)
+                            in_llm_wiki_sources = 0
                         } else if (line ~ /^sources:[[:space:]]*$/) {
                             in_llm_wiki_sources = 1
-                            found_top_sources = 1
                         } else if (in_llm_wiki_sources && line ~ /^-[[:space:]]+/) {
                             sub(/^-[[:space:]]+/, "", line)
                             tok = clean_token(line)
@@ -119,46 +98,6 @@ parse_configured_workspace_sources() {
                         } else if (line !~ /^-[[:space:]]+/) {
                             in_llm_wiki_sources = 0
                         }
-                    }
-                }
-                if (in_repos) {
-                    if (indent == 2 && line ~ /^[^[:space:]-][^:]*:[[:space:]]*$/) {
-                        curr_repo = line
-                        sub(/:.*$/, "", curr_repo)
-                        curr_repo = clean_token(curr_repo)
-                        repo_order[++num_repos] = curr_repo
-                        repo_enabled[curr_repo] = 1
-                        in_repo_sources = 0
-                        next
-                    }
-                    if (curr_repo != "") {
-                        if (line ~ /^enabled:[[:space:]]*false/) {
-                            repo_enabled[curr_repo] = 0
-                        }
-                        if (line ~ /^sources:[[:space:]]*\[.*\][[:space:]]*$/) {
-                            sub(/^sources:[[:space:]]*/, "", line)
-                            emit_inline(line, "repos/" curr_repo)
-                            repo_has_sources[curr_repo] = 1
-                        } else if (line ~ /^sources:[[:space:]]*$/) {
-                            in_repo_sources = 1
-                        } else if (in_repo_sources && line ~ /^-[[:space:]]+/) {
-                            sub(/^-[[:space:]]+/, "", line)
-                            tok = clean_token(line)
-                            if (tok != "") {
-                                print "repos/" curr_repo "/" tok
-                                repo_has_sources[curr_repo] = 1
-                            }
-                        } else if (line !~ /^-[[:space:]]+/) {
-                            in_repo_sources = 0
-                        }
-                    }
-                }
-            }
-            END {
-                for (i = 1; i <= num_repos; i++) {
-                    r = repo_order[i]
-                    if (repo_enabled[r] && !repo_has_sources[r]) {
-                        print "repos/" r "/README.md"
                     }
                 }
             }
@@ -169,14 +108,41 @@ parse_configured_workspace_sources() {
         fi
     done
 
-    # 3. If still empty, fall back to default candidate sources
+    # Fall back to default candidate sources defined in plugin.yaml config_defaults
     if [ -z "$_found_sources" ]; then
+        _repos_dir="${RNEX_CFG_REPOS_DIR:-repos}"
+        _repos_dir="${_repos_dir%/}"
         _found_sources="README.md
 docs
-repos/**/README.md"
+${_repos_dir}/**/README.md"
     fi
 
     printf '%s\n' "$_found_sources"
+    return 0
+}
+
+# -----------------------------------------------------------------------------
+# _is_workspace_source_enabled
+# Summary: Verifies whether a candidate workspace-relative file path belongs
+#          to an enabled member repository (or root workspace). Rejects paths
+#          under disabled member repositories (`enabled: false`).
+# @param $1: workspace_rel_path - Normalized workspace-relative file path.
+# @returns: 0 if allowed; 1 if inside a disabled member repository.
+# @pure
+# -----------------------------------------------------------------------------
+_is_workspace_source_enabled() {
+    _cand_rel="$1"
+    _rdir="${RNEX_CFG_REPOS_DIR:-repos}"
+    _rdir="${_rdir%/}"
+    case "$_cand_rel" in
+        "${_rdir}/"*)
+            _after_r="${_cand_rel#"${_rdir}/"}"
+            _m_repo="${_after_r%%/*}"
+            if [ -n "$_m_repo" ] && command -v is_repo_enabled >/dev/null 2>&1; then
+                is_repo_enabled "$_m_repo" || return 1
+            fi
+            ;;
+    esac
     return 0
 }
 
@@ -196,9 +162,6 @@ extract_already_indexed_paths() {
 
     for _shard_file in "${RNEX_WIKI_ROOT}"/repo-nexus*.md "${RNEX_WIKI_ROOT}"/repos-*.md; do
         [ -f "$_shard_file" ] || continue
-        # Matches both formats:
-        # 1. - **[Title](../../path)** (`path`) — summary
-        # 2. - **slug** (`path`) — summary
         LC_ALL=C awk '/^- \*\*/ && match($0, /\*\* \(`[^`]+`\)/) { print substr($0, RSTART + 5, RLENGTH - 7) }' "$_shard_file" >> "$_out_idx"
     done
 
@@ -248,8 +211,9 @@ derive_shard_id_for_workspace_path() {
 # expand_single_source_spec
 # Summary: Expands a single source specification (regular file, directory, or
 #          glob pattern including "**") into normalized workspace-relative
-#          Markdown file paths, rejecting symlinks and the wiki directory itself.
-# @param $1: source_spec - File path, directory path, or glob pattern.
+#          Markdown file paths, rejecting symlinks, disabled member repos,
+#          and the wiki directory itself.
+# @param $1: source_spec         - File path, directory path, or glob pattern.
 # @param $2: out_candidates_file - Output file to append discovered paths.
 # @returns: 0 on valid expansion; 1 if explicit path does not exist.
 # @throws: Writes error to stderr on path traversal or symlinks (OWASP A03).
@@ -283,7 +247,8 @@ expand_single_source_spec() {
             | while IFS= read -r _found_abs; do
                 [ -L "$_found_abs" ] && continue
                 _rel="$(normalize_workspace_rel_path "$RNEX_WORKSPACE_ROOT" "$_found_abs")" || continue
-                if match_globstar_path "$_rel" "$_spec"; then
+                _is_workspace_source_enabled "$_rel" || continue
+                if match_globstar_path "$_rel" "$_spec" "$RNEX_WORKSPACE_ROOT"; then
                     printf '%s\n' "$_rel" >> "$_out_file"
                 fi
             done
@@ -300,6 +265,7 @@ expand_single_source_spec() {
     # Case 3: Exact regular file
     if [ -f "$_abs_spec" ]; then
         _rel="$(normalize_workspace_rel_path "$RNEX_WORKSPACE_ROOT" "$_abs_spec")" || return 1
+        _is_workspace_source_enabled "$_rel" || return 0
         printf '%s\n' "$_rel" >> "$_out_file"
         return 0
     fi
@@ -311,6 +277,7 @@ expand_single_source_spec() {
         | while IFS= read -r _found_abs; do
             [ -L "$_found_abs" ] && continue
             _rel="$(normalize_workspace_rel_path "$RNEX_WORKSPACE_ROOT" "$_found_abs")" || continue
+            _is_workspace_source_enabled "$_rel" || continue
             printf '%s\n' "$_rel" >> "$_out_file"
         done
         return 0
@@ -322,10 +289,11 @@ expand_single_source_spec() {
 # -----------------------------------------------------------------------------
 # resolve_missing_sources_to_ingest
 # Summary: Resolves candidate Markdown files from either the passed CLI source
-#          argument ($1) or configured `sources` in .local.rnex.yaml / rnex.yaml,
-#          and filters out any source already present in .rnex/wiki/*.md shards.
+#          argument ($1) or configured `plugins.llm-wiki.sources` in
+#          .local.rnex.yaml / rnex.yaml, and filters out any source already
+#          present in existing wiki shards.
 # @param $1: explicit_source_arg - Optional CLI source argument (empty for config).
-# @param $2: out_missing_file - File receiving ONLY missing workspace_rel_paths.
+# @param $2: out_missing_file    - File receiving ONLY missing workspace_rel_paths.
 # @returns: 0 on success; 1 if an explicit CLI source argument is invalid/missing.
 # @throws: Writes error to stderr on missing explicit argument file.
 # @sideEffects: Writes sorted missing workspace-relative file paths to $2.
@@ -369,80 +337,4 @@ resolve_missing_sources_to_ingest() {
 
     rm -f "$_candidates_tmp" "$_indexed_tmp"
     return 0
-}
-
-# -----------------------------------------------------------------------------
-# Backwards-Compatible Helpers
-# -----------------------------------------------------------------------------
-extract_base_dir_from_pattern() {
-    _pat="$1"
-    _dir="$(dirname "$_pat")"
-    case "$_dir" in
-        *\**|*\?*|*\[*)
-            _curr="$_pat"
-            while [ "$_curr" != "." ] && [ "$_curr" != "/" ]; do
-                _curr="$(dirname "$_curr")"
-                case "$_curr" in
-                    *\**|*\?*|*\[*) continue ;;
-                    *) _dir="$_curr"; break ;;
-                esac
-            done
-            ;;
-    esac
-    if [ -z "$_dir" ] || [ "$_dir" = "." ] || [ "$_dir" = "/" ]; then
-        _dir="."
-    fi
-    printf '%s\n' "$_dir"
-}
-
-match_globstar_path() {
-    _candidate_path="$1"
-    _target_pat="$2"
-
-    _candidate_path="$(printf '%s' "$_candidate_path" | tr -d '"'\''' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
-    _target_pat="$(printf '%s' "$_target_pat" | tr -d '"'\''' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
-
-    while [ "${_candidate_path#./}" != "$_candidate_path" ]; do _candidate_path="${_candidate_path#./}"; done
-    while [ "${_target_pat#./}" != "$_target_pat" ]; do _target_pat="${_target_pat#./}"; done
-
-    if [ -n "${RNEX_WORKSPACE_ROOT:-}" ]; then
-        _candidate_path="${_candidate_path#"${RNEX_WORKSPACE_ROOT}/"}"
-    fi
-
-    if [ "$_candidate_path" = "$_target_pat" ]; then
-        return 0
-    fi
-
-    case "$_target_pat" in
-        *\*\**)
-            _prefix="${_target_pat%%\*\**}"
-            _suffix="${_target_pat##*\*\*}"
-            _suffix="${_suffix#/}"
-
-            # shellcheck disable=SC2254
-            case "$_candidate_path" in
-                "$_prefix"*$_suffix)
-                    _expected_filename="$(basename "$_suffix")"
-                    _actual_filename="$(basename "$_candidate_path")"
-                    if [ -n "$_expected_filename" ] && [ "$_expected_filename" != "*" ]; then
-                        case "$_actual_filename" in
-                            $_expected_filename) return 0 ;;
-                            *) return 1 ;;
-                        esac
-                    fi
-                    return 0
-                    ;;
-                *)
-                    return 1
-                    ;;
-            esac
-            ;;
-        *)
-            # shellcheck disable=SC2254
-            case "$_candidate_path" in
-                $_target_pat) return 0 ;;
-                *) return 1 ;;
-            esac
-            ;;
-    esac
 }

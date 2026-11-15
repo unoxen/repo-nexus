@@ -1,9 +1,13 @@
 name: cursor
-version: 0.9.24
+version: 0.9.25
 description: Cursor IDE integration (maintains .cursorrules and generates user skills in .cursor/rules/)
 author: unoxen
 homepage: https://github.com/unoxen/repo-nexus
+instruction_file: .cursorrules
 skill_dir: .cursor/rules
+ignore_file: .cursorignore
+ignore_comment: "Cursor codebase indexing un-ignore for member repos"
+ignore_message: "Created .cursorignore (enabling Cursor indexing for member repos)"
 
 config_defaults:
   skills: true

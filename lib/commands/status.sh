@@ -35,11 +35,7 @@ cmd_status() {
 
   printf '%bConfiguration:%b\n' "$_BOLD" "$_NC"
   if [ -f "$WORKSPACE_YAML" ]; then
-    _vc_res=0
-    version_cmp "$WORKSPACE_CONFIG_VERSION" "$RNEX_VERSION" || _vc_res=$?
-    if [ "$_vc_res" -eq 2 ]; then
-      printf '  %b!%b Repo Config:   %s %b(v%s is older than CLI v%s; run "rnex sync")%b\n' "$_Y" "$_NC" "$WORKSPACE_YAML" "$_DIM" "${WORKSPACE_CONFIG_VERSION:-0.0.0}" "$RNEX_VERSION" "$_NC"
-    elif [ -n "$WORKSPACE_CONFIG_VERSION" ]; then
+    if [ -n "$WORKSPACE_CONFIG_VERSION" ]; then
       printf '  %b●%b Repo Config:   %s %b(loaded, v%s)%b\n' "$_G" "$_NC" "$WORKSPACE_YAML" "$_DIM" "$WORKSPACE_CONFIG_VERSION" "$_NC"
     else
       printf '  %b●%b Repo Config:   %s %b(loaded)%b\n' "$_G" "$_NC" "$WORKSPACE_YAML" "$_DIM" "$_NC"
@@ -68,11 +64,10 @@ cmd_status() {
   _gi="$NEXUS_DIR/.gitignore"
   _repos_dir_name="$(yaml_get_repos_dir 2>/dev/null || printf 'repos')"
   [ -n "$_repos_dir_name" ] || _repos_dir_name="repos"
-  _gi_repos=0; _gi_local=0; _gi_has_counter=0; _gi_has_rnex=0; _gi_has_markers=0; _gi_custom_ok=1
+  _gi_repos=0; _gi_local=0; _gi_has_rnex=0; _gi_has_markers=0; _gi_custom_ok=1
   if [ -f "$_gi" ]; then
     (grep -q "^${_repos_dir_name}/" "$_gi" 2>/dev/null || grep -q "^${_repos_dir_name}\*" "$_gi" 2>/dev/null || grep -q '^repos' "$_gi" 2>/dev/null) && _gi_repos=1
     grep -qF "$RNEX_LOCAL_CONFIG_FILE" "$_gi" 2>/dev/null && _gi_local=1
-    grep -q "lint_trigger_counter" "$_gi" 2>/dev/null && _gi_has_counter=1
     (grep -q '\*\*/\.rnex\*' "$_gi" 2>/dev/null || grep -q '\.rnex\*' "$_gi" 2>/dev/null) && _gi_has_rnex=1
     if grep -qFx -- "${GITIGNORE_MARKER_START:-# REPO-NEXUS:START}" "$_gi" 2>/dev/null && \
        grep -qFx -- "${GITIGNORE_MARKER_END:-# REPO-NEXUS:END}" "$_gi" 2>/dev/null; then
@@ -92,7 +87,7 @@ cmd_status() {
     fi
   fi
 
-  if [ "$_gi_repos" -eq 1 ] && [ "$_gi_local" -eq 1 ] && [ "$_gi_has_counter" -eq 0 ] && [ "$_gi_has_rnex" -eq 1 ] && [ "$_gi_has_markers" -eq 1 ] && [ "$_gi_custom_ok" -eq 1 ]; then
+  if [ "$_gi_repos" -eq 1 ] && [ "$_gi_local" -eq 1 ] && [ "$_gi_has_rnex" -eq 1 ] && [ "$_gi_has_markers" -eq 1 ] && [ "$_gi_custom_ok" -eq 1 ]; then
     printf '  %b✓%b Git Ignore:    %s/, %s, and **/.rnex* ignored in .gitignore\n' "$_G" "$_NC" "$_repos_dir_name" "$RNEX_LOCAL_CONFIG_FILE"
   else
     printf '  %b!%b Git Ignore:    recommend running "rnex sync" to update .gitignore (%s/, local configs)\n' "$_Y" "$_NC" "$_repos_dir_name"
@@ -147,17 +142,12 @@ cmd_status() {
     printf '  %b✓%b %s %b(standard instructions directive)%b\n' "$_G" "$_NC" "AGENTS.md" "$_DIM" "$_NC"
     _has_any_instructions=1
   fi
-  for _pair in \
-    "CLAUDE.md:Claude" \
-    "GEMINI.md:Gemini" \
-    "CODEX.md:Codex" \
-    ".cursorrules:Cursor" \
-    ".windsurfrules:Windsurf" \
-    ".github/copilot-instructions.md:Copilot"; do
-    _ifile="${_pair%%:*}"
-    _ilbl="${_pair#*:}"
+  for _pdir in $(list_all_available_plugin_dirs 2>/dev/null || true); do
+    _ifile="$(plugin_get_field "$_pdir" "instruction_file" 2>/dev/null || true)"
+    [ -n "$_ifile" ] || continue
+    _pname="$(plugin_get_field "$_pdir" "name" 2>/dev/null || basename "$_pdir")"
     if [ -f "$NEXUS_DIR/$_ifile" ]; then
-      printf '  %b✓%b %s %b(%s instructions)%b\n' "$_G" "$_NC" "$_ifile" "$_DIM" "$_ilbl" "$_NC"
+      printf '  %b✓%b %s %b(%s instructions)%b\n' "$_G" "$_NC" "$_ifile" "$_DIM" "$_pname" "$_NC"
       _has_any_instructions=1
     fi
   done
@@ -185,19 +175,12 @@ cmd_status() {
   if [ -d "$NEXUS_DIR/.rnex/skills" ]; then
     printf '  %b✓%b %s %b(workspace skills)%b\n' "$_G" "$_NC" ".rnex/skills/" "$_DIM" "$_NC"
   fi
-  for _spair in \
-    ".cursor/rules/:Cursor" \
-    ".claude/skills/:Claude" \
-    ".windsurf/rules/:Windsurf" \
-    ".agents/skills/:Gemini" \
-    ".gemini/skills/:Gemini" \
-    ".codex/skills/:Codex" \
-    ".github/skills/:Copilot"; do
-    _sdir="${_spair%%:*}"
-    _slbl="${_spair#*:}"
-    [ "$_sdir" = ".gemini/skills/" ] && _status_has_rnex_skills "$NEXUS_DIR/.agents/skills" && continue
+  for _pdir in $(list_all_available_plugin_dirs 2>/dev/null || true); do
+    _sdir="$(plugin_get_field "$_pdir" "skill_dir" 2>/dev/null || true)"
+    [ -n "$_sdir" ] || continue
+    _pname="$(plugin_get_field "$_pdir" "name" 2>/dev/null || basename "$_pdir")"
     if _status_has_rnex_skills "$NEXUS_DIR/${_sdir%/}"; then
-      printf '  %b✓%b %s %b(%s user skills)%b\n' "$_G" "$_NC" "$_sdir" "$_DIM" "$_slbl" "$_NC"
+      printf '  %b✓%b %s/ %b(%s user skills)%b\n' "$_G" "$_NC" "${_sdir%/}" "$_DIM" "$_pname" "$_NC"
     fi
   done
   printf '\n'
@@ -231,9 +214,6 @@ cmd_status() {
             if [ -n "$_opts" ]; then
               printf '    %b↳ Options: %s%b\n' "$_DIM" "$_opts" "$_NC"
             fi
-            if [ -n "$(plugin_legacy_raw_dir "$_pname" 2>/dev/null)" ]; then
-              printf '    %b↳ [!] Deprecated: raw_dir — run "rnex sync" to rewrite to sources%b\n' "$_Y" "$_NC"
-            fi
           fi
         fi
       else
@@ -262,9 +242,6 @@ cmd_status() {
         _tags=""
         if yaml_repo_readonly "$_name"; then
           _tags=" ${_Y}[readonly]${_NC}"
-        fi
-        if [ -d "$_rdir/.rnex" ]; then
-          _tags="${_tags} ${_DIM}[.rnex]${_NC}"
         fi
         printf '  %b●%b %-18s %b[%s]%b%b %s\n' "$_G" "$_NC" "$_name" "$_C" "$_b" "$_NC" "$_tags" "${_url:+- $_url}"
       else

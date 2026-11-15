@@ -16,10 +16,6 @@ cd "$TEST_GEMINI_WS"
 
 # --------------------------------------------------------------------------
 run_test "Gemini plugin: init --gemini provisions GEMINI.md, .geminiignore, and User Skills without AGENTS.md"
-# Create a legacy .gemini/skills directory to verify migration/cleanup
-mkdir -p "$TEST_GEMINI_WS/.gemini/skills/rnex-legacy-skill"
-echo "legacy" > "$TEST_GEMINI_WS/.gemini/skills/rnex-legacy.md"
-
 "$TEST_GEMINI_WS/rnex" init -y --gemini "$TEST_GEMINI_WS" >/dev/null
 [ -f "$TEST_GEMINI_WS/GEMINI.md" ] || { fail "GEMINI.md missing after init --gemini"; exit 1; }
 [ -f "$TEST_GEMINI_WS/.geminiignore" ] || { fail ".geminiignore missing after init --gemini"; exit 1; }
@@ -35,8 +31,7 @@ _expected_3line_block="$(printf '%s\n%s\n%s' \
 _gemini_block="$(awk '/<!-- REPO-NEXUS:START -->/,/<!-- REPO-NEXUS:END -->/' "$TEST_GEMINI_WS/GEMINI.md")"
 [ "$_gemini_block" = "$_expected_3line_block" ] || { fail "GEMINI.md block did not match expected 3-line block: $_gemini_block"; exit 1; }
 
-# Verify legacy .gemini/skills was purged and .agents/skills created
-[ ! -d "$TEST_GEMINI_WS/.gemini/skills" ] || { fail "legacy .gemini/skills was not purged on sync"; exit 1; }
+# Verify .agents/skills created
 [ -d "$TEST_GEMINI_WS/.agents/skills" ] || { fail ".agents/skills missing after init --gemini"; exit 1; }
 [ -f "$TEST_GEMINI_WS/.agents/skills/rnex-clone-sync/SKILL.md" ] || { fail "rnex-clone-sync/SKILL.md missing in .agents/skills"; exit 1; }
 

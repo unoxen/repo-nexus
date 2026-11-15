@@ -1,8 +1,9 @@
 name: windsurf
-version: 0.9.24
+version: 0.9.25
 description: Windsurf IDE integration (maintains .windsurfrules and generates user skills in .windsurf/rules/)
 author: unoxen
 homepage: https://github.com/unoxen/repo-nexus
+instruction_file: .windsurfrules
 skill_dir: .windsurf/rules
 
 config_defaults:

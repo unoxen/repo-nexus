@@ -29,7 +29,7 @@ git:
     pre-push:
       - "rnex plugin llm-wiki lint --strict"
 
-rnex_hooks:
+rnex-hooks:
   after_sync:
     - "rnex plugin llm-wiki ingest --quiet"
 

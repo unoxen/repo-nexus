@@ -1,20 +1,24 @@
 #!/bin/sh
 # shellcheck shell=sh
+# shellcheck disable=SC2016
 # =============================================================================
 # File: plugins/llm-wiki/lib/utils.sh
 # Architectural Layer: Pure General Utilities (utils/ — Zero Domain Dependencies)
 # Single Responsibility: Provide stateless, deterministic, dependency-free
-# string, slug, path normalization, relative link prefix calculation,
-# markdown sanitization, ISO-8601 UTC date retrieval, and atomic file sorting.
+# string, slug, path normalization, globstar matching, relative link prefix
+# calculation, markdown sanitization, catalog entry parsing, shared AWK
+# functions, ISO-8601 UTC date retrieval, and atomic file sorting.
 #
 # Design Patterns & Principles:
 #   - Single Responsibility Principle (SRP): Each utility function addresses
-#     one specific data transformation or string manipulation task.
+#     one atomic data transformation or string manipulation task.
+#   - Don't Repeat Yourself (DRY): Exports RNEX_WIKI_AWK_LIB containing shared
+#     AWK functions reused across B-Tree routing, shard splitting, and linting.
 #   - Functional Purity: All utilities are strictly pure and side-effect free,
 #     except for get_iso_utc_date (reads system clock) and atomic_sort_unique_file
 #     (atomic filesystem sort operation).
-#   - Zero Domain Dependencies: Contains zero knowledge of repository models,
-#     plugin configurations, or domain entities.
+#   - Zero Domain Dependencies: Operates in complete isolation without reading
+#     global configuration files or mutating workspace state.
 #
 # Standards: Pure POSIX Shell (/bin/sh), OWASP ASVS A03 Input Sanitization.
 # =============================================================================
@@ -25,6 +29,98 @@ if [ "${RNEX_LLM_WIKI_UTILS_SH_SOURCED:-0}" = "1" ]; then
     return 0 2>/dev/null || exit 0
 fi
 RNEX_LLM_WIKI_UTILS_SH_SOURCED=1
+
+# -----------------------------------------------------------------------------
+# Shared AWK Library Contract (RNEX_WIKI_AWK_LIB)
+# Summary: Reusable POSIX AWK function definitions for B-Tree key normalization,
+#          catalog entry title/path extraction, slug normalization, and base
+#          shard derivation. Injected into AWK invocations to prevent duplication.
+# -----------------------------------------------------------------------------
+# shellcheck disable=SC2089
+RNEX_WIKI_AWK_LIB='
+function clean_alpha_key(str,   res, i, c, d) {
+    res = ""
+    for (i = 1; i <= length(str); i++) {
+        c = substr(str, i, 1)
+        if (c >= "a" && c <= "z") {
+            res = res c
+        } else if (c >= "A" && c <= "Z") {
+            res = res tolower(c)
+        } else if (c >= "0" && c <= "9") {
+            d = c + 0
+            if (d == 0) res = res "zero"
+            else if (d == 1) res = res "one"
+            else if (d == 2) res = res "two"
+            else if (d == 3) res = res "three"
+            else if (d == 4) res = res "four"
+            else if (d == 5) res = res "five"
+            else if (d == 6) res = res "six"
+            else if (d == 7) res = res "seven"
+            else if (d == 8) res = res "eight"
+            else if (d == 9) res = res "nine"
+        }
+    }
+    return res
+}
+function get_title(line,   m) {
+    if (match(line, /^- \*\*\[[^]]+\]/)) {
+        m = substr(line, 6)
+        sub(/\].*$/, "", m)
+        return m
+    } else if (match(line, /^- \*\*[^*]+\*\*/)) {
+        m = substr(line, 5)
+        sub(/\*\*.*$/, "", m)
+        return m
+    }
+    return ""
+}
+function get_rel_path(line,   m) {
+    if (match(line, /\*\* \(`[^`]+`\)/)) {
+        m = substr(line, RSTART + 5, RLENGTH - 7)
+        return m
+    } else if (match(line, /\(`[^`]+`\)/)) {
+        m = substr(line, RSTART + 2, RLENGTH - 4)
+        return m
+    }
+    return ""
+}
+function get_path(line,   m) {
+    m = get_rel_path(line)
+    if (m != "") return m
+    if (match(line, /\]\([^)]+\)/)) {
+        m = substr(line, RSTART + 2, RLENGTH - 3)
+        return m
+    }
+    return ""
+}
+function normalize_slug(s,   r) {
+    r = tolower(s)
+    gsub(/[^a-z0-9._-]+/, "-", r)
+    gsub(/--+/, "-", r)
+    gsub(/^-+|-+$/, "", r)
+    return (r != "") ? r : "unknown"
+}
+function expected_base_shard(rel_path, rdir,   rest, n, parts) {
+    if (rel_path == "") return ""
+    sub(/\/$/, "", rdir)
+    if (index(rel_path, rdir "/") == 1) {
+        rest = substr(rel_path, length(rdir) + 2)
+        n = split(rest, parts, "/")
+        if (n >= 3) {
+            return "repos-" normalize_slug(parts[1]) "-" normalize_slug(parts[2])
+        } else {
+            return "repos-" normalize_slug(parts[1])
+        }
+    } else if (index(rel_path, "/") > 0) {
+        n = split(rel_path, parts, "/")
+        return "repo-nexus-" normalize_slug(parts[1])
+    } else {
+        return "repo-nexus"
+    }
+}
+'
+# shellcheck disable=SC2090
+export RNEX_WIKI_AWK_LIB
 
 # -----------------------------------------------------------------------------
 # get_iso_utc_date
@@ -40,8 +136,8 @@ get_iso_utc_date() {
 # -----------------------------------------------------------------------------
 # normalize_slug_id
 # Summary: Converts an arbitrary string or file stem into a canonical lowercase
-#          alphanumeric slug (a-z, 0-9, hyphen) suitable for deterministic
-#          B-Tree shard file names or entry keys.
+#          alphanumeric slug (a-z, 0-9, period, underscore, hyphen) suitable for
+#          deterministic B-Tree shard file names or entry keys.
 # @param $1: raw_identifier - Input title, filename, or token string.
 # @returns: Canonical slug on stdout; returns 1 if resulting slug is empty.
 # @pure
@@ -64,7 +160,7 @@ normalize_slug_id() {
 #          slashes, and Windows CR characters.
 #          Rejects path traversal ("..") and absolute paths outside the root.
 # @param $1: workspace_root - Absolute workspace root path.
-# @param $2: target_path - Absolute or workspace-relative file path.
+# @param $2: target_path    - Absolute or workspace-relative file path.
 # @returns: Clean workspace-relative path on stdout, or 1 if outside root or invalid.
 # @throws: Returns 1 on invalid path traversal or out-of-boundary access (OWASP A03).
 # @pure
@@ -75,7 +171,6 @@ normalize_workspace_rel_path() {
 
     case "$_raw_path" in
         "${_ws_root}/"*)
-            # Strip workspace root prefix if absolute
             _rel="${_raw_path#"${_ws_root}/"}"
             ;;
         /*)
@@ -96,6 +191,66 @@ normalize_workspace_rel_path() {
     esac
     printf '%s\n' "$_rel"
     return 0
+}
+
+# -----------------------------------------------------------------------------
+# match_globstar_path
+# Summary: Evaluates whether a workspace-relative candidate path matches a
+#          POSIX glob or recursive globstar (**) pattern.
+# @param $1: candidate_path - Workspace-relative file path.
+# @param $2: target_pattern - Glob or globstar pattern (e.g., "repos/**/README.md").
+# @param $3: workspace_root - Optional workspace root prefix to strip.
+# @returns: 0 if the candidate path matches the pattern; 1 otherwise.
+# @pure
+# -----------------------------------------------------------------------------
+match_globstar_path() {
+    _candidate_path="$(printf '%s' "$1" | tr -d '"'\''' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+    _target_pat="$(printf '%s' "$2" | tr -d '"'\''' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+    _ws_prefix="${3:-}"
+
+    while [ "${_candidate_path#./}" != "$_candidate_path" ]; do _candidate_path="${_candidate_path#./}"; done
+    while [ "${_target_pat#./}" != "$_target_pat" ]; do _target_pat="${_target_pat#./}"; done
+
+    if [ -n "$_ws_prefix" ]; then
+        _candidate_path="${_candidate_path#"${_ws_prefix%/}/"}"
+    fi
+
+    if [ "$_candidate_path" = "$_target_pat" ]; then
+        return 0
+    fi
+
+    case "$_target_pat" in
+        *\*\**)
+            _prefix="${_target_pat%%\*\**}"
+            _suffix="${_target_pat##*\*\*}"
+            _suffix="${_suffix#/}"
+
+            # shellcheck disable=SC2254
+            case "$_candidate_path" in
+                "$_prefix"*$_suffix)
+                    _expected_filename="$(basename "$_suffix")"
+                    _actual_filename="$(basename "$_candidate_path")"
+                    if [ -n "$_expected_filename" ] && [ "$_expected_filename" != "*" ]; then
+                        case "$_actual_filename" in
+                            $_expected_filename) return 0 ;;
+                            *) return 1 ;;
+                        esac
+                    fi
+                    return 0
+                    ;;
+                *)
+                    return 1
+                    ;;
+            esac
+            ;;
+        *)
+            # shellcheck disable=SC2254
+            case "$_candidate_path" in
+                $_target_pat) return 0 ;;
+                *) return 1 ;;
+            esac
+            ;;
+    esac
 }
 
 # -----------------------------------------------------------------------------
@@ -124,6 +279,33 @@ compute_upward_rel_prefix() {
 }
 
 # -----------------------------------------------------------------------------
+# extract_entry_rel_path
+# Summary: Extracts the backtick-enclosed workspace-relative source path from a
+#          formatted B-Tree shard catalog entry line.
+# @param $1: entry_line - Catalog entry line (`- **[Title](link)** (\`path\`) — ...`).
+# @returns: Workspace-relative path string on stdout.
+# @pure
+# -----------------------------------------------------------------------------
+extract_entry_rel_path() {
+    printf '%s\n' "$1" | LC_ALL=C awk 'match($0, /\*\* \(`[^`]+`\)/) { print substr($0, RSTART + 5, RLENGTH - 7) }'
+}
+
+# -----------------------------------------------------------------------------
+# extract_entry_title
+# Summary: Extracts the document title from a formatted B-Tree shard catalog
+#          entry line, falling back to "untitled" if absent.
+# @param $1: entry_line - Catalog entry line (`- **[Title](link)** (\`path\`) — ...`).
+# @returns: Extracted title string on stdout.
+# @pure
+# -----------------------------------------------------------------------------
+extract_entry_title() {
+    _t="$(printf '%s\n' "$1" | sed -n 's/^- \*\*\[\([^]]*\)\].*/\1/p')"
+    [ -n "$_t" ] || _t="$(printf '%s\n' "$1" | sed -n 's/^- \*\*\([^*]*\)\*\*.*/\1/p')"
+    [ -n "$_t" ] || _t="untitled"
+    printf '%s\n' "$_t"
+}
+
+# -----------------------------------------------------------------------------
 # strip_markdown_links
 # Summary: Strips Markdown link syntax ([text](target)), image syntax
 #          (![alt](target)), and wikilink syntax ([[target|text]] / [[target]])
@@ -147,13 +329,11 @@ strip_markdown_links() {
             out = ""
             rem = str
             while (rem != "") {
-                # Find next opening bracket
                 p = index(rem, "[")
                 if (p == 0) {
                     out = out rem
                     break
                 }
-                # Check if preceding character is ! (Markdown image tag)
                 is_img = 0
                 if (p > 1 && substr(rem, p - 1, 1) == "!") {
                     out = out substr(rem, 1, p - 2)
@@ -223,7 +403,6 @@ normalize_relative_path() {
     _target_path="$2"
     _res="$(LC_ALL=C awk -v base_dir="$_base_dir" -v target="$_target_path" '
         BEGIN {
-            # Workspace root relative targets beginning with /
             if (substr(target, 1, 1) == "/") {
                 combined = substr(target, 2)
             } else if (base_dir != "" && base_dir != ".") {
@@ -231,7 +410,6 @@ normalize_relative_path() {
             } else {
                 combined = target
             }
-            # Collapse redundant slashes and remove leading/trailing slashes
             gsub(/\/+/, "/", combined)
             sub(/^\//, "", combined)
             sub(/\/$/, "", combined)
@@ -246,7 +424,6 @@ normalize_relative_path() {
                     if (top > 0) {
                         top--
                     } else {
-                        # Path traversal escapes workspace root; fail fast
                         exit 1
                     }
                 } else {

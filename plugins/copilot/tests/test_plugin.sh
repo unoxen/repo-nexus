@@ -152,32 +152,24 @@ _dis_out="$(env -i PATH="$PATH" HOME="$HOME" RNEX_ROOT="$TEST_COPILOT_WS" sh "$_
 pass
 
 # --------------------------------------------------------------------------
-run_test "Copilot plugin: prompt preservation and clean disable with fallback AGENTS.md"
+run_test "Copilot plugin: custom content preservation and clean disable with fallback AGENTS.md"
 # Re-enable copilot
 (cd "$TEST_COPILOT_WS" && ./rnex plugin enable copilot >/dev/null)
 
-mkdir -p "$TEST_COPILOT_WS/.github/prompts"
-printf '# User custom prompt\n' > "$TEST_COPILOT_WS/.github/prompts/user-authored.prompt.md"
-printf '# Vendor prompt\n' > "$TEST_COPILOT_WS/.github/prompts/vendor.prompt.md"
-printf '# Plugin-owned prompt\n' > "$TEST_COPILOT_WS/.github/prompts/rnex-sample.prompt.md"
+mkdir -p "$TEST_COPILOT_WS/.github/skills/user-authored-skill"
+printf '# User custom skill\n' > "$TEST_COPILOT_WS/.github/skills/user-authored-skill/SKILL.md"
 printf "\n# Custom Copilot Rules\n1. Do not hallucinate.\n" >> "$TEST_COPILOT_WS/.github/copilot-instructions.md"
 
 (cd "$TEST_COPILOT_WS" && ./rnex sync -y >/dev/null)
 grep -q "# Custom Copilot Rules" "$TEST_COPILOT_WS/.github/copilot-instructions.md" || { fail "Custom rules lost on sync"; exit 1; }
+[ -f "$TEST_COPILOT_WS/.github/skills/user-authored-skill/SKILL.md" ] || { fail "User-authored skill lost on sync"; exit 1; }
 
 # Disable copilot plugin
 (cd "$TEST_COPILOT_WS" && ./rnex plugin disable copilot >/dev/null)
 
-# Verify plugin-owned prompt is removed but user/vendor prompts remain
-[ ! -f "$TEST_COPILOT_WS/.github/prompts/rnex-sample.prompt.md" ] || { fail "Plugin-owned prompt was not removed"; exit 1; }
-[ -f "$TEST_COPILOT_WS/.github/prompts/user-authored.prompt.md" ] || { fail "User-authored prompt was deleted"; exit 1; }
-[ -f "$TEST_COPILOT_WS/.github/prompts/vendor.prompt.md" ] || { fail "Vendor prompt was deleted"; exit 1; }
-[ -d "$TEST_COPILOT_WS/.github/prompts" ] || { fail ".github/prompts directory was removed despite containing user files"; exit 1; }
-
-# Clean remaining user prompts and run disable hook; verify empty directory is removed
-rm -f "$TEST_COPILOT_WS/.github/prompts"/*
-(RNEX_ROOT="$TEST_COPILOT_WS" "$_copilot_pdir/hooks/before_plugin_disable.sh" >/dev/null 2>&1 || true)
-[ ! -d "$TEST_COPILOT_WS/.github/prompts" ] || { fail "Empty .github/prompts directory was not removed"; exit 1; }
+# Verify plugin-owned skills are removed but user skills remain
+[ ! -d "$TEST_COPILOT_WS/.github/skills/rnex-clone-sync" ] || { fail "rnex User Skills not cleaned on disable"; exit 1; }
+[ -f "$TEST_COPILOT_WS/.github/skills/user-authored-skill/SKILL.md" ] || { fail "User-authored skill was deleted on disable"; exit 1; }
 
 # Verify instructions file preserved custom content while REPO-NEXUS block was stripped
 [ -f "$TEST_COPILOT_WS/.github/copilot-instructions.md" ] || { fail "copilot-instructions.md with custom content was deleted"; exit 1; }

@@ -1,23 +1,17 @@
 #!/bin/sh
 # shellcheck shell=sh
 # ============================================================================
-# plugins/copilot/hooks/after_sync.sh — GitHub Copilot sync hook
+# File: plugins/copilot/hooks/after_sync.sh
+# Architectural Layer: Plugin Lifecycle Hook (after_sync)
+# Single Responsibility: Reconcile GitHub Copilot instruction file, skills, and hooks.
 # ============================================================================
 set -e
 _root="${RNEX_ROOT:-${NEXUS_DIR:-$PWD}}"
-if ! command -v merge_rnex_instructions >/dev/null 2>&1; then
+if ! command -v rnex_sdk_sync_provider >/dev/null 2>&1; then
   for _env_cand in "$_root/.rnex/bin/rnex-env.sh" "$_root/.rnex/rnex-env.sh" "${RNEX_LIB_DIR:-}/sdk.sh" "$_root/lib/sdk.sh"; do
     # shellcheck source=/dev/null
     [ -n "$_env_cand" ] && [ -f "$_env_cand" ] && { . "$_env_cand"; break; }
   done
 fi
 
-mkdir -p "$_root/.github"
-merge_rnex_instructions "$_root/.github/copilot-instructions.md"
-
-if ! provider_option_enabled "copilot" "skills" 2>/dev/null; then
-  clean_provider_user_skills "$_root/.github/skills"
-fi
-
-rnex_sdk_sync_provider_hooks "$_root" "copilot"
-rmdir "$_root/.github" 2>/dev/null || true
+rnex_sdk_sync_provider "$_root" "copilot"

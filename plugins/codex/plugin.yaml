@@ -1,8 +1,9 @@
 name: codex
-version: 0.9.24
+version: 0.9.25
 description: OpenAI Codex and ChatGPT integration (maintains CODEX.md instructions and generates user skills in .codex/skills/)
 author: unoxen
 homepage: https://github.com/unoxen/repo-nexus
+instruction_file: CODEX.md
 skill_dir: .codex/skills
 
 config_defaults:

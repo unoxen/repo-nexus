@@ -7,7 +7,7 @@ description: Implement the 4 cardinal principles for coding agents and autonomou
 
 The **`llm-wiki`** plugin packages agent behavioral principles, multi-repo context engineering standards, and the autonomous **LLM Wiki** knowledge architecture (based on the Karpathy LLM Wiki pattern) for AI coding assistants.
 
-It requires **zero external vector databases, embedding pipelines, or heavy MCP infrastructure** — knowledge is indexed directly in place into a flat B-Tree sharded index (`.rnex/wiki/*.md`, or a custom configured `wiki_dir`), organized by a bounded root router (`.rnex/wiki/index.md`), and recorded in a chronological audit log (`.rnex/wiki/log.md`) that AI agents navigate natively.
+It requires **zero external vector databases, embedding pipelines, or heavy MCP infrastructure** — knowledge is indexed directly in place into a flat B-Tree sharded index (`<wiki_dir>/*.md`, configured via `plugins.llm-wiki.wiki_dir`), organized by a bounded root router (`<wiki_dir>/<index_file>`, configured via `plugins.llm-wiki.index_file`), and recorded in a chronological audit log (`<wiki_dir>/<log_file>`, configured via `plugins.llm-wiki.log_file`) that AI agents navigate natively.
 
 ![LLM Wiki](/llm-wiki.jpeg)
 
@@ -24,35 +24,34 @@ It requires **zero external vector databases, embedding pipelines, or heavy MCP 
 ### 2. Multi-Repo Context Engineering & Autonomy (`rules/behavioral.md`)
 - Guidelines tailored specifically for multi-repo virtual workspaces:
   - Always read workspace configuration (`.local.rnex.yaml` and `rnex.yaml`) first.
-  - Respect member repository autonomy (`<repos_dir>/<name>/`, default `repos/<name>/`).
-  - Follow the deterministic 3-step retrieval protocol: B-Tree Root Router (`.rnex/wiki/index.md`) $\to$ Domain Shard (`.rnex/wiki/<shard>.md`) $\to$ In-Place Source Document.
+  - Respect member repository autonomy (`<repos_dir>/<name>/`, configured via `repos_dir`).
+  - Follow the deterministic 3-step retrieval protocol: B-Tree Root Router (`<wiki_dir>/<index_file>`) $\to$ Domain Shard (`<wiki_dir>/<shard>.md`) $\to$ In-Place Source Document.
   - Perform Git commits directly inside individual member repositories.
 
 ### 3. Flat Zero-Prefix B-Tree Wiki Architecture
-A self-healing, agent-maintained knowledge base structured directly under `.rnex/wiki/` (or custom configured `wiki_dir`):
+A self-healing, agent-maintained knowledge base structured directly under `<wiki_dir>/` (configured via `plugins.llm-wiki.wiki_dir`):
 
 - **Authoritative Source Materials**:
-  - Unmodified source documents (`README.md`, `docs/*.md`, `RFC/*.md`, and member repositories `<repos_dir>/<name>/**/*.md`) are inspected and indexed directly in place.
-  - Zero duplicate file copies and zero symbolic links (`concepts/` and `repos/` subdirectories inside wiki are completely eradicated).
-  - Intake sources are fully configurable via `sources` under `plugins.llm-wiki`.
-- **`.rnex/wiki/index.md` B-Tree Root Router**:
-  - Compact, strictly bounded routing table (maximum allowed lines, zero YAML frontmatter) organizing domain shards with key ranges and entry counts.
-- **`.rnex/wiki/repo-nexus*.md` & `.rnex/wiki/repos-*.md` Flat Leaf Shards**:
-  - Lexicographically sorted domain leaf pages (`repo-nexus.md`, `repos-<member-repo>.md`, `repos-<member-repo>-<subscope>.md`). Automatically split into alphabetical sub-shards (e.g. `repo-nexus-a-m.md`, `repo-nexus-n-z.md`) when exceeding capacity thresholds.
-- **`.rnex/wiki/log.md` Operational Audit Trail**:
-  - Shared append-only log recording granular document lifecycle events (`created`, `updated`, `deleted`) and operational summaries when sources are ingested or repaired. Automatically trimmed to `log_max_records` (default: 1000) by cutting oldest entries first. Inspected with `tail -n 20 .rnex/wiki/log.md`.
+  - Unmodified source documents configured via `plugins.llm-wiki.sources` are inspected and indexed directly in place.
+  - Zero duplicate file copies and zero symbolic links.
+  - Intake sources are fully configurable via `plugins.llm-wiki.sources`.
+- **`<wiki_dir>/<index_file>` B-Tree Root Router**:
+  - Compact, strictly bounded routing table (maximum allowed lines configured via `plugins.llm-wiki.btree_root_max_lines`, zero YAML frontmatter) organizing domain shards with key ranges and entry counts.
+- **`<wiki_dir>/repo-nexus*.md` & `<wiki_dir>/repos-*.md` Flat Leaf Shards**:
+  - Lexicographically sorted domain leaf pages (`repo-nexus.md`, `repos-<member-repo>.md`, `repos-<member-repo>-<subscope>.md`). Automatically split into alphabetical sub-shards (e.g. `repo-nexus-a-m.md`, `repo-nexus-n-z.md`) when exceeding `plugins.llm-wiki.btree_shard_max_entries`.
+- **`<wiki_dir>/<log_file>` Operational Audit Trail**:
+  - Shared append-only log recording granular document lifecycle events (`created`, `updated`, `deleted`) and operational summaries when sources are ingested or repaired. Automatically trimmed to `plugins.llm-wiki.log_max_records` (default: 1000) by cutting oldest entries first. Inspected with `tail -n 20 <wiki_dir>/<log_file>`.
 
 ### 4. Standardized Agent Workflows
 - **`ingest.md` (Ingestion Protocol)**:
-  - Scans workspace documentation and indexes missing sources in place without touching already-indexed entries.
-  - Rebalances flat B-Tree leaf shards directly in `.rnex/wiki/`, compiles `.rnex/wiki/index.md`, and updates `.rnex/wiki/log.md` when new sources are added.
+  - Scans workspace documentation configured under `plugins.llm-wiki.sources` and indexes missing sources in place without touching already-indexed entries.
+  - Rebalances flat B-Tree leaf shards directly in `<wiki_dir>/`, compiles `<wiki_dir>/<index_file>`, and updates `<wiki_dir>/<log_file>` when new sources are added.
 - **`lint.md` (Integrity Audit Protocol)**:
   - Standalone structural and reference audit without running ingestion or mutating source files.
   - Auto-heals directory structures, links orphan shards, prunes dead references, and re-sorts catalog entries in `LC_ALL=C` order.
-  - Purges deprecated legacy files and subdirectories.
-  - Enforces zero symbolic links across the `.rnex/wiki/` directory.
-  - Enforces the maximum allowed lines in root `.rnex/wiki/index.md`.
-  - Conditional audit logging: mutates `log.md` only when repairs are made; zero changes on clean runs.
+  - Enforces zero symbolic links across the `<wiki_dir>/` directory.
+  - Enforces the maximum allowed lines in `<wiki_dir>/<index_file>`.
+  - Conditional audit logging: mutates `<log_file>` only when repairs are made; zero changes on clean runs.
 
 ---
 
@@ -198,24 +197,12 @@ rnex plugin llm-wiki lint --quiet
 
 ---
 
-### Automated Ingestion via Workspace Lifecycle Hooks
-
-Core `rnex sync` is completely decoupled from plugin ingestion. To automatically run ingestion whenever `rnex sync` is executed, configure declarative `rnex_hooks.after_sync` in `rnex.yaml`:
-
-```yaml
-rnex_hooks:
-  after_sync:
-    - "rnex plugin llm-wiki ingest"
-```
-
----
-
 ## Retrieval Protocol: How AI Agents Query the Wiki
 
 Autonomous AI coding agents navigate the wiki using a deterministic 3-step retrieval protocol without needing vector embeddings or external MCP services:
 
-1. **Step 1 — Root Read**: Read `.rnex/wiki/index.md` ($\le 80$ lines) to locate the target shard file (`repo-nexus*.md` or `repos-<member>*.md`).
-2. **Step 2 — Leaf Shard Read**: Read the target shard directly in `.rnex/wiki/` to find the exact source file path and summary.
+1. **Step 1 — Root Read**: Read `<wiki_dir>/<index_file>` ($\le$ `btree_root_max_lines` lines) to locate the target shard file (`repo-nexus*.md` or `repos-<member>*.md`).
+2. **Step 2 — Leaf Shard Read**: Read the target shard directly in `<wiki_dir>/` to find the exact source file path and summary.
 3. **Step 3 — In-Place Access**: Read the authoritative source file directly where it resides in the workspace. Cross-references and backlinks are discovered natively using standard workspace search tools (`grep`, `ripgrep`).
 
 ---
@@ -241,22 +228,22 @@ When `llm-wiki` is enabled, it maintains:
 
 ```text
 my-workspace/
-├── docs/                            # Workspace documentation
+├── <source_dir>/                    # Configured intake source directory (via plugins.llm-wiki.sources)
 │   └── architecture.md
-├── repos/                           # Member repositories (inspected in-place)
+├── <repos_dir>/                     # Member repositories (configured via repos_dir, inspected in-place)
 │   └── <member-repo>/
 │       └── README.md
+├── <wiki_dir>/                      # Configured wiki directory (via plugins.llm-wiki.wiki_dir, default: .rnex/wiki)
+│   ├── <index_file>                 # B-Tree Root Router (default: index.md)
+│   ├── <log_file>                   # Chronological audit history (default: log.md)
+│   ├── repo-nexus.md                # Nexus repo shard (or repo-nexus-a-m.md, etc.)
+│   └── repos-<member-repo>.md       # Member repo shard (e.g. repos-backend-apps.md)
 ├── .rnex/
-│   ├── wiki/                        # Default wiki directory (configurable via wiki_dir)
-│   │   ├── index.md                 # B-Tree Root Router (<= 80 lines)
-│   │   ├── log.md                   # Chronological audit history
-│   │   ├── repo-nexus.md            # Nexus repo shard (or repo-nexus-a-m.md, etc.)
-│   │   └── repos-<member-repo>.md   # Member repo shard (e.g. repos-backend-apps.md)
 │   └── plugins/
 │       └── llm-wiki/
+│           ├── ai-instructions.md
 │           ├── instructions/
-│           │   ├── rnex-wiki-architecture.md
-│           │   └── rnex-scaffolding-meta-prompt.md
+│           │   └── rnex-wiki-architecture.md
 │           ├── rules/
 │           │   └── behavioral.md
 │           ├── skills/
@@ -282,9 +269,9 @@ The `llm-wiki` plugin encapsulates its agentic skills in `.rnex/plugins/llm-wiki
 - `ingest.md`
 - `lint.md`
 
-During `rnex sync`, its `after_sync.sh` lifecycle hook automatically registers zero-logic User Skill pointers (`rnex-llm-wiki-ingest` and `rnex-llm-wiki-lint`) across all enabled AI provider directories (`.cursor/rules/`, `.claude/skills/`, `.agents/skills/`, `.codex/skills/`, `.github/skills/`, `.windsurf/rules/`).
+During `rnex sync`, its `after_sync.sh` lifecycle hook automatically registers zero-logic User Skill pointers (`rnex-llm-wiki-ingest` and `rnex-llm-wiki-lint`) across the configured `<skill_dir>` of all enabled AI provider plugins.
 
-When running `rnex plugin disable llm-wiki`, its lifecycle hook automatically unregisters the User Skills from all provider directories, while keeping user data in `.rnex/wiki/` (or custom `wiki_dir`) intact.
+When running `rnex plugin disable llm-wiki`, its lifecycle hook automatically unregisters the User Skills from all active provider skill directories, while keeping user data in `plugins.llm-wiki.wiki_dir` and `plugins.llm-wiki.sources` intact.
 
 ---
 
@@ -296,4 +283,4 @@ rnex plugin disable llm-wiki
 
 When disabled:
 - Scoped assets under `.rnex/plugins/llm-wiki/` are cleanly removed.
-- **Your data in `.rnex/wiki/` (or custom `wiki_dir`) and `./docs/` is preserved 100% intact.** Repo Nexus never deletes user-generated knowledge bases upon plugin disablement.
+- **Your data in the configured `plugins.llm-wiki.wiki_dir` and `plugins.llm-wiki.sources` paths is preserved 100% intact.** Repo Nexus never deletes user-generated knowledge bases upon plugin disablement.

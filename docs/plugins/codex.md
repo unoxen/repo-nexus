@@ -7,7 +7,7 @@ description: Integrate OpenAI Codex CLI and assistants with Repo Nexus, generati
 
 The **`codex`** plugin integrates OpenAI Codex CLI (`codex`) and environments into a Repo Nexus Virtual Meta-Repo.
 
-All AI assistants in Repo Nexus share `AGENTS.md` at the workspace root as the single universal source of truth for routing. When enabled, the `codex` plugin generates zero-logic User Skill pointers into `.codex/skills/` (e.g. `rnex-clone-sync/SKILL.md`, `rnex-batch-exec/SKILL.md`, `rnex-llm-wiki-ingest/SKILL.md`).
+All AI assistants in Repo Nexus share `AGENTS.md` at the workspace root as the single universal source of truth for routing. When enabled, the `codex` plugin generates zero-logic User Skill pointers into `.codex/skills/` (e.g. `rnex-clone-sync/SKILL.md`, `rnex-batch-exec/SKILL.md`, `rnex-<plugin>-<skill>/SKILL.md`).
 
 Operational skills, rules, and subagents remain cleanly encapsulated within `.rnex/skills/` and active plugin directories (`.rnex/plugins/<plugin-name>/`).
 
@@ -63,7 +63,6 @@ Configure options under `plugins.codex` in `rnex.yaml` or `.local.rnex.yaml`:
 plugins:
   codex:
     skills: true         # Generate user skills in .codex/skills/ (default: true)
-    instructions: true   # Maintain routing instructions in CODEX.md (default: true)
     hooks:               # Strictly opt-in AI lifecycle hooks
       SessionStart:
         - "rnex sync --quiet"
@@ -73,7 +72,6 @@ plugins:
 | Option | Type | Default | Description |
 |:---|:---|:---|:---|
 | `skills` | boolean | `true` | Generate user skill pointers in `.codex/skills/rnex-*/SKILL.md`. |
-| `instructions` | boolean | `true` | Maintain routing directive in `CODEX.md`. |
 | `hooks` | map | *(none)* | Strictly opt-in lifecycle hooks projected into `.codex/hooks.json` (e.g. `SessionStart: ["rnex sync --quiet"]`). Cleanly removed when unconfigured. |
 | `enabled` | boolean | `true` | Enable or disable the plugin. Overridable in `.local.rnex.yaml`. |
 
@@ -81,7 +79,7 @@ plugins:
 
 ## Generated Directory Structure
 
-When `codex` is enabled with functional plugins like `llm-wiki`, it generates:
+When `codex` is enabled alongside any functional plugin (`<plugin>`), it generates:
 
 ```text
 my-workspace/
@@ -95,14 +93,12 @@ my-workspace/
 │       │   └── SKILL.md
 │       ├── rnex-workspace-status/
 │       │   └── SKILL.md
-│       ├── rnex-llm-wiki-ingest/
-│       │   └── SKILL.md
-│       └── rnex-llm-wiki-lint/
+│       └── rnex-<plugin>-<skill>/
 │           └── SKILL.md
 ├── .rnex/
 │   ├── skills/                        # Core workspace agentic skills
 │   └── plugins/
-│       └── llm-wiki/              # Scoped plugin skills and rules
+│       └── <plugin>/                  # Scoped plugin skills and rules
 └── rnex.yaml
 ```
 

@@ -22,7 +22,7 @@ git -C "$TEST_HOOKS_WS" init -q
 # Initialize workspace
 (cd "$TEST_HOOKS_WS" && ./rnex init -y >/dev/null)
 grep -q "git:" "$TEST_HOOKS_WS/rnex.yaml" || { fail "init -y did not record git: in rnex.yaml"; exit 1; }
-grep -q "rnex_hooks:" "$TEST_HOOKS_WS/rnex.yaml" || { fail "init -y did not record rnex_hooks: in rnex.yaml"; exit 1; }
+grep -q "rnex-hooks:" "$TEST_HOOKS_WS/rnex.yaml" || { fail "init -y did not record rnex-hooks: in rnex.yaml"; exit 1; }
 grep -q "post-merge:" "$TEST_HOOKS_WS/rnex.yaml" || { fail "init -y did not record git.hooks.post-merge in rnex.yaml"; exit 1; }
 ! grep -q "git_hooks:" "$TEST_HOOKS_WS/rnex.yaml" || { fail "legacy git_hooks was written to rnex.yaml"; exit 1; }
 
@@ -165,7 +165,7 @@ _inode_after="$(ls -i "$TEST_WRAPPER_WS/.git/hooks/post-merge" | awk '{print $1}
 pass
 
 # --------------------------------------------------------------------------
-run_test "rnex_hooks lifecycle command execution across workspace events"
+run_test "rnex-hooks lifecycle command execution across workspace events"
 TEST_RNEX_HOOKS_WS="$TEST_TMP/rnex-hooks-lifecycle-ws"
 mkdir -p "$TEST_RNEX_HOOKS_WS"
 cp "$CLI" "$TEST_RNEX_HOOKS_WS/rnex"
@@ -193,7 +193,7 @@ version: 1.0.0
 git:
   hooks:
     post-merge: []
-rnex_hooks:
+rnex-hooks:
   before_sync:
     - "echo 'BEFORE_SYNC' >> hook_log"
   after_sync:
@@ -280,7 +280,7 @@ grep -q "AFTER_REPO_REMOVE" "$TEST_RNEX_HOOKS_WS/hook_log" || { fail "after_repo
 pass
 
 # --------------------------------------------------------------------------
-run_test "Two-level rnex_hooks config (.local.rnex.yaml priority & hyphen/underscore keys)"
+run_test "Two-level rnex-hooks config (.local.rnex.yaml priority & hyphen/underscore keys)"
 TEST_RNEX_LOCAL_WS="$TEST_TMP/rnex-hooks-local-ws"
 mkdir -p "$TEST_RNEX_LOCAL_WS"
 cp "$CLI" "$TEST_RNEX_LOCAL_WS/rnex"
@@ -297,7 +297,7 @@ version: 1.0.0
 git:
   hooks:
     post-merge: []
-rnex_hooks:
+rnex-hooks:
   before-sync:
     - "exit 42"
   after_sync:
@@ -307,7 +307,7 @@ plugins:
 BASE_YAML
 
 cat <<'LOCAL_YAML' > "$TEST_RNEX_LOCAL_WS/.local.rnex.yaml"
-rnex_hooks:
+rnex-hooks:
   before_sync: []
   after-sync:
     - "echo 'LOCAL_OVERRIDE_RAN' > override_test_marker"
@@ -337,7 +337,7 @@ version: 1.0.0
 git:
   hooks:
     post-merge: []
-rnex_hooks:
+rnex-hooks:
   before_sync:
     - "exit 37"
 repos:
@@ -350,7 +350,7 @@ _block_rc=0
 pass
 
 # --------------------------------------------------------------------------
-run_test "Re-entrant loop guard in rnex_hooks prevents infinite recursion"
+run_test "Re-entrant loop guard in rnex-hooks prevents infinite recursion"
 TEST_RNEX_RECURSE_WS="$TEST_TMP/rnex-hooks-recurse-ws"
 mkdir -p "$TEST_RNEX_RECURSE_WS"
 cp "$CLI" "$TEST_RNEX_RECURSE_WS/rnex"
@@ -367,7 +367,7 @@ version: 1.0.0
 git:
   hooks:
     post-merge: []
-rnex_hooks:
+rnex-hooks:
   after_sync:
     - "echo 'REENTRANT_RUN' >> reentrant_log"
     - "./rnex sync --quiet"
@@ -575,7 +575,7 @@ grep -q "USER_HOOK_EXECUTED" "$TEST_USER_HOOKS_WS/.git/hooks/pre-commit" || {
 pass
 
 # --------------------------------------------------------------------------
-run_test "Lifecycle hooks: after_clone with bare 'rnex plugin llm-wiki ingest' and top-level / hooks: blocks"
+run_test "Lifecycle hooks: after_clone with bare 'rnex plugin llm-wiki ingest'"
 TEST_AFTER_CLONE_WS="$TEST_TMP/after-clone-hook-ws"
 mkdir -p "$TEST_AFTER_CLONE_WS"
 cp "$CLI" "$TEST_AFTER_CLONE_WS/rnex"
@@ -587,17 +587,15 @@ git -C "$TEST_AFTER_CLONE_WS" init -q
 
 "$TEST_AFTER_CLONE_WS/rnex" init -y --llm-wiki "$TEST_AFTER_CLONE_WS" >/dev/null
 
-# Top-level after_clone configuration (even when rnex_hooks: after_clone: [] also exists)
 cat <<AFTER_CLONE_YAML > "$TEST_AFTER_CLONE_WS/rnex.yaml"
 version: 1.0.0
 git:
   hooks:
     post-merge: []
-rnex_hooks:
-  after_clone: []
-after_clone:
-  - "rnex plugin llm-wiki ingest --quiet"
-  - "echo 'AFTER_CLONE_INGEST_RAN' >> clone_hook_marker"
+rnex-hooks:
+  after_clone:
+    - "rnex plugin llm-wiki ingest --quiet"
+    - "echo 'AFTER_CLONE_INGEST_RAN' >> clone_hook_marker"
 plugins:
   llm-wiki:
 repos:
@@ -643,7 +641,7 @@ version: 1.0.0
 git:
   hooks:
     post-merge: []
-rnex_hooks:
+rnex-hooks:
   before_sync:
     - "echo 'BEFORE_SYNC_FIRED' >> ignore_hook_log"
   after_sync:

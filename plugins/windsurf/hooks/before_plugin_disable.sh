@@ -1,20 +1,17 @@
 #!/bin/sh
 # shellcheck shell=sh
 # ============================================================================
-# plugins/windsurf/hooks/before_plugin_disable.sh — Windsurf cleanup hook
+# File: plugins/windsurf/hooks/before_plugin_disable.sh
+# Architectural Layer: Plugin Lifecycle Hook (before_plugin_disable)
+# Single Responsibility: Clean up managed Windsurf IDE artifacts on disable.
 # ============================================================================
 set -e
 _root="${RNEX_ROOT:-${NEXUS_DIR:-$PWD}}"
-if ! command -v clean_provider_user_skills >/dev/null 2>&1; then
+if ! command -v rnex_sdk_disable_provider >/dev/null 2>&1; then
   for _env_cand in "$_root/.rnex/bin/rnex-env.sh" "$_root/.rnex/rnex-env.sh" "${RNEX_LIB_DIR:-}/sdk.sh" "$_root/lib/sdk.sh"; do
     # shellcheck source=/dev/null
     [ -n "$_env_cand" ] && [ -f "$_env_cand" ] && { . "$_env_cand"; break; }
   done
 fi
 
-clean_provider_user_skills "$_root/.windsurf/rules"
-rnex_sdk_clean_provider_hooks "$_root" "windsurf"
-clean_rnex_instructions "$_root/.windsurfrules"
-rm -rf "$_root/.windsurf/prompts" 2>/dev/null || true
-rmdir "$_root/.windsurf/rules" 2>/dev/null || true
-rmdir "$_root/.windsurf" 2>/dev/null || true
+rnex_sdk_disable_provider "$_root" "windsurf"

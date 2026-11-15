@@ -6,14 +6,15 @@
 # Architectural Layer: Domain Helpers (helpers/)
 # Single Responsibility: Validate and auto-heal existing Markdown files inside
 # .rnex/wiki/ (root router bounds, orphan shards, dead workspace references,
-# deterministic sorting, relative Markdown links, [[wikilinks]], symlink absence)
-# WITHOUT reading or checking rnex config `sources`.
+# deterministic sorting, misplaced entries, relative Markdown links,
+# [[wikilinks]], symlink absence) WITHOUT reading or checking `sources`.
 #
 # Design Patterns & Principles:
 #   - Single Responsibility Principle (SRP): Confined strictly to inspecting,
 #     validating, and auto-healing existing wiki documentation. Zero ingestion.
-#   - Auto-Healing & Self-Repair: Heals out-of-order catalog entries, links orphan
-#     shards into index.md, prunes dead document references, and removes symlinks.
+#   - Don't Repeat Yourself (DRY): Reuses RNEX_WIKI_AWK_LIB,
+#     heal_entry_title_link_depth, reroute_wiki_entry_line, and
+#     write_btree_shard_entries from utils.sh and btree_helpers.sh.
 #   - Conditional Mutation Logging: Appends an audit entry to log.md ONLY when
 #     actual repairs/modifications are made. Clean runs never mutate log.md.
 #
@@ -39,17 +40,22 @@ fi
 # Summary: Performs structural validation and auto-healing across all existing
 #          Markdown documents inside $RNEX_WIKI_ROOT:
 #            1. Verifies wiki directory exists.
-#            2. Auto-heals legacy artifacts and purges prohibited symlinks.
-#            3. Prunes dead workspace document references (deleted source files).
-#            4. Auto-heals deterministic LC_ALL=C sort order of catalog entries.
+#            2. Removes prohibited symbolic links.
+#            3. Prunes dead workspace document references (deleted source files)
+#               and auto-heals link targets/depths.
+#            4. Auto-heals deterministic LC_ALL=C sort order, re-routes
+#               misplaced entries, consolidates gapped sub-shards, and splits
+#               oversized shards.
 #            5. Rebuilds root router index.md (linking orphan shards, unlinking
 #               deleted shards, updating entry counts).
-#            6. Enforces index.md line count <= RNEX_WIKI_BTREE_MAX_ROOT_LINES.
+#            6. Enforces index.md line count <= RNEX_WIKI_BTREE_MAX_ROOT_LINES
+#               and shard entry count <= RNEX_WIKI_BTREE_SHARD_MAX_ENTRIES.
 #            7. Validates relative Markdown links and [[wikilinks]].
 #            8. Mutates log.md ONLY if repairs were applied (zero changes on clean runs).
 # @param $1: strict (0 or 1, default 0).
 # @param $2: quiet  (0 or 1, default 0).
 # @returns: 0 if valid or healed; 1 if any unresolvable failure or rule fails.
+# @sideEffects: Auto-heals wiki shards, index.md, and appends to log.md when repairs occur.
 # -----------------------------------------------------------------------------
 lint_existing_wiki_directory() {
     _strict="${1:-0}"
@@ -72,8 +78,7 @@ lint_existing_wiki_directory() {
         return 1
     fi
 
-    # 2. Auto-heal legacy artifacts and remove prohibited symlinks
-    purge_legacy_wiki_artifacts
+    # 2. Remove prohibited symbolic links
     _symlinks="$(find "$RNEX_WIKI_ROOT" -type l -print 2>/dev/null || true)"
     if [ -n "$_symlinks" ]; then
         find "$RNEX_WIKI_ROOT" -type l -exec rm -f {} + 2>/dev/null || true
@@ -98,7 +103,7 @@ lint_existing_wiki_directory() {
         while IFS= read -r _line || [ -n "$_line" ]; do
             case "$_line" in
                 '- **'*)
-                    _doc_rel="$(printf '%s\n' "$_line" | LC_ALL=C awk 'match($0, /\*\* \(`[^`]+`\)/) { print substr($0, RSTART + 5, RLENGTH - 7) }')"
+                    _doc_rel="$(extract_entry_rel_path "$_line")"
                     if [ -z "$_doc_rel" ]; then
                         _shard_pruned=1
                         _fixes_count=$((_fixes_count + 1))
@@ -112,47 +117,40 @@ lint_existing_wiki_directory() {
                         continue
                     fi
 
-                    # Auto-heal broken links inside catalog entry summary if source document exists
-                    if [ -f "${RNEX_WORKSPACE_ROOT}/${_doc_rel}" ]; then
-                        # 4a-1. Auto-heal entry title link target depth if it does not match RNEX_WIKI_UP_PREFIX
-                        _expected_target="${RNEX_WIKI_UP_PREFIX}${_doc_rel}"
-                        _curr_target="$(printf '%s\n' "$_line" | sed -n 's/^- \*\*\[[^]]*\](\([^)]*\)).*/\1/p')"
-                        if [ -n "$_curr_target" ] && [ "$_curr_target" != "$_expected_target" ]; then
-                            _title_text="$(printf '%s\n' "$_line" | sed -n 's/^- \*\*\[\([^]]*\)\].*/\1/p')"
-                            _rest="${_line#*\*\* (\`"${_doc_rel}"\`)}"
-                            _line="- **[${_title_text}](${_expected_target})** (\`${_doc_rel}\`)${_rest}"
-                            _shard_pruned=1
-                            _fixes_count=$((_fixes_count + 1))
-                            append_wiki_log_entry "lint" "updated: \`${_doc_rel}\` in \`${_base_md}\` (auto-healed entry link depth)"
-                        fi
-
-                        # 4a-2. Auto-heal links inside catalog entry summary
-                        _marker="** (\`${_doc_rel}\`) — "
-                        case "$_line" in
-                            *"$_marker"*)
-                                _prefix="${_line%%"$_marker"*}** (\`${_doc_rel}\`)"
-                                _sum_part="${_line#*"$_marker"}"
-                                case "$_sum_part" in
-                                    *']('*')'*|*'[['*']]'*)
-                                        _healed_sum="$(rewrite_markdown_links_in_summary \
-                                            "$_sum_part" \
-                                            "$_doc_rel" \
-                                            "$RNEX_WORKSPACE_ROOT" \
-                                            "${RNEX_WIKI_UP_PREFIX:-../../}" \
-                                            "${RNEX_WIKI_RELATIVE_LINKS:-rewrite}" \
-                                            "1")"
-                                        _healed_sum="$(sanitize_markdown_summary "$_healed_sum")"
-                                        if [ "$_healed_sum" != "$_sum_part" ]; then
-                                            _line="${_prefix} — ${_healed_sum}"
-                                            _shard_pruned=1
-                                            _fixes_count=$((_fixes_count + 1))
-                                            append_wiki_log_entry "lint" "updated: \`${_doc_rel}\` in \`${_base_md}\` (auto-healed broken link targets)"
-                                        fi
-                                        ;;
-                                esac
-                                ;;
-                        esac
+                    # 4a-1. Auto-heal entry title link target depth if it drifted from RNEX_WIKI_UP_PREFIX
+                    if _healed_line="$(heal_entry_title_link_depth "$_line" "$_doc_rel")"; then
+                        _line="$_healed_line"
+                        _shard_pruned=1
+                        _fixes_count=$((_fixes_count + 1))
+                        append_wiki_log_entry "lint" "updated: \`${_doc_rel}\` in \`${_base_md}\` (auto-healed entry link depth)"
                     fi
+
+                    # 4a-2. Auto-heal links inside catalog entry summary
+                    _marker="** (\`${_doc_rel}\`) — "
+                    case "$_line" in
+                        *"$_marker"*)
+                            _prefix="${_line%%"$_marker"*}** (\`${_doc_rel}\`)"
+                            _sum_part="${_line#*"$_marker"}"
+                            case "$_sum_part" in
+                                *']('*')'*|*'[['*']]'*)
+                                    _healed_sum="$(rewrite_markdown_links_in_summary \
+                                        "$_sum_part" \
+                                        "$_doc_rel" \
+                                        "$RNEX_WORKSPACE_ROOT" \
+                                        "${RNEX_WIKI_UP_PREFIX:-../../}" \
+                                        "${RNEX_WIKI_RELATIVE_LINKS:-rewrite}" \
+                                        "1")"
+                                    _healed_sum="$(sanitize_markdown_summary "$_healed_sum")"
+                                    if [ "$_healed_sum" != "$_sum_part" ]; then
+                                        _line="${_prefix} — ${_healed_sum}"
+                                        _shard_pruned=1
+                                        _fixes_count=$((_fixes_count + 1))
+                                        append_wiki_log_entry "lint" "updated: \`${_doc_rel}\` in \`${_base_md}\` (auto-healed broken link targets)"
+                                    fi
+                                    ;;
+                            esac
+                            ;;
+                    esac
                     ;;
             esac
             printf '%s\n' "$_line" >> "$_shard_tmp"
@@ -170,7 +168,7 @@ lint_existing_wiki_directory() {
         LC_ALL=C grep '^- \*\*' "$_wiki_md" > "$_entries_tmp" 2>/dev/null || : > "$_entries_tmp"
         if [ -s "$_entries_tmp" ]; then
             if ! LC_ALL=C sort -c "$_entries_tmp" 2>/dev/null; then
-                LC_ALL=C grep -v '^- \*\*' "$_wiki_md" > "$_hdr_tmp"
+                LC_ALL=C grep -v '^- \*\*' "$_wiki_md" > "$_hdr_tmp" 2>/dev/null || : > "$_hdr_tmp"
                 cat "$_hdr_tmp" > "$_wiki_md"
                 LC_ALL=C sort -u "$_entries_tmp" >> "$_wiki_md"
                 rm -f "$_hdr_tmp"
@@ -181,71 +179,7 @@ lint_existing_wiki_directory() {
         rm -f "$_entries_tmp"
     done
 
-    # 4b-2. Detect and dissolve any legacy numeric shards (e.g. *-1.md, *-2.md, *-aa-1.md)
-    for _num_shard in "${RNEX_WIKI_ROOT}"/*-[0-9]*.md; do
-        [ -f "$_num_shard" ] || continue
-        _num_bname="$(basename "$_num_shard")"
-        case "$_num_bname" in
-            index.md|log.md) continue ;;
-        esac
-        _num_sid="${_num_bname%.md}"
-        _num_base="$(derive_base_id_for_shard "$_num_sid")"
-        [ "$_num_sid" != "$_num_base" ] || continue
-
-        _raw_entries="${_num_shard}.raw.$$"
-        LC_ALL=C grep '^- \*\*' "$_num_shard" > "$_raw_entries" 2>/dev/null || : > "$_raw_entries"
-        rm -f "$_num_shard"
-        append_wiki_log_entry "lint" "deleted: \`${_num_bname}\` (purged non-semantic numeric shard)"
-        _fixes_count=$((_fixes_count + 1))
-
-        if [ -s "$_raw_entries" ]; then
-            while IFS= read -r _entry_line <&6; do
-                [ -n "$_entry_line" ] || continue
-                _rel_path="$(printf '%s\n' "$_entry_line" | LC_ALL=C awk 'match($0, /\*\* \(`[^`]+`\)/) { print substr($0, RSTART + 5, RLENGTH - 7) }')"
-                _title="$(printf '%s' "$_entry_line" | sed -n 's/^- \*\*\[\([^]]*\)\].*/\1/p')"
-                [ -n "$_title" ] || _title="$(printf '%s' "$_entry_line" | sed -n 's/^- \*\*\([^*]*\)\*\*.*/\1/p')"
-                [ -n "$_title" ] || _title="untitled"
-
-                if [ -n "$_rel_path" ]; then
-                    _shard_id="$(derive_shard_id_for_workspace_path "$_rel_path")"
-                else
-                    _shard_id="$_num_base"
-                fi
-
-                # Auto-heal entry relative link depth if source file exists
-                if [ -n "$_rel_path" ] && [ -f "${RNEX_WORKSPACE_ROOT}/${_rel_path}" ]; then
-                    _expected_target="${RNEX_WIKI_UP_PREFIX}${_rel_path}"
-                    _curr_target="$(printf '%s\n' "$_entry_line" | sed -n 's/^- \*\*\[[^]]*\](\([^)]*\)).*/\1/p')"
-                    if [ -n "$_curr_target" ] && [ "$_curr_target" != "$_expected_target" ]; then
-                        _rest="${_entry_line#*\*\* (\`"${_rel_path}"\`)}"
-                        _entry_line="- **[${_title}](${_expected_target})** (\`${_rel_path}\`)${_rest}"
-                    fi
-                fi
-
-                _target_shard_file="$(resolve_target_btree_shard_file "$_shard_id" "$_title" "$_rel_path")"
-                _target_shard_id="$(basename "$_target_shard_file" .md)"
-
-                _t_entries="${_target_shard_file}.entries.$$"
-                if [ -f "$_target_shard_file" ]; then
-                    LC_ALL=C grep '^- \*\*' "$_target_shard_file" > "$_t_entries" 2>/dev/null || : > "$_t_entries"
-                else
-                    : > "$_t_entries"
-                fi
-                printf '%s\n' "$_entry_line" >> "$_t_entries"
-                atomic_sort_unique_file "$_t_entries"
-
-                _t_tmp="${_target_shard_file}.tmp.$$"
-                printf '# Wiki Index Shard: %s\n<!-- base: %s -->\n\n' "$_target_shard_id" "$_shard_id" > "$_t_tmp"
-                cat "$_t_entries" >> "$_t_tmp"
-                rm -f "$_t_entries"
-                mv "$_t_tmp" "$_target_shard_file"
-                append_wiki_log_entry "lint" "updated: \`${_target_shard_id}.md\` (re-routed entry from purged numeric shard)"
-            done 6< "$_raw_entries"
-        fi
-        rm -f "$_raw_entries"
-    done
-
-    # 4b-3. Detect and re-route misplaced entries in existing leaf shards
+    # 4b-2. Detect and re-route misplaced entries or invalid sub-shards in leaf shards
     for _wiki_md in "${RNEX_WIKI_ROOT}"/repo-nexus*.md "${RNEX_WIKI_ROOT}"/repos-*.md; do
         [ -f "$_wiki_md" ] || continue
         _base_md="$(basename "$_wiki_md")"
@@ -316,122 +250,44 @@ lint_existing_wiki_directory() {
             -v ep="$_ep" \
             -v k="${#_sp}" \
             -v val_file="$_valid_entries" \
-            -v mis_file="$_misplaced_entries" '
-            function normalize_slug(s,   r) {
-                r = tolower(s)
-                gsub(/[^a-z0-9._-]+/, "-", r)
-                gsub(/--+/, "-", r)
-                gsub(/^-+|-+$/, "", r)
-                return (r != "") ? r : "unknown"
-            }
-            function expected_base_shard(rel_path, rdir,   rest, n, parts) {
-                if (rel_path == "") return ""
-                sub(/\/$/, "", rdir)
-                if (index(rel_path, rdir "/") == 1) {
-                    rest = substr(rel_path, length(rdir) + 2)
-                    n = split(rest, parts, "/")
-                    if (n >= 3) {
-                        return "repos-" normalize_slug(parts[1]) "-" normalize_slug(parts[2])
-                    } else {
-                        return "repos-" normalize_slug(parts[1])
-                    }
-                } else if (index(rel_path, "/") > 0) {
-                    n = split(rel_path, parts, "/")
-                    return "repo-nexus-" normalize_slug(parts[1])
-                } else {
-                    return "repo-nexus"
-                }
-            }
-            function clean_alpha_key(str,   res, i, c, d) {
-                res = ""
-                for (i = 1; i <= length(str); i++) {
-                    c = substr(str, i, 1)
-                    if (c >= "a" && c <= "z") {
-                        res = res c
-                    } else if (c >= "A" && c <= "Z") {
-                        res = res tolower(c)
-                    } else if (c >= "0" && c <= "9") {
-                        d = c + 0
-                        if (d == 0) res = res "zero"
-                        else if (d == 1) res = res "one"
-                        else if (d == 2) res = res "two"
-                        else if (d == 3) res = res "three"
-                        else if (d == 4) res = res "four"
-                        else if (d == 5) res = res "five"
-                        else if (d == 6) res = res "six"
-                        else if (d == 7) res = res "seven"
-                        else if (d == 8) res = res "eight"
-                        else if (d == 9) res = res "nine"
-                    }
-                }
-                return res
-            }
-            function get_title(line,   m) {
-                if (match(line, /^- \*\*\[[^]]+\]/)) {
-                    m = substr(line, 6)
-                    sub(/\].*$/, "", m)
-                    return m
-                } else if (match(line, /^- \*\*[^*]+\*\*/)) {
-                    m = substr(line, 5)
-                    sub(/\*\*.*$/, "", m)
-                    return m
-                }
-                return ""
-            }
-            function get_rel_path(line,   m) {
-                if (match(line, /\*\* \(`[^`]+`\)/)) {
-                    m = substr(line, RSTART + 5, RLENGTH - 7)
-                    return m
-                } else if (match(line, /\(`[^`]+`\)/)) {
-                    m = substr(line, RSTART + 2, RLENGTH - 4)
-                    return m
-                }
-                return ""
-            }
-            function get_path(line,   m) {
-                m = get_rel_path(line)
-                if (m != "") return m
-                if (match(line, /\]\([^)]+\)/)) {
-                    m = substr(line, RSTART + 2, RLENGTH - 3)
-                    return m
-                }
-                return ""
-            }
+            -v mis_file="$_misplaced_entries" "
+            ${RNEX_WIKI_AWK_LIB}
             /^- \*\*/ {
                 if (is_invalid_sub == 1) {
-                    print $0 >> mis_file
+                    print \$0 >> mis_file
                     next
                 }
-                p_rel = get_rel_path($0)
+                p_rel = get_rel_path(\$0)
                 exp_base = expected_base_shard(p_rel, repos_dir)
-                if (exp_base != "" && exp_base != base_id) {
-                    print $0 >> mis_file
+                if (exp_base != \"\" && exp_base != base_id) {
+                    print \$0 >> mis_file
                     next
                 }
                 if (is_sub == 1 && k > 0) {
-                    kt = clean_alpha_key(get_title($0))
-                    kp = clean_alpha_key(get_path($0))
-                    if (kt != "") t = kt kp
-                    else if (kp != "") t = kp
-                    else t = "untitled"
+                    kt = clean_alpha_key(get_title(\$0))
+                    kp = clean_alpha_key(get_path(\$0))
+                    if (kt != \"\") t = kt kp
+                    else if (kp != \"\") t = kp
+                    else t = \"untitled\"
 
                     pfx = substr(t, 1, k)
-                    while (length(pfx) < k) pfx = pfx "a"
-                    if ((sp == "a" && pfx < sp) || (pfx >= sp && (ep == "z" || pfx <= ep))) {
-                        print $0 >> val_file
+                    while (length(pfx) < k) pfx = pfx \"a\"
+                    if ((sp == \"a\" && pfx < sp) || (pfx >= sp && (ep == \"z\" || pfx <= ep))) {
+                        print \$0 >> val_file
                     } else {
-                        print $0 >> mis_file
+                        print \$0 >> mis_file
                     }
                 } else {
-                    print $0 >> val_file
+                    print \$0 >> val_file
                 }
             }
-        ' "$_wiki_md"
+        " "$_wiki_md"
 
-        if [ -s "$_misplaced_entries" ]; then
+        if [ -s "$_misplaced_entries" ] || [ "$_is_invalid_sub" -eq 1 ]; then
             _mis_count="$(LC_ALL=C grep -c '^- \*\*' "$_misplaced_entries" 2>/dev/null || true)"
+            [ -n "$_mis_count" ] || _mis_count=0
             _hdr_tmp="${_wiki_md}.hdr.$$"
-            LC_ALL=C grep -v '^- \*\*' "$_wiki_md" > "$_hdr_tmp"
+            LC_ALL=C grep -v '^- \*\*' "$_wiki_md" > "$_hdr_tmp" 2>/dev/null || : > "$_hdr_tmp"
             cat "$_hdr_tmp" > "$_wiki_md"
             cat "$_valid_entries" >> "$_wiki_md"
             rm -f "$_hdr_tmp"
@@ -446,51 +302,16 @@ lint_existing_wiki_directory() {
 
             while IFS= read -r _m_line <&7; do
                 [ -n "$_m_line" ] || continue
-                _rel_path="$(printf '%s\n' "$_m_line" | LC_ALL=C awk 'match($0, /\*\* \(`[^`]+`\)/) { print substr($0, RSTART + 5, RLENGTH - 7) }')"
-                _title="$(printf '%s' "$_m_line" | sed -n 's/^- \*\*\[\([^]]*\)\].*/\1/p')"
-                [ -n "$_title" ] || _title="$(printf '%s' "$_m_line" | sed -n 's/^- \*\*\([^*]*\)\*\*.*/\1/p')"
-                [ -n "$_title" ] || _title="untitled"
-
-                if [ -n "$_rel_path" ]; then
-                    _t_shard_id="$(derive_shard_id_for_workspace_path "$_rel_path")"
-                else
-                    _t_shard_id="$_base_id"
-                fi
-
-                # Auto-heal entry relative link depth if source file exists
-                if [ -n "$_rel_path" ] && [ -f "${RNEX_WORKSPACE_ROOT}/${_rel_path}" ]; then
-                    _expected_target="${RNEX_WIKI_UP_PREFIX}${_rel_path}"
-                    _curr_target="$(printf '%s\n' "$_m_line" | sed -n 's/^- \*\*\[[^]]*\](\([^)]*\)).*/\1/p')"
-                    if [ -n "$_curr_target" ] && [ "$_curr_target" != "$_expected_target" ]; then
-                        _rest="${_m_line#*\*\* (\`"${_rel_path}"\`)}"
-                        _m_line="- **[${_title}](${_expected_target})** (\`${_rel_path}\`)${_rest}"
-                    fi
-                fi
-
-                _target_shard_file="$(resolve_target_btree_shard_file "$_t_shard_id" "$_title" "$_rel_path")"
-                _target_shard_id="$(basename "$_target_shard_file" .md)"
-
-                _t_entries="${_target_shard_file}.entries.$$"
-                if [ -f "$_target_shard_file" ]; then
-                    LC_ALL=C grep '^- \*\*' "$_target_shard_file" > "$_t_entries" 2>/dev/null || : > "$_t_entries"
-                else
-                    : > "$_t_entries"
-                fi
-                printf '%s\n' "$_m_line" >> "$_t_entries"
-                atomic_sort_unique_file "$_t_entries"
-
-                _t_tmp="${_target_shard_file}.tmp.$$"
-                printf '# Wiki Index Shard: %s\n<!-- base: %s -->\n\n' "$_target_shard_id" "$_t_shard_id" > "$_t_tmp"
-                cat "$_t_entries" >> "$_t_tmp"
-                rm -f "$_t_entries"
-                mv "$_t_tmp" "$_target_shard_file"
+                _rerouted="$(reroute_wiki_entry_line "$_m_line" "$_base_id")"
+                _target_shard_id="${_rerouted%%|*}"
+                _title="${_rerouted#*|}"
                 append_wiki_log_entry "lint" "updated: \`${_target_shard_id}.md\` (re-routed misplaced entry \"${_title}\")"
             done 7< "$_misplaced_entries"
         fi
         rm -f "$_valid_entries" "$_misplaced_entries"
     done
 
-    # 4b-4. Consolidate gapped sub-shards back into their base shard whenever
+    # 4b-3. Consolidate gapped sub-shards back into their base shard whenever
     #       both a base shard file and its sub-shards exist simultaneously,
     #       allowing Step 4c to cleanly rebalance into gap-free B-Tree ranges.
     for _sub_cand in "${RNEX_WIKI_ROOT}"/repo-nexus*.md "${RNEX_WIKI_ROOT}"/repos-*.md; do
@@ -504,17 +325,10 @@ lint_existing_wiki_directory() {
         [ "$_sc_sid" != "$_sc_base" ] || continue
         _sc_base_file="${RNEX_WIKI_ROOT}/${_sc_base}.md"
         if [ -f "$_sc_base_file" ]; then
-            _mrg_entries="${_sc_base_file}.mrg.$$"
-            LC_ALL=C grep '^- \*\*' "$_sc_base_file" > "$_mrg_entries" 2>/dev/null || : > "$_mrg_entries"
-            LC_ALL=C grep '^- \*\*' "$_sub_cand" >> "$_mrg_entries" 2>/dev/null || true
-            atomic_sort_unique_file "$_mrg_entries"
-
-            _mrg_tmp="${_sc_base_file}.tmp.$$"
-            printf '# Wiki Index Shard: %s\n<!-- base: %s -->\n\n' "$_sc_base" "$_sc_base" > "$_mrg_tmp"
-            cat "$_mrg_entries" >> "$_mrg_tmp"
-            rm -f "$_mrg_entries"
-            mv "$_mrg_tmp" "$_sc_base_file"
-            rm -f "$_sub_cand"
+            _sub_entries="${_sub_cand}.entries.$$"
+            LC_ALL=C grep '^- \*\*' "$_sub_cand" > "$_sub_entries" 2>/dev/null || : > "$_sub_entries"
+            write_btree_shard_entries "$_sc_base_file" "$_sc_base" "$_sub_entries" "1"
+            rm -f "$_sub_entries" "$_sub_cand"
             _fixes_count=$((_fixes_count + 1))
             append_wiki_log_entry "lint" "deleted: \`${_sc_bname}\` (consolidated gapped sub-shard into \`${_sc_base}.md\`)"
         fi
@@ -629,21 +443,7 @@ lint_existing_wiki_directory() {
         fi
     done
 
-    # 6e. Verify zero non-semantic numeric shards (*-[0-9]*.md) exist
-    for _num_check in "${RNEX_WIKI_ROOT}"/*-[0-9]*.md; do
-        [ -f "$_num_check" ] || continue
-        _nc_bname="$(basename "$_num_check")"
-        case "$_nc_bname" in
-            index.md|log.md) continue ;;
-        esac
-        _nc_sid="${_nc_bname%.md}"
-        _nc_base="$(derive_base_id_for_shard "$_nc_sid")"
-        [ "$_nc_sid" != "$_nc_base" ] || continue
-        printf 'Lint Error [%s]: Prohibited non-semantic numeric shard found in wiki.\n' "$_nc_bname" >&2
-        _errors=$((_errors + 1))
-    done
-
-    # 7. In --strict mode or on fatal errors, fail
+    # 7. On fatal errors, fail
     if [ "$_errors" -gt 0 ]; then
         if [ "$_fixes_count" -gt 0 ]; then
             append_wiki_log_entry "lint" "Repaired ${_fixes_count} wiki issue(s) before encountering fatal error(s)."

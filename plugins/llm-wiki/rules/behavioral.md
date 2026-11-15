@@ -1,6 +1,6 @@
 # Coding Agent Behavioral Principles
 
-These rules define standing behavioral principles for AI coding assistants (Cursor, Claude Code, GitHub Copilot, Antigravity, Windsurf) working in this workspace.
+These rules define standing behavioral principles for AI coding assistants working in this workspace.
 
 ---
 
@@ -30,25 +30,22 @@ These rules define standing behavioral principles for AI coding assistants (Curs
 
 ## 2. Multi-Repo Context Engineering
 
-In a Repo Nexus workspace, independent repositories are organized into `./repos/<name>/` as autonomous Git repositories. Coding agents must follow these rules:
+In a Repo Nexus workspace, independent repositories are organized into `<repos_dir>/<name>/` (configured via `repos_dir`, default: `repos`) as autonomous Git repositories. Coding agents must follow these rules:
 
-1. **Repository Boundaries:**
-   - Edits made to `repos/<name>/` modify the underlying member repository directly.
-   - Member repositories are autonomous projects. Do not introduce cross-repository source imports or shared runtime dependencies unless an explicit monorepo architecture is configured.
+1. **Repository Boundaries & Encapsulation:**
+   - Edits made to `<repos_dir>/<name>/` modify the underlying member repository directly.
+   - Member repositories are autonomous projects and remain 100% clean of workspace `.rnex/` metadata. Do not introduce cross-repository source imports or shared runtime dependencies unless an explicit monorepo architecture is configured.
+   - Run Git operations (commits, branches, pushes) directly within the respective member repository root (`<repos_dir>/<name>/`).
 
-2. **Member .rnex Directory Routing:**
-   - Member repositories may contain an `.rnex/` directory (e.g. `<repos_dir>/<name>/.rnex/`) containing repository-specific documents, instructions, rules, workflows, and scripts. Coding assistants must inspect this directory for member-specific instructions.
-   - Run git operations (commits, branches, pushes) directly within the respective member repository root (`<repos_dir>/<name>/`).
-
-3. **Context Economy:**
+2. **Context Economy:**
    - Do not redundantly read entire files or directory trees when targeted symbol lookups or line ranges suffice.
    - Rely on active workspace context, indexing, and compiled documentation rather than re-scanning raw files repeatedly.
 
-4. **In-Place Source Indexing & Encapsulated Metadata:**
-   - Source documents (`plugins.llm-wiki.sources`, default: `docs`, `repos/**/README.md`) and member repositories (`./<repos_dir>/`, default: `./repos/`) are indexed directly in place without symlinks (`ln -s`) or redundant copies (`wiki/concepts/` and `wiki/repos/` do not exist). Generated wiki metadata (`index.md`, `log.md`, `repo-nexus*.md`, `repos-*.md`) resides exclusively directly inside `wiki_dir` (`wiki/`). Zero `_graph/` and zero `_index/` subdirectories.
+3. **In-Place Source Indexing & Encapsulated Metadata:**
+   - Source documents configured in `plugins.llm-wiki.sources` and member repositories in `repos_dir` are indexed directly in place without symlinks (`ln -s`) or redundant copies.
+   - Generated wiki metadata (`<index_file>`, `<log_file>`, `repo-nexus*.md`, `repos-*.md`) resides exclusively inside the configured `plugins.llm-wiki.wiki_dir` (default: `.rnex/wiki`).
 
-5. **Wiki Navigation Order:**
-   - **Step 1 — B-Tree Root Index**: Consult `<wiki_dir>/_index.md` (bounded root routing table <= 80 lines) to locate the appropriate shard (`_index/repo-nexus*.md` or `_index/repos-<member>*.md`).
-   - **Step 2 — Domain Shard Pinpointing**: Read only the specific B-Tree leaf shard `<wiki_dir>/_index/<shard>.md` identified in Step 1 (or query `_graph/nodes.tsv`, `edges_out.tsv`, and `edges_in.tsv` via internal agent query helpers) to locate the target source path.
+4. **Wiki Navigation Order:**
+   - **Step 1 — B-Tree Root Index**: Consult `<wiki_dir>/<index_file>` (configured via `plugins.llm-wiki.wiki_dir` and `plugins.llm-wiki.index_file`, bounded by `plugins.llm-wiki.btree_root_max_lines`) to locate the appropriate shard (`<wiki_dir>/repo-nexus*.md` or `<wiki_dir>/repos-<member>*.md`).
+   - **Step 2 — Domain Shard Pinpointing**: Read only the specific B-Tree leaf shard `<wiki_dir>/<shard>.md` identified in Step 1 to locate the target source path.
    - **Step 3 — Authoritative Source Retrieval**: Open only the 1–3 authoritative workspace source document(s) referenced in the shard.
-

@@ -24,7 +24,7 @@ When `rnex exec` iterates through member repositories, it sets:
 * `RNEX_REPO_PATH`: Relative path to the repository directory (e.g. `./repos/backend` or `<repos_dir>/backend`).
 * `RNEX_REPO_BRANCH`: Currently checked out Git branch or commit SHA.
 
-### Hook Execution Variables (`rnex_hooks` & `git.hooks`)
+### Hook Execution Variables (`rnex-hooks` & `git.hooks`)
 * `RNEX_HOOK_EVENT`: Name of the triggering event (e.g. `after_sync`, `before_repo_add`).
 * `RNEX_HOOK_ARGS`: Full argument string passed to the event.
 * `RNEX_HOOK_ACTIVE`: Guard variable indicating active hook execution (prevents recursive loops).

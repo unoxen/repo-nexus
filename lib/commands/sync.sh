@@ -10,7 +10,6 @@ _write_auto_sync_script() {
   _dir="${1:-$NEXUS_DIR}"
   _bin_dir="$_dir/.rnex/bin"
   mkdir -p "$_bin_dir"
-  rm -f "$_bin_dir/auto-sync.sh" 2>/dev/null || true
   _script="$_bin_dir/rnex-auto-sync.sh"
   cat > "$_script" <<'EOF'
 #!/bin/sh
@@ -35,11 +34,11 @@ EOF
 }
 
 # Primary workspace reconciliation command:
-# Reconciles workspace configuration version, .gitignore / .ignore routing, AGENTS.md,
-# core skills, AI instruction compilation, active plugins, Git hooks, member .rnex
-# harnesses, and VS Code / Cursor workspace files.
+# Reconciles .gitignore / .ignore routing, AGENTS.md / provider instruction files,
+# core skills, AI instruction compilation, active plugins, Git hooks, member
+# repositories, and VS Code / Cursor workspace files.
 # Usage:
-#   rnex sync [-y|--yes] [-q|--quiet] [--upgrade]
+#   rnex sync [-y|--yes] [-q|--quiet]
 cmd_sync() {
   require_workspace
   ensure_repos_dir
@@ -47,31 +46,17 @@ cmd_sync() {
   _old_sync_quiet="${_sync_quiet:-0}"
   _sync_auto_yes=0
   _sync_quiet=0
-  _sync_upgrade=0
 
   while [ $# -gt 0 ]; do
     case "$1" in
       -y|--yes) _sync_auto_yes=1 ;;
       -q|--quiet) _sync_quiet=1 ;;
-      --upgrade) _sync_upgrade=1 ;;
-      -f|--fix) ;; # Accepted silently for backward compatibility
       *) ;;
     esac
     shift
   done
 
   [ "$_sync_quiet" -eq 0 ] && log_info "Reconciling Repo Nexus workspace at $NEXUS_DIR..."
-
-  # Version detection & non-destructive upgrade
-  _vc_res=0
-  version_cmp "$WORKSPACE_CONFIG_VERSION" "$RNEX_VERSION" || _vc_res=$?
-  if [ "$_vc_res" -eq 2 ] || [ "$_sync_upgrade" -eq 1 ]; then
-    upgrade_workspace_config "$WORKSPACE_YAML" "$RNEX_VERSION"
-    _load_workspace_version
-    _load_repos_dir
-    _load_code_workspace
-    [ "$_sync_quiet" -eq 0 ] && log_ok "Upgraded workspace configuration and routing instructions to v$RNEX_VERSION"
-  fi
 
   # --------------------------------------------------------------------------
   # Step 1: Sync hardcoded files & invoke commands that do not depend on config
@@ -101,7 +86,7 @@ cmd_sync() {
   # --------------------------------------------------------------------------
   # Step 3: The rest of synchronization
   # --------------------------------------------------------------------------
-  # 3.1. Reconcile plugins (scopes, deterministic sync, lifecycle hooks copy, templates, leaked dir cleanup)
+  # 3.1. Reconcile plugins (scopes, deterministic sync, lifecycle hooks copy, templates)
   sync_plugins
 
   # 3.2. Reconcile Git hooks
@@ -115,15 +100,13 @@ cmd_sync() {
     fi
   fi
 
-  # 3.3. Reconcile member repos (<repos_dir> unlisted pruning & .rnex/ harness sync)
+  # 3.3. Reconcile member repos (<repos_dir> unlisted pruning & missing clone checks)
   prune_unlisted_repos "$REPOS_DIR"
   yaml_list_repos | while read -r _name; do
     [ -n "$_name" ] || continue
     if yaml_repo_enabled "$_name"; then
       _rdir="$(resolve_repo_path "$_name")"
-      if [ -d "$_rdir" ]; then
-        sync_repo_rnex "$_name"
-      else
+      if [ ! -d "$_rdir" ]; then
         log_warn "Member repo '$_name' is missing on disk. Run: rnex clone"
       fi
     fi
@@ -133,7 +116,7 @@ cmd_sync() {
   sync_code_workspace
 
   if [ "$_sync_quiet" -eq 0 ]; then
-    log_ok "Sync complete — workspace, plugins, skills, and member .rnex directories reconciled"
+    log_ok "Sync complete — workspace, plugins, skills, and member repositories reconciled"
   fi
   _sync_quiet="$_old_sync_quiet"
   return 0

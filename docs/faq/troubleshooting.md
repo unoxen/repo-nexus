@@ -13,7 +13,7 @@ Practical diagnostic guidance and step-by-step solutions for everyday multi-repo
 
 ### 1. "Configuration drift detected" or "Run rnex sync"
 * **Cause**: `rnex.yaml` or `.local.rnex.yaml` was modified, but the workspace harness (`.rnex/`), AI instructions, or Git hook dispatchers have not been reconciled.
-* **Solution**: Run `rnex sync` (or `rnex sync -y` to auto-confirm schema upgrades).
+* **Solution**: Run `rnex sync`.
 
 ### 2. Search tools or AI assistants cannot find files inside configured repository directory (`<repos_dir>/`)
 * **Cause**: Some indexers respect `.gitignore` by default and skip `<repos_dir>/` (default `repos/`).
@@ -42,15 +42,11 @@ Practical diagnostic guidance and step-by-step solutions for everyday multi-repo
 * **Cause**: Single-file ingestion validates that the target argument is a valid, readable regular file (`[ -f ]` and `! -L`). It explicitly rejects non-existent paths, directories, and symbolic links.
 * **Solution**: Pass an existing file path (e.g. `rnex plugin llm-wiki ingest docs/spec.md` or `rnex plugin llm-wiki ingest --file docs/spec.md`). To ingest all configured workspace sources, run `rnex plugin llm-wiki ingest` with no arguments.
 
-### 9. Legacy `_index.md`, `_graph/`, `_index/`, or `hot.md` in wiki directory
-* **Cause**: The workspace was initialized using an older wiki layout version containing `_index.md`, `_graph/`, `_index/`, `hot.md`, or legacy category directories (`overview/`, `entities/`, `sources/`, `concepts/`, `repos/`).
-* **Solution**: Run `rnex plugin llm-wiki lint` (or `rnex plugin llm-wiki ingest`). The automated routine purges obsolete legacy folders (`_graph/`, `_index/`, `concepts/`, `repos/`, `overview/`, `entities/`, `sources/`), purges legacy `hot.md` and `_index.md` files, migrates historical audit entries from `_log.md` to `log.md`, asserts zero symbolic links, compiles the bounded root router `.rnex/wiki/index.md` ($\le 80$ lines), and rebuilds the flat B-Tree leaf shards (`.rnex/wiki/repo-nexus*.md`, `.rnex/wiki/repos-*.md`).
-
-### 10. Existing local Git hook was overwritten or not running
+### 9. Existing local Git hook was overwritten or not running
 * **Cause**: Repo Nexus manages Git hooks via non-destructive wrapper scripts in `.git/hooks/`. When installing wrappers, any pre-existing custom hook script is automatically backed up to `<hook>.user` (e.g. `.git/hooks/pre-commit.user`) and invoked by the wrapper during Git operations.
 * **Solution**: Verify that `.git/hooks/<hook>.user` exists and has executable permissions (`chmod +x .git/hooks/<hook>.user`).
 
-### 11. `Permission denied` when running `./rnex`
+### 10. `Permission denied` when running `./rnex`
 * **Cause**: Git checkout or archive extraction may not have preserved executable file mode bits.
 * **Solution**: Make the CLI entrypoint executable: `chmod +x ./rnex`.
 

@@ -82,9 +82,12 @@ grep -q '^[ ]*lint:' "$_yaml_file" || { fail "lint command missing in plugin.yam
 ! grep -q "ingest_member_readmes" "$_yaml_file" || { fail "ingest_member_readmes still present in plugin.yaml"; exit 1; }
 ! grep -q "hot_file" "$_yaml_file" || { fail "hot_file still present in plugin.yaml"; exit 1; }
 
-# Assert ai-instructions.md exists in plugin root
+# Assert ai-instructions.md exists in plugin root and plugin does not reference specific AI providers
 [ -f "$_kl_pdir/ai-instructions.md" ] || { fail "ai-instructions.md missing in llm-wiki root"; exit 1; }
 [ -s "$_kl_pdir/ai-instructions.md" ] || { fail "ai-instructions.md is empty in llm-wiki root"; exit 1; }
+if grep -En '\.(claude|codex|cursor|gemini|windsurf)/' "$_kl_pdir/README.md" "$_kl_pdir/ai-instructions.md" "$_kl_pdir/rules/behavioral.md" "$_kl_pdir/skills/"*.md 2>/dev/null; then
+  fail "llm-wiki plugin docs/skills must not hardcode AI provider directories"; exit 1
+fi
 
 # Verify valid YAML parsing if ruby is available
 if command -v ruby >/dev/null 2>&1; then
@@ -162,14 +165,16 @@ printf '# Service A API\nService A REST endpoints.\n' > "$TEST_COV_WS/repos/serv
 
 cat <<'EOF_COV_YAML' > "$TEST_COV_WS/rnex.yaml"
 version: 1.0.0
-sources: [README.md, AGENTS.md, docs]
 plugins:
   llm-wiki:
-repos:
-  service-a:
     sources:
       - README.md
-      - docs/api.md
+      - AGENTS.md
+      - docs
+      - repos/service-a/README.md
+      - repos/service-a/docs/api.md
+repos:
+  service-a:
 EOF_COV_YAML
 
 "$TEST_COV_WS/rnex" init -y --llm-wiki "$TEST_COV_WS" >/dev/null
@@ -382,9 +387,9 @@ printf '# Doc Two\nContent two.\n' > "$TEST_LINT_WS/docs/two.md"
 
 cat <<'EOF_LINT_CFG' > "$TEST_LINT_WS/rnex.yaml"
 version: 1.0.0
-sources: [docs]
 plugins:
   llm-wiki:
+    sources: [docs]
 repos:
 EOF_LINT_CFG
 
@@ -521,9 +526,9 @@ rm -rf "$TEST_LLM_WIKI_WS/plugins/mock-provider" "$TEST_LLM_WIKI_WS/.mock"
 pass
 
 # --------------------------------------------------------------------------
-# Test 12: Configurable wiki_dir and Leaked Placeholder Purge
+# Test 12: Configurable wiki_dir and sources
 # --------------------------------------------------------------------------
-run_test "LLM Wiki: configurable wiki_dir and leaked placeholder directory cleanup"
+run_test "LLM Wiki: configurable wiki_dir and sources"
 cat <<'EOF_CFG' > "$TEST_LLM_WIKI_WS/rnex.yaml"
 version: 1.0.0
 plugins:
@@ -533,8 +538,6 @@ plugins:
 repos:
 EOF_CFG
 
-# Simulate pre-existing leaked bogus placeholder directories in workspace root
-mkdir -p "$TEST_LLM_WIKI_WS/\"{wiki_dir}" "$TEST_LLM_WIKI_WS/\"{raw_dir}" "$TEST_LLM_WIKI_WS/{wiki_dir}" "$TEST_LLM_WIKI_WS/{raw_dir}"
 mkdir -p "$TEST_LLM_WIKI_WS/intake/raw"
 printf '# Raw Doc\nRaw content.\n' > "$TEST_LLM_WIKI_WS/intake/raw/doc.md"
 
@@ -550,12 +553,6 @@ printf '# Raw Doc\nRaw content.\n' > "$TEST_LLM_WIKI_WS/intake/raw/doc.md"
 [ ! -e "$TEST_LLM_WIKI_WS/docs/wiki/_index.md" ] || { fail "docs/wiki/_index.md should not exist"; exit 1; }
 [ ! -e "$TEST_LLM_WIKI_WS/docs/wiki/_log.md" ] || { fail "docs/wiki/_log.md should not exist"; exit 1; }
 [ ! -e "$TEST_LLM_WIKI_WS/docs/wiki/hot.md" ] || { fail "docs/wiki/hot.md found in custom wiki"; exit 1; }
-
-# Verify bogus directories were purged by sync
-[ ! -d "$TEST_LLM_WIKI_WS/\"{wiki_dir}" ] || { fail "Bogus directory \"{wiki_dir} still exists"; exit 1; }
-[ ! -d "$TEST_LLM_WIKI_WS/\"{raw_dir}" ] || { fail "Bogus directory \"{raw_dir} still exists"; exit 1; }
-[ ! -d "$TEST_LLM_WIKI_WS/{wiki_dir}" ] || { fail "Bogus directory {wiki_dir} still exists"; exit 1; }
-[ ! -d "$TEST_LLM_WIKI_WS/{raw_dir}" ] || { fail "Bogus directory {raw_dir} still exists"; exit 1; }
 
 # Reset configuration back to standard wiki
 cat <<'EOF_CFG_RESET' > "$TEST_LLM_WIKI_WS/rnex.yaml"
@@ -657,10 +654,10 @@ printf '# Frontend Setup\nInternal setup doc.\n' > "$TEST_GLOB_WS/repos/frontend
 
 cat <<'EOF_GLOB_CFG' > "$TEST_GLOB_WS/rnex.yaml"
 version: 1.0.0
-sources:
-  - "repos/**/README.md"
 plugins:
   llm-wiki:
+    sources:
+      - "repos/**/README.md"
 repos:
   backend:
   frontend:
@@ -714,9 +711,9 @@ mkdir -p "$TEST_MISSING_WS/docs"
 printf '# Nexus Readme\nRoot overview.\n' > "$TEST_MISSING_WS/README.md"
 cat <<'EOF_MISS_YAML' > "$TEST_MISSING_WS/rnex.yaml"
 version: 1.0.0
-sources: [README.md, docs]
 plugins:
   llm-wiki:
+    sources: [README.md, docs]
 repos:
 EOF_MISS_YAML
 
@@ -795,9 +792,9 @@ EOF_INT_MD
 
 cat <<'EOF_REW_YAML' > "$TEST_REWRITE_WS/rnex.yaml"
 version: 1.0.0
-sources: [docs]
 plugins:
   llm-wiki:
+    sources: [docs]
 repos:
 EOF_REW_YAML
 
@@ -847,9 +844,9 @@ printf '# Real Doc\nReal content.\n' > "$TEST_STRIP_WS/docs/real.md"
 
 cat <<'EOF_STRIP_YAML' > "$TEST_STRIP_WS/rnex.yaml"
 version: 1.0.0
-sources: [docs]
 plugins:
   llm-wiki:
+    sources: [docs]
 repos:
 EOF_STRIP_YAML
 
@@ -889,9 +886,9 @@ EOF_MODE_MD
 
 cat <<'EOF_MODE_YAML' > "$TEST_MODE_WS/rnex.yaml"
 version: 1.0.0
-sources: [docs]
 plugins:
   llm-wiki:
+    sources: [docs]
     relative_links: "strip"
 repos:
 EOF_MODE_YAML
@@ -934,9 +931,9 @@ printf '# Doc Beta\nBeta doc with [Alpha](alpha.md).\n' > "$TEST_DET_LOG_WS/docs
 
 cat <<'EOF_DET_YAML' > "$TEST_DET_LOG_WS/rnex.yaml"
 version: 1.0.0
-sources: [docs]
 plugins:
   llm-wiki:
+    sources: [docs]
 repos:
 EOF_DET_YAML
 
@@ -988,7 +985,7 @@ version: 1.0.0
 plugins:
   llm-wiki:
     log_max_records: 5
-sources: [docs]
+    sources: [docs]
 repos:
 EOF_ROLL_YAML
 
@@ -1373,9 +1370,9 @@ _pan_paz_count="$(LC_ALL=C grep -c '^- \*\*' "$TEST_3LET_WS/wiki/repos-test-repo
 pass
 
 # --------------------------------------------------------------------------
-# Test 27: Standalone lint auto-heals legacy numeric shards and misplaced entries
+# Test 27: Standalone lint auto-heals and re-routes misplaced entries across shards
 # --------------------------------------------------------------------------
-run_test "LLM Wiki: lint auto-heals legacy numeric shards and re-routes misplaced entries"
+run_test "LLM Wiki: lint auto-heals and re-routes misplaced entries across semantic shards"
 TEST_NUM_HEAL_WS="$TEST_TMP/llm-wiki-num-heal-ws"
 mkdir -p "$TEST_NUM_HEAL_WS"
 setup_plugin_test_workspace llm-wiki "$TEST_NUM_HEAL_WS"
@@ -1392,13 +1389,13 @@ touch "$TEST_NUM_HEAL_WS/repos/test-module/education/README.md"
 touch "$TEST_NUM_HEAL_WS/repos/test-module/example/README.md"
 touch "$TEST_NUM_HEAL_WS/repos/test-module/aa/README.md"
 
-# Seed a legacy numeric shard (repos-test-module-aa-1.md) containing misplaced entries
-cat <<'EOF_NUM_SHARD' > "$TEST_NUM_HEAL_WS/wiki/repos-test-module-aa-1.md"
-# Wiki Index Shard: repos-test-module-aa-1
+# Seed shard repos-test-module-aa.md containing misplaced entries for education and example
+cat <<'EOF_NUM_SHARD' > "$TEST_NUM_HEAL_WS/wiki/repos-test-module-aa.md"
+# Wiki Index Shard: repos-test-module-aa
 
-- **[aa-service](../../repos/test-module/aa/README.md)** (`repos/test-module/aa/README.md`) — AA service.
-- **[education](../../repos/test-module/education/README.md)** (`repos/test-module/education/README.md`) — Education module.
-- **[example-module](../../repos/test-module/example/README.md)** (`repos/test-module/example/README.md`) — Example module.
+- **[aa-service](../repos/test-module/aa/README.md)** (`repos/test-module/aa/README.md`) — AA service.
+- **[education](../repos/test-module/education/README.md)** (`repos/test-module/education/README.md`) — Education module.
+- **[example-module](../repos/test-module/example/README.md)** (`repos/test-module/example/README.md`) — Example module.
 EOF_NUM_SHARD
 
 cat <<'EOF_HEAL_CFG' > "$TEST_NUM_HEAL_WS/rnex.yaml"
@@ -1413,17 +1410,15 @@ repos:
     path: repos/test-module
 EOF_HEAL_CFG
 
-# Run standalone lint -- must dissolve the numeric shard and re-route misplaced entries without error
+# Run standalone lint -- must re-route misplaced entries without error
 (cd "$TEST_NUM_HEAL_WS" && ./rnex plugin llm-wiki lint) || {
-  fail "Standalone lint failed to auto-heal numeric shard"; exit 1;
+  fail "Standalone lint failed to auto-heal misplaced entries"; exit 1;
 }
 
-# 1. Assert that legacy numeric shard repos-test-module-aa-1.md was deleted
-[ ! -f "$TEST_NUM_HEAL_WS/wiki/repos-test-module-aa-1.md" ] || {
-  fail "Legacy numeric shard repos-test-module-aa-1.md was not deleted by lint"; exit 1;
+# Assert that entries are present in valid semantic shard(s) and misplaced entries were removed from repos-test-module-aa.md
+! grep -q 'education' "$TEST_NUM_HEAL_WS/wiki/repos-test-module-aa.md" 2>/dev/null || {
+  fail "Misplaced education entry was not moved out of repos-test-module-aa.md"; exit 1;
 }
-
-# 2. Assert that entries were re-routed into valid semantic shard(s)
 _found_edu=0
 _found_ex=0
 _found_aa=0
@@ -1433,20 +1428,9 @@ for _shard_f in "$TEST_NUM_HEAL_WS/wiki"/repos-test-module*.md; do
   grep -q 'example-module' "$_shard_f" && _found_ex=1
   grep -q 'aa-service' "$_shard_f" && _found_aa=1
 done
-[ "$_found_edu" -eq 1 ] || { fail "education entry missing after numeric shard healing"; exit 1; }
-[ "$_found_ex" -eq 1 ] || { fail "example-module entry missing after numeric shard healing"; exit 1; }
-[ "$_found_aa" -eq 1 ] || { fail "aa-service entry missing after numeric shard healing"; exit 1; }
-
-# 3. Assert zero numeric shards exist
-_num_shards_left="$(find "$TEST_NUM_HEAL_WS/wiki" -name '*-[0-9]*.md' | grep -v 'log.md' || true)"
-[ -z "$_num_shards_left" ] || {
-  fail "Numeric shard(s) still exist after healing: $_num_shards_left"; exit 1;
-}
-
-# 4. Assert log recorded deletion of numeric shard
-grep -q 'purged non-semantic numeric shard' "$TEST_NUM_HEAL_WS/wiki/log.md" || {
-  fail "Purging of numeric shard not logged in log.md"; exit 1;
-}
+[ "$_found_edu" -eq 1 ] || { fail "education entry missing after misplaced entry healing"; exit 1; }
+[ "$_found_ex" -eq 1 ] || { fail "example-module entry missing after misplaced entry healing"; exit 1; }
+[ "$_found_aa" -eq 1 ] || { fail "aa-service entry missing after misplaced entry healing"; exit 1; }
 pass
 
 # --------------------------------------------------------------------------

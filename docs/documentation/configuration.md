@@ -177,7 +177,7 @@ plugins:
 
 ### Lifecycle Hooks (`rnex-hooks`)
 
-Map of workspace lifecycle event names (`before_sync`, `after_sync`, `after_clone`, etc.) to lists of shell commands executed by the RNEX dispatcher (strictly opt-in, zero defaults; `rnex_hooks` is accepted as a backwards-compatible alias).
+Map of workspace lifecycle event names (`before_sync`, `after_sync`, `after_clone`, etc.) to lists of shell commands executed by the RNEX dispatcher (strictly opt-in, zero defaults).
 
 ### Member Repositories (`repos`)
 

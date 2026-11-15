@@ -47,7 +47,7 @@ rnex init [options] [directory]
 * `--codex`: Enable OpenAI Codex plugin (`CODEX.md`, `.codex/skills/`).
 * `--gemini`: Enable Google Gemini plugin (`GEMINI.md`, `.agents/skills/`).
 * `--windsurf`: Enable Windsurf plugin (`.windsurfrules`, `.windsurf/rules/`).
-* `--llm-wiki`: Enable LLM Wiki plugin (`wiki/`, `docs/`).
+* `--llm-wiki`: Enable LLM Wiki plugin (`plugins.llm-wiki.wiki_dir`, `plugins.llm-wiki.sources`).
 * `--plugin <name>`: Enable any specified plugin during initialization (repeatable).
 
 ### `rnex sync`
@@ -57,8 +57,7 @@ Single reconciliation command: syncs skills, plugins, Git hooks & ignore rules, 
 rnex sync [options]
 ```
 
-* `-y`, `--yes`: Automatically confirm non-destructive schema upgrades if prompted.
-* `--upgrade`: Explicitly trigger non-destructive configuration and schema upgrade checks.
+* `-y`, `--yes`: Non-interactive mode; accepts all prompts automatically.
 * `-q`, `--quiet`: Quiet mode; suppresses non-error informational messages (ideal for hooks).
 
 ### `rnex status`

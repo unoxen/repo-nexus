@@ -31,7 +31,7 @@ git:
     post-checkout:
       - "rnex sync --quiet"
 
-rnex_hooks:
+rnex-hooks:
   after_clone:
     - "rnex exec make setup"
   after_sync:

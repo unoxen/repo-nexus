@@ -6,7 +6,7 @@
 
 # Initialize a new Repo Nexus workspace in the specified directory (or current directory):
 # Sets up rnex.yaml, .rnex/ harness, gitignore rules, routing instructions in AGENTS.md,
-# enabled plugins (e.g. --claude, --gemini, --llm-wiki), and optional VS Code / Cursor workspace.
+# enabled plugins (via --<plugin> or --plugin <plugin>), and optional multi-root workspace.
 # Usage:
 #   rnex init [-y|--yes] [--hooks|--no-hooks] [--<plugin>] [<directory>]
 cmd_init() {
@@ -34,10 +34,6 @@ cmd_init() {
       --plugin|--enable-plugin)
         shift
         [ -n "$1" ] && _cli_plugins="${_cli_plugins:+$_cli_plugins }$1"
-        ;;
-      --ai|--instructions|--ai-instructions)
-        shift
-        # Legacy flag ignored in favor of plugins
         ;;
       --code-workspace|--vscode)
         _cli_code_workspace="true"
@@ -195,7 +191,7 @@ git:
 $_hooks_block
 
 # Lifecycle Hooks
-rnex_hooks:
+rnex-hooks:
   before_sync: []
   after_sync: []
   before_clone: []

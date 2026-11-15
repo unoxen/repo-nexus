@@ -6,15 +6,18 @@
 # Architectural Layer: Domain Helpers (helpers/)
 # Single Responsibility: Incrementally merge newly discovered missing sources
 # into flat B-Tree shards (.rnex/wiki/*.md), maintain strict LC_ALL=C sort
-# order, compile .rnex/wiki/index.md router, and append audit entries to log.md.
+# order, split oversized shards recursively, compile .rnex/wiki/index.md router,
+# and append audit entries to log.md.
 #
 # Design Patterns Applied:
 #   - Builder Pattern: Incrementally merges missing entries and builds clean
 #     Markdown shard catalogs and root router index tables.
 #   - Information Expert (GRASP): Encapsulates title extraction, summary
-#     sanitization, and Markdown shard formatting.
-#   - Single Responsibility Principle (SRP): Confined strictly to B-Tree shard
-#     mutation and root router synthesis. Zero linting or validation logic.
+#     sanitization, B-Tree shard routing, and Markdown shard formatting.
+#   - Don't Repeat Yourself (DRY): Centralizes atomic shard file writing
+#     (write_btree_shard_entries), entry link-depth healing
+#     (heal_entry_title_link_depth), and entry re-routing (reroute_wiki_entry_line),
+#     and reuses RNEX_WIKI_AWK_LIB from utils.sh.
 #
 # Standards: Pure POSIX Shell (/bin/sh), OWASP ASVS A03 Atomic File Operations.
 # =============================================================================
@@ -27,10 +30,133 @@ fi
 RNEX_LLM_WIKI_BTREE_HELPERS_SH_SOURCED=1
 
 # -----------------------------------------------------------------------------
+# ensure_baseline_flat_shards
+# Summary: Ensures at least the baseline repo-nexus.md shard exists inside
+#          $RNEX_WIKI_ROOT when no repo-nexus* shards have been created yet.
+# @returns: 0 on success.
+# @sideEffects: Creates ${RNEX_WIKI_ROOT}/repo-nexus.md if no repo-nexus* shard exists.
+# -----------------------------------------------------------------------------
+ensure_baseline_flat_shards() {
+    mkdir -p "$RNEX_WIKI_ROOT"
+    _has_nexus_shard=0
+    for _nf in "${RNEX_WIKI_ROOT}"/repo-nexus*.md; do
+        [ -f "$_nf" ] && { _has_nexus_shard=1; break; }
+    done
+    if [ "$_has_nexus_shard" -eq 0 ]; then
+        cat <<'EOF' > "${RNEX_WIKI_ROOT}/repo-nexus.md"
+# Wiki Shard: repo-nexus
+
+- *(No source pages indexed for `repo-nexus` yet.)*
+EOF
+    fi
+    return 0
+}
+
+# -----------------------------------------------------------------------------
+# write_btree_shard_entries
+# Summary: Atomically writes or merges catalog entries into a target B-Tree
+#          shard file with canonical header and embedded base shard metadata,
+#          maintaining strict LC_ALL=C unique sort order.
+# @param $1: target_shard_file - Absolute path to target .md shard file.
+# @param $2: base_shard_id     - Canonical base shard ID for metadata comment.
+# @param $3: entries_source    - File path containing entries OR single entry line.
+# @param $4: is_file_source    - "1" if $3 is a file path, "0" if $3 is a single line.
+# @returns: 0 on success.
+# @sideEffects: Atomically creates or updates $1 in sorted unique order.
+# -----------------------------------------------------------------------------
+write_btree_shard_entries() {
+    _wb_file="$1"
+    _wb_base_id="$2"
+    _wb_source="$3"
+    _wb_is_file="${4:-0}"
+
+    _wb_sid="$(basename "$_wb_file" .md)"
+    _wb_merged="${_wb_file}.mrg.$$"
+    : > "$_wb_merged"
+
+    if [ -f "$_wb_file" ]; then
+        LC_ALL=C grep '^- \*\*' "$_wb_file" >> "$_wb_merged" 2>/dev/null || true
+    fi
+
+    if [ "$_wb_is_file" = "1" ]; then
+        [ -f "$_wb_source" ] && cat "$_wb_source" >> "$_wb_merged"
+    else
+        [ -n "$_wb_source" ] && printf '%s\n' "$_wb_source" >> "$_wb_merged"
+    fi
+
+    atomic_sort_unique_file "$_wb_merged" || true
+
+    _wb_tmp="${_wb_file}.tmp.$$"
+    printf '# Wiki Index Shard: %s\n<!-- base: %s -->\n\n' "$_wb_sid" "$_wb_base_id" > "$_wb_tmp"
+    cat "$_wb_merged" >> "$_wb_tmp"
+    rm -f "$_wb_merged"
+    mv "$_wb_tmp" "$_wb_file"
+    return 0
+}
+
+# -----------------------------------------------------------------------------
+# heal_entry_title_link_depth
+# Summary: Ensures a catalog entry's title Markdown link target uses the current
+#          RNEX_WIKI_UP_PREFIX depth when the referenced workspace file exists.
+# @param $1: entry_line - Catalog bullet line ('- **[Title](target)** (`path`) — ...').
+# @param $2: doc_rel    - Workspace-relative document path.
+# @returns: Healed (or unchanged) entry line on stdout; returns 0 if modified, 1 if unchanged.
+# @pure
+# -----------------------------------------------------------------------------
+heal_entry_title_link_depth() {
+    _hl_line="$1"
+    _hl_rel="$2"
+    if [ -n "$_hl_rel" ] && [ -f "${RNEX_WORKSPACE_ROOT}/${_hl_rel}" ]; then
+        _hl_expected="${RNEX_WIKI_UP_PREFIX:-../../}${_hl_rel}"
+        _hl_curr="$(printf '%s\n' "$_hl_line" | sed -n 's/^- \*\*\[[^]]*\](\([^)]*\)).*/\1/p')"
+        if [ -n "$_hl_curr" ] && [ "$_hl_curr" != "$_hl_expected" ]; then
+            _hl_title="$(extract_entry_title "$_hl_line")"
+            _hl_rest="${_hl_line#*\*\* (\`"${_hl_rel}"\`)}"
+            printf -- '- **[%s](%s)** (`%s`)%s\n' "$_hl_title" "$_hl_expected" "$_hl_rel" "$_hl_rest"
+            return 0
+        fi
+    fi
+    printf '%s\n' "$_hl_line"
+    return 1
+}
+
+# -----------------------------------------------------------------------------
+# reroute_wiki_entry_line
+# Summary: Parses a displaced wiki catalog entry line, heals its link depth,
+#          resolves its canonical destination B-Tree shard file, and merges it
+#          into that shard in sorted order.
+# @param $1: entry_line       - Catalog entry line to re-route.
+# @param $2: fallback_base_id - Fallback base shard ID if entry lacks a path.
+# @returns: "<target_shard_id>|<title>" on stdout.
+# @sideEffects: Merges entry into resolved target shard file.
+# -----------------------------------------------------------------------------
+reroute_wiki_entry_line() {
+    _rr_line="$1"
+    _rr_fallback_base="$2"
+
+    _rr_rel="$(extract_entry_rel_path "$_rr_line")"
+    _rr_title="$(extract_entry_title "$_rr_line")"
+
+    if [ -n "$_rr_rel" ]; then
+        _rr_base_id="$(derive_shard_id_for_workspace_path "$_rr_rel")"
+    else
+        _rr_base_id="$_rr_fallback_base"
+    fi
+
+    _rr_line="$(heal_entry_title_link_depth "$_rr_line" "$_rr_rel" || true)"
+    _rr_target_file="$(resolve_target_btree_shard_file "$_rr_base_id" "$_rr_title" "$_rr_rel")"
+    _rr_target_id="$(basename "$_rr_target_file" .md)"
+
+    write_btree_shard_entries "$_rr_target_file" "$_rr_base_id" "$_rr_line" "0"
+    printf '%s|%s\n' "$_rr_target_id" "$_rr_title"
+    return 0
+}
+
+# -----------------------------------------------------------------------------
 # extract_markdown_title_and_summary
 # Summary: Extracts the first H1 heading and first non-empty prose paragraph
 #          from a Markdown file, skipping YAML frontmatter and code blocks.
-# @param $1: abs_file_path - Absolute path to the Markdown document.
+# @param $1: abs_file_path  - Absolute path to the Markdown document.
 # @param $2: fallback_title - Fallback title if no H1 heading exists.
 # @returns: "<title>|<summary>" on stdout.
 # @pure
@@ -74,13 +200,6 @@ extract_markdown_title_and_summary() {
 # Summary: Enforces the maximum record ceiling on the operational log file
 #          by pruning the oldest bullet records ('^- \*\*') while preserving
 #          the markdown header block intact.
-#
-# Design Patterns & Principles:
-#   - Single Responsibility Principle (SRP): Confined strictly to record
-#     capacity trimming on markdown log files.
-#   - Fail-Safe & Atomic (OWASP A03): Atomic replacement via temporary file;
-#     retains header block and the most recent N records.
-#
 # @param $1: log_file    - Absolute path to log.md.
 # @param $2: max_records - Maximum allowed record count (default: 1000).
 # @returns: 0 on success.
@@ -202,19 +321,12 @@ EOF
 #          from the destination wiki shard back to the workspace target, or
 #          strips them down to plain text if the target cannot be resolved
 #          or if "strip" mode is selected.
-#
-# Design Patterns & Architecture:
-#   - Information Expert (GRASP): Knows the source document location and
-#     relative path hierarchy to determine the exact workspace destination.
-#   - Strategy Pattern (GoF): Operates under "rewrite" (default) or "strip" mode.
-#   - Security (OWASP A03): Traversal validation through normalize_relative_path;
-#     avoids command execution or unsafe subshells.
-#
-# @param $1: raw_summary      - Unsanitized single-line summary string.
-# @param $2: source_rel_path  - Workspace-relative path to source file (e.g., "docs/guide.md").
-# @param $3: workspace_root   - Absolute path to workspace root.
-# @param $4: up_prefix        - Upward prefix from wiki directory to workspace root (e.g., "../../").
-# @param $5: mode             - Link strategy: "rewrite" (default) or "strip"/"delete".
+# @param $1: raw_summary     - Unsanitized single-line summary string.
+# @param $2: source_rel_path - Workspace-relative path to source file (e.g., "docs/guide.md").
+# @param $3: workspace_root  - Absolute path to workspace root.
+# @param $4: up_prefix       - Upward prefix from wiki directory to workspace root (e.g., "../../").
+# @param $5: mode            - Link strategy: "rewrite" (default) or "strip"/"delete".
+# @param $6: from_wiki       - "1" if input is already from a wiki shard, "0" otherwise.
 # @returns: Rewritten or stripped summary string on stdout.
 # @sideEffects: Verifies target file existence via [ -e ... ] against workspace root.
 # -----------------------------------------------------------------------------
@@ -235,11 +347,6 @@ rewrite_markdown_links_in_summary() {
 
     _out=""
 
-    # Tokenize input text into atomic segment types:
-    #   T = literal text segment
-    #   L = standard markdown link [text](target)
-    #   W = wikilink [[target|label]] or [[target]]
-    #   I = markdown image ![alt](target)
     _tokens="$(printf '%s\n' "$_raw_sum" | LC_ALL=C awk '
         BEGIN { RS = ""; FS = "\n" }
         function emit(type, a, b) {
@@ -249,7 +356,6 @@ rewrite_markdown_links_in_summary() {
         }
         {
             str = $0
-            # Pre-strip markdown image tags ![alt](target) to alt text so clickable badges [![alt](img)](url) become [alt](url)
             while (match(str, /!\[[^][]+\]\([^()]+\)/)) {
                 alt_txt = substr(str, RSTART + 2, RLENGTH - 2)
                 sub(/\]\([^()]*\)$/, "", alt_txt)
@@ -274,7 +380,6 @@ rewrite_markdown_links_in_summary() {
                 }
                 rem = substr(rem, p)
 
-                # Check for wikilink format [[target|label]] or [[target]]
                 if (substr(rem, 1, 2) == "[[") {
                     p2 = index(rem, "]]")
                     if (p2 > 0) {
@@ -293,7 +398,6 @@ rewrite_markdown_links_in_summary() {
                     }
                 }
 
-                # Check for markdown link [text](target) where first ] is immediately followed by (
                 p_close = index(substr(rem, 2), "]")
                 if (p_close > 0 && substr(rem, 1 + p_close, 2) == "](") {
                     text = substr(rem, 2, p_close - 1)
@@ -312,7 +416,6 @@ rewrite_markdown_links_in_summary() {
                     }
                 }
 
-                # Not a link, retain bracket literal
                 if (is_img) {
                     emit("T", "![", "")
                 } else {
@@ -325,11 +428,7 @@ rewrite_markdown_links_in_summary() {
 
     while IFS="$(printf '\t')" read -r _type _a _b; do
         case "$_type" in
-            T)
-                _out="${_out}${_a}"
-                ;;
-            I)
-                # Strip image markup to plain alternative text
+            T|I)
                 _out="${_out}${_a}"
                 ;;
             W)
@@ -349,13 +448,11 @@ rewrite_markdown_links_in_summary() {
                 _text="$_a"
                 _target="$_b"
 
-                # Empty target: strip to plain label
                 if [ -z "$_target" ]; then
                     _out="${_out}${_text}"
                     continue
                 fi
 
-                # Strip mode: preserve absolute/external URLs, strip relative links to plain text
                 if [ "$_mode" = "strip" ] || [ "$_mode" = "delete" ] || [ "$_mode" = "unlink" ]; then
                     case "$_target" in
                         http://*|https://*|mailto:*|ftp://*|//*)
@@ -368,18 +465,14 @@ rewrite_markdown_links_in_summary() {
                     continue
                 fi
 
-                # Rewrite mode: evaluate and resolve link target
                 case "$_target" in
                     http://*|https://*|mailto:*|ftp://*|//*)
-                        # External absolute URL; preserve untouched
                         _out="${_out}[${_text}](${_target})"
                         ;;
                     \#*)
-                        # Fragment anchor referring to current source document
                         _out="${_out}[${_text}](${_up_prefix}${_source_rel}${_target})"
                         ;;
                     *)
-                        # Relative workspace link
                         _target_path="${_target%%[#?]*}"
                         _target_extra="${_target#"$_target_path"}"
                         _resolved=""
@@ -431,10 +524,8 @@ rewrite_markdown_links_in_summary() {
                         fi
 
                         if [ -n "$_resolved" ]; then
-                            # Target exists in workspace; rewrite relative to wiki destination
                             _out="${_out}[${_text}](${_up_prefix}${_resolved}${_target_extra})"
                         else
-                            # Dead/broken relative target; strip link markup to avoid broken wiki links
                             _out="${_out}${_text}"
                         fi
                         ;;
@@ -452,18 +543,12 @@ EOF
 # -----------------------------------------------------------------------------
 # resolve_target_btree_shard_file
 # Summary: Resolves the appropriate destination shard file for a document based
-#          on the base shard ID and document title. If the base shard has been
-#          split into sub-shards, matches the title'\''s leading character against
-#          the available range/part shards.
-#
-# Design Patterns & Architecture:
-#   - Information Expert (GRASP): Uses document title and existing shard
-#     topology to determine the exact target file path.
-#   - Protected Variations (GRASP): Shields callers from whether a shard is
-#     unsplit or deeply partitioned.
-#
+#          on the base shard ID, document title, and document path. If the base
+#          shard has been split into sub-shards, matches the entry's composite
+#          sort key against available range/prefix sub-shards.
 # @param $1: shard_id - Base shard identifier (e.g. "repos-test-repo-packages").
 # @param $2: title    - Document title string.
+# @param $3: path     - Optional workspace-relative path tie-breaker.
 # @returns: Absolute file path to target shard on stdout.
 # @pure
 # -----------------------------------------------------------------------------
@@ -474,7 +559,6 @@ resolve_target_btree_shard_file() {
     _base_file="${RNEX_WIKI_ROOT}/${_s_id}.md"
 
     # Find existing sub-shard files whose canonical base shard ID equals $_s_id
-    # (filtering out sibling scope shards such as repos-<member>-lib.md)
     _cand_files=""
     for _f in "${RNEX_WIKI_ROOT}/${_s_id}-"*.md; do
         [ -f "$_f" ] || continue
@@ -486,94 +570,58 @@ resolve_target_btree_shard_file() {
         fi
     done
 
-    # If no true sub-shards exist for this base shard ID, target is the base shard file
     if [ -z "$_cand_files" ]; then
         printf '%s\n' "$_base_file"
         return 0
     fi
 
-    _base_exists=0
-    [ -f "$_base_file" ] && _base_exists=1
-
-    # Sub-shards exist; route title to the most appropriate sub-shard via awk
     printf '%s' "$_cand_files" | LC_ALL=C awk \
         -v sid="$_s_id" \
         -v title="$_doc_title" \
         -v path="$_doc_path" \
-        -v def_file="$_base_file" \
-        -v base_exists="$_base_exists" '
-        function clean_alpha_key(str,   res, i, c, d) {
-            res = ""
-            for (i = 1; i <= length(str); i++) {
-                c = substr(str, i, 1)
-                if (c >= "a" && c <= "z") {
-                    res = res c
-                } else if (c >= "A" && c <= "Z") {
-                    res = res tolower(c)
-                } else if (c >= "0" && c <= "9") {
-                    d = c + 0
-                    if (d == 0) res = res "zero"
-                    else if (d == 1) res = res "one"
-                    else if (d == 2) res = res "two"
-                    else if (d == 3) res = res "three"
-                    else if (d == 4) res = res "four"
-                    else if (d == 5) res = res "five"
-                    else if (d == 6) res = res "six"
-                    else if (d == 7) res = res "seven"
-                    else if (d == 8) res = res "eight"
-                    else if (d == 9) res = res "nine"
-                }
-            }
-            return res
-        }
+        -v def_file="$_base_file" "
+        ${RNEX_WIKI_AWK_LIB}
         BEGIN {
             kt = clean_alpha_key(title)
             kp = clean_alpha_key(path)
-            if (kt != "") t = kt kp
-            else if (kp != "") t = kp
-            else t = "untitled"
+            if (kt != \"\") t = kt kp
+            else if (kp != \"\") t = kp
+            else t = \"untitled\"
 
-            prefix = sid "-"
-            first_child = ""
-            last_child = ""
-            matched_child = ""
+            prefix = sid \"-\"
+            matched_child = \"\"
             max_match_k = -1
         }
         {
-            f = $0
-            if (f == "" || f == def_file) next
+            f = \$0
+            if (f == \"\" || f == def_file) next
             sub_id = f
-            sub(/^.*\//, "", sub_id)
-            sub(/\.md$/, "", sub_id)
+            sub(/^.*\//, \"\", sub_id)
+            sub(/\.md\$/, \"\", sub_id)
             if (index(sub_id, prefix) != 1) next
             sub_suffix = substr(sub_id, length(prefix) + 1)
 
-            # Strictly require valid alphabetic range or prefix (ignore legacy numeric shards)
-            if (!match(sub_suffix, /^[a-z]+-[a-z]+$/) && !match(sub_suffix, /^[a-z]+$/)) next
+            if (!match(sub_suffix, /^[a-z]+-[a-z]+\$/) && !match(sub_suffix, /^[a-z]+\$/)) next
 
-            if (first_child == "" || f < first_child) first_child = f
-            if (last_child == "" || f > last_child) last_child = f
-
-            # Range suffix: e.g. "a-m", "n-s", "pa-pm", "paa-pam"
-            if (match(sub_suffix, /^[a-z]+-[a-z]+$/)) {
-                dash_pos = index(sub_suffix, "-")
+            if (match(sub_suffix, /^[a-z]+-[a-z]+\$/)) {
+                dash_pos = index(sub_suffix, \"-\")
                 s_part = substr(sub_suffix, 1, dash_pos - 1)
                 e_part = substr(sub_suffix, dash_pos + 1)
                 if (length(s_part) == length(e_part) && s_part <= e_part) {
                     K = length(s_part)
                     pfx = substr(t, 1, K)
-                    while (length(pfx) < K) pfx = pfx "a"
-                    if ((s_part == "a" && pfx < s_part) || (pfx >= s_part && (e_part == "z" || pfx <= e_part))) {
+                    while (length(pfx) < K) pfx = pfx \"a\"
+                    if ((s_part == \"a\" && pfx < s_part) || (pfx >= s_part && (e_part == \"z\" || pfx <= e_part))) {
                         if (K > max_match_k) {
                             max_match_k = K
                             matched_child = f
                         }
                     }
                 }
-            } else if (match(sub_suffix, /^[a-z]+$/)) {
+            } else if (match(sub_suffix, /^[a-z]+\$/)) {
                 K = length(sub_suffix)
                 pfx = substr(t, 1, K)
-                while (length(pfx) < K) pfx = pfx "a"
+                while (length(pfx) < K) pfx = pfx \"a\"
                 if (pfx == sub_suffix) {
                     if (K > max_match_k) {
                         max_match_k = K
@@ -583,13 +631,13 @@ resolve_target_btree_shard_file() {
             }
         }
         END {
-            if (matched_child != "") {
+            if (matched_child != \"\") {
                 print matched_child
             } else {
                 print def_file
             }
         }
-    '
+    "
     return 0
 }
 
@@ -598,7 +646,6 @@ resolve_target_btree_shard_file() {
 # Summary: Identifies the root base shard ID for any wiki shard file, shielding
 #          sub-shards from premature truncation and ensuring accurate prefix
 #          tracking across arbitrary B-Tree depth.
-#
 # @param $1: shard_id - Shard identifier (e.g. "repos-test-repo-packages-n-z").
 # @returns: Base shard ID on stdout (e.g. "repos-test-repo-packages").
 # @pure
@@ -685,14 +732,25 @@ derive_base_id_for_shard() {
         fi
     fi
 
-    # 3. Fallback: strip range or numeric suffix using sed
-    _stripped="$(printf '%s' "$_sid" | sed 's/-[a-z]\{1,\}-[a-z]\{1,\}$//; s/-[0-9]\{1,\}$//')"
-    if [ "$_stripped" != "$_sid" ] && [ -n "$_stripped" ]; then
-        printf '%s\n' "$_stripped"
-        return 0
-    fi
-
-    printf '%s\n' "$_sid"
+    # 3. Fallback: strip valid equal-length alphabetical range suffix (e.g. -a-m, -pa-pm)
+    _stripped="$(printf '%s\n' "$_sid" | LC_ALL=C awk '
+        {
+            s = $0
+            if (match(s, /-[a-z]+-[a-z]+$/)) {
+                sfx = substr(s, RSTART + 1)
+                base = substr(s, 1, RSTART - 1)
+                dash = index(sfx, "-")
+                sp = substr(sfx, 1, dash - 1)
+                ep = substr(sfx, dash + 1)
+                if (length(sp) == length(ep) && sp <= ep && base != "repo" && base != "repos") {
+                    print base
+                    next
+                }
+            }
+            print s
+        }
+    ')"
+    printf '%s\n' "${_stripped:-$_sid}"
     return 0
 }
 
@@ -702,13 +760,6 @@ derive_base_id_for_shard() {
 #          index.md and log.md) and subdivides any shard whose record count
 #          exceeds RNEX_WIKI_BTREE_SHARD_MAX_ENTRIES into balanced sub-shards.
 #          Appends audit entries ("created: ...", "deleted: ...") to log.md.
-#
-# Design Patterns & Principles:
-#   - Single Responsibility Principle (SRP): Confined strictly to B-Tree shard
-#     decomposition and capacity boundary maintenance.
-#   - Fail-Safe & Atomic (OWASP A03): Atomic replacement via temporary files.
-#   - Information Expert (GRASP): Extracts title keys and partitions entries.
-#
 # @param $1: action_name - Context label for audit log ("ingest" or "lint").
 # @returns: Total count of shards split on stdout.
 # @sideEffects: Replaces oversized shard files with sub-shards and mutates log.md.
@@ -738,7 +789,6 @@ split_oversized_btree_shards() {
                 _s_id="$(basename "$_shard_cand" .md)"
                 _base_id="$(derive_base_id_for_shard "$_s_id")"
 
-                # Extract all entries from oversized shard
                 _entries_all="${_shard_cand}.all.$$"
                 LC_ALL=C grep '^- \*\*' "$_shard_cand" > "$_entries_all" 2>/dev/null || : > "$_entries_all"
 
@@ -747,7 +797,6 @@ split_oversized_btree_shards() {
                     continue
                 fi
 
-                # Partition entries using awk into Child 1 and Child 2
                 _part1_tmp="${RNEX_WIKI_ROOT}/.part1.$$"
                 _part2_tmp="${RNEX_WIKI_ROOT}/.part2.$$"
                 : > "$_part1_tmp"
@@ -757,132 +806,79 @@ split_oversized_btree_shards() {
                     -v shard_id="$_s_id" \
                     -v base_id="$_base_id" \
                     -v part1_file="$_part1_tmp" \
-                    -v part2_file="$_part2_tmp" '
-                    function get_title(line,   m) {
-                        if (match(line, /^- \*\*\[[^]]+\]/)) {
-                            m = substr(line, 6)
-                            sub(/\].*$/, "", m)
-                            return m
-                        } else if (match(line, /^- \*\*[^*]+\*\*/)) {
-                            m = substr(line, 5)
-                            sub(/\*\*.*$/, "", m)
-                            return m
-                        }
-                        return ""
-                    }
-                    function get_path(line,   m) {
-                        if (match(line, /\*\* \(`[^`]+`\)/)) {
-                            m = substr(line, RSTART + 5, RLENGTH - 7)
-                            return m
-                        } else if (match(line, /\(`[^`]+`\)/)) {
-                            m = substr(line, RSTART + 2, RLENGTH - 4)
-                            return m
-                        } else if (match(line, /\]\([^)]+\)/)) {
-                            m = substr(line, RSTART + 2, RLENGTH - 3)
-                            return m
-                        }
-                        return ""
-                    }
-                    function clean_alpha_key(str,   res, i, c, d) {
-                        res = ""
-                        for (i = 1; i <= length(str); i++) {
-                            c = substr(str, i, 1)
-                            if (c >= "a" && c <= "z") {
-                                res = res c
-                            } else if (c >= "A" && c <= "Z") {
-                                res = res tolower(c)
-                            } else if (c >= "0" && c <= "9") {
-                                d = c + 0
-                                if (d == 0) res = res "zero"
-                                else if (d == 1) res = res "one"
-                                else if (d == 2) res = res "two"
-                                else if (d == 3) res = res "three"
-                                else if (d == 4) res = res "four"
-                                else if (d == 5) res = res "five"
-                                else if (d == 6) res = res "six"
-                                else if (d == 7) res = res "seven"
-                                else if (d == 8) res = res "eight"
-                                else if (d == 9) res = res "nine"
-                            }
-                        }
-                        return res
-                    }
+                    -v part2_file="$_part2_tmp" "
+                    ${RNEX_WIKI_AWK_LIB}
                     BEGIN {
-                        alpha = "abcdefghijklmnopqrstuvwxyz"
+                        alpha = \"abcdefghijklmnopqrstuvwxyz\"
                         lines_count = 0
                     }
                     {
                         lines_count++
-                        lines[lines_count] = $0
-                        t = tolower(get_title($0))
-                        p = tolower(get_path($0))
-                        titles[lines_count] = (t != "") ? t : "untitled"
-                        paths[lines_count] = (p != "") ? p : ("item" lines_count)
+                        lines[lines_count] = \$0
+                        t = tolower(get_title(\$0))
+                        p = tolower(get_path(\$0))
+                        titles[lines_count] = (t != \"\") ? t : \"untitled\"
+                        paths[lines_count] = (p != \"\") ? p : (\"item\" lines_count)
                     }
                     END {
                         if (lines_count == 0) exit 0
 
-                        # Build sorting keys: title + unique path
                         for (i = 1; i <= lines_count; i++) {
                             kt = clean_alpha_key(titles[i])
                             kp = clean_alpha_key(paths[i])
-                            if (kt != "") {
+                            if (kt != \"\") {
                                 keys[i] = kt kp
                             } else {
-                                keys[i] = (kp != "") ? kp : ("entry" clean_alpha_key(i))
+                                keys[i] = (kp != \"\") ? kp : (\"entry\" clean_alpha_key(i))
                             }
                         }
 
-                        # Suffix of shard_id relative to base_id
                         if (shard_id == base_id) {
-                            suffix = ""
+                            suffix = \"\"
                         } else {
                             suffix = substr(shard_id, length(base_id) + 2)
                         }
 
-                        # Determine initial S, E, K
-                        if (suffix == "") {
-                            S = "a"; E = "z"; K = 1
-                        } else if (match(suffix, /^[a-z]+-[a-z]+$/)) {
-                            dash_pos = index(suffix, "-")
+                        if (suffix == \"\") {
+                            S = \"a\"; E = \"z\"; K = 1
+                        } else if (match(suffix, /^[a-z]+-[a-z]+\$/)) {
+                            dash_pos = index(suffix, \"-\")
                             s_part = substr(suffix, 1, dash_pos - 1)
                             e_part = substr(suffix, dash_pos + 1)
                             if (length(s_part) == length(e_part)) {
                                 S = s_part; E = e_part; K = length(s_part)
                             } else {
-                                S = "a"; E = "z"; K = 1
+                                S = \"a\"; E = \"z\"; K = 1
                             }
-                        } else if (match(suffix, /^[a-z]+$/)) {
+                        } else if (match(suffix, /^[a-z]+\$/)) {
                             S = suffix; E = suffix; K = length(suffix)
                         } else {
-                            S = "a"; E = "z"; K = 1
+                            S = \"a\"; E = \"z\"; K = 1
                         }
 
                         loop_limit = 0
                         while (loop_limit++ < 120) {
-                            # Compute true min_c and max_c at position K across ALL keys in this shard
-                            min_c = ""
-                            max_c = ""
+                            min_c = \"\"
+                            max_c = \"\"
                             for (i = 1; i <= lines_count; i++) {
                                 c = substr(keys[i], K, 1)
-                                if (c < "a" || c > "z") c = "a"
-                                if (min_c == "" || c < min_c) min_c = c
-                                if (max_c == "" || c > max_c) max_c = c
+                                if (c < \"a\" || c > \"z\") c = \"a\"
+                                if (min_c == \"\" || c < min_c) min_c = c
+                                if (max_c == \"\" || c > max_c) max_c = c
                             }
 
-                            # Advance past characters shared by ALL keys in this shard
-                            if (min_c == max_c && min_c >= "a" && min_c <= "z") {
-                                P = (K > 1) ? substr(S, 1, K - 1) : ""
+                            if (min_c == max_c && min_c >= \"a\" && min_c <= \"z\") {
+                                P = (K > 1) ? substr(S, 1, K - 1) : \"\"
                                 S = P min_c
                                 E = P min_c
                                 K = K + 1
-                                S = S "a"
-                                E = E "z"
+                                S = S \"a\"
+                                E = E \"z\"
                                 continue
                             }
 
                             if (S != E) {
-                                P = (K > 1) ? substr(S, 1, K - 1) : ""
+                                P = (K > 1) ? substr(S, 1, K - 1) : \"\"
                                 c_S = substr(S, K, 1)
                                 c_E = substr(E, K, 1)
                                 ord_S = index(alpha, c_S)
@@ -899,18 +895,18 @@ split_oversized_btree_shards() {
                                     r2_s = P c_M2
                                     r2_e = E
 
-                                    sfx1 = (r1_s == r1_e) ? r1_s : (r1_s "-" r1_e)
-                                    sfx2 = (r2_s == r2_e) ? r2_s : (r2_s "-" r2_e)
+                                    sfx1 = (r1_s == r1_e) ? r1_s : (r1_s \"-\" r1_e)
+                                    sfx2 = (r2_s == r2_e) ? r2_s : (r2_s \"-\" r2_e)
 
-                                    c1_name = base_id "-" sfx1
-                                    c2_name = base_id "-" sfx2
+                                    c1_name = base_id \"-\" sfx1
+                                    c2_name = base_id \"-\" sfx2
 
                                     cnt1 = 0
                                     cnt2 = 0
                                     for (i = 1; i <= lines_count; i++) {
                                         pfx = substr(keys[i], 1, K)
-                                        while (length(pfx) < K) pfx = pfx "a"
-                                        if ((r1_s == (P "a") && pfx < r1_s) || (pfx <= r1_e)) {
+                                        while (length(pfx) < K) pfx = pfx \"a\"
+                                        if ((r1_s == (P \"a\") && pfx < r1_s) || (pfx <= r1_e)) {
                                             cnt1++
                                         } else {
                                             cnt2++
@@ -920,14 +916,14 @@ split_oversized_btree_shards() {
                                     if (cnt1 > 0 && cnt2 > 0) {
                                         for (i = 1; i <= lines_count; i++) {
                                             pfx = substr(keys[i], 1, K)
-                                            while (length(pfx) < K) pfx = pfx "a"
-                                            if ((r1_s == (P "a") && pfx < r1_s) || (pfx <= r1_e)) {
+                                            while (length(pfx) < K) pfx = pfx \"a\"
+                                            if ((r1_s == (P \"a\") && pfx < r1_s) || (pfx <= r1_e)) {
                                                 print lines[i] >> part1_file
                                             } else {
                                                 print lines[i] >> part2_file
                                             }
                                         }
-                                        printf "%s|%s\n", c1_name, c2_name
+                                        printf \"%s|%s\n\", c1_name, c2_name
                                         exit 0
                                     } else if (cnt1 == lines_count) {
                                         S = r1_s; E = r1_e
@@ -946,20 +942,19 @@ split_oversized_btree_shards() {
                             if (S == E) {
                                 P = S
                                 K = K + 1
-                                S = P "a"
-                                E = P "z"
+                                S = P \"a\"
+                                E = P \"z\"
                                 continue
                             }
                         }
                     }
-                ' "$_entries_all")"
+                " "$_entries_all")"
 
                 rm -f "$_entries_all"
 
                 _c1_id="${_child_names%%|*}"
                 _c2_id="${_child_names#*|}"
 
-                # Safety guard: reject self-split or identical child names
                 if [ -z "$_c1_id" ] || [ -z "$_c2_id" ] || [ "$_c1_id" = "$_c2_id" ] || [ "$_c1_id" = "$_s_id" ] || [ "$_c2_id" = "$_s_id" ]; then
                     rm -f "$_part1_tmp" "$_part2_tmp"
                     continue
@@ -967,23 +962,11 @@ split_oversized_btree_shards() {
 
                 _wrote_any=0
 
-                # Write Child 1 if part1 has entries
                 if [ -n "$_c1_id" ] && [ -s "$_part1_tmp" ]; then
                     _c1_file="${RNEX_WIKI_ROOT}/${_c1_id}.md"
                     _c1_existed=0
                     [ -f "$_c1_file" ] && _c1_existed=1
-                    _c1_merged="${_c1_file}.mrg.$$"
-                    : > "$_c1_merged"
-                    if [ "$_c1_existed" -eq 1 ]; then
-                        LC_ALL=C grep '^- \*\*' "$_c1_file" >> "$_c1_merged" 2>/dev/null || true
-                    fi
-                    cat "$_part1_tmp" >> "$_c1_merged"
-                    atomic_sort_unique_file "$_c1_merged"
-                    _c1_tmp="${_c1_file}.tmp.$$"
-                    printf '# Wiki Index Shard: %s\n<!-- base: %s -->\n\n' "$_c1_id" "$_base_id" > "$_c1_tmp"
-                    cat "$_c1_merged" >> "$_c1_tmp"
-                    mv "$_c1_tmp" "$_c1_file"
-                    rm -f "$_c1_merged"
+                    write_btree_shard_entries "$_c1_file" "$_base_id" "$_part1_tmp" "1"
                     if [ "$_c1_existed" -eq 1 ]; then
                         append_wiki_log_entry "$_action" "updated: \`${_c1_id}.md\` (split sub-shard)"
                     else
@@ -992,23 +975,11 @@ split_oversized_btree_shards() {
                     _wrote_any=1
                 fi
 
-                # Write Child 2 if part2 has entries
                 if [ -n "$_c2_id" ] && [ -s "$_part2_tmp" ]; then
                     _c2_file="${RNEX_WIKI_ROOT}/${_c2_id}.md"
                     _c2_existed=0
                     [ -f "$_c2_file" ] && _c2_existed=1
-                    _c2_merged="${_c2_file}.mrg.$$"
-                    : > "$_c2_merged"
-                    if [ "$_c2_existed" -eq 1 ]; then
-                        LC_ALL=C grep '^- \*\*' "$_c2_file" >> "$_c2_merged" 2>/dev/null || true
-                    fi
-                    cat "$_part2_tmp" >> "$_c2_merged"
-                    atomic_sort_unique_file "$_c2_merged"
-                    _c2_tmp="${_c2_file}.tmp.$$"
-                    printf '# Wiki Index Shard: %s\n<!-- base: %s -->\n\n' "$_c2_id" "$_base_id" > "$_c2_tmp"
-                    cat "$_c2_merged" >> "$_c2_tmp"
-                    mv "$_c2_tmp" "$_c2_file"
-                    rm -f "$_c2_merged"
+                    write_btree_shard_entries "$_c2_file" "$_base_id" "$_part2_tmp" "1"
                     if [ "$_c2_existed" -eq 1 ]; then
                         append_wiki_log_entry "$_action" "updated: \`${_c2_id}.md\` (split sub-shard)"
                     else
@@ -1017,7 +988,6 @@ split_oversized_btree_shards() {
                     _wrote_any=1
                 fi
 
-                # If at least one child was written, remove oversized parent shard
                 if [ "$_wrote_any" -eq 1 ]; then
                     rm -f "$_shard_cand"
                     append_wiki_log_entry "$_action" "deleted: \`${_s_id}.md\` (split into sub-shards)"
@@ -1040,7 +1010,7 @@ split_oversized_btree_shards() {
 #          those missing entries into their respective .rnex/wiki/*.md shards,
 #          maintains strict LC_ALL=C sort order, and updates .rnex/wiki/index.md.
 # @param $1: missing_manifest_file - File containing missing workspace_rel_paths.
-# @param $2: source_arg_label     - Optional CLI argument for log attribution.
+# @param $2: source_arg_label      - Optional CLI argument for log attribution.
 # @returns: 0 on success.
 # @sideEffects: Updates .rnex/wiki/*.md shards, index.md, and log.md.
 # -----------------------------------------------------------------------------
@@ -1050,7 +1020,6 @@ ingest_missing_sources_into_btree() {
     mkdir -p "$RNEX_WIKI_ROOT"
     ensure_baseline_flat_shards
 
-    # If zero missing sources, inspect existing shards for any needed splits before declaring up-to-date
     if [ ! -s "$_missing_file" ] && [ -f "$RNEX_WIKI_INDEX_FILE" ]; then
         _pre_splits="$(split_oversized_btree_shards "ingest")"
         if [ -z "$_pre_splits" ] || [ "$_pre_splits" -eq 0 ]; then
@@ -1078,8 +1047,6 @@ ingest_missing_sources_into_btree() {
             [ -f "$_abs_path" ] || continue
 
             _shard_id="$(derive_shard_id_for_workspace_path "$_rel_path")"
-            _shard_file="${RNEX_WIKI_ROOT}/${_shard_id}.md"
-
             _meta="$(extract_markdown_title_and_summary "$_abs_path" "$(basename "$_rel_path")")"
             _raw_title="${_meta%%|*}"
             _raw_summary="${_meta#*|}"
@@ -1097,28 +1064,13 @@ ingest_missing_sources_into_btree() {
 
             _entry_line="- **[${_title}](${_rel_link})** (\`${_rel_path}\`) — ${_summary}"
 
-            # Route dynamically to existing leaf sub-shard or base shard
             _target_shard_file="$(resolve_target_btree_shard_file "$_shard_id" "$_title" "$_rel_path")"
+            _target_shard_id="$(basename "$_target_shard_file" .md)"
 
             _shard_existed=0
             [ -f "$_target_shard_file" ] && _shard_existed=1
 
-            # Extract existing catalog entries from target shard, append new entry, and sort
-            _entries_tmp="${_target_shard_file}.entries.$$"
-            if [ -f "$_target_shard_file" ]; then
-                LC_ALL=C grep '^- \*\*' "$_target_shard_file" > "$_entries_tmp" 2>/dev/null || : > "$_entries_tmp"
-            else
-                : > "$_entries_tmp"
-            fi
-            printf '%s\n' "$_entry_line" >> "$_entries_tmp"
-            atomic_sort_unique_file "$_entries_tmp"
-
-            _shard_tmp="${_target_shard_file}.tmp.$$"
-            _target_shard_id="$(basename "$_target_shard_file" .md)"
-            printf '# Wiki Index Shard: %s\n<!-- base: %s -->\n\n' "$_target_shard_id" "$_shard_id" > "$_shard_tmp"
-            cat "$_entries_tmp" >> "$_shard_tmp"
-            rm -f "$_entries_tmp"
-            mv "$_shard_tmp" "$_target_shard_file"
+            write_btree_shard_entries "$_target_shard_file" "$_shard_id" "$_entry_line" "0"
 
             _ingested_count=$((_ingested_count + 1))
             append_wiki_log_entry "ingest" "created: \`${_rel_path}\` (indexed into \`${_target_shard_id}.md\`)"
@@ -1130,7 +1082,6 @@ ingest_missing_sources_into_btree() {
         done 3< "$_missing_file"
     fi
 
-    # Post-ingestion recursive shard splitting for any shard exceeding threshold
     _splits_count="$(split_oversized_btree_shards "ingest")"
 
     if [ "$_ingested_count" -gt 0 ] || [ "${_splits_count:-0}" -gt 0 ] || [ ! -f "$RNEX_WIKI_INDEX_FILE" ]; then
@@ -1150,58 +1101,4 @@ ingest_missing_sources_into_btree() {
     fi
     printf 'Ingested %s missing source(s) into %s.\n' "$_ingested_count" "$RNEX_WIKI_REL_DIR"
     return 0
-}
-
-# -----------------------------------------------------------------------------
-# Backwards-Compatible Helpers
-# -----------------------------------------------------------------------------
-purge_legacy_wiki_artifacts() {
-    mkdir -p "$RNEX_WIKI_ROOT" || return 1
-    if [ -f "${RNEX_WIKI_ROOT}/_log.md" ]; then
-        if [ ! -f "$RNEX_WIKI_LOG_FILE" ]; then
-            mv "${RNEX_WIKI_ROOT}/_log.md" "$RNEX_WIKI_LOG_FILE"
-        fi
-    fi
-    find "$RNEX_WIKI_ROOT" -type l -exec rm -f {} + 2>/dev/null || true
-    rm -rf "${RNEX_WIKI_ROOT}/_graph" \
-           "${RNEX_WIKI_ROOT}/_index" \
-           "${RNEX_WIKI_ROOT}/concepts" \
-           "${RNEX_WIKI_ROOT}/repos" \
-           "${RNEX_WIKI_ROOT}/sources" \
-           "${RNEX_WIKI_ROOT}/entities" \
-           "${RNEX_WIKI_ROOT}/overview" \
-           "${RNEX_WIKI_ROOT}/_index.md" \
-           "${RNEX_WIKI_ROOT}/hot.md" 2>/dev/null || true
-    return 0
-}
-
-ensure_baseline_flat_shards() {
-    _has_nexus_shard=0
-    for _nf in "${RNEX_WIKI_ROOT}"/repo-nexus*.md; do
-        [ -f "$_nf" ] && { _has_nexus_shard=1; break; }
-    done
-    if [ "$_has_nexus_shard" -eq 0 ]; then
-        cat <<'EOF' > "${RNEX_WIKI_ROOT}/repo-nexus.md"
-# Wiki Shard: repo-nexus
-
-- *(No source pages indexed for `repo-nexus` yet.)*
-EOF
-    fi
-    return 0
-}
-
-compile_flat_btree_wiki() {
-    compile_root_index_router
-}
-
-purge_legacy_wiki_directories_and_symlinks() {
-    purge_legacy_wiki_artifacts
-}
-
-ensure_baseline_btree_shards() {
-    ensure_baseline_flat_shards
-}
-
-rebalance_btree_shards_and_compile_root() {
-    compile_root_index_router
 }

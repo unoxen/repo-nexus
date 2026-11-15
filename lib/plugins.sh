@@ -365,24 +365,15 @@ plugin_get_version() {
   fi
 }
 
-# Resolve target user skill directory for a provider plugin from plugin.yaml (with fallback).
+# Resolve target user skill directory for a provider plugin from plugin.yaml.
 plugin_get_skill_dir() {
   _pgs_name="$1"
   _pgs_pdir="${2:-}"
+  [ -n "$_pgs_pdir" ] || _pgs_pdir="$(plugin_resolve_dir "$_pgs_name" 2>/dev/null || true)"
   [ -n "$_pgs_pdir" ] || _pgs_pdir="$(find_plugin_dir "$_pgs_name" 2>/dev/null || true)"
   _pgs_dir=""
   if [ -n "$_pgs_pdir" ]; then
     _pgs_dir="$(plugin_get_field "$_pgs_pdir" "skill_dir" 2>/dev/null || true)"
-  fi
-  if [ -z "$_pgs_dir" ]; then
-    case "$_pgs_name" in
-      copilot)  _pgs_dir=".github/skills" ;;
-      cursor)   _pgs_dir=".cursor/rules" ;;
-      claude)   _pgs_dir=".claude/skills" ;;
-      windsurf) _pgs_dir=".windsurf/rules" ;;
-      gemini)   _pgs_dir=".agents/skills" ;;
-      codex)    _pgs_dir=".codex/skills" ;;
-    esac
   fi
   printf '%s' "$_pgs_dir"
 }
@@ -418,13 +409,10 @@ plugin_list_instructions() {
   ' "$_pdir/plugin.yaml"
 }
 
-# Substitute configurable placeholders (e.g. {wiki_dir}, {raw_dir}) in template destination paths.
+# Substitute configurable placeholders declared in plugin.yaml config_defaults in template destination paths.
 plugin_resolve_placeholders() {
   _p="$1"; _pd="$2"; _str="$3"
   _res="$(printf '%s' "$_str" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d "'\"")"
-
-  # Normalize legacy static prefixes into placeholders prior to expansion
-  _res="$(printf '%s' "$_res" | sed -e 's|^\.\{0,1\}\/\{0,1\}wiki/|{wiki_dir}/|' -e 's|^\.\{0,1\}\/\{0,1\}raw/|{raw_dir}/|')"
 
   if [ -f "$_pd/plugin.yaml" ]; then
     _keys="$(awk '
@@ -462,21 +450,6 @@ plugin_resolve_placeholders() {
     done
   fi
 
-  # Fallback resolution for core wiki/raw placeholders
-  _w_val="$(yaml_plugin_get "$_p" "wiki_dir" 2>/dev/null || true)"
-  [ -n "$_w_val" ] || _w_val="wiki"
-  _w_val="$(normalize_rel_path "$_w_val")"
-  [ -n "$_w_val" ] || _w_val="wiki"
-
-  # {raw_dir} (legacy alias) resolves to the first explicit directory source; when no
-  # directory source exists it stays unresolved so callers can skip the destination.
-  _r_val="$(plugin_primary_source_dir "$_p" 2>/dev/null || true)"
-
-  _res="$(printf '%s' "$_res" | sed -e "s|{wiki_dir}|${_w_val}|g")"
-  if [ -n "$_r_val" ]; then
-    _res="$(printf '%s' "$_res" | sed -e "s|{raw_dir}|${_r_val}|g")"
-  fi
-
   _res="$(printf '%s' "$_res" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d "'\"" | sed -e 's#^\./##')"
 
   printf '%s' "$_res"
@@ -485,27 +458,55 @@ plugin_resolve_placeholders() {
 plugin_instantiate_template() {
   _p="$1"; _pd="$2"; _src="$3"; _dest="$4"
 
-  _w_val="$(yaml_plugin_get "$_p" "wiki_dir" 2>/dev/null || true)"
-  [ -z "$_w_val" ] && _w_val="wiki"
-  _w_val="$(normalize_rel_path "$_w_val")"
-  [ -z "$_w_val" ] && _w_val="wiki"
-
-  _r_val="$(plugin_primary_source_dir "$_p" 2>/dev/null || true)"
-  [ -z "$_r_val" ] && _r_val="docs"
-
   # {sources}: human-readable list of configured intake sources (sed-escaped)
   _s_val="$(plugin_sources_display "$_p" 2>/dev/null || true)"
-  [ -z "$_s_val" ] && _s_val="$(printf '\140%s/\140' "$_r_val")"
   _s_val="$(printf '%s' "$_s_val" | sed -e 's/[\\&|]/\\&/g')"
 
   # {today}: current UTC date (ISO-8601, YYYY-MM-DD)
   _t_val="$(date -u +%Y-%m-%d 2>/dev/null || date +%Y-%m-%d 2>/dev/null || date +%F 2>/dev/null || echo "2026-10-15")"
 
-  sed -e "s|{wiki_dir}|$_w_val|g" \
-      -e "s|{raw_dir}|$_r_val|g" \
-      -e "s|{sources}|$_s_val|g" \
+  cp "$_src" "$_dest"
+  if [ -f "$_pd/plugin.yaml" ]; then
+    _keys="$(awk '
+      /^config_defaults:[ ]*$/ || /^config_defaults:[ ]*#/ { in_c=1; next }
+      in_c && /^[^ #]/ { exit }
+      in_c && /^[ ]*[a-zA-Z0-9_.-]+:[ ]*/ {
+        k = $0
+        sub(/^[ ]*/, "", k)
+        sub(/:.*/, "", k)
+        print k
+      }
+    ' "$_pd/plugin.yaml")"
+    for _k in $_keys; do
+      _v="$(yaml_plugin_get "$_p" "$_k" 2>/dev/null || true)"
+      if [ -z "$_v" ]; then
+        _v="$(awk -v k="$_k" '
+          /^config_defaults:[ ]*$/ || /^config_defaults:[ ]*#/ { in_c=1; next }
+          in_c && /^[^ #]/ { exit }
+          in_c && $0 ~ ("^[ ]*" k ":") {
+            sub("^[ ]*" k ":[ ]*", "")
+            sub(/[ ]*#.*/, "")
+            gsub(/["\047]/, "")
+            print
+            exit
+          }
+        ' "$_pd/plugin.yaml")"
+      fi
+      case "$_k" in
+        *_dir|dir) _v="$(normalize_rel_path "$_v")" ;;
+      esac
+      if [ -n "$_v" ]; then
+        _v_esc="$(printf '%s' "$_v" | sed -e 's/[\\&|]/\\&/g')"
+        _tmp_inst="$(mktemp)"
+        sed -e "s|{$_k}|$_v_esc|g" "$_dest" > "$_tmp_inst" && mv "$_tmp_inst" "$_dest"
+      fi
+    done
+  fi
+
+  _tmp_inst="$(mktemp)"
+  sed -e "s|{sources}|$_s_val|g" \
       -e "s|{today}|$_t_val|g" \
-      "$_src" > "$_dest"
+      "$_dest" > "$_tmp_inst" && mv "$_tmp_inst" "$_dest"
 }
 
 # Deterministically sync plugin asset directories and manifest files into destination
@@ -515,7 +516,6 @@ sync_plugin_bundle() {
   [ "$_spb_src" != "$_spb_dest" ] || return 0
 
   mkdir -p "$_spb_dest"
-  rm -rf "${_spb_dest:?}/prompts" 2>/dev/null || true
   for _sub in rules workflows instructions skills agents templates hooks commands lib bin; do
     if [ -d "$_spb_src/$_sub" ]; then
       rm -rf "${_spb_dest:?}/$_sub"
@@ -539,89 +539,8 @@ sync_plugin_bundle() {
   done
 }
 
-# Clean up obsolete leaked root ./raw and ./wiki directories if non-default paths are configured
-_clean_leaked_plugin_dirs() {
-  _cld_root="${1:-$NEXUS_DIR}"
-  _cld_raw="$(normalize_rel_path "$2")"
-  _cld_wiki="$(normalize_rel_path "$3")"
-  _cld_plugin="${4:-}"
-  [ -n "$_cld_raw" ] || _cld_raw="docs"
-  [ -n "$_cld_wiki" ] || _cld_wiki="wiki"
-
-  if [ "$_cld_raw" != "raw" ] && [ -d "$_cld_root/raw" ]; then
-    _raw_is_configured=0
-    if [ -n "$_cld_plugin" ] && plugin_source_dirs "$_cld_plugin" 2>/dev/null | grep -qx 'raw'; then
-      _raw_is_configured=1
-    fi
-    if [ "$_raw_is_configured" -eq 0 ]; then
-      if ! rmdir "$_cld_root/raw" 2>/dev/null; then
-        _can_clean=1
-        for _f in "$_cld_root/raw"/* "$_cld_root/raw"/.[!.]* "$_cld_root/raw"/..?*; do
-          [ -e "$_f" ] || continue
-          _b="$(basename "$_f")"
-          [ "$_b" = ".gitkeep" ] && continue
-          [ -f "$_cld_root/$_cld_raw/$_b" ] && cmp -s "$_f" "$_cld_root/$_cld_raw/$_b" && continue
-          _can_clean=0
-          break
-        done
-        if [ "$_can_clean" -eq 1 ]; then
-          rm -rf "$_cld_root/raw" 2>/dev/null || true
-          log_dim "Cleaned up obsolete root raw/ directory"
-        fi
-      else
-        log_dim "Removed empty obsolete root raw/ directory"
-      fi
-    fi
-  fi
-
-  if [ "$_cld_wiki" != "wiki" ] && [ -d "$_cld_root/wiki" ]; then
-    if ! rmdir "$_cld_root/wiki" 2>/dev/null; then
-      _can_clean=1
-      for _f in "$_cld_root/wiki"/* "$_cld_root/wiki"/.[!.]* "$_cld_root/wiki"/..?*; do
-        [ -e "$_f" ] || continue
-        _b="$(basename "$_f")"
-        case "$_b" in
-          index.md|_index.md|_log.md|.gitkeep) continue ;;
-          *)
-            [ -f "$_cld_root/$_cld_wiki/$_b" ] && cmp -s "$_f" "$_cld_root/$_cld_wiki/$_b" && continue
-            _can_clean=0
-            break
-            ;;
-        esac
-      done
-      if [ "$_can_clean" -eq 1 ]; then
-        rm -rf "$_cld_root/wiki" 2>/dev/null || true
-        log_dim "Cleaned up obsolete root wiki/ directory"
-      fi
-    else
-      log_dim "Removed empty obsolete root wiki/ directory"
-    fi
-  fi
-}
-
 # Sync plugins into scoped directories: .rnex/plugins/<plugin-name>/
 sync_plugins() {
-  # Clean up any bogus placeholder directories accidentally created in workspace root
-  for _bogus in \
-    "$NEXUS_DIR/\"{wiki_dir}" \
-    "$NEXUS_DIR/\"{raw_dir}" \
-    "$NEXUS_DIR/{wiki_dir}" \
-    "$NEXUS_DIR/{raw_dir}"; do
-    if [ -d "$_bogus" ]; then
-      rm -rf "$_bogus"
-      log_dim "Cleaned up leaked placeholder directory: $(basename "$_bogus")"
-    fi
-  done
-
-  # Clean up obsolete leaked root ./raw and ./wiki directories if non-default paths are configured
-  for _cld_p in $(yaml_list_plugins 2>/dev/null); do
-    _raw_cfg="$(plugin_primary_source_dir "$_cld_p" 2>/dev/null || true)"
-    _wiki_cfg="$(yaml_plugin_get "$_cld_p" "wiki_dir" 2>/dev/null || true)"
-    if [ -n "$_wiki_cfg" ] || [ -n "$_raw_cfg" ]; then
-      _clean_leaked_plugin_dirs "$NEXUS_DIR" "${_raw_cfg:-docs}" "$(normalize_rel_path "${_wiki_cfg:-wiki}")" "$_cld_p"
-    fi
-  done
-
   # 1. Prune plugins that are disabled or no longer enabled in config
   if [ -d "$NEXUS_DIR/.rnex/plugins" ]; then
     for _existing in "$NEXUS_DIR/.rnex/plugins"/*; do
@@ -690,7 +609,7 @@ sync_plugins() {
       fi
     done
 
-    # Initialize templates declared in plugin (functional external dirs like raw/, wiki/)
+    # Initialize templates declared in plugin
     plugin_list_templates "$_pdir" | while read -r _item; do
       [ -n "$_item" ] || continue
       _s="${_item%%:*}"
@@ -699,11 +618,6 @@ sync_plugins() {
       _d="$(printf '%s' "$_d" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d "'\"")"
 
       _d="$(plugin_resolve_placeholders "$_pname" "$_pdir" "$_d")"
-
-      # No explicit directory source configured (e.g. glob-only sources): nothing to provision
-      case "$_d" in
-        *"{raw_dir}"*) continue ;;
-      esac
 
       # Defensive guard: never create directories or files if placeholder expansion failed or quotes leaked
       case "$_d" in
@@ -790,11 +704,6 @@ plugin_source_dirs() {
     esac
     printf '%s\n' "$_psd_e"
   done
-}
-
-# First provisionable directory source (legacy {raw_dir} placeholder); may be empty
-plugin_primary_source_dir() {
-  plugin_source_dirs "$1" | sed -n '1p'
 }
 
 # Human-readable source list for templates, e.g.: `docs/`, `repos/**/README.md`

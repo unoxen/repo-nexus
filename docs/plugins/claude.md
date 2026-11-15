@@ -7,7 +7,7 @@ description: Integrate Anthropic Claude Code with Repo Nexus, generating zero-lo
 
 The **`claude`** plugin integrates Anthropic Claude Code CLI (`claude`) and Claude Desktop into a Repo Nexus Virtual Meta-Repo.
 
-All AI assistants in Repo Nexus share `AGENTS.md` at the workspace root as the single universal source of truth for routing. When enabled, the `claude` plugin generates zero-logic User Skill pointers into `.claude/skills/` (e.g. `rnex-clone-sync/SKILL.md`, `rnex-batch-exec/SKILL.md`, `rnex-llm-wiki-ingest/SKILL.md`).
+All AI assistants in Repo Nexus share `AGENTS.md` at the workspace root as the single universal source of truth for routing. When enabled, the `claude` plugin generates zero-logic User Skill pointers into `.claude/skills/` (e.g. `rnex-clone-sync/SKILL.md`, `rnex-batch-exec/SKILL.md`, `rnex-<plugin>-<skill>/SKILL.md`).
 
 Operational skills, rules, and subagents remain cleanly encapsulated within `.rnex/skills/` and active plugin directories (`.rnex/plugins/<plugin-name>/`).
 
@@ -79,7 +79,7 @@ plugins:
 
 ## Generated Directory Structure
 
-When `claude` is enabled with functional plugins like `llm-wiki`, it generates:
+When `claude` is enabled alongside any functional plugin (`<plugin>`), it generates:
 
 ```text
 my-workspace/
@@ -93,14 +93,12 @@ my-workspace/
 │       │   └── SKILL.md
 │       ├── rnex-workspace-status/
 │       │   └── SKILL.md
-│       ├── rnex-llm-wiki-ingest/
-│       │   └── SKILL.md
-│       └── rnex-llm-wiki-lint/
+│       └── rnex-<plugin>-<skill>/
 │           └── SKILL.md
 ├── .rnex/
 │   ├── skills/                        # Core workspace agentic skills
 │   └── plugins/
-│       └── llm-wiki/              # Scoped plugin skills and rules
+│       └── <plugin>/                  # Scoped plugin skills and rules
 └── rnex.yaml
 ```
 

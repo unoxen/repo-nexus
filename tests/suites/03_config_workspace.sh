@@ -23,10 +23,8 @@ if ! grep -q "test-app:" "$TEST_WORKSPACE/rnex.yaml" 2>/dev/null; then
 fi
 
 # --------------------------------------------------------------------------
-run_test "Gitignore reconciliation removes legacy lint_trigger_counter and ensures safe recursive .rnex patterns with rnex.yaml excluded"
-printf '\n.rnex/.lint_trigger_counter\nwiki/.lint_trigger_counter\n.lint_trigger_counter\n' >> "$TEST_WORKSPACE/.gitignore"
+run_test "Gitignore reconciliation ensures safe recursive .rnex patterns with rnex.yaml excluded"
 "$TEST_WORKSPACE/rnex" sync >/dev/null
-grep -q "lint_trigger_counter" "$TEST_WORKSPACE/.gitignore" && { fail "Legacy lint_trigger_counter still present in .gitignore"; exit 1; }
 grep -q '\*\*/\.rnex\*' "$TEST_WORKSPACE/.gitignore" || { fail "**/.rnex* missing from .gitignore after sync"; exit 1; }
 grep -q '\*\*/rnex\*' "$TEST_WORKSPACE/.gitignore" || { fail "**/rnex* missing from .gitignore after sync"; exit 1; }
 grep -q 'repos/\*' "$TEST_WORKSPACE/.gitignore" || { fail "repos/* missing from .gitignore after sync"; exit 1; }
@@ -211,60 +209,6 @@ chmod +x "$TEST_VS_WS/rnex"
 "$TEST_VS_WS/rnex" init -y --code-workspace "$TEST_VS_WS" >/dev/null
 [ -f "$TEST_VS_WS/vscode-workspace.code-workspace" ] || { fail ".code-workspace was not created by init --code-workspace"; exit 1; }
 grep -q "code_workspace:[ ]*true" "$TEST_VS_WS/rnex.yaml" || { fail "code_workspace not enabled in rnex.yaml"; exit 1; }
-pass
-
-# --------------------------------------------------------------------------
-run_test "Version-aware upgrade in rnex sync and update/upgrade commands"
-TEST_UPGRADE_WS="$TEST_TMP/upgrade-workspace"
-mkdir -p "$TEST_UPGRADE_WS"
-cp "$CLI" "$TEST_UPGRADE_WS/rnex"
-chmod +x "$TEST_UPGRADE_WS/rnex"
-cp -r "$DIR/plugins" "$TEST_UPGRADE_WS/plugins"
-cp -r "$DIR/skills" "$TEST_UPGRADE_WS/skills"
-cp "$DIR/package.json" "$TEST_UPGRADE_WS/package.json"
-
-# Write older pre-v0.5.0 configuration (missing version & code_workspace)
-cat <<'OLD_YAML' > "$TEST_UPGRADE_WS/rnex.yaml"
-# Pre-versioned workspace configuration
-repos_dir: ./repos
-ai_instructions: AGENTS.md
-plugins:
-repos:
-OLD_YAML
-
-cat <<'OLD_AGENTS' > "$TEST_UPGRADE_WS/AGENTS.md"
-<!-- REPO-NEXUS:START -->
-# Multi-Repo AI Workspace Context
-Legacy instructions without mandatory startup
-<!-- REPO-NEXUS:END -->
-OLD_AGENTS
-
-# rnex status should detect version inconsistency without mutating
-_status_audit="$(cd "$TEST_UPGRADE_WS" && { ./rnex status 2>&1 || true; })"
-echo "$_status_audit" | grep -q "older than CLI" || { fail "rnex status did not audit version mismatch"; exit 1; }
-grep -q "ai_instructions:" "$TEST_UPGRADE_WS/rnex.yaml" || { fail "rnex status mutated rnex.yaml"; exit 1; }
-
-# Sync with -y should detect missing/older version, upgrade config, and reconcile instructions
-(cd "$TEST_UPGRADE_WS" && ./rnex sync -y >/dev/null)
-_ws_cli_ver="$("$TEST_UPGRADE_WS/rnex" version 2>&1 | awk '{print $NF}')"
-grep -q "version:[ ]*$_ws_cli_ver" "$TEST_UPGRADE_WS/rnex.yaml" || { fail "rnex sync -y did not add version $_ws_cli_ver to rnex.yaml"; exit 1; }
-! grep -q "ai_instructions:" "$TEST_UPGRADE_WS/rnex.yaml" || { fail "ai_instructions should be stripped during upgrade"; exit 1; }
-grep -q "code_workspace:[ ]*false" "$TEST_UPGRADE_WS/rnex.yaml" || { fail "rnex sync -y did not populate missing code_workspace key"; exit 1; }
-grep -q "git:" "$TEST_UPGRADE_WS/rnex.yaml" || { fail "rnex sync -y did not populate missing git: section"; exit 1; }
-grep -q "post-merge:" "$TEST_UPGRADE_WS/rnex.yaml" || { fail "rnex sync -y did not populate missing git.hooks"; exit 1; }
-! grep -q "git_hooks:" "$TEST_UPGRADE_WS/rnex.yaml" || { fail "legacy git_hooks still present after upgrade"; exit 1; }
-grep -q "CRITICAL: If \`.rnex/ai-instructions.md\` exists, you MUST read and strictly follow all instructions in \`.rnex/ai-instructions.md\`" "$TEST_UPGRADE_WS/AGENTS.md" || { fail "AGENTS.md missing critical directive after upgrade"; exit 1; }
-grep -q "Mandatory Execution Sequence" "$TEST_UPGRADE_WS/.rnex/ai-instructions.md" || { fail ".rnex/ai-instructions.md not updated with Mandatory Execution Sequence"; exit 1; }
-grep -q "Skills" "$TEST_UPGRADE_WS/.rnex/ai-instructions.md" || { fail ".rnex/ai-instructions.md missing subagents reference"; exit 1; }
-
-# Running sync when already at current version should succeed cleanly
-(cd "$TEST_UPGRADE_WS" && ./rnex sync -y >/dev/null)
-
-# Verify deleted update and upgrade commands fail with unknown command
-for _del_cmd in update upgrade; do
-  _del_err="$(cd "$TEST_UPGRADE_WS" && { ./rnex "$_del_cmd" 2>&1 || true; })"
-  echo "$_del_err" | grep -qi "Unknown command" || { fail "Deleted command 'rnex $_del_cmd' did not fail with Unknown command"; exit 1; }
-done
 pass
 
 # --------------------------------------------------------------------------
@@ -456,21 +400,10 @@ grep -q "Repository Mode Rules" "$TEST_RO_WS/.rnex/ai-instructions.md" || { fail
 [ -f "$TEST_RO_WS/.rnex/repos-instructions.md" ] || { fail ".rnex/repos-instructions.md missing"; exit 1; }
 grep -q "read-only" "$TEST_RO_WS/.rnex/repos-instructions.md" || { fail "read-only directive missing from compiled repos instructions"; exit 1; }
 
-# 7. Lazy on-demand .rnex behavior:
-# - If user or plugin creates a custom file in member .rnex/, it is preserved
-mkdir -p "$TEST_RO_WS/repos/standard-repo/.rnex"
-echo "custom member context" > "$TEST_RO_WS/repos/standard-repo/.rnex/custom.txt"
+# 7. Member repositories remain 100% clean without .rnex/ directories after sync
 (cd "$TEST_RO_WS" && ./rnex sync -y --quiet >/dev/null)
-[ -f "$TEST_RO_WS/repos/standard-repo/.rnex/custom.txt" ] || { fail "custom member .rnex file deleted during sync"; exit 1; }
-
-# - If member repo only has boilerplate README, rnex sync prunes it
-mkdir -p "$TEST_RO_WS/repos/reference-repo/.rnex"
-cat <<'EOF_BOILERPLATE' > "$TEST_RO_WS/repos/reference-repo/.rnex/README.md"
-# .rnex — Repo Nexus Workspace Integration
-Repo Nexus Workspace Integration boilerplate
-EOF_BOILERPLATE
-(cd "$TEST_RO_WS" && ./rnex sync -y --quiet >/dev/null)
-[ ! -d "$TEST_RO_WS/repos/reference-repo/.rnex" ] || { fail "boilerplate .rnex was not pruned by sync"; exit 1; }
+[ ! -d "$TEST_RO_WS/repos/standard-repo/.rnex" ] || { fail ".rnex was created inside member repo standard-repo"; exit 1; }
+[ ! -d "$TEST_RO_WS/repos/reference-repo/.rnex" ] || { fail ".rnex was created inside member repo reference-repo"; exit 1; }
 pass
 
 # --------------------------------------------------------------------------

@@ -1,9 +1,13 @@
 name: gemini
-version: 0.9.24
+version: 0.9.25
 description: Google Gemini and Antigravity integration (maintains GEMINI.md instructions and generates user skills in .agents/skills/)
 author: unoxen
 homepage: https://github.com/unoxen/repo-nexus
+instruction_file: GEMINI.md
 skill_dir: .agents/skills
+ignore_file: .geminiignore
+ignore_comment: "Gemini CLI file discovery un-ignore for member repos"
+ignore_message: "Created .geminiignore (enabling Gemini CLI file discovery for member repos)"
 
 config_defaults:
   skills: true
