@@ -103,7 +103,7 @@ load_wiki_config_contract() {
     if [ -n "${RNEX_CFG_WIKI_DIR:-}" ]; then
         _wiki_rel="$RNEX_CFG_WIKI_DIR"
     else
-        _wiki_rel="$(_lookup_llm_wiki_cfg "wiki_dir")"
+        _wiki_rel="$(_lookup_llm_wiki_cfg "wikiDir")"
         [ -n "$_wiki_rel" ] || _wiki_rel=".rnex/wiki"
     fi
 
@@ -114,7 +114,7 @@ load_wiki_config_contract() {
     # OWASP A03: Reject empty paths, path traversal (".."), or absolute paths
     case "$_wiki_rel" in
         ''|*..*|/*)
-            printf 'Error [security]: Unsafe wiki_dir path "%s" rejected (OWASP A03).\n' "$_wiki_rel" >&2
+            printf 'Error [security]: Unsafe wikiDir path "%s" rejected (OWASP A03).\n' "$_wiki_rel" >&2
             return 1
             ;;
     esac
@@ -126,7 +126,7 @@ load_wiki_config_contract() {
     if [ -n "${RNEX_CFG_INDEX_FILE:-}" ]; then
         _idx_name="$RNEX_CFG_INDEX_FILE"
     else
-        _idx_name="$(_lookup_llm_wiki_cfg "index_file")"
+        _idx_name="$(_lookup_llm_wiki_cfg "indexFile")"
         [ -n "$_idx_name" ] || _idx_name="index.md"
     fi
     RNEX_WIKI_INDEX_FILE="${RNEX_WIKI_ROOT}/${_idx_name}"
@@ -135,7 +135,7 @@ load_wiki_config_contract() {
     if [ -n "${RNEX_CFG_LOG_FILE:-}" ]; then
         _log_name="$RNEX_CFG_LOG_FILE"
     else
-        _log_name="$(_lookup_llm_wiki_cfg "log_file")"
+        _log_name="$(_lookup_llm_wiki_cfg "logFile")"
         [ -n "$_log_name" ] || _log_name="log.md"
     fi
     RNEX_WIKI_LOG_FILE="${RNEX_WIKI_ROOT}/${_log_name}"
@@ -147,14 +147,14 @@ load_wiki_config_contract() {
     if [ -n "${RNEX_CFG_BTREE_ROOT_MAX_LINES:-}" ]; then
         RNEX_WIKI_BTREE_MAX_ROOT_LINES="$RNEX_CFG_BTREE_ROOT_MAX_LINES"
     else
-        RNEX_WIKI_BTREE_MAX_ROOT_LINES="$(_lookup_llm_wiki_cfg "btree_root_max_lines")"
+        RNEX_WIKI_BTREE_MAX_ROOT_LINES="$(_lookup_llm_wiki_cfg "btreeRootMaxLines")"
         [ -n "$RNEX_WIKI_BTREE_MAX_ROOT_LINES" ] || RNEX_WIKI_BTREE_MAX_ROOT_LINES=80
     fi
 
     if [ -n "${RNEX_CFG_BTREE_SHARD_MAX_ENTRIES:-}" ]; then
         RNEX_WIKI_BTREE_SHARD_MAX_ENTRIES="$RNEX_CFG_BTREE_SHARD_MAX_ENTRIES"
     else
-        RNEX_WIKI_BTREE_SHARD_MAX_ENTRIES="$(_lookup_llm_wiki_cfg "btree_shard_max_entries")"
+        RNEX_WIKI_BTREE_SHARD_MAX_ENTRIES="$(_lookup_llm_wiki_cfg "btreeShardMaxEntries")"
         [ -n "$RNEX_WIKI_BTREE_SHARD_MAX_ENTRIES" ] || RNEX_WIKI_BTREE_SHARD_MAX_ENTRIES=100
     fi
 
@@ -162,7 +162,7 @@ load_wiki_config_contract() {
     if [ -n "${RNEX_CFG_LOG_MAX_RECORDS:-}" ]; then
         RNEX_WIKI_LOG_MAX_RECORDS="$RNEX_CFG_LOG_MAX_RECORDS"
     else
-        RNEX_WIKI_LOG_MAX_RECORDS="$(_lookup_llm_wiki_cfg "log_max_records")"
+        RNEX_WIKI_LOG_MAX_RECORDS="$(_lookup_llm_wiki_cfg "logMaxRecords")"
         [ -n "$RNEX_WIKI_LOG_MAX_RECORDS" ] || RNEX_WIKI_LOG_MAX_RECORDS=1000
     fi
 
@@ -180,7 +180,7 @@ load_wiki_config_contract() {
     if [ -n "${RNEX_CFG_RELATIVE_LINKS:-}" ]; then
         RNEX_WIKI_RELATIVE_LINKS="$RNEX_CFG_RELATIVE_LINKS"
     else
-        RNEX_WIKI_RELATIVE_LINKS="$(_lookup_llm_wiki_cfg "relative_links")"
+        RNEX_WIKI_RELATIVE_LINKS="$(_lookup_llm_wiki_cfg "relativeLinks")"
         [ -n "$RNEX_WIKI_RELATIVE_LINKS" ] || RNEX_WIKI_RELATIVE_LINKS="rewrite"
     fi
 

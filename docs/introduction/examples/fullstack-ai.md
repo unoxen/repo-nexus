@@ -14,8 +14,8 @@ head:
 ```yaml
 version: "1"
 name: "fullstack-ai"
-repos_dir: "./repos"
-code_workspace: "fullstack.code-workspace"
+reposDir: "./repos"
+codeWorkspace: "fullstack.code-workspace"
 
 git:
   ignore:
@@ -28,8 +28,8 @@ git:
     post-merge:
       - "rnex sync --quiet"
 
-rnex-hooks:
-  after_sync:
+rnexHooks:
+  afterSync:
     - "echo 'AI context reconciled across all providers'"
 
 repos:

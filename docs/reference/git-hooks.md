@@ -42,7 +42,7 @@ During `rnex init` and `rnex sync`, Repo Nexus deterministically reconciles a de
    Generated runtime assets, caches, logs, and internal state are ignored recursively across all directories:
    * `**/.rnex*`
    * `**/rnex*`
-   * `<repos_dir>/` (default `repos/`)
+   * `<reposDir>/` (default `repos/`)
    * `!rnex.yaml` and `!**/rnex.yaml` (explicitly un-ignored)
 
    ::: tip Exclude Configuration via Negation
@@ -53,7 +53,7 @@ During `rnex init` and `rnex sync`, Repo Nexus deterministically reconciles a de
    All patterns defined in `git.ignore` (in both `rnex.yaml` and `.local.rnex.yaml`) are synchronized into the `# REPO-NEXUS:START` ... `# REPO-NEXUS:END` block in `.gitignore`. Adding, modifying, or removing entries in `git.ignore` updates the managed block on the next `rnex sync`.
 
 3. **Search Tool Un-Ignore (`.ignore`)**:
-   Repo Nexus maintains `.ignore` (and `.cursorignore`, `.geminiignore`) with `!<repos_dir>/*` so search tools (ripgrep) and AI indexers can navigate member code without Git tracking.
+   Repo Nexus maintains `.ignore` (and `.cursorignore`, `.geminiignore`) with `!<reposDir>/*` so search tools (ripgrep) and AI indexers can navigate member code without Git tracking.
 
 ---
 

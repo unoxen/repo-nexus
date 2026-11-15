@@ -22,9 +22,11 @@ git -C "$TEST_HOOKS_WS" init -q
 # Initialize workspace
 (cd "$TEST_HOOKS_WS" && ./rnex init -y >/dev/null)
 grep -q "git:" "$TEST_HOOKS_WS/rnex.yaml" || { fail "init -y did not record git: in rnex.yaml"; exit 1; }
-grep -q "rnex-hooks:" "$TEST_HOOKS_WS/rnex.yaml" || { fail "init -y did not record rnex-hooks: in rnex.yaml"; exit 1; }
+grep -q "rnexHooks:" "$TEST_HOOKS_WS/rnex.yaml" || { fail "init -y did not record rnexHooks: in rnex.yaml"; exit 1; }
+grep -q "afterSync:" "$TEST_HOOKS_WS/rnex.yaml" || { fail "init -y did not record rnexHooks.afterSync in rnex.yaml"; exit 1; }
 grep -q "post-merge:" "$TEST_HOOKS_WS/rnex.yaml" || { fail "init -y did not record git.hooks.post-merge in rnex.yaml"; exit 1; }
 ! grep -q "git_hooks:" "$TEST_HOOKS_WS/rnex.yaml" || { fail "legacy git_hooks was written to rnex.yaml"; exit 1; }
+! grep -q "rnex-hooks:" "$TEST_HOOKS_WS/rnex.yaml" || { fail "legacy rnex-hooks was written to rnex.yaml"; exit 1; }
 
 # Wrappers in .git/hooks must be installed and executable
 [ -x "$TEST_HOOKS_WS/.git/hooks/post-merge" ] || { fail "post-merge hook missing or not executable in .git/hooks"; exit 1; }
@@ -165,7 +167,7 @@ _inode_after="$(ls -i "$TEST_WRAPPER_WS/.git/hooks/post-merge" | awk '{print $1}
 pass
 
 # --------------------------------------------------------------------------
-run_test "rnex-hooks lifecycle command execution across workspace events"
+run_test "rnexHooks lifecycle command execution across workspace events"
 TEST_RNEX_HOOKS_WS="$TEST_TMP/rnex-hooks-lifecycle-ws"
 mkdir -p "$TEST_RNEX_HOOKS_WS"
 cp "$CLI" "$TEST_RNEX_HOOKS_WS/rnex"
@@ -193,38 +195,38 @@ version: 1.0.0
 git:
   hooks:
     post-merge: []
-rnex-hooks:
-  before_sync:
+rnexHooks:
+  beforeSync:
     - "echo 'BEFORE_SYNC' >> hook_log"
-  after_sync:
-    - "echo 'AFTER_SYNC' >> hook_log"
-  before_repo_add:
+  afterSync:
+    - "echo \"AFTER_SYNC:$RNEX_HOOK_EVENT\" >> hook_log"
+  beforeRepoAdd:
     - "echo 'BEFORE_REPO_ADD' >> hook_log"
-  after_repo_add:
+  afterRepoAdd:
     - "echo 'AFTER_REPO_ADD' >> hook_log"
-  before_repo_set:
+  beforeRepoSet:
     - "echo 'BEFORE_REPO_SET' >> hook_log"
-  after_repo_set:
+  afterRepoSet:
     - "echo 'AFTER_REPO_SET' >> hook_log"
-  before_clone:
+  beforeClone:
     - "echo 'BEFORE_CLONE' >> hook_log"
-  after_clone:
+  afterClone:
     - "echo 'AFTER_CLONE' >> hook_log"
-  before_exec:
+  beforeExec:
     - "echo 'BEFORE_EXEC' >> hook_log"
-  after_exec:
+  afterExec:
     - "echo 'AFTER_EXEC' >> hook_log"
-  before_repo_remove:
+  beforeRepoRemove:
     - "echo 'BEFORE_REPO_REMOVE' >> hook_log"
-  after_repo_remove:
+  afterRepoRemove:
     - "echo 'AFTER_REPO_REMOVE' >> hook_log"
-  before_plugin_enable:
+  beforePluginEnable:
     - "echo 'BEFORE_PLUGIN_ENABLE' >> hook_log"
-  after_plugin_enable:
+  afterPluginEnable:
     - "echo 'AFTER_PLUGIN_ENABLE' >> hook_log"
-  before_plugin_disable:
+  beforePluginDisable:
     - "echo 'BEFORE_PLUGIN_DISABLE' >> hook_log"
-  after_plugin_disable:
+  afterPluginDisable:
     - "echo 'AFTER_PLUGIN_DISABLE' >> hook_log"
 repos:
 plugins:
@@ -234,8 +236,8 @@ rm -f "$TEST_RNEX_HOOKS_WS/hook_log"
 
 # 1. Sync
 (cd "$TEST_RNEX_HOOKS_WS" && ./rnex sync --quiet)
-grep -q "BEFORE_SYNC" "$TEST_RNEX_HOOKS_WS/hook_log" || { fail "before_sync hook did not execute"; exit 1; }
-grep -q "AFTER_SYNC" "$TEST_RNEX_HOOKS_WS/hook_log" || { fail "after_sync hook did not execute"; exit 1; }
+grep -q "BEFORE_SYNC" "$TEST_RNEX_HOOKS_WS/hook_log" || { fail "beforeSync hook did not execute"; exit 1; }
+grep -q "AFTER_SYNC:afterSync" "$TEST_RNEX_HOOKS_WS/hook_log" || { fail "afterSync hook or RNEX_HOOK_EVENT=afterSync did not execute"; exit 1; }
 
 # 2. Repo add
 (cd "$TEST_RNEX_HOOKS_WS" && ./rnex repo add "$TEST_DUMMY_REMOTE" --name dummy --branch master >/dev/null)
@@ -280,7 +282,7 @@ grep -q "AFTER_REPO_REMOVE" "$TEST_RNEX_HOOKS_WS/hook_log" || { fail "after_repo
 pass
 
 # --------------------------------------------------------------------------
-run_test "Two-level rnex-hooks config (.local.rnex.yaml priority & hyphen/underscore keys)"
+run_test "Two-level rnexHooks config (.local.rnex.yaml priority & camelCase overrides)"
 TEST_RNEX_LOCAL_WS="$TEST_TMP/rnex-hooks-local-ws"
 mkdir -p "$TEST_RNEX_LOCAL_WS"
 cp "$CLI" "$TEST_RNEX_LOCAL_WS/rnex"
@@ -297,30 +299,30 @@ version: 1.0.0
 git:
   hooks:
     post-merge: []
-rnex-hooks:
-  before-sync:
+rnexHooks:
+  beforeSync:
     - "exit 42"
-  after_sync:
+  afterSync:
     - "echo 'BASE_HOOK' > override_test_marker"
 repos:
 plugins:
 BASE_YAML
 
 cat <<'LOCAL_YAML' > "$TEST_RNEX_LOCAL_WS/.local.rnex.yaml"
-rnex-hooks:
-  before_sync: []
-  after-sync:
+rnexHooks:
+  beforeSync: []
+  afterSync:
     - "echo 'LOCAL_OVERRIDE_RAN' > override_test_marker"
 LOCAL_YAML
 
-# before-sync was exit 42 in rnex.yaml, but .local.rnex.yaml overrides before_sync to []
+# beforeSync was exit 42 in rnex.yaml, but .local.rnex.yaml overrides beforeSync to []
 (cd "$TEST_RNEX_LOCAL_WS" && ./rnex sync --quiet)
 [ -f "$TEST_RNEX_LOCAL_WS/override_test_marker" ] || { fail "override_test_marker was not created"; exit 1; }
 grep -q "LOCAL_OVERRIDE_RAN" "$TEST_RNEX_LOCAL_WS/override_test_marker" || { fail "local override did not execute or did not override rnex.yaml"; exit 1; }
 pass
 
 # --------------------------------------------------------------------------
-run_test "Blocking before_* hook failure aborts action with exit code"
+run_test "Blocking before* hook failure aborts action with exit code"
 TEST_RNEX_BLOCK_WS="$TEST_TMP/rnex-hooks-block-ws"
 mkdir -p "$TEST_RNEX_BLOCK_WS"
 cp "$CLI" "$TEST_RNEX_BLOCK_WS/rnex"
@@ -337,8 +339,8 @@ version: 1.0.0
 git:
   hooks:
     post-merge: []
-rnex-hooks:
-  before_sync:
+rnexHooks:
+  beforeSync:
     - "exit 37"
 repos:
 plugins:
@@ -346,11 +348,11 @@ BLOCK_YAML
 
 _block_rc=0
 (cd "$TEST_RNEX_BLOCK_WS" && ./rnex sync --quiet >/dev/null 2>&1) || _block_rc=$?
-[ "$_block_rc" -eq 37 ] || { fail "before_sync hook did not block with exit code 37 (got: $_block_rc)"; exit 1; }
+[ "$_block_rc" -eq 37 ] || { fail "beforeSync hook did not block with exit code 37 (got: $_block_rc)"; exit 1; }
 pass
 
 # --------------------------------------------------------------------------
-run_test "Re-entrant loop guard in rnex-hooks prevents infinite recursion"
+run_test "Re-entrant loop guard in rnexHooks prevents infinite recursion"
 TEST_RNEX_RECURSE_WS="$TEST_TMP/rnex-hooks-recurse-ws"
 mkdir -p "$TEST_RNEX_RECURSE_WS"
 cp "$CLI" "$TEST_RNEX_RECURSE_WS/rnex"
@@ -367,8 +369,8 @@ version: 1.0.0
 git:
   hooks:
     post-merge: []
-rnex-hooks:
-  after_sync:
+rnexHooks:
+  afterSync:
     - "echo 'REENTRANT_RUN' >> reentrant_log"
     - "./rnex sync --quiet"
 repos:
@@ -575,7 +577,7 @@ grep -q "USER_HOOK_EXECUTED" "$TEST_USER_HOOKS_WS/.git/hooks/pre-commit" || {
 pass
 
 # --------------------------------------------------------------------------
-run_test "Lifecycle hooks: after_clone with bare 'rnex plugin llm-wiki ingest'"
+run_test "Lifecycle hooks: afterClone with bare 'rnex plugin llm-wiki ingest'"
 TEST_AFTER_CLONE_WS="$TEST_TMP/after-clone-hook-ws"
 mkdir -p "$TEST_AFTER_CLONE_WS"
 cp "$CLI" "$TEST_AFTER_CLONE_WS/rnex"
@@ -592,8 +594,8 @@ version: 1.0.0
 git:
   hooks:
     post-merge: []
-rnex-hooks:
-  after_clone:
+rnexHooks:
+  afterClone:
     - "rnex plugin llm-wiki ingest --quiet"
     - "echo 'AFTER_CLONE_INGEST_RAN' >> clone_hook_marker"
 plugins:
@@ -641,16 +643,16 @@ version: 1.0.0
 git:
   hooks:
     post-merge: []
-rnex-hooks:
-  before_sync:
+rnexHooks:
+  beforeSync:
     - "echo 'BEFORE_SYNC_FIRED' >> ignore_hook_log"
-  after_sync:
+  afterSync:
     - "echo 'AFTER_SYNC_FIRED' >> ignore_hook_log"
     - "rnex plugin llm-wiki ingest --quiet"
-  before_plugin_command:
+  beforePluginCommand:
     - "echo 'BEFORE_PLUGIN_CMD_FIRED' >> ignore_hook_log"
     - "rnex sync --quiet"
-  after_plugin_command:
+  afterPluginCommand:
     - "echo 'AFTER_PLUGIN_CMD_FIRED' >> ignore_hook_log"
 plugins:
   llm-wiki:
@@ -665,23 +667,23 @@ rm -f "$TEST_IGNORE_HOOKS_WS/ignore_hook_log"
 (cd "$TEST_IGNORE_HOOKS_WS" && ./rnex -H sync --quiet)
 [ ! -f "$TEST_IGNORE_HOOKS_WS/ignore_hook_log" ] || { fail "-H did not suppress hooks"; exit 1; }
 
-# 2. Normal sync runs before_sync and after_sync, which calls 'rnex plugin llm-wiki ingest',
-#    which must receive --ignore-hooks / RNEX_IGNORE_HOOKS=1 and NOT fire before_plugin_command or recurse into rnex sync!
+# 2. Normal sync runs beforeSync and afterSync, which calls 'rnex plugin llm-wiki ingest',
+#    which must receive --ignore-hooks / RNEX_IGNORE_HOOKS=1 and NOT fire beforePluginCommand or recurse into rnex sync!
 (cd "$TEST_IGNORE_HOOKS_WS" && ./rnex sync --quiet)
 [ -f "$TEST_IGNORE_HOOKS_WS/ignore_hook_log" ] || { fail "Normal sync did not fire hooks"; exit 1; }
-grep -q "BEFORE_SYNC_FIRED" "$TEST_IGNORE_HOOKS_WS/ignore_hook_log" || { fail "before_sync missing from log"; exit 1; }
-grep -q "AFTER_SYNC_FIRED" "$TEST_IGNORE_HOOKS_WS/ignore_hook_log" || { fail "after_sync missing from log"; exit 1; }
+grep -q "BEFORE_SYNC_FIRED" "$TEST_IGNORE_HOOKS_WS/ignore_hook_log" || { fail "beforeSync missing from log"; exit 1; }
+grep -q "AFTER_SYNC_FIRED" "$TEST_IGNORE_HOOKS_WS/ignore_hook_log" || { fail "afterSync missing from log"; exit 1; }
 ! grep -q "BEFORE_PLUGIN_CMD_FIRED" "$TEST_IGNORE_HOOKS_WS/ignore_hook_log" || {
-  fail "Consequential command triggered by after_sync fired before_plugin_command (hook recursion!)"; exit 1;
+  fail "Consequential command triggered by afterSync fired beforePluginCommand (hook recursion!)"; exit 1;
 }
 _sync_cnt="$(grep -c "AFTER_SYNC_FIRED" "$TEST_IGNORE_HOOKS_WS/ignore_hook_log" || true)"
-[ "$_sync_cnt" -eq 1 ] || { fail "after_sync fired $_sync_cnt times instead of 1"; exit 1; }
+[ "$_sync_cnt" -eq 1 ] || { fail "afterSync fired $_sync_cnt times instead of 1"; exit 1; }
 [ ! -d "$TEST_IGNORE_HOOKS_WS/wiki" ] || { fail "legacy ./wiki was created in ignore_hooks test"; exit 1; }
 [ -f "$TEST_IGNORE_HOOKS_WS/.rnex/wiki/index.md" ] || { fail ".rnex/wiki/index.md was not created by ingest hook"; exit 1; }
 pass
 
 # --------------------------------------------------------------------------
-run_test "rnex-hooks: strict opt-in parsing, after_sync stage dispatch, and zero execution when unconfigured"
+run_test "rnexHooks: strict opt-in parsing, afterSync stage dispatch, and zero execution when unconfigured"
 # shellcheck source=lib/core.sh
 . "$DIR/lib/core.sh"
 # shellcheck source=lib/workspace.sh
@@ -700,13 +702,13 @@ link_dir_contents "$DIR/skills" "$TEST_STRICT_HOOKS_WS/skills"
 cp "$DIR/package.json" "$TEST_STRICT_HOOKS_WS/package.json"
 git -C "$TEST_STRICT_HOOKS_WS" init -q
 
-# 1. Workspace with rnex-hooks.after_sync and git.hooks.pre-commit
+# 1. Workspace with rnexHooks.preSync / afterSync and git.hooks.pre-commit
 cat <<'STRICT_YAML' > "$TEST_STRICT_HOOKS_WS/rnex.yaml"
 version: 1.0.0
-rnex-hooks:
-  pre_sync:
+rnexHooks:
+  preSync:
     - "echo 'PRE_SYNC_FIRED' >> strict_hook_log"
-  after_sync:
+  afterSync:
     - "echo 'AFTER_SYNC_FIRED' >> strict_hook_log"
 git:
   hooks:
@@ -717,9 +719,9 @@ plugins:
 STRICT_YAML
 
 (cd "$TEST_STRICT_HOOKS_WS" && ./rnex sync --quiet)
-[ -f "$TEST_STRICT_HOOKS_WS/strict_hook_log" ] || { fail "rnex-hooks log missing after sync"; exit 1; }
-grep -q "PRE_SYNC_FIRED" "$TEST_STRICT_HOOKS_WS/strict_hook_log" || { fail "pre_sync did not fire"; exit 1; }
-grep -q "AFTER_SYNC_FIRED" "$TEST_STRICT_HOOKS_WS/strict_hook_log" || { fail "after_sync did not fire"; exit 1; }
+[ -f "$TEST_STRICT_HOOKS_WS/strict_hook_log" ] || { fail "rnexHooks log missing after sync"; exit 1; }
+grep -q "PRE_SYNC_FIRED" "$TEST_STRICT_HOOKS_WS/strict_hook_log" || { fail "preSync did not fire"; exit 1; }
+grep -q "AFTER_SYNC_FIRED" "$TEST_STRICT_HOOKS_WS/strict_hook_log" || { fail "afterSync did not fire"; exit 1; }
 [ -x "$TEST_STRICT_HOOKS_WS/.git/hooks/pre-commit" ] || { fail "pre-commit git wrapper not installed"; exit 1; }
 [ ! -f "$TEST_STRICT_HOOKS_WS/.git/hooks/post-merge" ] || { fail "post-merge git wrapper installed when omitted from config"; exit 1; }
 
@@ -780,8 +782,8 @@ plugins:
     hooks:
       SessionStart:
         - "echo 'LOCAL_CLAUDE_HOOK'"
-rnex-hooks:
-  after_sync:
+rnexHooks:
+  afterSync:
     - "echo 'LOCAL_AFTER_SYNC' > local_after_sync_marker"
 LOCAL_OVERRIDE_YAML
 
@@ -863,9 +865,9 @@ done
 pass
 
 # --------------------------------------------------------------------------
-# Test 16: rnex-hooks: after_sync execution of llm-wiki ingest runs exactly once
+# Test 16: rnexHooks: afterSync execution of llm-wiki ingest runs exactly once
 # --------------------------------------------------------------------------
-run_test "Lifecycle hooks: after_sync execution of llm-wiki ingest runs exactly once without recursion"
+run_test "Lifecycle hooks: afterSync execution of llm-wiki ingest runs exactly once without recursion"
 TEST_AFTER_SYNC_WS="$TEST_TMP/after-sync-ingest-ws"
 mkdir -p "$TEST_AFTER_SYNC_WS"
 cp "$CLI" "$TEST_AFTER_SYNC_WS/rnex"
@@ -880,8 +882,8 @@ printf '# Architecture Overview\nSystem architecture details.\n' > "$TEST_AFTER_
 
 cat <<'AFTER_SYNC_YAML' > "$TEST_AFTER_SYNC_WS/rnex.yaml"
 version: 1.0.0
-rnex-hooks:
-  after_sync:
+rnexHooks:
+  afterSync:
     - "echo 'AFTER_SYNC_INVOCATION' >> after_sync_run.log"
     - "rnex plugin llm-wiki ingest"
 plugins:
@@ -972,7 +974,7 @@ git -C "$TEST_MAINT_WS" diff --quiet package.json || { fail "package.json left d
 pass
 
 # --------------------------------------------------------------------------
-run_test "Lifecycle hooks: deprecated rnex_hooks key and malformed -'cmd' syntax trigger errors cleanly"
+run_test "Lifecycle hooks: deprecated keys (rnex_hooks, rnex-hooks, repos_dir, code_workspace, after_sync, wiki_dir) and malformed syntax trigger errors cleanly"
 TEST_HOOK_AUDIT_WS="$TEST_TMP/hooks-audit-ws"
 mkdir -p "$TEST_HOOK_AUDIT_WS"
 cp "$CLI" "$TEST_HOOK_AUDIT_WS/rnex"
@@ -985,13 +987,17 @@ mkdir -p "$TEST_HOOK_AUDIT_WS/plugins"
 
 (cd "$TEST_HOOK_AUDIT_WS" && ./rnex init -y "$TEST_HOOK_AUDIT_WS" >/dev/null)
 
-# 1. Deprecated rnex_hooks: key must fail sync and instruct user to use rnex-hooks:
+# 1. Deprecated rnex_hooks:, rnex-hooks:, repos_dir:, code_workspace:, after_sync:, wiki_dir: must fail sync with camelCase hints
 cat <<'EOF_LEG_HOOKS' > "$TEST_HOOK_AUDIT_WS/rnex.yaml"
 version: 1.0.0
+repos_dir: "custom"
+code_workspace: true
 rnex_hooks:
   after_sync:
     - "touch should_not_run"
 plugins:
+  llm-wiki:
+    wiki_dir: "wiki"
 repos:
 EOF_LEG_HOOKS
 
@@ -999,16 +1005,48 @@ set +e
 (cd "$TEST_HOOK_AUDIT_WS" && ./rnex sync --quiet >/dev/null 2>"$TEST_HOOK_AUDIT_WS/err_leg.log")
 _leg_rc=$?
 set -e
-[ "$_leg_rc" -ne 0 ] || { fail "Expected non-zero exit for deprecated rnex_hooks key"; exit 1; }
-grep -q "rnex_hooks:" "$TEST_HOOK_AUDIT_WS/err_leg.log" || { fail "Error missing rnex_hooks reference"; exit 1; }
-grep -q "rnex-hooks:" "$TEST_HOOK_AUDIT_WS/err_leg.log" || { fail "Error missing rnex-hooks migration hint"; exit 1; }
+[ "$_leg_rc" -ne 0 ] || { fail "Expected non-zero exit for deprecated snake_case config keys"; exit 1; }
+grep -q "reposDir:" "$TEST_HOOK_AUDIT_WS/err_leg.log" || { fail "Error missing reposDir: migration hint"; exit 1; }
+grep -q "codeWorkspace:" "$TEST_HOOK_AUDIT_WS/err_leg.log" || { fail "Error missing codeWorkspace: migration hint"; exit 1; }
+grep -q "rnexHooks:" "$TEST_HOOK_AUDIT_WS/err_leg.log" || { fail "Error missing rnexHooks: migration hint"; exit 1; }
+grep -q "wikiDir:" "$TEST_HOOK_AUDIT_WS/err_leg.log" || { fail "Error missing wikiDir: migration hint"; exit 1; }
 [ ! -f "$TEST_HOOK_AUDIT_WS/should_not_run" ] || { fail "Deprecated rnex_hooks unexpectedly executed"; exit 1; }
+
+# 1b. Deprecated rnex-hooks: and snake_case event key after_sync: under rnexHooks: must fail with camelCase hints
+cat <<'EOF_KEBAB_HOOKS' > "$TEST_HOOK_AUDIT_WS/rnex.yaml"
+version: 1.0.0
+rnex-hooks:
+  after_sync: []
+plugins:
+repos:
+EOF_KEBAB_HOOKS
+set +e
+(cd "$TEST_HOOK_AUDIT_WS" && ./rnex sync --quiet >/dev/null 2>"$TEST_HOOK_AUDIT_WS/err_kebab.log")
+_kebab_rc=$?
+set -e
+[ "$_kebab_rc" -ne 0 ] || { fail "Expected non-zero exit for deprecated rnex-hooks: key"; exit 1; }
+grep -q "rnexHooks:" "$TEST_HOOK_AUDIT_WS/err_kebab.log" || { fail "Error missing rnexHooks: hint for rnex-hooks:"; exit 1; }
+
+cat <<'EOF_STAGE_SNAKE' > "$TEST_HOOK_AUDIT_WS/rnex.yaml"
+version: 1.0.0
+rnexHooks:
+  after_sync:
+    - "touch should_not_run"
+plugins:
+repos:
+EOF_STAGE_SNAKE
+set +e
+(cd "$TEST_HOOK_AUDIT_WS" && ./rnex sync --quiet >/dev/null 2>"$TEST_HOOK_AUDIT_WS/err_stage.log")
+_stage_rc=$?
+set -e
+[ "$_stage_rc" -ne 0 ] || { fail "Expected non-zero exit for snake_case stage after_sync under rnexHooks"; exit 1; }
+grep -q "afterSync:" "$TEST_HOOK_AUDIT_WS/err_stage.log" || { fail "Error missing afterSync: migration hint"; exit 1; }
 
 # 2. Malformed list entry without space after hyphen (-"cmd") must fail sync clearly
 cat <<'EOF_BAD_ITEM' > "$TEST_HOOK_AUDIT_WS/rnex.yaml"
 version: 1.0.0
-rnex-hooks:
-  after_sync:
+rnexHooks:
+  afterSync:
     -"touch malformed_ran"
 plugins:
 repos:
@@ -1021,11 +1059,11 @@ set -e
 [ "$_bad1_rc" -ne 0 ] || { fail "Expected non-zero exit for malformed -\"cmd\" hook item"; exit 1; }
 grep -q "Malformed YAML hook entry" "$TEST_HOOK_AUDIT_WS/err_bad1.log" || { fail "Missing malformed hook error for -\"cmd\""; exit 1; }
 
-# 3. Inline malformed after_sync: -"cmd" must also fail clearly
+# 3. Inline malformed afterSync: -"cmd" must also fail clearly
 cat <<'EOF_BAD_INLINE' > "$TEST_HOOK_AUDIT_WS/rnex.yaml"
 version: 1.0.0
-rnex-hooks:
-  after_sync: -"touch malformed_inline_ran"
+rnexHooks:
+  afterSync: -"touch malformed_inline_ran"
 plugins:
 repos:
 EOF_BAD_INLINE
@@ -1034,21 +1072,21 @@ set +e
 (cd "$TEST_HOOK_AUDIT_WS" && ./rnex sync --quiet >/dev/null 2>"$TEST_HOOK_AUDIT_WS/err_bad2.log")
 _bad2_rc=$?
 set -e
-[ "$_bad2_rc" -ne 0 ] || { fail "Expected non-zero exit for inline after_sync: -\"cmd\""; exit 1; }
+[ "$_bad2_rc" -ne 0 ] || { fail "Expected non-zero exit for inline afterSync: -\"cmd\""; exit 1; }
 grep -q "Malformed YAML hook entry" "$TEST_HOOK_AUDIT_WS/err_bad2.log" || { fail "Missing malformed hook error for inline -\"cmd\""; exit 1; }
 
-# 4. Valid rnex-hooks.after_sync executes cleanly
+# 4. Valid rnexHooks.afterSync executes cleanly
 cat <<'EOF_GOOD_HOOKS' > "$TEST_HOOK_AUDIT_WS/rnex.yaml"
 version: 1.0.0
-rnex-hooks:
-  after_sync:
+rnexHooks:
+  afterSync:
     - "touch hook_executed_ok"
 plugins:
 repos:
 EOF_GOOD_HOOKS
 
 (cd "$TEST_HOOK_AUDIT_WS" && ./rnex sync --quiet)
-[ -f "$TEST_HOOK_AUDIT_WS/hook_executed_ok" ] || { fail "Valid rnex-hooks.after_sync did not execute"; exit 1; }
+[ -f "$TEST_HOOK_AUDIT_WS/hook_executed_ok" ] || { fail "Valid rnexHooks.afterSync did not execute"; exit 1; }
 pass
 
 if [ "${_STANDALONE_RUN:-0}" -eq 1 ]; then

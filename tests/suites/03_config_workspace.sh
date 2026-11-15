@@ -183,10 +183,10 @@ pass
 
 
 # --------------------------------------------------------------------------
-run_test "Configurable code_workspace generates and updates .code-workspace file"
-echo "code_workspace: true" >> "$TEST_WORKSPACE/rnex.yaml"
+run_test "Configurable codeWorkspace generates and updates .code-workspace file"
+echo "codeWorkspace: true" >> "$TEST_WORKSPACE/rnex.yaml"
 _status_ws="$("$TEST_WORKSPACE/rnex" status 2>&1)"
-echo "$_status_ws" | grep -q "nexus-workspace.code-workspace" || { fail "Status did not detect configured code_workspace file"; exit 1; }
+echo "$_status_ws" | grep -q "nexus-workspace.code-workspace" || { fail "Status did not detect configured codeWorkspace file"; exit 1; }
 echo "$_status_ws" | grep -q "MISSING" || { fail "Status did not highlight missing code-workspace"; exit 1; }
 "$TEST_WORKSPACE/rnex" sync >/dev/null
 [ -f "$TEST_WORKSPACE/nexus-workspace.code-workspace" ] || { fail "code-workspace file was not created by fix"; exit 1; }
@@ -208,7 +208,7 @@ cp "$CLI" "$TEST_VS_WS/rnex"
 chmod +x "$TEST_VS_WS/rnex"
 "$TEST_VS_WS/rnex" init -y --code-workspace "$TEST_VS_WS" >/dev/null
 [ -f "$TEST_VS_WS/vscode-workspace.code-workspace" ] || { fail ".code-workspace was not created by init --code-workspace"; exit 1; }
-grep -q "code_workspace:[ ]*true" "$TEST_VS_WS/rnex.yaml" || { fail "code_workspace not enabled in rnex.yaml"; exit 1; }
+grep -q "codeWorkspace:[ ]*true" "$TEST_VS_WS/rnex.yaml" || { fail "codeWorkspace not enabled in rnex.yaml"; exit 1; }
 pass
 
 # --------------------------------------------------------------------------
@@ -423,7 +423,7 @@ echo "$_status_prompts" | grep -q "workspace skills" || { fail "Status does not 
 pass
 
 # --------------------------------------------------------------------------
-run_test "Configurable repos_dir lifecycle: init, gitignore, add, clone, status, exec, set, and purge"
+run_test "Configurable reposDir lifecycle: init, gitignore, add, clone, status, exec, set, and purge"
 TEST_RDIR_WS="$TEST_TMP/custom-repos-dir-ws"
 mkdir -p "$TEST_RDIR_WS"
 cp "$CLI" "$TEST_RDIR_WS/rnex"
@@ -438,7 +438,7 @@ git -C "$TEST_RDIR_WS" init -q
 
 [ -d "$TEST_RDIR_WS/services" ] || { fail "Custom services/ directory not created during init"; exit 1; }
 [ ! -d "$TEST_RDIR_WS/repos" ] || { fail "Default repos/ directory should not exist"; exit 1; }
-grep -q 'repos_dir:[ ]*"services"' "$TEST_RDIR_WS/rnex.yaml" || { fail "repos_dir: \"services\" not written to rnex.yaml"; exit 1; }
+grep -q 'reposDir:[ ]*"services"' "$TEST_RDIR_WS/rnex.yaml" || { fail "reposDir: \"services\" not written to rnex.yaml"; exit 1; }
 git -C "$TEST_RDIR_WS" check-ignore -q services/ || { fail "services/ is not ignored by git"; exit 1; }
 grep -q '!services/\*' "$TEST_RDIR_WS/.ignore" || { fail "!services/* not found in .ignore"; exit 1; }
 
@@ -483,7 +483,7 @@ echo "$_ws_status" | grep "auth" | grep -q "\[readonly\]" || { fail "auth missin
 pass
 
 # --------------------------------------------------------------------------
-run_test "repos_dir two-level config override (.local.rnex.yaml) and path traversal fallback"
+run_test "reposDir two-level config override (.local.rnex.yaml) and path traversal fallback"
 TEST_RDIR_OVR="$TEST_TMP/repos-dir-ovr-ws"
 mkdir -p "$TEST_RDIR_OVR"
 cp "$CLI" "$TEST_RDIR_OVR/rnex"
@@ -495,13 +495,13 @@ git -C "$TEST_RDIR_OVR" init -q
 
 "$TEST_RDIR_OVR/rnex" init -y "$TEST_RDIR_OVR" >/dev/null
 
-# Set base config repos_dir: "components"
-_sed_cmd='s/^repos_dir:.*/repos_dir: "components"/'
+# Set base config reposDir: "components"
+_sed_cmd='s/^reposDir:.*/reposDir: "components"/'
 sed "$_sed_cmd" "$TEST_RDIR_OVR/rnex.yaml" > "$TEST_RDIR_OVR/rnex.yaml.tmp" && mv "$TEST_RDIR_OVR/rnex.yaml.tmp" "$TEST_RDIR_OVR/rnex.yaml"
 
 # Override in .local.rnex.yaml
 cat <<'LOCAL_EOF' > "$TEST_RDIR_OVR/.local.rnex.yaml"
-repos_dir: "local-components"
+reposDir: "local-components"
 LOCAL_EOF
 
 (cd "$TEST_RDIR_OVR" && ./rnex sync >/dev/null)
@@ -510,21 +510,21 @@ git -C "$TEST_RDIR_OVR" check-ignore -q local-components/ || { fail "local-compo
 
 # Test path traversal security fallback
 cat <<'TRAVERSAL_EOF' > "$TEST_RDIR_OVR/.local.rnex.yaml"
-repos_dir: "../escaping"
+reposDir: "../escaping"
 TRAVERSAL_EOF
 
 _resolved_trav="$(cd "$TEST_RDIR_OVR" && . "$DIR/lib/core.sh" && . "$DIR/lib/workspace.sh" && . "$DIR/lib/yaml.sh" && WORKSPACE_YAML="$TEST_RDIR_OVR/rnex.yaml" WORKSPACE_LOCAL_YAML="$TEST_RDIR_OVR/.local.rnex.yaml" yaml_get_repos_dir)"
 [ "$_resolved_trav" = "repos" ] || { fail "Path traversal ../escaping did not fall back to repos, got '$_resolved_trav'"; exit 1; }
 
 cat <<'ABSOLUTE_EOF' > "$TEST_RDIR_OVR/.local.rnex.yaml"
-repos_dir: "/root/abs"
+reposDir: "/root/abs"
 ABSOLUTE_EOF
 
 _resolved_abs="$(cd "$TEST_RDIR_OVR" && . "$DIR/lib/core.sh" && . "$DIR/lib/workspace.sh" && . "$DIR/lib/yaml.sh" && WORKSPACE_YAML="$TEST_RDIR_OVR/rnex.yaml" WORKSPACE_LOCAL_YAML="$TEST_RDIR_OVR/.local.rnex.yaml" yaml_get_repos_dir)"
 [ "$_resolved_abs" = "repos" ] || { fail "Absolute path /root/abs did not fall back to repos, got '$_resolved_abs'"; exit 1; }
 
 cat <<'DOT_EOF' > "$TEST_RDIR_OVR/.local.rnex.yaml"
-repos_dir: "."
+reposDir: "."
 DOT_EOF
 
 _resolved_dot="$(cd "$TEST_RDIR_OVR" && . "$DIR/lib/core.sh" && . "$DIR/lib/workspace.sh" && . "$DIR/lib/yaml.sh" && WORKSPACE_YAML="$TEST_RDIR_OVR/rnex.yaml" WORKSPACE_LOCAL_YAML="$TEST_RDIR_OVR/.local.rnex.yaml" yaml_get_repos_dir)"

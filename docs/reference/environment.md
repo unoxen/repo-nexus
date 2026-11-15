@@ -21,11 +21,11 @@ Reference for Repo Nexus runtime variables, directory layout conventions, and ex
 ### Batch Execution Variables (`rnex exec`)
 When `rnex exec` iterates through member repositories, it sets:
 * `RNEX_REPO_NAME`: Name of the repository currently executing the command.
-* `RNEX_REPO_PATH`: Relative path to the repository directory (e.g. `./repos/backend` or `<repos_dir>/backend`).
+* `RNEX_REPO_PATH`: Relative path to the repository directory (e.g. `./repos/backend` or `<reposDir>/backend`).
 * `RNEX_REPO_BRANCH`: Currently checked out Git branch or commit SHA.
 
-### Hook Execution Variables (`rnex-hooks` & `git.hooks`)
-* `RNEX_HOOK_EVENT`: Name of the triggering event (e.g. `after_sync`, `before_repo_add`).
+### Hook Execution Variables (`rnexHooks` & `git.hooks`)
+* `RNEX_HOOK_EVENT`: Name of the triggering event (e.g. `afterSync`, `beforeRepoAdd`).
 * `RNEX_HOOK_ARGS`: Full argument string passed to the event.
 * `RNEX_HOOK_ACTIVE`: Guard variable indicating active hook execution (prevents recursive loops).
 
@@ -43,7 +43,7 @@ my-workspace/
 ├── .git/                            # Meta-repo Git directory
 │   └── hooks/                       # Git hook wrappers generated from git.hooks
 ├── .gitignore                       # Managed deterministically via git.ignore
-├── .ignore                          # Un-ignores <repos_dir>/* for code search tools
+├── .ignore                          # Un-ignores <reposDir>/* for code search tools
 ├── rnex.yaml                        # Shared team configuration manifest
 ├── .local.rnex.yaml                 # (Optional) Developer workstation overrides
 │
@@ -59,7 +59,7 @@ my-workspace/
 │           ├── skills/              # Plugin-owned agentic skills
 │           └── rules/               # Mirrored plugin rules
 │
-├── <repos_dir>/                     # Autonomous member repositories (default: repos/, configurable via repos_dir)
+├── <reposDir>/                      # Autonomous member repositories (default: repos/, configurable via reposDir)
 │   ├── <repo-a>/                    # Standard independent Git repository
 │   │   ├── .git/
 │   │   └── ...

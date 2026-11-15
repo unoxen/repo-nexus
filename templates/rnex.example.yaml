@@ -14,8 +14,8 @@ name: "acme-platform"
 description: "Multi-repo platform workspace and shared AI context"
 # Directory where member repositories are cloned (default: "./repos").
 # Automatically added to workspace .gitignore and un-ignored in .ignore.
-repos_dir: "./repos"
-code_workspace: "acme.code-workspace"
+reposDir: "./repos"
+codeWorkspace: "acme.code-workspace"
 
 # Git Integration (Ignore rules & Git hooks)
 git:
@@ -42,30 +42,30 @@ git:
 # ==============================================================================
 # Zero hidden hooks: Repo Nexus never executes lifecycle actions unless explicitly
 # declared in rnex.yaml or .local.rnex.yaml.
-rnex-hooks:
-  before_init: []
-  after_init:
+rnexHooks:
+  beforeInit: []
+  afterInit:
     - "echo 'Workspace initialized'"
-  before_sync: []
-  after_sync:
+  beforeSync: []
+  afterSync:
     - "rnex plugin llm-wiki ingest"
-  before_clone: []
-  after_clone:
+  beforeClone: []
+  afterClone:
     - "rnex exec npm install"
-  before_repo_add: []
-  after_repo_add: []
-  before_repo_remove: []
-  after_repo_remove: []
-  before_repo_set: []
-  after_repo_set: []
-  before_plugin_enable: []
-  after_plugin_enable: []
-  before_plugin_disable: []
-  after_plugin_disable: []
-  before_plugin_command: []
-  after_plugin_command: []
-  before_exec: []
-  after_exec: []
+  beforeRepoAdd: []
+  afterRepoAdd: []
+  beforeRepoRemove: []
+  afterRepoRemove: []
+  beforeRepoSet: []
+  afterRepoSet: []
+  beforePluginEnable: []
+  afterPluginEnable: []
+  beforePluginDisable: []
+  afterPluginDisable: []
+  beforePluginCommand: []
+  afterPluginCommand: []
+  beforeExec: []
+  afterExec: []
 
 # Member Repositories
 repos:
@@ -135,11 +135,11 @@ plugins:
     path: "./custom-plugins/my-plugin"
   llm-wiki:
     enabled: true
-    wiki_dir: ".rnex/wiki"
-    index_file: "index.md"
-    log_file: "log.md"
-    btree_root_max_lines: 80
-    btree_shard_max_entries: 100
+    wikiDir: ".rnex/wiki"
+    indexFile: "index.md"
+    logFile: "log.md"
+    btreeRootMaxLines: 80
+    btreeShardMaxEntries: 100
     sources:
       - "docs"
       - "adr"

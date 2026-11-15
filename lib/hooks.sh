@@ -179,7 +179,7 @@ _run_hook_internal() {
     done
   fi
 
-  # 2. Execute configured commands from rnex-hooks.<event_name>
+  # 2. Execute configured commands from rnexHooks.<hookName>
   if [ -z "$_hook_target_plugin" ] && [ "${_RNEX_INTERNAL_PLUGIN_ONLY:-0}" != "1" ] && [ "$_ignore_hooks" != "1" ]; then
     rnex_hooks_run_stage "$_hook_root" "$_hook_phase_cmd" "$@"
   fi
@@ -193,8 +193,8 @@ _run_hook_internal() {
 #
 # Summary:
 #   Executes configured workspace lifecycle hook commands for a specified stage
-#   (e.g., pre_sync, post_sync, after_sync, before_sync, after_init) strictly
-#   declared in rnex.yaml or .local.rnex.yaml under rnex-hooks.<stage>.
+#   (e.g., preSync, postSync, afterSync, beforeSync, afterInit) strictly
+#   declared in rnex.yaml or .local.rnex.yaml under rnexHooks.<stage>.
 #   Adheres to strict opt-in execution: if no hook commands are declared for
 #   the stage, zero commands are executed.
 #
@@ -232,27 +232,32 @@ rnex_hooks_run_stage() {
   [ "${RNEX_IGNORE_HOOKS:-0}" = "1" ] && return 0
 
   _stage_norm="$(printf '%s' "$_rhrs_stage" | tr '-' '_')"
+  if command -v _yaml_to_camel >/dev/null 2>&1; then
+    _stage_camel="$(_yaml_to_camel "$_stage_norm")"
+  else
+    _stage_camel="$(printf '%s' "$_stage_norm" | awk -F'_' '{ out=$1; for(i=2;i<=NF;i++) if($i!="") out=out toupper(substr($i,1,1)) substr($i,2); print out }')"
+  fi
 
   # Re-entrant loop guard: skip re-entrant execution of this hook event
   case ":${RNEX_HOOK_ACTIVE:-}:" in
-    *":${_stage_norm}:"*) return 0 ;;
+    *":${_stage_camel}:"*|*":${_stage_norm}:"*) return 0 ;;
   esac
 
   _stage_cmds=""
   if command -v rnex_yaml_get_rnex_hooks >/dev/null 2>&1; then
-    _stage_cmds="$(rnex_yaml_get_rnex_hooks "$_rhrs_root" "$_stage_norm" 2>/dev/null || true)"
+    _stage_cmds="$(rnex_yaml_get_rnex_hooks "$_rhrs_root" "$_stage_camel" 2>/dev/null || true)"
   elif command -v yaml_get_rnex_hook_commands >/dev/null 2>&1; then
-    _stage_cmds="$(yaml_get_rnex_hook_commands "$_stage_norm" 2>/dev/null || true)"
+    _stage_cmds="$(yaml_get_rnex_hook_commands "$_stage_camel" 2>/dev/null || true)"
   fi
 
   [ -n "$_stage_cmds" ] || return 0
 
   _prev_active="${RNEX_HOOK_ACTIVE:-}"
-  export RNEX_HOOK_ACTIVE="${RNEX_HOOK_ACTIVE:+${RNEX_HOOK_ACTIVE}:}${_stage_norm}"
+  export RNEX_HOOK_ACTIVE="${RNEX_HOOK_ACTIVE:+${RNEX_HOOK_ACTIVE}:}${_stage_camel}"
 
   _is_blocking=0
-  case "$_stage_norm" in
-    before_*|pre_*) _is_blocking=1 ;;
+  case "$_stage_camel" in
+    before*|pre*) _is_blocking=1 ;;
   esac
 
   # shellcheck disable=SC2031
@@ -283,7 +288,7 @@ rnex_hooks_run_stage() {
         RNEX_CONFIG_MERGED="$_rhrs_config"
         RNEX_CMD="$_rhrs_cmd"
         RNEX_ARGS="$_rhrs_args"
-        RNEX_HOOK_EVENT="$_stage_norm"
+        RNEX_HOOK_EVENT="$_stage_camel"
         RNEX_HOOK_ARGS="$_rhrs_args"
         RNEX_QUIET="$_rhrs_quiet"
         RNEX_PROVIDER_SKILL_DIRS="$_rhrs_skill_dirs"
@@ -300,7 +305,7 @@ rnex_hooks_run_stage() {
         RNEX_CONFIG_MERGED="$_rhrs_config"
         RNEX_CMD="$_rhrs_cmd"
         RNEX_ARGS="$_rhrs_args"
-        RNEX_HOOK_EVENT="$_stage_norm"
+        RNEX_HOOK_EVENT="$_stage_camel"
         RNEX_HOOK_ARGS="$_rhrs_args"
         RNEX_QUIET="$_rhrs_quiet"
         RNEX_PROVIDER_SKILL_DIRS="$_rhrs_skill_dirs"

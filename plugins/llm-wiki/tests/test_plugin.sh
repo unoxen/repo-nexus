@@ -42,11 +42,11 @@ _yaml_file="$_kl_pdir/plugin.yaml"
 ! grep -q 'templates' "$_yaml_file" || { fail "templates should not be in plugin.yaml"; exit 1; }
 
 # Assert flat B-Tree configuration defaults
-grep -q 'btree_shard_max_entries:' "$_yaml_file" || { fail "btree_shard_max_entries missing in plugin.yaml"; exit 1; }
-grep -q 'btree_root_max_lines:' "$_yaml_file" || { fail "btree_root_max_lines missing in plugin.yaml"; exit 1; }
-grep -q 'wiki_dir: "\.rnex/wiki"' "$_yaml_file" || { fail "wiki_dir default missing in plugin.yaml"; exit 1; }
-grep -q 'index_file: "index.md"' "$_yaml_file" || { fail "index_file default missing in plugin.yaml"; exit 1; }
-grep -q 'log_file: "log.md"' "$_yaml_file" || { fail "log_file default missing in plugin.yaml"; exit 1; }
+grep -q 'btreeShardMaxEntries:' "$_yaml_file" || { fail "btreeShardMaxEntries missing in plugin.yaml"; exit 1; }
+grep -q 'btreeRootMaxLines:' "$_yaml_file" || { fail "btreeRootMaxLines missing in plugin.yaml"; exit 1; }
+grep -q 'wikiDir: "\.rnex/wiki"' "$_yaml_file" || { fail "wikiDir default missing in plugin.yaml"; exit 1; }
+grep -q 'indexFile: "index.md"' "$_yaml_file" || { fail "indexFile default missing in plugin.yaml"; exit 1; }
+grep -q 'logFile: "log.md"' "$_yaml_file" || { fail "logFile default missing in plugin.yaml"; exit 1; }
 
 # Assert legacy graph and directory keys are completely purged
 ! grep -q 'graph_default_depth:' "$_yaml_file" || { fail "graph_default_depth must NOT be in plugin.yaml"; exit 1; }
@@ -287,8 +287,8 @@ cat <<'EOF_BTREE_CFG' > "$TEST_BTREE_WS/rnex.yaml"
 version: 1.0.0
 plugins:
   llm-wiki:
-    wiki_dir: wiki
-    btree_shard_max_entries: 5
+    wikiDir: wiki
+    btreeShardMaxEntries: 5
     sources: [docs]
 repos:
 EOF_BTREE_CFG
@@ -339,7 +339,7 @@ cat <<'EOF_CFG_SF' > "$TEST_SF_WS/rnex.yaml"
 version: 1.0.0
 plugins:
   llm-wiki:
-    wiki_dir: wiki
+    wikiDir: wiki
     sources: [raw]
 repos:
 EOF_CFG_SF
@@ -464,25 +464,25 @@ cat <<'EOF_STRICT_CFG' > "$TEST_STRICT_WS/rnex.yaml"
 version: 1.0.0
 plugins:
   llm-wiki:
-    btree_root_max_lines: 2
+    btreeRootMaxLines: 2
 repos:
 EOF_STRICT_CFG
 
 _bound_err=0
 (cd "$TEST_STRICT_WS" && ./rnex plugin llm-wiki lint >/dev/null 2>&1) || _bound_err=1
-[ "$_bound_err" -eq 1 ] || { fail "lint did not exit non-zero when index.md exceeded btree_root_max_lines"; exit 1; }
+[ "$_bound_err" -eq 1 ] || { fail "lint did not exit non-zero when index.md exceeded btreeRootMaxLines"; exit 1; }
 
 # Restore proper line bounds and verify lint passes
 cat <<'EOF_STRICT_CFG2' > "$TEST_STRICT_WS/rnex.yaml"
 version: 1.0.0
 plugins:
   llm-wiki:
-    btree_root_max_lines: 80
+    btreeRootMaxLines: 80
 repos:
 EOF_STRICT_CFG2
 
 (cd "$TEST_STRICT_WS" && ./rnex plugin llm-wiki lint >/dev/null) || {
-  fail "lint failed after restoring valid btree_root_max_lines"; exit 1;
+  fail "lint failed after restoring valid btreeRootMaxLines"; exit 1;
 }
 pass
 
@@ -526,14 +526,14 @@ rm -rf "$TEST_LLM_WIKI_WS/plugins/mock-provider" "$TEST_LLM_WIKI_WS/.mock"
 pass
 
 # --------------------------------------------------------------------------
-# Test 12: Configurable wiki_dir and sources
+# Test 12: Configurable wikiDir and sources
 # --------------------------------------------------------------------------
-run_test "LLM Wiki: configurable wiki_dir and sources"
+run_test "LLM Wiki: configurable wikiDir and sources"
 cat <<'EOF_CFG' > "$TEST_LLM_WIKI_WS/rnex.yaml"
 version: 1.0.0
 plugins:
   llm-wiki:
-    wiki_dir: docs/wiki
+    wikiDir: docs/wiki
     sources: [intake/raw]
 repos:
 EOF_CFG
@@ -559,7 +559,7 @@ cat <<'EOF_CFG_RESET' > "$TEST_LLM_WIKI_WS/rnex.yaml"
 version: 1.0.0
 plugins:
   llm-wiki:
-    wiki_dir: wiki
+    wikiDir: wiki
     sources: [docs]
 repos:
 EOF_CFG_RESET
@@ -869,9 +869,9 @@ echo "$_dead_shard" | grep -q 'Please consult Dead Target and \[Real Real\](\.\.
 pass
 
 # --------------------------------------------------------------------------
-# Test 19: Configurable relative_links: "strip" & CLI flag --strip-links
+# Test 19: Configurable relativeLinks: "strip" & CLI flag --strip-links
 # --------------------------------------------------------------------------
-run_test "LLM Wiki: configurable relative_links: strip and CLI flag --strip-links"
+run_test "LLM Wiki: configurable relativeLinks: strip and CLI flag --strip-links"
 TEST_MODE_WS="$TEST_TMP/llm-wiki-mode-ws"
 mkdir -p "$TEST_MODE_WS"
 setup_plugin_test_workspace llm-wiki "$TEST_MODE_WS"
@@ -889,7 +889,7 @@ version: 1.0.0
 plugins:
   llm-wiki:
     sources: [docs]
-    relative_links: "strip"
+    relativeLinks: "strip"
 repos:
 EOF_MODE_YAML
 
@@ -984,7 +984,7 @@ cat <<'EOF_ROLL_YAML' > "$TEST_ROLL_WS/rnex.yaml"
 version: 1.0.0
 plugins:
   llm-wiki:
-    log_max_records: 5
+    logMaxRecords: 5
     sources: [docs]
 repos:
 EOF_ROLL_YAML
@@ -1014,7 +1014,7 @@ _roll_rec_count="$(echo "$_roll_content" | LC_ALL=C grep -c '^- \*\*')"
 
 # Assert total records capped at max (5)
 [ "$_roll_rec_count" -le 5 ] || {
-  fail "Log record count ($_roll_rec_count) exceeds log_max_records (5): $_roll_content"; exit 1;
+  fail "Log record count ($_roll_rec_count) exceeds logMaxRecords (5): $_roll_content"; exit 1;
 }
 
 # Assert oldest records (Record 1, Record 2) were pruned
@@ -1049,8 +1049,8 @@ cat <<'EOF_RECURSE_CFG' > "$TEST_RECURSE_WS/rnex.yaml"
 version: 1.0.0
 plugins:
   llm-wiki:
-    wiki_dir: wiki
-    btree_shard_max_entries: 100
+    wikiDir: wiki
+    btreeShardMaxEntries: 100
     sources: [repos/test-repo/packages]
 repos:
   test-repo:
@@ -1146,8 +1146,8 @@ cat <<'EOF_LINT_CFG' > "$TEST_LINT_SPLIT_WS/rnex.yaml"
 version: 1.0.0
 plugins:
   llm-wiki:
-    wiki_dir: wiki
-    btree_shard_max_entries: 100
+    wikiDir: wiki
+    btreeShardMaxEntries: 100
     sources: [repos/test-repo/packages]
 repos:
   test-repo:
@@ -1220,8 +1220,8 @@ cat <<'EOF_ROUTE_CFG' > "$TEST_ROUTE_WS/rnex.yaml"
 version: 1.0.0
 plugins:
   llm-wiki:
-    wiki_dir: wiki
-    btree_shard_max_entries: 100
+    wikiDir: wiki
+    btreeShardMaxEntries: 100
     sources: [repos/test-repo/packages]
 repos:
   test-repo:
@@ -1281,8 +1281,8 @@ cat <<'EOF_2LET_CFG' > "$TEST_2LET_WS/rnex.yaml"
 version: 1.0.0
 plugins:
   llm-wiki:
-    wiki_dir: wiki
-    btree_shard_max_entries: 100
+    wikiDir: wiki
+    btreeShardMaxEntries: 100
     sources: [repos/test-repo/packages]
 repos:
   test-repo:
@@ -1340,8 +1340,8 @@ cat <<'EOF_3LET_CFG' > "$TEST_3LET_WS/rnex.yaml"
 version: 1.0.0
 plugins:
   llm-wiki:
-    wiki_dir: wiki
-    btree_shard_max_entries: 100
+    wikiDir: wiki
+    btreeShardMaxEntries: 100
     sources: [repos/test-repo/packages]
 repos:
   test-repo:
@@ -1402,8 +1402,8 @@ cat <<'EOF_HEAL_CFG' > "$TEST_NUM_HEAL_WS/rnex.yaml"
 version: 1.0.0
 plugins:
   llm-wiki:
-    wiki_dir: wiki
-    btree_shard_max_entries: 100
+    wikiDir: wiki
+    btreeShardMaxEntries: 100
     sources: [repos/test-module]
 repos:
   test-module:
@@ -1465,8 +1465,8 @@ cat <<'EOF_IDENT_CFG' > "$TEST_IDENT_WS/rnex.yaml"
 version: 1.0.0
 plugins:
   llm-wiki:
-    wiki_dir: wiki
-    btree_shard_max_entries: 100
+    wikiDir: wiki
+    btreeShardMaxEntries: 100
     sources: [repos/test-repo/packages]
 repos:
   test-repo:
@@ -1540,8 +1540,8 @@ cat <<'EOF_IDEM_CFG' > "$TEST_IDEM_WS/rnex.yaml"
 version: 1.0.0
 plugins:
   llm-wiki:
-    wiki_dir: wiki
-    btree_shard_max_entries: 100
+    wikiDir: wiki
+    btreeShardMaxEntries: 100
     sources: [repos/test-repo/packages, repos/test1, repos/test1-one, repos/my_repo, repos/service-1]
 repos:
   test-repo:
@@ -1654,19 +1654,19 @@ _proj_ai="$TEST_AI_INSTR_WS/.rnex/plugins/llm-wiki/ai-instructions.md"
 grep -q "LLM Wiki AI Instructions" "$_proj_ai" || { fail "Projected ai-instructions.md content corrupted"; exit 1; }
 grep -qF ".rnex/wiki/index.md" "$_proj_ai" || { fail "Default wiki index path not resolved in ai-instructions.md"; exit 1; }
 
-# 2. Customize all llm-wiki and repos_dir settings and assert exact concrete paths with ZERO placeholders/config refs
+# 2. Customize all llm-wiki and reposDir settings and assert exact concrete paths with ZERO placeholders/config refs
 cat <<'EOF_CUSTOM_AI_CFG' > "$TEST_AI_INSTR_WS/rnex.yaml"
 version: 1.0.0
-repos_dir: "services"
+reposDir: "services"
 plugins:
   llm-wiki:
-    wiki_dir: "knowledge/wiki"
-    index_file: "HOME.md"
-    log_file: "HISTORY.md"
-    log_max_records: 250
-    btree_root_max_lines: 42
-    btree_shard_max_entries: 15
-    relative_links: "strip"
+    wikiDir: "knowledge/wiki"
+    indexFile: "HOME.md"
+    logFile: "HISTORY.md"
+    logMaxRecords: 250
+    btreeRootMaxLines: 42
+    btreeShardMaxEntries: 15
+    relativeLinks: "strip"
     sources:
       - "guides"
       - "services/**/README.md"
@@ -1679,23 +1679,23 @@ _proj_rules="$TEST_AI_INSTR_WS/.rnex/plugins/llm-wiki/rules/behavioral.md"
 _proj_ingest="$TEST_AI_INSTR_WS/.rnex/plugins/llm-wiki/skills/ingest.md"
 _proj_lint="$TEST_AI_INSTR_WS/.rnex/plugins/llm-wiki/skills/lint.md"
 
-grep -qF "knowledge/wiki/HOME.md" "$_proj_ai" || { fail "Custom wiki_dir/index_file not resolved in ai-instructions.md"; exit 1; }
-grep -qF "knowledge/wiki/HISTORY.md" "$_proj_ai" || { fail "Custom log_file not resolved in ai-instructions.md"; exit 1; }
+grep -qF "knowledge/wiki/HOME.md" "$_proj_ai" || { fail "Custom wikiDir/indexFile not resolved in ai-instructions.md"; exit 1; }
+grep -qF "knowledge/wiki/HISTORY.md" "$_proj_ai" || { fail "Custom logFile not resolved in ai-instructions.md"; exit 1; }
 grep -qF 'guides/' "$_proj_ai" || { fail "Custom sources missing in ai-instructions.md"; exit 1; }
 grep -qF 'services/**/README.md' "$_proj_ai" || { fail "Custom glob source missing in ai-instructions.md"; exit 1; }
 grep -qF "knowledge/wiki/HOME.md" "$_proj_arch" || { fail "Custom wiki index path missing in rnex-wiki-architecture.md"; exit 1; }
-grep -qF "services/" "$_proj_rules" || { fail "Custom repos_dir missing in rules/behavioral.md"; exit 1; }
-grep -qF "42" "$_proj_rules" || { fail "Custom btree_root_max_lines missing in rules/behavioral.md"; exit 1; }
-grep -qF "strip" "$_proj_ingest" || { fail "Custom relative_links missing in skills/ingest.md"; exit 1; }
-grep -qF "250" "$_proj_ingest" || { fail "Custom log_max_records missing in skills/ingest.md"; exit 1; }
-grep -qF "15" "$_proj_lint" || { fail "Custom btree_shard_max_entries missing in skills/lint.md"; exit 1; }
+grep -qF "services/" "$_proj_rules" || { fail "Custom reposDir missing in rules/behavioral.md"; exit 1; }
+grep -qF "42" "$_proj_rules" || { fail "Custom btreeRootMaxLines missing in rules/behavioral.md"; exit 1; }
+grep -qF "strip" "$_proj_ingest" || { fail "Custom relativeLinks missing in skills/ingest.md"; exit 1; }
+grep -qF "250" "$_proj_ingest" || { fail "Custom logMaxRecords missing in skills/ingest.md"; exit 1; }
+grep -qF "15" "$_proj_lint" || { fail "Custom btreeShardMaxEntries missing in skills/lint.md"; exit 1; }
 
 for _proj_f in "$_proj_ai" "$_proj_arch" "$_proj_rules" "$_proj_ingest" "$_proj_lint"; do
   [ -f "$_proj_f" ] || { fail "Missing projected file $_proj_f"; exit 1; }
-  if grep -qE '(\{[a-zA-Z0-9_-]+\}|<wiki_dir>|<index_file>|<log_file>|<repos_dir>|<source_path>)' "$_proj_f"; then
+  if grep -qE '(\{[a-zA-Z0-9_-]+\}|<wiki_dir>|<index_file>|<log_file>|<repos_dir>|<source_path>|<wikiDir>|<indexFile>|<logFile>|<reposDir>|<sourcePath>)' "$_proj_f"; then
     fail "Unresolved placeholder detected in $_proj_f: $(cat "$_proj_f")"; exit 1;
   fi
-  if grep -qE '(rnex\.yaml|plugins\.llm-wiki|default:|repos_dir)' "$_proj_f"; then
+  if grep -qE '(rnex\.yaml|plugins\.llm-wiki|default:|repos_dir|reposDir|wikiDir|indexFile|logFile)' "$_proj_f"; then
     fail "Disallowed rnex config reference detected in $_proj_f: $(cat "$_proj_f")"; exit 1;
   fi
 done
@@ -1717,9 +1717,9 @@ grep -qF "No plugin AI instructions registered." "$_ai_instr" || {
 pass
 
 # --------------------------------------------------------------------------
-# Test 31: Zero hidden hooks on sync & deterministic opt-in via rnex-hooks.after_sync
+# Test 31: Zero hidden hooks on sync & deterministic opt-in via rnexHooks.afterSync
 # --------------------------------------------------------------------------
-run_test "LLM Wiki: zero hidden hooks invariant on sync and deterministic explicit after_sync execution"
+run_test "LLM Wiki: zero hidden hooks invariant on sync and deterministic explicit afterSync execution"
 TEST_HOOKS_WS="$TEST_TMP/llm-wiki-hooks-ws"
 mkdir -p "$TEST_HOOKS_WS"
 setup_plugin_test_workspace llm-wiki "$TEST_HOOKS_WS"
@@ -1737,7 +1737,7 @@ cat <<'EOF_CFG_NOHOOK' > "$TEST_HOOKS_WS/rnex.yaml"
 version: 1.0.0
 plugins:
   llm-wiki:
-    wiki_dir: ".rnex/wiki"
+    wikiDir: ".rnex/wiki"
     sources:
       - docs
 repos:
@@ -1755,15 +1755,15 @@ if [ -d "$TEST_HOOKS_WS/.rnex/wiki" ]; then
   }
 fi
 
-# 2. Configure explicit rnex-hooks.after_sync: sync must run ingest deterministically
+# 2. Configure explicit rnexHooks.afterSync: sync must run ingest deterministically
 cat <<'EOF_CFG_HOOK' > "$TEST_HOOKS_WS/rnex.yaml"
 version: 1.0.0
-rnex-hooks:
-  after_sync:
+rnexHooks:
+  afterSync:
     - "rnex plugin llm-wiki ingest"
 plugins:
   llm-wiki:
-    wiki_dir: ".rnex/wiki"
+    wikiDir: ".rnex/wiki"
     sources:
       - docs
 repos:
@@ -1773,25 +1773,25 @@ EOF_CFG_HOOK
 
 # Assert that wiki shard was created and contains guide
 [ -f "$TEST_HOOKS_WS/.rnex/wiki/repo-nexus-docs.md" ] || {
-  fail "Wiki shard repo-nexus-docs.md missing after sync with explicit after_sync hook"; exit 1;
+  fail "Wiki shard repo-nexus-docs.md missing after sync with explicit afterSync hook"; exit 1;
 }
 grep -q "guide" "$TEST_HOOKS_WS/.rnex/wiki/repo-nexus-docs.md" || {
-  fail "guide doc missing in repo-nexus-docs.md after sync with explicit after_sync hook"; exit 1;
+  fail "guide doc missing in repo-nexus-docs.md after sync with explicit afterSync hook"; exit 1;
 }
 
 # 3. Test priority override via .local.rnex.yaml
 cat <<'EOF_LOCAL_HOOK' > "$TEST_HOOKS_WS/.local.rnex.yaml"
-rnex-hooks:
-  after_sync:
+rnexHooks:
+  afterSync:
     - "printf 'OVERRIDDEN_HOOK\\n' > .rnex/hook_test.log"
 EOF_LOCAL_HOOK
 
 (cd "$TEST_HOOKS_WS" && ./rnex sync -y >/dev/null)
 [ -f "$TEST_HOOKS_WS/.rnex/hook_test.log" ] || {
-  fail ".local.rnex.yaml after_sync hook was not executed"; exit 1;
+  fail ".local.rnex.yaml afterSync hook was not executed"; exit 1;
 }
 grep -q "OVERRIDDEN_HOOK" "$TEST_HOOKS_WS/.rnex/hook_test.log" || {
-  fail "Unexpected output from .local.rnex.yaml after_sync hook"; exit 1;
+  fail "Unexpected output from .local.rnex.yaml afterSync hook"; exit 1;
 }
 rm -f "$TEST_HOOKS_WS/.local.rnex.yaml" "$TEST_HOOKS_WS/.rnex/hook_test.log"
 pass

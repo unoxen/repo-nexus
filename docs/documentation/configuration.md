@@ -31,8 +31,8 @@ Settings in `.local.rnex.yaml` take precedence over `rnex.yaml`:
 version: "1"
 name: "acme-platform"
 description: "Multi-repo platform workspace and shared AI context"
-repos_dir: "repos"
-code_workspace: "acme.code-workspace"
+reposDir: "repos"
+codeWorkspace: "acme.code-workspace"
 
 # Git Integration (Ignore rules & Git hooks)
 git:
@@ -55,30 +55,30 @@ git:
       - "rnex plugin llm-wiki lint --strict"
 
 # Lifecycle Hooks (Map of RNEX events to command lists; strictly opt-in)
-rnex-hooks:
-  before_init: []
-  after_init:
+rnexHooks:
+  beforeInit: []
+  afterInit:
     - "echo 'Workspace initialized'"
-  before_sync: []
-  after_sync:
+  beforeSync: []
+  afterSync:
     - "rnex plugin llm-wiki ingest"
-  before_clone: []
-  after_clone:
+  beforeClone: []
+  afterClone:
     - "rnex exec npm install"
-  before_repo_add: []
-  after_repo_add: []
-  before_repo_remove: []
-  after_repo_remove: []
-  before_repo_set: []
-  after_repo_set: []
-  before_plugin_enable: []
-  after_plugin_enable: []
-  before_plugin_disable: []
-  after_plugin_disable: []
-  before_plugin_command: []
-  after_plugin_command: []
-  before_exec: []
-  after_exec: []
+  beforeRepoAdd: []
+  afterRepoAdd: []
+  beforeRepoRemove: []
+  afterRepoRemove: []
+  beforeRepoSet: []
+  afterRepoSet: []
+  beforePluginEnable: []
+  afterPluginEnable: []
+  beforePluginDisable: []
+  afterPluginDisable: []
+  beforePluginCommand: []
+  afterPluginCommand: []
+  beforeExec: []
+  afterExec: []
 
 # Member Repositories
 repos:
@@ -150,7 +150,7 @@ plugins:
   # Built-in LLM Knowledge Base plugin
   llm-wiki:
     enabled: true
-    wiki_dir: ".rnex/wiki"
+    wikiDir: ".rnex/wiki"
     sources:
       - "docs"
       - "adr"
@@ -167,17 +167,17 @@ plugins:
 |:---|:---|:---|:---|
 | `version` | string | `"1"` | Schema version compatibility check. |
 | `name` | string | basename | Workspace identifier. |
-| `repos_dir` | string | `"repos"` | Directory where member repositories are cloned (automatically managed in `.gitignore` and `.ignore`). |
-| `code_workspace`| string / bool | `false` | Path to generated `.code-workspace` file. |
+| `reposDir` | string | `"repos"` | Directory where member repositories are cloned (automatically managed in `.gitignore` and `.ignore`). |
+| `codeWorkspace`| string / bool | `false` | Path to generated `.code-workspace` file. |
 
 ### Git Integration (`git`)
 
 * `git.ignore`: List of directories or file patterns appended to `.gitignore`. Files and directories starting with `.rnex` or `rnex` (`**/.rnex*`, `**/rnex*`) are recursively ignored by default, while `rnex.yaml` (`!rnex.yaml`, `!**/rnex.yaml`) is excluded and tracked.
 * `git.hooks`: Map of Git hook names (`post-merge`, `post-checkout`, `pre-commit`, `pre-push`) to lists of shell commands executed when the hook fires.
 
-### Lifecycle Hooks (`rnex-hooks`)
+### Lifecycle Hooks (`rnexHooks`)
 
-Map of workspace lifecycle event names (`before_sync`, `after_sync`, `after_clone`, etc.) to lists of shell commands executed by the RNEX dispatcher (strictly opt-in, zero defaults).
+Map of workspace lifecycle event names (`beforeSync`, `afterSync`, `afterClone`, etc.) to lists of shell commands executed by the RNEX dispatcher (strictly opt-in, zero defaults).
 
 ### Member Repositories (`repos`)
 
@@ -197,7 +197,7 @@ Plugins provide specialized AI assistant integration, agentic skills, and domain
 | **`plugins.<name>.path`** | string | *(built-in)* | **External plugin location.** Relative (to workspace root) or absolute path to an external plugin directory (or its `plugin.yaml` manifest). Overrides built-in `plugins/<name>`. |
 | `plugins.<name>.skills` | boolean | `true` | Controls whether AI provider plugins generate user skill/rule pointers (`rnex-*`) for active skills. |
 | `plugins.<name>.hooks` | map | *(none)* | Strictly opt-in lifecycle hooks projected into provider manifests (`.claude/settings.json`, `.codex/hooks.json`, `.cursor/hooks.json`, `.gemini/settings.json`, `.github/hooks/rnex.json`, `.windsurf/hooks.json`). Canonical events like `SessionStart` are normalized automatically per provider schema. Cleanly removed when unconfigured. |
-| `plugins.<name>.<option>` | any | `config_defaults` | Plugin-specific configuration options defined in the plugin's `plugin.yaml` (e.g., `wiki_dir` and `sources` for `llm-wiki`). |
+| `plugins.<name>.<option>` | any | `config_defaults` | Plugin-specific configuration options defined in the plugin's `plugin.yaml` (e.g., `wikiDir` and `sources` for `llm-wiki`). |
 
 #### External Plugin Resolution (`plugins.<name>.path`)
 

@@ -185,7 +185,7 @@ _load_repos_dir() {
 
 _load_code_workspace() {
   _cw="${1:-}"
-  [ -n "$_cw" ] || _cw="$(yaml_get_top_level "code_workspace")"
+  [ -n "$_cw" ] || _cw="$(yaml_get_top_level "codeWorkspace")"
   case "$_cw" in
     true|yes|1)
       _ws_basename="$(basename "$NEXUS_DIR")"

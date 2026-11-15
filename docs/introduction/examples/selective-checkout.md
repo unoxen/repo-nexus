@@ -14,7 +14,7 @@ head:
 ```yaml
 version: "1"
 name: "distributed-platform"
-repos_dir: "./repos"
+reposDir: "./repos"
 
 git:
   ignore:

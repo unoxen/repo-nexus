@@ -471,13 +471,13 @@ _plugin_resolve_scalar_value() {
     ' "$_prsv_pd/plugin.yaml")"
   fi
   case "$_prsv_k" in
-    *_dir|dir) _prsv_v="$(normalize_rel_path "$_prsv_v")" ;;
+    *Dir|*_dir|dir) _prsv_v="$(normalize_rel_path "$_prsv_v")" ;;
   esac
   printf '%s' "$_prsv_v"
 }
 
 # Substitute configurable placeholders declared in plugin.yaml config_defaults
-# and core workspace metadata ({repos_dir}, {plugin_dir}) in template paths.
+# and core workspace metadata ({reposDir}, {plugin_dir}) in template paths.
 #
 # @param $1 plugin_name Target plugin name.
 # @param $2 plugin_dir  Resolved plugin directory.
@@ -501,7 +501,7 @@ plugin_resolve_placeholders() {
   _rdir_v="$(normalize_rel_path "$(_plugin_repos_rel_dir)")"
   if [ -n "$_rdir_v" ]; then
     _rdir_esc="$(_sed_escape_replacement "$_rdir_v")"
-    _res="$(printf '%s' "$_res" | sed -e "s|{repos_dir}|$_rdir_esc|g")"
+    _res="$(printf '%s' "$_res" | sed -e "s|{reposDir}|$_rdir_esc|g")"
   fi
   _pdir_esc="$(_sed_escape_replacement ".rnex/plugins/$_p")"
   _res="$(printf '%s' "$_res" | sed -e "s|{plugin_dir}|$_pdir_esc|g")"
@@ -564,7 +564,7 @@ plugin_instantiate_template() {
   fi
 
   _tmp_inst="$(mktemp)"
-  sed -e "s|{repos_dir}|$_r_val|g" \
+  sed -e "s|{reposDir}|$_r_val|g" \
       -e "s|{skill_dir}|$_sd_val|g" \
       -e "s|{instruction_file}|$_if_val|g" \
       -e "s|{plugin_dir}|$_pdir_val|g" \
@@ -795,7 +795,7 @@ _src_is_file_like() {
   return 1
 }
 
-# Expand workspace placeholders (e.g. {repos_dir}) inside a configured plugin source
+# Expand workspace placeholders (e.g. {reposDir}) inside a configured plugin source
 # specification and normalize it as a clean relative entry.
 #
 # @param $1 raw_entry Source specification string.
@@ -806,9 +806,9 @@ _plugin_expand_source_entry() {
   _pese_val="$1"
   _pese_rdir="${2:-$(_plugin_repos_rel_dir)}"
   case "$_pese_val" in
-    *"{repos_dir}"*)
+    *"{reposDir}"*)
       _pese_esc="$(_sed_escape_replacement "$_pese_rdir")"
-      _pese_val="$(printf '%s' "$_pese_val" | sed -e "s|{repos_dir}|$_pese_esc|g")"
+      _pese_val="$(printf '%s' "$_pese_val" | sed -e "s|{reposDir}|$_pese_esc|g")"
       ;;
   esac
   _src_normalize_entry "$_pese_val"

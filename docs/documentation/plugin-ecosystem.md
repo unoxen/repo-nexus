@@ -17,7 +17,7 @@ Each plugin is self-contained and managed declaratively via `rnex.yaml` or works
 When a plugin is enabled in `rnex.yaml` (or `.local.rnex.yaml`), its rules, instructions, commands, hooks, and skills are scoped directly under `.rnex/plugins/<plugin-name>/`. This keeps workspace root directories clean and avoids naming collisions between plugins while tracking active plugin configuration in `rnex.yaml`.
 
 ### 2. Complete Member Repository Autonomy
-Member repositories live in the configured `repos_dir` (default: `./repos/`) and remain 100% clean and untouched with zero `.rnex/` directories inside member trees. All workspace orchestration, caches, and sync metadata reside exclusively within `.rnex/` at the workspace root.
+Member repositories live in the configured `reposDir` (default: `./repos/`) and remain 100% clean and untouched with zero `.rnex/` directories inside member trees. All workspace orchestration, caches, and sync metadata reside exclusively within `.rnex/` at the workspace root.
 
 ### 3. Decoupled Two-Tier Skills Architecture
 Repo Nexus decouples functional plugins from AI provider plugins:
@@ -37,8 +37,8 @@ rnex plugin <command> [options...]
 ```
 
 Every command execution automatically dispatches lifecycle hooks:
-* `before_plugin_command <plugin> <cmd> [args...]`
-* `after_plugin_command <plugin> <cmd> [args...]`
+* `beforePluginCommand <plugin> <cmd> [args...]`
+* `afterPluginCommand <plugin> <cmd> [args...]`
 
 Environment variables exported to command scripts:
 * `RNEX_PLUGIN_NAME`: Name of the plugin.
@@ -171,7 +171,7 @@ my-plugin/
 │   └── my-plugin.md
 ├── rules/                   # Rules mirrored to IDEs
 ├── skills/                  # Domain skills copied to .rnex/plugins/my-plugin/skills/
-└── templates/               # Workspace template files (e.g. {wiki_dir}/...)
+└── templates/               # Workspace template files (e.g. {wikiDir}/...)
 ```
 
 ### AI Instructions Contract (`ai-instructions.md`)

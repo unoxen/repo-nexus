@@ -15,9 +15,9 @@ Practical diagnostic guidance and step-by-step solutions for everyday multi-repo
 * **Cause**: `rnex.yaml` or `.local.rnex.yaml` was modified, but the workspace harness (`.rnex/`), AI instructions, or Git hook dispatchers have not been reconciled.
 * **Solution**: Run `rnex sync`.
 
-### 2. Search tools or AI assistants cannot find files inside configured repository directory (`<repos_dir>/`)
-* **Cause**: Some indexers respect `.gitignore` by default and skip `<repos_dir>/` (default `repos/`).
-* **Solution**: Repo Nexus automatically generates `.ignore`, `.cursorignore`, and `.geminiignore` containing `!<repos_dir>/*`. Run `rnex sync` to restore these un-ignore files.
+### 2. Search tools or AI assistants cannot find files inside configured repository directory (`<reposDir>/`)
+* **Cause**: Some indexers respect `.gitignore` by default and skip `<reposDir>/` (default `repos/`).
+* **Solution**: Repo Nexus automatically generates `.ignore`, `.cursorignore`, and `.geminiignore` containing `!<reposDir>/*`. Run `rnex sync` to restore these un-ignore files.
 
 ### 3. A repository failed to clone during `rnex clone`
 * **Cause**: SSH key authentication error or network interruption.
@@ -27,8 +27,8 @@ Practical diagnostic guidance and step-by-step solutions for everyday multi-repo
 * **Solution**: Run `rnex repo set <name> --disable --local`. This writes `enabled: false` into `.local.rnex.yaml` without touching the shared `rnex.yaml`.
 
 ### 5. Repository directory mismatch or unexpected clone location
-* **Cause**: A custom `repos_dir` setting in `.local.rnex.yaml` overrides `rnex.yaml`, or a custom directory was provided during `rnex init --repos-dir <dir>`.
-* **Solution**: Run `rnex status` to inspect active workspace configuration, and check `repos_dir:` in `.local.rnex.yaml` vs `rnex.yaml`.
+* **Cause**: A custom `reposDir` setting in `.local.rnex.yaml` overrides `rnex.yaml`, or a custom directory was provided during `rnex init --repos-dir <dir>`.
+* **Solution**: Run `rnex status` to inspect active workspace configuration, and check `reposDir:` in `.local.rnex.yaml` vs `rnex.yaml`.
 
 ### 6. `rnex exec` reports a non-zero exit code across member repositories
 * **Cause**: `rnex exec <command...>` executes your command sequentially across all active, enabled repositories. It does not halt on the first error; instead, it runs through the full set of repositories, logs `[✓] <name> succeeded` or `[✗] <name> failed (exit <code>)` for each, and returns the exit code of the last failing repository.
@@ -86,4 +86,4 @@ rnex repo add git@github.com:my-org/frontend.git --name frontend
 rnex clone
 ```
 
-All repositories are now cloned into your configured member repository directory (`<repos_dir>/`, default `./repos/`) as independent Git repositories. No submodule pointers are tracked in the umbrella repository.
+All repositories are now cloned into your configured member repository directory (`<reposDir>/`, default `./repos/`) as independent Git repositories. No submodule pointers are tracked in the umbrella repository.

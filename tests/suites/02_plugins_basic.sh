@@ -61,12 +61,12 @@ chmod +x "$_cmd_plugin_dir/commands"/*
 grep -qF "1. **Mandatory**: Read and follow \`.rnex/plugins/cmd-test/ai-instructions.md\`." "$TEST_WORKSPACE/.rnex/ai-instructions.md" || { fail "Custom workflow plugin instruction link missing from ai-instructions.md"; exit 1; }
 [ -f "$TEST_WORKSPACE/.rnex/plugins/cmd-test/ai-instructions.md" ] || { fail "ai-instructions.md was not projected into .rnex/plugins/cmd-test/"; exit 1; }
 
-# Configure rnex-hooks for before_plugin_command and after_plugin_command via .local.rnex.yaml
+# Configure rnexHooks for beforePluginCommand and afterPluginCommand via .local.rnex.yaml
 cat <<'EOF_HOOKS' > "$TEST_WORKSPACE/.local.rnex.yaml"
-rnex-hooks:
-  before_plugin_command:
+rnexHooks:
+  beforePluginCommand:
     - "echo BEFORE_CMD: $RNEX_ARGS >> hook_cmd.log"
-  after_plugin_command:
+  afterPluginCommand:
     - "echo AFTER_CMD: $RNEX_ARGS >> hook_cmd.log"
 EOF_HOOKS
 
@@ -805,7 +805,7 @@ cat <<'EOF_UNK_CFG' > "$TEST_UNK_PLUG_WS/rnex.yaml"
 version: 1.0.0
 plugins:
   karpathy-llm:
-    wiki_dir: ".rnex/wiki"
+    wikiDir: ".rnex/wiki"
 repos:
 EOF_UNK_CFG
 

@@ -43,7 +43,7 @@ esac
 # @param $@: CLI arguments ([<source_path>], --file/-f, --rewrite-links,
 #            --strip-links, --quiet/-q, --help/-h).
 # @returns: 0 on successful ingestion; 1 on configuration or source error.
-# @sideEffects: Mutates configured wiki_dir shards, index_file, and log_file.
+# @sideEffects: Mutates configured wikiDir shards, indexFile, and logFile.
 # -----------------------------------------------------------------------------
 main_ingest() {
     _ws_root="${RNEX_WORKSPACE_ROOT:-${RNEX_ROOT:-$(pwd)}}"

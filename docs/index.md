@@ -43,7 +43,7 @@ A lightweight, zero-dependency and AI-First Nexus Repository (Virtual Meta Repos
   <div class="rnex-feature-card">
     <div class="rnex-feature-icon">🗂️</div>
     <h3>No Git Submodules</h3>
-    <p>Autonomous member repositories clone directly into your configured <code>repos_dir</code> (default <code>./repos/</code>) as independent Git repositories with their own branches, tags, and remotes. No detached HEAD traps.</p>
+    <p>Autonomous member repositories clone directly into your configured <code>reposDir</code> (default <code>./repos/</code>) as independent Git repositories with their own branches, tags, and remotes. No detached HEAD traps.</p>
   </div>
   <div class="rnex-feature-card">
     <div class="rnex-feature-icon">🤖</div>
@@ -110,6 +110,6 @@ rnex --version
 
 * **[Introduction](./introduction/why-rnex)**: Understand why the Virtual Meta-Repo model succeeds where monorepos and Git submodules fall short, follow the quick start tutorial, and inspect practical examples.
 * **[Documentation](./documentation/architecture)**: Deep dive into the architecture, configuration schema, workflows, workspace lifecycle, and plugin ecosystem.
-* **[Reference](./reference/cli)**: Complete syntax and options for `rnex` CLI commands, lifecycle hooks (`rnex-hooks`), Git hooks (`git.hooks`), and environment variables.
+* **[Reference](./reference/cli)**: Complete syntax and options for `rnex` CLI commands, lifecycle hooks (`rnexHooks`), Git hooks (`git.hooks`), and environment variables.
 * **[Plugins](./plugins/llm-wiki)**: Explore first-class plugins for the LLM Wiki, Claude Code, OpenAI Codex, Cursor, Gemini, Copilot, and Windsurf.
 * **[FAQ](./faq/general)**: Review frequently asked questions, comparisons with Git submodules/monorepos, and troubleshooting tips.

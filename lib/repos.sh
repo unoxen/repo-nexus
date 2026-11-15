@@ -42,12 +42,12 @@ ensure_repos_dir() {
   [ -f "$REPOS_DIR/.gitkeep" ] || touch "$REPOS_DIR/.gitkeep"
 }
 
-# Reconcile the repositories root directory (<repos_dir>) by detecting and
-# pruning unlisted or deleted repository directories so that <repos_dir>
+# Reconcile the repositories root directory (<reposDir>) by detecting and
+# pruning unlisted or deleted repository directories so that <reposDir>
 # contains strictly the repositories currently declared in configuration.
 #
 # Responsibility:
-#   Audits all subdirectories within the active <repos_dir>. Any directory
+#   Audits all subdirectories within the active <reposDir>. Any directory
 #   that does not match the resolved path of a repository registered in
 #   rnex.yaml or .local.rnex.yaml is recognized as deleted/unlisted and purged.
 #

@@ -14,7 +14,7 @@ head:
 ```yaml
 version: "1"
 name: "research-wiki"
-repos_dir: "./repos"
+reposDir: "./repos"
 
 git:
   ignore:
@@ -29,8 +29,8 @@ git:
     pre-push:
       - "rnex plugin llm-wiki lint --strict"
 
-rnex-hooks:
-  after_sync:
+rnexHooks:
+  afterSync:
     - "rnex plugin llm-wiki ingest --quiet"
 
 repos:
@@ -42,7 +42,7 @@ repos:
 
 plugins:
   llm-wiki:
-    wiki_dir: "wiki"
+    wikiDir: "wiki"
     sources:
       - "docs"
       - "specs"

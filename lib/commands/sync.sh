@@ -100,7 +100,7 @@ cmd_sync() {
     fi
   fi
 
-  # 3.3. Reconcile member repos (<repos_dir> unlisted pruning & missing clone checks)
+  # 3.3. Reconcile member repos (<reposDir> unlisted pruning & missing clone checks)
   prune_unlisted_repos "$REPOS_DIR"
   yaml_list_repos | while read -r _name; do
     [ -n "$_name" ] || continue

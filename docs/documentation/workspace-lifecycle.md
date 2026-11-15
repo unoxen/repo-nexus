@@ -55,11 +55,11 @@ rnex sync [options]
 
 ### Reconciliation Pipeline
 1. Upgrades configuration schema non-destructively if an older version is detected.
-2. Re-verifies `.gitignore` rules from `git.ignore` (ignoring recursive patterns `**/.rnex*`, `**/rnex*`, `<repos_dir>/`, while preserving `!rnex.yaml`), and ensures `.ignore` contains `!<repos_dir>/*`.
+2. Re-verifies `.gitignore` rules from `git.ignore` (ignoring recursive patterns `**/.rnex*`, `**/rnex*`, `<reposDir>/`, while preserving `!rnex.yaml`), and ensures `.ignore` contains `!<reposDir>/*`.
 3. Compiles `.rnex/ai-instructions.md` (two-section router with Execution Gate and ordered plugin instructions) and `.rnex/repos-instructions.md` (active member repositories matrix with Path and Mode). Writes single strict directive to top-level provider files (`AGENTS.md`, `CLAUDE.md`, `CODEX.md`, etc.).
 4. Syncs core agentic skills from `skills/` to `.rnex/skills/` and generates zero-logic User Skills (`rnex-*`) in active AI provider directories.
 5. Re-syncs enabled plugin assets into `.rnex/plugins/` (member repositories remain completely clean with zero `.rnex/` folders).
-6. Dispatches lifecycle hooks (`before_sync`, `after_sync`).
+6. Dispatches lifecycle hooks (`beforeSync`, `afterSync`).
 7. Reconciles Git hook dispatchers in `.git/hooks/` against declarative `git.hooks` commands.
 8. Updates multi-root `.code-workspace` folder mappings if configured.
 9. Updates the checksum stamp in `.rnex/sync_stamp`.
@@ -86,12 +86,12 @@ rnex status
 
 ## 4. Multi-Repo Batch Execution (`rnex exec`)
 
-Runs arbitrary shell commands sequentially across every active member repository in `<repos_dir>/` (default `./repos/`).
+Runs arbitrary shell commands sequentially across every active member repository in `<reposDir>/` (default `./repos/`).
 
 ```bash
 rnex exec [command...]
 ```
 
-* Executes in each repository root (`<repos_dir>/<name>`).
+* Executes in each repository root (`<reposDir>/<name>`).
 * Preserves and bubbles the exact exit code of any failing command.
 * Sets environment variables: `RNEX_REPO_NAME`, `RNEX_REPO_PATH`, `RNEX_REPO_BRANCH`.

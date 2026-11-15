@@ -23,12 +23,12 @@ cmd_init() {
       -y|--yes) _non_interactive=1 ;;
       --hooks) _cli_hooks="true" ;;
       --no-hooks) _cli_no_hooks=1; _cli_hooks="false" ;;
-      --repos-dir|--repos_dir)
+      --repos-dir)
         shift
         [ -n "${1:-}" ] || die "Option $1 requires a directory path"
         _cli_repos_dir="$1"
         ;;
-      --repos-dir=*|--repos_dir=*)
+      --repos-dir=*)
         _cli_repos_dir="${1#*=}"
         ;;
       --plugin|--enable-plugin)
@@ -174,10 +174,10 @@ cmd_init() {
 version: $RNEX_VERSION
 
 # Directory for member repository clones
-repos_dir: "$_init_repos_dir"
+reposDir: "$_init_repos_dir"
 
 # VS Code / Cursor multi-root workspace file (default: false; e.g. true or workspace.code-workspace)
-code_workspace: ${_cli_code_workspace:-false}
+codeWorkspace: ${_cli_code_workspace:-false}
 
 # Git Integration (Ignore rules & Git hooks)
 git:
@@ -191,11 +191,11 @@ git:
 $_hooks_block
 
 # Lifecycle Hooks
-rnex-hooks:
-  before_sync: []
-  after_sync: []
-  before_clone: []
-  after_clone: []
+rnexHooks:
+  beforeSync: []
+  afterSync: []
+  beforeClone: []
+  afterClone: []
 
 # Workspace plugins
 plugins:

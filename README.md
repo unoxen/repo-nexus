@@ -14,7 +14,7 @@
 
 A lightweight, zero-dependency and AI-First **Nexus Repository (Virtual Meta Repository Orchestrator)** for multi-repo workspaces. Repo Nexus organizes independent Git repositories into a unified **nexus repository** and **meta repository** workspace—sharing compiled AI context instructions (`.rnex/ai-instructions.md`) **without Git submodules, monorepo migrations, or symlink fragility**.
 
-- **No Git Submodules or Nested Git Collisions**: Member repositories are physically cloned into your configured `repos_dir` (default: `./repos/`) and strictly ignored by workspace Git. Each repository maintains its own standalone history, remotes, branches, and commits with zero submodule friction.
+- **No Git Submodules or Nested Git Collisions**: Member repositories are physically cloned into your configured `reposDir` (default: `./repos/`) and strictly ignored by workspace Git. Each repository maintains its own standalone history, remotes, branches, and commits with zero submodule friction.
 - **Unified Workspace for AI Coding Assistants**: Open one root folder to give Cursor, Claude Code, GitHub Copilot, Codex, or Antigravity complete cross-service visibility.
 - **Two-Level Configuration as Source of Truth**: Shared team manifest in `rnex.yaml` with machine-specific overrides in `.local.rnex.yaml` (highest priority).
 - **One Command Team Onboarding**: Teammates clone the **meta repository** (**meta repo** / **nexus repo**) and run `rnex clone` to clone and configure all member repositories in seconds.
@@ -51,7 +51,7 @@ A lightweight, zero-dependency and AI-First **Nexus Repository (Virtual Meta Rep
 | What It Is | What It Isn't |
 | :--- | :--- |
 | **A lightweight nexus repository & meta repository CLI** (modular pure POSIX `/bin/sh` CLI). | **NOT a replacement for your workspace or tools.** It doesn't replace VS Code, Cursor, JetBrains, or your terminal. |
-| **A Virtual Meta Repo & Nexus Repo orchestrator** managing autonomous member clones in your configured `repos_dir` (default: `./repos/`). | **NOT a build tool or monorepo orchestrator.** It doesn't replace tools like Nx, Turborepo, Cargo, or Gradle. |
+| **A Virtual Meta Repo & Nexus Repo orchestrator** managing autonomous member clones in your configured `reposDir` (default: `./repos/`). | **NOT a build tool or monorepo orchestrator.** It doesn't replace tools like Nx, Turborepo, Cargo, or Gradle. |
 | **Zero Git friction.** Repositories remain normal, autonomous Git repos. | **NOT Git submodules or subtrees.** No `.gitmodules` files, no detached HEADs, no commit coordination lock-in. |
 | **Strictly encapsulated.** Internal rnex assets live exclusively in `.rnex/`. | **NOT invasive.** Member repositories remain 100% untouched and clean; zero `.rnex/` folders inside member trees. |
 
@@ -61,10 +61,10 @@ A lightweight, zero-dependency and AI-First **Nexus Repository (Virtual Meta Rep
 ## Context Sync & Key Principles
 
 1. **Configuration as Single Source of Truth**:
-   Every agent workflow and command starts by reading the configuration files. `.local.rnex.yaml` takes **highest priority** over `rnex.yaml`. Top-level `repos_dir` configures where member repositories reside (default: `repos`).
+   Every agent workflow and command starts by reading the configuration files. `.local.rnex.yaml` takes **highest priority** over `rnex.yaml`. Top-level `reposDir` configures where member repositories reside (default: `repos`).
 
 2. **No Git Submodules (Complete Repository Autonomy)**:
-   Member repositories are cloned directly into your configured `repos_dir` (default: `./repos/<name>`). The root workspace `.gitignore` dynamically ignores the configured `repos_dir/`, ensuring the workspace repository never tracks or interferes with member Git histories, remotes, branches, or commits.
+   Member repositories are cloned directly into your configured `reposDir` (default: `./repos/<name>`). The root workspace `.gitignore` dynamically ignores the configured `reposDir/`, ensuring the workspace repository never tracks or interferes with member Git histories, remotes, branches, or commits.
 
 3. **Enabled by Default with Two-Level Merging**:
    Member repositories are enabled by default. Developers can selectively disable specific repositories locally in `.local.rnex.yaml` (`enabled: false`) without mutating the shared `rnex.yaml`. Disabled repositories are skipped by `clone` and `exec`.

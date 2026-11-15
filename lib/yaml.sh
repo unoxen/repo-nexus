@@ -66,14 +66,14 @@ yaml_get_top_level() {
   fi
 }
 
-# Read the top-level repos_dir setting from .local.rnex.yaml or rnex.yaml.
+# Read the top-level reposDir setting from .local.rnex.yaml or rnex.yaml.
 # Normalizes relative paths (stripping leading './' and trailing slashes).
 # Enforces safe directory paths (preventing path traversal escaping workspace root).
 # Defaults to "repos" if unset, empty, or invalid.
 yaml_get_repos_dir() {
   _yaml_resolve_files
-  _ygrd_val="$(_yaml_top_level_from_file "$_wly" "repos_dir")"
-  [ -n "$_ygrd_val" ] || _ygrd_val="$(_yaml_top_level_from_file "$_wy" "repos_dir")"
+  _ygrd_val="$(_yaml_top_level_from_file "$_wly" "reposDir")"
+  [ -n "$_ygrd_val" ] || _ygrd_val="$(_yaml_top_level_from_file "$_wy" "reposDir")"
 
   # Strip leading whitespace
   while :; do
@@ -805,9 +805,43 @@ yaml_get_git_hook_commands() {
   fi
 }
 
-# ---- Lifecycle Hooks Configuration Operations (rnex-hooks) -------------
+# ---- Lifecycle Hooks Configuration Operations (rnexHooks) ---------------
 
-# Extract list of hook/event names defined under rnex-hooks from a YAML file.
+# ==============================================================================
+# _yaml_to_camel
+#
+# Summary:
+#   Converts a snake_case or kebab-case identifier to camelCase while preserving
+#   identifiers that are already camelCase cleanly.
+#
+# @param $1 raw_ident Identifier string (e.g. "before_repo_add" or "beforeRepoAdd").
+# @returns camelCase identifier on stdout.
+# @pure
+# ==============================================================================
+_yaml_to_camel() {
+  _ytc_raw="${1:-}"
+  [ -n "$_ytc_raw" ] || return 0
+  case "$_ytc_raw" in
+    *[_-]*)
+      printf '%s' "$_ytc_raw" | awk -F'[_-]+' '
+        {
+          out = $1
+          for (i = 2; i <= NF; i++) {
+            if ($i != "") {
+              out = out toupper(substr($i, 1, 1)) substr($i, 2)
+            }
+          }
+          print out
+        }
+      '
+      ;;
+    *)
+      printf '%s' "$_ytc_raw"
+      ;;
+  esac
+}
+
+# Extract list of hook/event names defined under rnexHooks from a YAML file.
 _yaml_rnex_hooks_list_from_file() {
   _yrhl_f="$1"
   [ -f "$_yrhl_f" ] || return 0
@@ -820,8 +854,8 @@ _yaml_rnex_hooks_list_from_file() {
     }
     trimmed ~ /^([#]|$)/ { next }
 
-    # Detect top-level rnex-hooks section header
-    indent == 0 && trimmed ~ /^rnex-hooks:[ \t]*(#.*)?$/ {
+    # Detect top-level rnexHooks section header
+    indent == 0 && trimmed ~ /^rnexHooks:[ \t]*(#.*)?$/ {
       in_hooks = 1
       hooks_indent = indent
       next
@@ -843,7 +877,6 @@ _yaml_rnex_hooks_list_from_file() {
         sub(/:.*/, "", k)
         gsub(/^["\047]|["\047]$/, "", k)
         gsub(/[[:space:]]/, "", k)
-        gsub(/-/, "_", k)
         if (length(k) > 0) print k
       }
     }
@@ -880,8 +913,6 @@ _yaml_rnex_hook_commands_from_file() {
       return v
     }
     BEGIN {
-      target_norm = target_hook
-      gsub(/-/, "_", target_norm)
       in_hooks = 0
       in_hook_cmds = 0
     }
@@ -903,7 +934,7 @@ _yaml_rnex_hook_commands_from_file() {
       in_hook_cmds = 0
     }
 
-    indent == 0 && trimmed ~ /^rnex-hooks:[ \t]*(#.*)?$/ {
+    indent == 0 && trimmed ~ /^rnexHooks:[ \t]*(#.*)?$/ {
       in_hooks = 1
       hooks_indent = indent
       next
@@ -924,9 +955,7 @@ _yaml_rnex_hook_commands_from_file() {
       sub(/:.*/, "", k)
       gsub(/^["\047]|["\047]$/, "", k)
       gsub(/[[:space:]]/, "", k)
-      k_norm = k
-      gsub(/-/, "_", k_norm)
-      if (k_norm == target_norm && trimmed ~ /:[ \t]*/) {
+      if (k == target_hook && trimmed ~ /:[ \t]*/) {
         target_indent = indent
         val = trimmed
         sub(/^[^:]*:[ \t]*/, "", val)
@@ -956,7 +985,7 @@ _yaml_rnex_hook_commands_from_file() {
 # rnex_yaml_get_rnex_hooks
 #
 # Summary:
-#   Reads lifecycle hook commands for a specified stage from rnex-hooks.<stage>
+#   Reads lifecycle hook commands for a specified stage from rnexHooks.<stage>
 #   with strict .local.rnex.yaml override priority over rnex.yaml.
 #   Adheres to strict opt-in execution: if the stage is not explicitly configured
 #   or is set to an empty list / false, zero commands are returned.
@@ -969,7 +998,7 @@ _yaml_rnex_hook_commands_from_file() {
 #
 # Arguments:
 #   $1 - Optional workspace root directory (defaults to NEXUS_DIR or .).
-#   $2 - Lifecycle stage name (e.g. "pre_sync", "post_sync", "after_sync", "before_sync").
+#   $2 - Lifecycle stage name (e.g. "preSync", "postSync", "afterSync", "beforeSync").
 #
 # Returns:
 #   Outputs newline-delimited hook command strings to stdout.
@@ -983,15 +1012,15 @@ rnex_yaml_get_rnex_hooks() {
   _rygh_stage="${2:-}"
   [ -n "$_rygh_stage" ] || return 0
 
-  _rygh_stage_norm="$(printf '%s' "$_rygh_stage" | tr '-' '_')"
+  _rygh_stage_norm="$(_yaml_to_camel "$_rygh_stage")"
 
-  # Stage aliases: pre_sync <-> before_sync; post_sync <-> after_sync
+  # Stage aliases: preSync <-> beforeSync; postSync <-> afterSync
   _rygh_alias=""
   case "$_rygh_stage_norm" in
-    pre_sync)    _rygh_alias="before_sync" ;;
-    before_sync) _rygh_alias="pre_sync" ;;
-    post_sync)   _rygh_alias="after_sync" ;;
-    after_sync)  _rygh_alias="post_sync" ;;
+    preSync)    _rygh_alias="beforeSync" ;;
+    beforeSync) _rygh_alias="preSync" ;;
+    postSync)   _rygh_alias="afterSync" ;;
+    afterSync)  _rygh_alias="postSync" ;;
   esac
 
   if [ -n "${1:-}" ]; then
@@ -1437,33 +1466,88 @@ _yaml_audit_config_file() {
     }
     trimmed ~ /^([#]|$)/ { next }
 
-    # Detect deprecated top-level keys removed in current schema
+    # Detect deprecated top-level keys removed in current camelCase schema
+    indent == 0 && trimmed ~ /^repos_dir:[ \t]*/ {
+      printf "LEGACY_REPOS_DIR|%d|repos_dir\n", NR
+      in_rnex_hooks = 0; in_plugins = 0; plugin_entry_indent = -1; plugin_setting_indent = -1
+      next
+    }
+    indent == 0 && trimmed ~ /^code_workspace:[ \t]*/ {
+      printf "LEGACY_CODE_WORKSPACE|%d|code_workspace\n", NR
+      in_rnex_hooks = 0; in_plugins = 0; plugin_entry_indent = -1; plugin_setting_indent = -1
+      next
+    }
     indent == 0 && trimmed ~ /^rnex_hooks:[ \t]*(#.*)?$/ {
       printf "LEGACY_RNEX_HOOKS|%d|%s\n", NR, trimmed
-      in_rnex_hooks = 0
+      in_rnex_hooks = 0; in_plugins = 0; plugin_entry_indent = -1; plugin_setting_indent = -1
+      next
+    }
+    indent == 0 && trimmed ~ /^rnex-hooks:[ \t]*(#.*)?$/ {
+      printf "LEGACY_RNEX_HOOKS_KEBAB|%d|%s\n", NR, trimmed
+      in_rnex_hooks = 0; in_plugins = 0; plugin_entry_indent = -1; plugin_setting_indent = -1
       next
     }
     indent == 0 && trimmed ~ /^git_hooks:[ \t]*(#.*)?$/ {
       printf "LEGACY_GIT_HOOKS|%d|%s\n", NR, trimmed
-      in_rnex_hooks = 0
+      in_rnex_hooks = 0; in_plugins = 0; plugin_entry_indent = -1; plugin_setting_indent = -1
       next
     }
     indent == 0 && trimmed ~ /^sources:[ \t]*(#.*)?$/ {
       printf "LEGACY_ROOT_SOURCES|%d|%s\n", NR, trimmed
-      in_rnex_hooks = 0
+      in_rnex_hooks = 0; in_plugins = 0; plugin_entry_indent = -1; plugin_setting_indent = -1
       next
     }
 
-    # Track rnex-hooks section for malformed YAML list items (e.g. -"cmd" without space)
-    indent == 0 && trimmed ~ /^rnex-hooks:[ \t]*(#.*)?$/ {
-      in_rnex_hooks = 1
+    # Track plugins section generically (plugin-agnostic camelCase setting validation)
+    indent == 0 && trimmed ~ /^plugins:[ \t]*(#.*)?$/ {
+      in_plugins = 1
+      plugins_child_indent = -1
+      plugin_entry_indent = -1
+      plugin_setting_indent = -1
+      in_rnex_hooks = 0
       in_hooks_sub = 0
+      next
+    }
+
+    # Track rnexHooks section for malformed YAML list items and deprecated stage keys
+    indent == 0 && trimmed ~ /^rnexHooks:[ \t]*(#.*)?$/ {
+      in_rnex_hooks = 1
+      hooks_child_indent = -1
+      in_hooks_sub = 0
+      in_plugins = 0
+      plugin_entry_indent = -1
+      plugin_setting_indent = -1
       next
     }
     indent == 0 && trimmed ~ /^[a-zA-Z0-9_.-]+:/ {
       in_rnex_hooks = 0
       in_hooks_sub = 0
+      in_plugins = 0
+      plugin_entry_indent = -1
+      plugin_setting_indent = -1
       next
+    }
+
+    in_plugins {
+      if (plugins_child_indent < 0) plugins_child_indent = indent
+      if (indent == plugins_child_indent && trimmed ~ /^[a-zA-Z0-9_.-]+:[ \t]*(\{\})?[ \t]*(#.*)?$/) {
+        plugin_entry_indent = indent
+        plugin_setting_indent = -1
+        in_hooks_sub = 0
+        next
+      }
+      if (plugin_entry_indent >= 0 && indent > plugin_entry_indent) {
+        if (trimmed !~ /^-/ && plugin_setting_indent < 0) {
+          plugin_setting_indent = indent
+        }
+        if (indent == plugin_setting_indent && trimmed !~ /^-/ && trimmed ~ /^[a-zA-Z0-9_.-]+:[ \t]*/) {
+          k = trimmed
+          sub(/:.*/, "", k)
+          if (k ~ /_/) {
+            printf "LEGACY_PLUGIN_KEY|%d|%s\n", NR, k
+          }
+        }
+      }
     }
 
     # Track nested git.hooks or plugins.<p>.hooks sections for malformed list syntax
@@ -1474,6 +1558,19 @@ _yaml_audit_config_file() {
     }
     in_hooks_sub && indent <= hooks_sub_indent {
       in_hooks_sub = 0
+    }
+
+    in_rnex_hooks {
+      if (trimmed !~ /^-/ && trimmed ~ /^[a-zA-Z0-9_.-]+:[ \t]*/) {
+        if (hooks_child_indent < 0) hooks_child_indent = indent
+        if (indent == hooks_child_indent) {
+          k = trimmed
+          sub(/:.*/, "", k)
+          if (k ~ /[_-]/) {
+            printf "LEGACY_RNEX_HOOK_STAGE|%d|%s\n", NR, k
+          }
+        }
+      }
     }
 
     in_rnex_hooks || in_hooks_sub {
@@ -1508,8 +1605,30 @@ validate_workspace_config() {
     while IFS='|' read -r _f_code _f_line _f_detail; do
       [ -n "$_f_code" ] || continue
       case "$_f_code" in
+        LEGACY_REPOS_DIR)
+          log_err "Deprecated configuration key 'repos_dir:' at $_vwc_name:$_f_line — rename it to 'reposDir:'."
+          _vwc_rc_tmp=1
+          ;;
+        LEGACY_CODE_WORKSPACE)
+          log_err "Deprecated configuration key 'code_workspace:' at $_vwc_name:$_f_line — rename it to 'codeWorkspace:'."
+          _vwc_rc_tmp=1
+          ;;
         LEGACY_RNEX_HOOKS)
-          log_err "Deprecated configuration key 'rnex_hooks:' at $_vwc_name:$_f_line — rename it to 'rnex-hooks:'."
+          log_err "Deprecated configuration key 'rnex_hooks:' at $_vwc_name:$_f_line — rename it to 'rnexHooks:'."
+          _vwc_rc_tmp=1
+          ;;
+        LEGACY_RNEX_HOOKS_KEBAB)
+          log_err "Deprecated configuration key 'rnex-hooks:' at $_vwc_name:$_f_line — rename it to 'rnexHooks:'."
+          _vwc_rc_tmp=1
+          ;;
+        LEGACY_RNEX_HOOK_STAGE)
+          _f_camel="$(_yaml_to_camel "$_f_detail")"
+          log_err "Deprecated hook event '$_f_detail:' under 'rnexHooks:' at $_vwc_name:$_f_line — rename it to '$_f_camel:'."
+          _vwc_rc_tmp=1
+          ;;
+        LEGACY_PLUGIN_KEY)
+          _f_camel="$(_yaml_to_camel "$_f_detail")"
+          log_err "Deprecated plugin configuration setting '$_f_detail:' at $_vwc_name:$_f_line — rename it to '$_f_camel:'."
           _vwc_rc_tmp=1
           ;;
         LEGACY_GIT_HOOKS)
@@ -1535,10 +1654,10 @@ EOF_VWC
 
 # Emit a plugin's config_defaults block from plugin.yaml, re-indented for insertion
 # under plugins.<name> in rnex.yaml by shifting indentation +2 spaces and resolving
-# workspace {repos_dir} placeholders deterministically.
+# workspace {reposDir} placeholders deterministically.
 #
 # @param $1 plugin_yaml Path to plugin.yaml manifest.
-# @param $2 repos_dir   Optional relative repos directory (defaults to configured repos_dir).
+# @param $2 repos_dir   Optional relative repos directory (defaults to configured reposDir).
 # @returns Re-indented YAML block lines on stdout.
 # @pure Read-only manifest inspection.
 plugin_config_default_lines() {
@@ -1556,7 +1675,7 @@ plugin_config_default_lines() {
     in_c && /^[ ]*$/ { next }
     in_c {
       line = $0
-      gsub(/\{repos_dir\}/, rdir, line)
+      gsub(/\{reposDir\}/, rdir, line)
       print "  " line
     }
   ' "$_pcd_file"

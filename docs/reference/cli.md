@@ -9,7 +9,7 @@ head:
 
 # CLI Reference
 
-`rnex` is a zero-dependency CLI written entirely in pure POSIX `/bin/sh`. It orchestrates Virtual Meta Repository (**meta repo**) and Nexus Repository (**nexus repo**) workspaces, single-repository management under `rnex repo`, batch operations across `<repos_dir>/` (default `./repos/`), and extensible plugin commands.
+`rnex` is a zero-dependency CLI written entirely in pure POSIX `/bin/sh`. It orchestrates Virtual Meta Repository (**meta repo**) and Nexus Repository (**nexus repo**) workspaces, single-repository management under `rnex repo`, batch operations across `<reposDir>/` (default `./repos/`), and extensible plugin commands.
 
 ---
 
@@ -47,11 +47,11 @@ rnex init [options] [directory]
 * `--codex`: Enable OpenAI Codex plugin (`CODEX.md`, `.codex/skills/`).
 * `--gemini`: Enable Google Gemini plugin (`GEMINI.md`, `.agents/skills/`).
 * `--windsurf`: Enable Windsurf plugin (`.windsurfrules`, `.windsurf/rules/`).
-* `--llm-wiki`: Enable LLM Wiki plugin (`plugins.llm-wiki.wiki_dir`, `plugins.llm-wiki.sources`).
+* `--llm-wiki`: Enable LLM Wiki plugin (`plugins.llm-wiki.wikiDir`, `plugins.llm-wiki.sources`).
 * `--plugin <name>`: Enable any specified plugin during initialization (repeatable).
 
 ### `rnex sync`
-Single reconciliation command: syncs skills, plugins, Git hooks & ignore rules, compiles `.rnex/ai-instructions.md`, and prunes unlisted/deleted member repositories from `<repos_dir>` so the directory strictly matches configuration.
+Single reconciliation command: syncs skills, plugins, Git hooks & ignore rules, compiles `.rnex/ai-instructions.md`, and prunes unlisted/deleted member repositories from `<reposDir>` so the directory strictly matches configuration.
 
 ```sh
 rnex sync [options]
@@ -68,7 +68,7 @@ rnex status
 ```
 
 ### `rnex clone`
-Clones all enabled member repositories declared in configuration that are missing from `<repos_dir>/` (default: `./repos/`).
+Clones all enabled member repositories declared in configuration that are missing from `<reposDir>/` (default: `./repos/`).
 
 ```sh
 rnex clone
@@ -112,7 +112,7 @@ rnex completion <bash|zsh|fish>
 Manage individual member repositories without affecting the entire workspace.
 
 ### `rnex repo add`
-Registers a repository in configuration and clones it into `<repos_dir>/<name>` (default: `./repos/<name>`).
+Registers a repository in configuration and clones it into `<reposDir>/<name>` (default: `./repos/<name>`).
 
 ```sh
 rnex repo add <url> [--name <name>] [--branch <branch>] [--local] [--disabled] [--readonly]
@@ -132,7 +132,7 @@ Unregisters a repository from configuration and deletes its directory from disk.
 rnex repo remove <name> [--purge] [-y|--yes]
 ```
 
-* `--purge`: Deletes the repository directory from disk (`<repos_dir>/<name>`). (Retained for backward compatibility; repo directory is deleted upon removal).
+* `--purge`: Deletes the repository directory from disk (`<reposDir>/<name>`). (Retained for backward compatibility; repo directory is deleted upon removal).
 * `-y`, `--yes`: Skip confirmation prompt.
 
 ### `rnex repo set`
@@ -147,7 +147,7 @@ rnex repo set <name> [--enable|--disable] [--readonly|--readwrite] [--global|--l
 * `--local` / `--global`: Write to `.local.rnex.yaml` (default) or `rnex.yaml`.
 
 ### `rnex repo clone`
-Clones a single registered member repository into `<repos_dir>/<name>` (default: `./repos/<name>`).
+Clones a single registered member repository into `<reposDir>/<name>` (default: `./repos/<name>`).
 
 ```sh
 rnex repo clone <name>
@@ -225,4 +225,4 @@ rnex plugin <name> <command> [options...]
 * Shorthand execution: `rnex plugin <command> [options...]` when `<command>` is unique across enabled plugins (e.g. `rnex plugin ingest`).
 
 > [!NOTE]
-> Plugin commands such as `llm-wiki ingest` and `llm-wiki lint` automatically initialize directory structures, maintain flat B-Tree leaf shards directly in `.rnex/wiki/*.md` (or custom configured `wiki_dir`), compile the bounded root router `.rnex/wiki/index.md` ($\le 80$ lines), and track chronological changes in `.rnex/wiki/log.md` with zero symlinks and zero property graph dependencies. Autonomous agents navigate the structure via a 3-step retrieval protocol without requiring external databases or proprietary MCPs.
+> Plugin commands such as `llm-wiki ingest` and `llm-wiki lint` automatically initialize directory structures, maintain flat B-Tree leaf shards directly in `.rnex/wiki/*.md` (or custom configured `wikiDir`), compile the bounded root router `.rnex/wiki/index.md` ($\le 80$ lines), and track chronological changes in `.rnex/wiki/log.md` with zero symlinks and zero property graph dependencies. Autonomous agents navigate the structure via a 3-step retrieval protocol without requiring external databases or proprietary MCPs.

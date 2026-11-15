@@ -14,8 +14,8 @@ head:
 ```yaml
 version: "1"
 name: "acme-microservices"
-repos_dir: "./repos"
-code_workspace: "microservices.code-workspace"
+reposDir: "./repos"
+codeWorkspace: "microservices.code-workspace"
 
 git:
   ignore:
@@ -31,10 +31,10 @@ git:
     post-checkout:
       - "rnex sync --quiet"
 
-rnex-hooks:
-  after_clone:
+rnexHooks:
+  afterClone:
     - "rnex exec make setup"
-  after_sync:
+  afterSync:
     - "echo 'Workspace reconciled'"
 
 repos:
