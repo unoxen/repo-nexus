@@ -115,9 +115,21 @@ cmd_sync() {
   # 3.4. Reconcile VS Code / Cursor multi-root workspace if configured
   sync_code_workspace
 
+  # 3.5. Validate configuration schema, deprecated keys, and declared plugins (Fail-Fast)
+  _sync_validation_failed=0
+  if command -v validate_workspace_config >/dev/null 2>&1; then
+    validate_workspace_config || _sync_validation_failed=1
+  fi
+  if command -v validate_configured_plugins >/dev/null 2>&1; then
+    validate_configured_plugins || _sync_validation_failed=1
+  fi
+
+  _sync_quiet="$_old_sync_quiet"
+  if [ "$_sync_validation_failed" -ne 0 ]; then
+    return 1
+  fi
   if [ "$_sync_quiet" -eq 0 ]; then
     log_ok "Sync complete — workspace, plugins, skills, and member repositories reconciled"
   fi
-  _sync_quiet="$_old_sync_quiet"
   return 0
 }

@@ -786,6 +786,70 @@ rnex_sdk_clean_provider_hooks "$TEST_SDK_WS" "claude"
 
 pass
 
+# --------------------------------------------------------------------------
+run_test "Plugin engine: unknown or removed configured plugins fail sync cleanly even under --quiet"
+TEST_UNK_PLUG_WS="$TEST_TMP/unknown-plugin-ws"
+mkdir -p "$TEST_UNK_PLUG_WS"
+cp "$CLI" "$TEST_UNK_PLUG_WS/rnex"
+chmod +x "$TEST_UNK_PLUG_WS/rnex"
+cp "$DIR/package.json" "$TEST_UNK_PLUG_WS/package.json"
+cp -r "$DIR/lib" "$TEST_UNK_PLUG_WS/lib"
+cp -r "$DIR/templates" "$TEST_UNK_PLUG_WS/templates"
+cp -r "$DIR/skills" "$TEST_UNK_PLUG_WS/skills"
+mkdir -p "$TEST_UNK_PLUG_WS/plugins"
+
+(cd "$TEST_UNK_PLUG_WS" && ./rnex init -y "$TEST_UNK_PLUG_WS" >/dev/null)
+
+# Declare removed legacy plugin name (enabled implicitly)
+cat <<'EOF_UNK_CFG' > "$TEST_UNK_PLUG_WS/rnex.yaml"
+version: 1.0.0
+plugins:
+  karpathy-llm:
+    wiki_dir: ".rnex/wiki"
+repos:
+EOF_UNK_CFG
+
+set +e
+(cd "$TEST_UNK_PLUG_WS" && ./rnex sync --quiet >/dev/null 2>"$TEST_UNK_PLUG_WS/err_quiet.log")
+_unk_rc=$?
+set -e
+[ "$_unk_rc" -ne 0 ] || { fail "Expected non-zero exit code when unknown plugin is configured, got 0"; exit 1; }
+grep -q "Unknown plugin 'karpathy-llm'" "$TEST_UNK_PLUG_WS/err_quiet.log" || {
+  fail "Expected non-suppressible stderr error naming karpathy-llm under --quiet, got: $(cat "$TEST_UNK_PLUG_WS/err_quiet.log")"; exit 1;
+}
+
+# Status must also report MISSING
+_unk_status="$(cd "$TEST_UNK_PLUG_WS" && ./rnex status 2>&1)"
+echo "$_unk_status" | grep -q "karpathy-llm" || { fail "Status missing unknown plugin name"; exit 1; }
+echo "$_unk_status" | grep -q "MISSING" || { fail "Status missing MISSING marker for unknown plugin"; exit 1; }
+
+# Even if marked enabled: false, an obsolete nonexistent plugin entry must fail sync validation
+cat <<'EOF_UNK_DIS' > "$TEST_UNK_PLUG_WS/rnex.yaml"
+version: 1.0.0
+plugins:
+  karpathy-llm:
+    enabled: false
+repos:
+EOF_UNK_DIS
+
+set +e
+(cd "$TEST_UNK_PLUG_WS" && ./rnex sync -y >/dev/null 2>"$TEST_UNK_PLUG_WS/err_dis.log")
+_unk_dis_rc=$?
+set -e
+[ "$_unk_dis_rc" -ne 0 ] || { fail "Expected non-zero exit code for disabled nonexistent plugin"; exit 1; }
+grep -q "Unknown plugin 'karpathy-llm'" "$TEST_UNK_PLUG_WS/err_dis.log" || {
+  fail "Expected stderr error naming disabled karpathy-llm, got: $(cat "$TEST_UNK_PLUG_WS/err_dis.log")"; exit 1;
+}
+
+# Clean config recovers cleanly
+cat <<'EOF_UNK_CLEAN' > "$TEST_UNK_PLUG_WS/rnex.yaml"
+version: 1.0.0
+plugins:
+repos:
+EOF_UNK_CLEAN
+(cd "$TEST_UNK_PLUG_WS" && ./rnex sync --quiet)
+pass
+
 if [ "${_STANDALONE_RUN:-0}" -eq 1 ]; then
   report_results
 fi

@@ -1641,26 +1641,73 @@ pass
 # --------------------------------------------------------------------------
 # Test 30: AI instructions projection and Section 2 routing in .rnex/ai-instructions.md
 # --------------------------------------------------------------------------
-run_test "LLM Wiki: ai-instructions.md projection and Section 2 routing contract"
+run_test "LLM Wiki: ai-instructions.md projection, concrete path instantiation, and Section 2 routing contract"
 TEST_AI_INSTR_WS="$TEST_TMP/llm-wiki-ai-instr-ws"
 mkdir -p "$TEST_AI_INSTR_WS"
 setup_plugin_test_workspace llm-wiki "$TEST_AI_INSTR_WS"
 (cd "$TEST_AI_INSTR_WS" && ./rnex init -y --llm-wiki "$TEST_AI_INSTR_WS" >/dev/null)
 (cd "$TEST_AI_INSTR_WS" && ./rnex sync -y --quiet)
 
-# 1. Verify projected ai-instructions.md in .rnex/plugins/llm-wiki/
+# 1. Verify projected ai-instructions.md in .rnex/plugins/llm-wiki/ with default resolved values
 _proj_ai="$TEST_AI_INSTR_WS/.rnex/plugins/llm-wiki/ai-instructions.md"
 [ -f "$_proj_ai" ] || { fail ".rnex/plugins/llm-wiki/ai-instructions.md was not projected"; exit 1; }
 grep -q "LLM Wiki AI Instructions" "$_proj_ai" || { fail "Projected ai-instructions.md content corrupted"; exit 1; }
+grep -qF ".rnex/wiki/index.md" "$_proj_ai" || { fail "Default wiki index path not resolved in ai-instructions.md"; exit 1; }
 
-# 2. Verify Section 2 in .rnex/ai-instructions.md contains mandatory reference
+# 2. Customize all llm-wiki and repos_dir settings and assert exact concrete paths with ZERO placeholders/config refs
+cat <<'EOF_CUSTOM_AI_CFG' > "$TEST_AI_INSTR_WS/rnex.yaml"
+version: 1.0.0
+repos_dir: "services"
+plugins:
+  llm-wiki:
+    wiki_dir: "knowledge/wiki"
+    index_file: "HOME.md"
+    log_file: "HISTORY.md"
+    log_max_records: 250
+    btree_root_max_lines: 42
+    btree_shard_max_entries: 15
+    relative_links: "strip"
+    sources:
+      - "guides"
+      - "services/**/README.md"
+repos:
+EOF_CUSTOM_AI_CFG
+(cd "$TEST_AI_INSTR_WS" && ./rnex sync -y --quiet)
+
+_proj_arch="$TEST_AI_INSTR_WS/.rnex/plugins/llm-wiki/instructions/rnex-wiki-architecture.md"
+_proj_rules="$TEST_AI_INSTR_WS/.rnex/plugins/llm-wiki/rules/behavioral.md"
+_proj_ingest="$TEST_AI_INSTR_WS/.rnex/plugins/llm-wiki/skills/ingest.md"
+_proj_lint="$TEST_AI_INSTR_WS/.rnex/plugins/llm-wiki/skills/lint.md"
+
+grep -qF "knowledge/wiki/HOME.md" "$_proj_ai" || { fail "Custom wiki_dir/index_file not resolved in ai-instructions.md"; exit 1; }
+grep -qF "knowledge/wiki/HISTORY.md" "$_proj_ai" || { fail "Custom log_file not resolved in ai-instructions.md"; exit 1; }
+grep -qF 'guides/' "$_proj_ai" || { fail "Custom sources missing in ai-instructions.md"; exit 1; }
+grep -qF 'services/**/README.md' "$_proj_ai" || { fail "Custom glob source missing in ai-instructions.md"; exit 1; }
+grep -qF "knowledge/wiki/HOME.md" "$_proj_arch" || { fail "Custom wiki index path missing in rnex-wiki-architecture.md"; exit 1; }
+grep -qF "services/" "$_proj_rules" || { fail "Custom repos_dir missing in rules/behavioral.md"; exit 1; }
+grep -qF "42" "$_proj_rules" || { fail "Custom btree_root_max_lines missing in rules/behavioral.md"; exit 1; }
+grep -qF "strip" "$_proj_ingest" || { fail "Custom relative_links missing in skills/ingest.md"; exit 1; }
+grep -qF "250" "$_proj_ingest" || { fail "Custom log_max_records missing in skills/ingest.md"; exit 1; }
+grep -qF "15" "$_proj_lint" || { fail "Custom btree_shard_max_entries missing in skills/lint.md"; exit 1; }
+
+for _proj_f in "$_proj_ai" "$_proj_arch" "$_proj_rules" "$_proj_ingest" "$_proj_lint"; do
+  [ -f "$_proj_f" ] || { fail "Missing projected file $_proj_f"; exit 1; }
+  if grep -qE '(\{[a-zA-Z0-9_-]+\}|<wiki_dir>|<index_file>|<log_file>|<repos_dir>|<source_path>)' "$_proj_f"; then
+    fail "Unresolved placeholder detected in $_proj_f: $(cat "$_proj_f")"; exit 1;
+  fi
+  if grep -qE '(rnex\.yaml|plugins\.llm-wiki|default:|repos_dir)' "$_proj_f"; then
+    fail "Disallowed rnex config reference detected in $_proj_f: $(cat "$_proj_f")"; exit 1;
+  fi
+done
+
+# 3. Verify Section 2 in .rnex/ai-instructions.md contains mandatory reference
 _ai_instr="$TEST_AI_INSTR_WS/.rnex/ai-instructions.md"
 [ -f "$_ai_instr" ] || { fail ".rnex/ai-instructions.md missing after sync"; exit 1; }
 grep -qF "1. **Mandatory**: Read and follow \`.rnex/plugins/llm-wiki/ai-instructions.md\`." "$_ai_instr" || {
   fail "Missing llm-wiki reference in Section 2 of ai-instructions.md"; exit 1;
 }
 
-# 3. Disable llm-wiki and assert removal from ai-instructions.md and fallback message
+# 4. Disable llm-wiki and assert removal from ai-instructions.md and fallback message
 (cd "$TEST_AI_INSTR_WS" && ./rnex plugin disable llm-wiki >/dev/null)
 ! grep -qF "llm-wiki" "$_ai_instr" || { fail "llm-wiki reference not removed after plugin disable"; exit 1; }
 grep -qF "No plugin AI instructions registered." "$_ai_instr" || {

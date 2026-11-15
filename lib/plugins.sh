@@ -409,94 +409,154 @@ plugin_list_instructions() {
   ' "$_pdir/plugin.yaml"
 }
 
-# Substitute configurable placeholders declared in plugin.yaml config_defaults in template destination paths.
+# Escape \, &, and | characters in a string for safe use as a POSIX sed replacement.
+#
+# @param $1 raw_value Unescaped replacement value.
+# @returns Escaped string on stdout.
+# @pure
+_sed_escape_replacement() {
+  printf '%s' "$1" | sed -e 's/[\\&|]/\\&/g'
+}
+
+# Extract direct scalar configuration key names declared under config_defaults: in
+# a plugin manifest, skipping structured sequence/map keys (sources, hooks).
+#
+# @param $1 manifest_file Path to plugin.yaml.
+# @returns Newline-separated key names on stdout.
+# @pure
+_plugin_config_default_keys() {
+  _pcdk_file="$1"
+  [ -f "$_pcdk_file" ] || return 0
+  awk '
+    /^config_defaults:[ ]*(#.*)?$/ { in_c=1; def_indent=-1; next }
+    in_c && /^[^ #]/ { exit }
+    in_c && /^[ ]*(#|$)/ { next }
+    in_c {
+      match($0, /^[ ]*/)
+      ind = RLENGTH
+      if (def_indent == -1) def_indent = ind
+      if (ind == def_indent && $0 ~ /^[ ]*[a-zA-Z0-9_.-]+:[ ]*/) {
+        k = $0
+        sub(/^[ ]*/, "", k)
+        sub(/:.*/, "", k)
+        if (k != "sources" && k != "hooks") print k
+      }
+    }
+  ' "$_pcdk_file"
+}
+
+# Resolve a single scalar plugin configuration value, preferring workspace YAML
+# overrides (.local.rnex.yaml > rnex.yaml) and falling back to plugin.yaml defaults.
+# Normalizes *_dir / dir values as clean relative paths.
+#
+# @param $1 plugin_name Target plugin name.
+# @param $2 plugin_dir  Resolved plugin directory.
+# @param $3 key_name    Configuration key name.
+# @returns Resolved string value on stdout.
+# @pure
+_plugin_resolve_scalar_value() {
+  _prsv_p="$1"; _prsv_pd="$2"; _prsv_k="$3"
+  _prsv_v="$(yaml_plugin_get "$_prsv_p" "$_prsv_k" 2>/dev/null || true)"
+  if [ -z "$_prsv_v" ] && [ -f "$_prsv_pd/plugin.yaml" ]; then
+    _prsv_v="$(awk -v k="$_prsv_k" '
+      /^config_defaults:[ ]*(#.*)?$/ { in_c=1; next }
+      in_c && /^[^ #]/ { exit }
+      in_c && $0 ~ ("^[ ]*" k ":") {
+        sub("^[ ]*" k ":[ ]*", "")
+        sub(/[ ]*#.*/, "")
+        gsub(/["\047]/, "")
+        print
+        exit
+      }
+    ' "$_prsv_pd/plugin.yaml")"
+  fi
+  case "$_prsv_k" in
+    *_dir|dir) _prsv_v="$(normalize_rel_path "$_prsv_v")" ;;
+  esac
+  printf '%s' "$_prsv_v"
+}
+
+# Substitute configurable placeholders declared in plugin.yaml config_defaults
+# and core workspace metadata ({repos_dir}, {plugin_dir}) in template paths.
+#
+# @param $1 plugin_name Target plugin name.
+# @param $2 plugin_dir  Resolved plugin directory.
+# @param $3 input_str   Path or string containing {placeholder} tokens.
+# @returns Resolved relative path string on stdout.
+# @pure
 plugin_resolve_placeholders() {
   _p="$1"; _pd="$2"; _str="$3"
   _res="$(printf '%s' "$_str" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d "'\"")"
 
   if [ -f "$_pd/plugin.yaml" ]; then
-    _keys="$(awk '
-      /^config_defaults:[ ]*$/ || /^config_defaults:[ ]*#/ { in_c=1; next }
-      in_c && /^[^ #]/ { exit }
-      in_c && /^[ ]*[a-zA-Z0-9_.-]+:[ ]*/ {
-        k = $0
-        sub(/^[ ]*/, "", k)
-        sub(/:.*/, "", k)
-        print k
-      }
-    ' "$_pd/plugin.yaml")"
-
-    for _k in $_keys; do
-      _v="$(yaml_plugin_get "$_p" "$_k" 2>/dev/null || true)"
-      if [ -z "$_v" ]; then
-        _v="$(awk -v k="$_k" '
-          /^config_defaults:[ ]*$/ || /^config_defaults:[ ]*#/ { in_c=1; next }
-          in_c && /^[^ #]/ { exit }
-          in_c && $0 ~ ("^[ ]*" k ":") {
-            sub("^[ ]*" k ":[ ]*", "")
-            sub(/[ ]*#.*/, "")
-            gsub(/["\047]/, "")
-            print
-            exit
-          }
-        ' "$_pd/plugin.yaml")"
+    for _k in $(_plugin_config_default_keys "$_pd/plugin.yaml"); do
+      _v="$(_plugin_resolve_scalar_value "$_p" "$_pd" "$_k")"
+      if [ -n "$_v" ]; then
+        _v_esc="$(_sed_escape_replacement "$_v")"
+        _res="$(printf '%s' "$_res" | sed -e "s|{$_k}|$_v_esc|g")"
       fi
-      case "$_k" in
-        *_dir|dir)
-          _v="$(normalize_rel_path "$_v")"
-          ;;
-      esac
-      [ -n "$_v" ] && _res="$(printf '%s' "$_res" | sed -e "s|{$_k}|$_v|g")"
     done
   fi
+
+  _rdir_v="$(normalize_rel_path "$(_plugin_repos_rel_dir)")"
+  if [ -n "$_rdir_v" ]; then
+    _rdir_esc="$(_sed_escape_replacement "$_rdir_v")"
+    _res="$(printf '%s' "$_res" | sed -e "s|{repos_dir}|$_rdir_esc|g")"
+  fi
+  _pdir_esc="$(_sed_escape_replacement ".rnex/plugins/$_p")"
+  _res="$(printf '%s' "$_res" | sed -e "s|{plugin_dir}|$_pdir_esc|g")"
 
   _res="$(printf '%s' "$_res" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d "'\"" | sed -e 's#^\./##')"
 
   printf '%s' "$_res"
 }
 
+# Instantiate a Markdown template or AI asset file by resolving all workspace,
+# manifest, and plugin config placeholders into concrete values.
+# Fast-paths to raw copy when the source file contains no {placeholder} tokens.
+#
+# @param $1 plugin_name Target plugin name.
+# @param $2 plugin_dir  Resolved source plugin directory.
+# @param $3 src_file    Source file path.
+# @param $4 dest_file   Destination file path.
+# @returns 0 on success.
+# @sideEffects Writes instantiated file to $4.
 plugin_instantiate_template() {
   _p="$1"; _pd="$2"; _src="$3"; _dest="$4"
 
-  # {sources}: human-readable list of configured intake sources (sed-escaped)
+  # Fast path: avoid spawning awk/sed when source file has no {placeholder} tokens
+  if ! grep -qE '\{[a-zA-Z0-9_-]+\}' "$_src" 2>/dev/null; then
+    cp "$_src" "$_dest"
+    return 0
+  fi
+
+  # Core workspace & plugin metadata placeholders (sed-escaped)
+  _r_val="$(normalize_rel_path "$(_plugin_repos_rel_dir)")"
+  _r_val="$(_sed_escape_replacement "$_r_val")"
+
+  _sd_val="$(normalize_rel_path "$(plugin_get_skill_dir "$_p" 2>/dev/null || true)")"
+  _sd_val="$(_sed_escape_replacement "$_sd_val")"
+
+  _if_val=""
+  [ -f "$_pd/plugin.yaml" ] && _if_val="$(normalize_rel_path "$(plugin_get_field "$_pd" "instruction_file" 2>/dev/null || true)")"
+  _if_val="$(_sed_escape_replacement "$_if_val")"
+
+  _pdir_val="$(_sed_escape_replacement ".rnex/plugins/$_p")"
+
+  # {sources}: human-readable list of resolved intake sources (or "(none configured)")
   _s_val="$(plugin_sources_display "$_p" 2>/dev/null || true)"
-  _s_val="$(printf '%s' "$_s_val" | sed -e 's/[\\&|]/\\&/g')"
+  [ -n "$_s_val" ] || _s_val="(none configured)"
+  _s_val="$(_sed_escape_replacement "$_s_val")"
 
   # {today}: current UTC date (ISO-8601, YYYY-MM-DD)
   _t_val="$(date -u +%Y-%m-%d 2>/dev/null || date +%Y-%m-%d 2>/dev/null || date +%F 2>/dev/null || echo "2026-10-15")"
 
   cp "$_src" "$_dest"
   if [ -f "$_pd/plugin.yaml" ]; then
-    _keys="$(awk '
-      /^config_defaults:[ ]*$/ || /^config_defaults:[ ]*#/ { in_c=1; next }
-      in_c && /^[^ #]/ { exit }
-      in_c && /^[ ]*[a-zA-Z0-9_.-]+:[ ]*/ {
-        k = $0
-        sub(/^[ ]*/, "", k)
-        sub(/:.*/, "", k)
-        print k
-      }
-    ' "$_pd/plugin.yaml")"
-    for _k in $_keys; do
-      _v="$(yaml_plugin_get "$_p" "$_k" 2>/dev/null || true)"
-      if [ -z "$_v" ]; then
-        _v="$(awk -v k="$_k" '
-          /^config_defaults:[ ]*$/ || /^config_defaults:[ ]*#/ { in_c=1; next }
-          in_c && /^[^ #]/ { exit }
-          in_c && $0 ~ ("^[ ]*" k ":") {
-            sub("^[ ]*" k ":[ ]*", "")
-            sub(/[ ]*#.*/, "")
-            gsub(/["\047]/, "")
-            print
-            exit
-          }
-        ' "$_pd/plugin.yaml")"
-      fi
-      case "$_k" in
-        *_dir|dir) _v="$(normalize_rel_path "$_v")" ;;
-      esac
+    for _k in $(_plugin_config_default_keys "$_pd/plugin.yaml"); do
+      _v="$(_plugin_resolve_scalar_value "$_p" "$_pd" "$_k")"
       if [ -n "$_v" ]; then
-        _v_esc="$(printf '%s' "$_v" | sed -e 's/[\\&|]/\\&/g')"
+        _v_esc="$(_sed_escape_replacement "$_v")"
         _tmp_inst="$(mktemp)"
         sed -e "s|{$_k}|$_v_esc|g" "$_dest" > "$_tmp_inst" && mv "$_tmp_inst" "$_dest"
       fi
@@ -504,14 +564,25 @@ plugin_instantiate_template() {
   fi
 
   _tmp_inst="$(mktemp)"
-  sed -e "s|{sources}|$_s_val|g" \
+  sed -e "s|{repos_dir}|$_r_val|g" \
+      -e "s|{skill_dir}|$_sd_val|g" \
+      -e "s|{instruction_file}|$_if_val|g" \
+      -e "s|{plugin_dir}|$_pdir_val|g" \
+      -e "s|{sources}|$_s_val|g" \
       -e "s|{today}|$_t_val|g" \
       "$_dest" > "$_tmp_inst" && mv "$_tmp_inst" "$_dest"
 }
 
-# Deterministically sync plugin asset directories and manifest files into destination
+# Deterministically sync plugin asset directories and manifest files into destination.
+# Compiles AI-facing Markdown files via plugin_instantiate_template so runtime agent
+# artifacts under .rnex/plugins/<name>/ contain concrete workspace paths without placeholders.
+#
+# @param $1 src_dir     Resolved plugin source directory.
+# @param $2 dest_dir    Target scoped directory (.rnex/plugins/<name>).
+# @param $3 plugin_name Optional explicit plugin name (defaults to basename of dest_dir).
+# @sideEffects Reconciles destination tree and projected files.
 sync_plugin_bundle() {
-  _spb_src="$1"; _spb_dest="$2"
+  _spb_src="$1"; _spb_dest="$2"; _spb_pname="${3:-$(basename "$2")}"
   [ -n "$_spb_src" ] && [ -n "$_spb_dest" ] || return 0
   [ "$_spb_src" != "$_spb_dest" ] || return 0
 
@@ -523,6 +594,11 @@ sync_plugin_bundle() {
       cp -R "$_spb_src/$_sub"/. "$_spb_dest/$_sub"/ 2>/dev/null || true
       if [ "$_sub" = "hooks" ] || [ "$_sub" = "commands" ] || [ "$_sub" = "bin" ]; then
         chmod +x "$_spb_dest/$_sub"/* 2>/dev/null || true
+      elif [ "$_sub" = "rules" ] || [ "$_sub" = "workflows" ] || [ "$_sub" = "instructions" ] || [ "$_sub" = "skills" ] || [ "$_sub" = "agents" ]; then
+        find "$_spb_src/$_sub" -type f -name '*.md' 2>/dev/null | while IFS= read -r _spb_md; do
+          _spb_rel="${_spb_md#"$_spb_src"/}"
+          plugin_instantiate_template "$_spb_pname" "$_spb_src" "$_spb_md" "$_spb_dest/$_spb_rel"
+        done
       fi
     else
       rm -rf "${_spb_dest:?}/$_sub"
@@ -531,7 +607,14 @@ sync_plugin_bundle() {
   _spb_ai_fn="${RNEX_PLUGIN_AI_FILENAME:-ai-instructions.md}"
   for _meta in plugin.yaml instructions.md README.md "$_spb_ai_fn"; do
     if [ -f "$_spb_src/$_meta" ]; then
-      cp "$_spb_src/$_meta" "$_spb_dest/$_meta"
+      case "$_meta" in
+        instructions.md|"$_spb_ai_fn")
+          plugin_instantiate_template "$_spb_pname" "$_spb_src" "$_spb_src/$_meta" "$_spb_dest/$_meta"
+          ;;
+        *)
+          cp "$_spb_src/$_meta" "$_spb_dest/$_meta"
+          ;;
+      esac
     elif [ "$_meta" = "$_spb_ai_fn" ]; then
       # Prune stale projected ai-instructions.md if removed from source plugin
       rm -f "${_spb_dest:?}/$_meta" 2>/dev/null || true
@@ -579,24 +662,14 @@ sync_plugins() {
 
     # OWASP A03 / Path Traversal Guard: plugin name must strictly match allowlist
     case "$_pname" in
-      *[!a-zA-Z0-9._-]*|"")
-        log_warn "Skipping invalid plugin name containing disallowed characters: '$_pname'"
-        continue
-        ;;
-      .|..)
-        log_warn "Skipping invalid plugin name: '$_pname'"
-        continue
-        ;;
+      *[!a-zA-Z0-9._-]*|""|.|..) continue ;;
     esac
 
     _pdir="$(plugin_resolve_dir "$_pname" 2>/dev/null || true)"
     [ -n "$_pdir" ] || _pdir="$(find_plugin_dir "$_pname" 2>/dev/null || true)"
-    if [ -z "$_pdir" ]; then
-      log_warn "Plugin '$_pname' declared in config but not found on disk"
-      continue
-    fi
+    [ -n "$_pdir" ] || continue
 
-    sync_plugin_bundle "$_pdir" "$NEXUS_DIR/.rnex/plugins/$_pname"
+    sync_plugin_bundle "$_pdir" "$NEXUS_DIR/.rnex/plugins/$_pname" "$_pname"
 
     # Provision explicit directory sources declared under plugins.<name>.sources (e.g. ./docs)
     for _sdir in $(plugin_source_dirs "$_pname" 2>/dev/null); do
@@ -640,6 +713,40 @@ sync_plugins() {
       fi
     done
   done
+}
+
+# Validate all plugin entries declared in rnex.yaml and .local.rnex.yaml.
+# Enforces name allowlisting (OWASP A03) and verifies every configured plugin
+# resolves to a valid directory, emitting non-suppressible stderr errors when
+# stale or nonexistent plugins (e.g. removed names) remain in config.
+#
+# @returns 0 if all configured plugins resolve; 1 if any unknown plugin is declared.
+# @sideEffects Emits diagnostic errors via log_err (stderr).
+validate_configured_plugins() {
+  _vcp_rc=0
+  _vcp_list="$(yaml_list_plugins 2>/dev/null || true)"
+  [ -n "$_vcp_list" ] || return 0
+
+  while IFS= read -r _vcp_name || [ -n "$_vcp_name" ]; do
+    [ -n "$_vcp_name" ] || continue
+
+    case "$_vcp_name" in
+      *[!a-zA-Z0-9._-]*|""|.|..)
+        log_err "Invalid plugin name '$_vcp_name' declared in configuration (disallowed characters or path traversal rejected)."
+        continue
+        ;;
+    esac
+
+    _vcp_dir="$(plugin_resolve_dir "$_vcp_name" 2>/dev/null || true)"
+    [ -n "$_vcp_dir" ] || _vcp_dir="$(find_plugin_dir "$_vcp_name" 2>/dev/null || true)"
+    if [ -z "$_vcp_dir" ]; then
+      log_err "Unknown plugin '$_vcp_name' declared in configuration: plugin does not exist in built-in plugins or via a valid 'path:'. Remove or update 'plugins.$_vcp_name'."
+      _vcp_rc=1
+    fi
+  done <<EOF_VCP
+$_vcp_list
+EOF_VCP
+  return "$_vcp_rc"
 }
 
 # ----------------------------------------------------------------------------
@@ -688,13 +795,32 @@ _src_is_file_like() {
   return 1
 }
 
+# Expand workspace placeholders (e.g. {repos_dir}) inside a configured plugin source
+# specification and normalize it as a clean relative entry.
+#
+# @param $1 raw_entry Source specification string.
+# @param $2 repos_dir Optional relative member repos directory override.
+# @returns Normalized source specification on stdout.
+# @pure
+_plugin_expand_source_entry() {
+  _pese_val="$1"
+  _pese_rdir="${2:-$(_plugin_repos_rel_dir)}"
+  case "$_pese_val" in
+    *"{repos_dir}"*)
+      _pese_esc="$(_sed_escape_replacement "$_pese_rdir")"
+      _pese_val="$(printf '%s' "$_pese_val" | sed -e "s|{repos_dir}|$_pese_esc|g")"
+      ;;
+  esac
+  _src_normalize_entry "$_pese_val"
+}
+
 # List explicit directory sources of a plugin that rnex may provision (mkdir).
 # Skips glob patterns, file entries, absolute paths, '..' traversal, the workspace
 # root, and paths inside the member repositories directory.
 plugin_source_dirs() {
   _psd_rdir="$(_plugin_repos_rel_dir)"
   get_plugin_config_list "$1" "sources" 2>/dev/null | while IFS= read -r _psd_e || [ -n "$_psd_e" ]; do
-    _psd_e="$(_src_normalize_entry "$_psd_e")"
+    _psd_e="$(_plugin_expand_source_entry "$_psd_e" "$_psd_rdir")"
     case "$_psd_e" in
       ''|.|/*|..|../*|*/..|*/../*) continue ;;
     esac
@@ -708,8 +834,9 @@ plugin_source_dirs() {
 
 # Human-readable source list for templates, e.g.: `docs/`, `repos/**/README.md`
 plugin_sources_display() {
+  _psy_rdir="$(_plugin_repos_rel_dir)"
   get_plugin_config_list "$1" "sources" 2>/dev/null | while IFS= read -r _psy_e || [ -n "$_psy_e" ]; do
-    _psy_e="$(_src_normalize_entry "$_psy_e")"
+    _psy_e="$(_plugin_expand_source_entry "$_psy_e" "$_psy_rdir")"
     [ -n "$_psy_e" ] || continue
     if _src_is_file_like "$_psy_e"; then
       printf '\140%s\140\n' "$_psy_e"

@@ -118,7 +118,7 @@ cmd_init() {
       [ -n "$_pdir" ] || _pdir="$(find_plugin_dir "$_p" 2>/dev/null || true)"
       _cfg_lines=""
       if [ -n "$_pdir" ] && [ -f "$_pdir/plugin.yaml" ]; then
-        _cfg_lines="$(plugin_config_default_lines "$_pdir/plugin.yaml")"
+        _cfg_lines="$(plugin_config_default_lines "$_pdir/plugin.yaml" "$_init_repos_dir")"
       fi
       if [ -n "$_cfg_lines" ]; then
         _init_plugins="${_init_plugins}  ${_p}:\n${_cfg_lines}\n"

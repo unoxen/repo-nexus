@@ -957,8 +957,7 @@ _yaml_rnex_hook_commands_from_file() {
 #
 # Summary:
 #   Reads lifecycle hook commands for a specified stage from rnex-hooks.<stage>
-#   (with backward-compatible fallback to legacy rnex_hooks.<stage>) with strict
-#   .local.rnex.yaml override priority over rnex.yaml.
+#   with strict .local.rnex.yaml override priority over rnex.yaml.
 #   Adheres to strict opt-in execution: if the stage is not explicitly configured
 #   or is set to an empty list / false, zero commands are returned.
 #
@@ -1420,18 +1419,145 @@ get_plugin_config_list() {
   yaml_get_plugin_list "$1" "$2" 2>/dev/null || true
 }
 
+# Audit a single YAML configuration file for deprecated top-level schema keys and
+# malformed YAML hook list syntax that would otherwise be silently skipped.
+#
+# @param $1 file_path Path to rnex.yaml or .local.rnex.yaml.
+# @returns Emits structured findings (<CODE>|<line>|<detail>) on stdout.
+# @pure Read-only configuration inspection.
+_yaml_audit_config_file() {
+  _yacf_f="$1"
+  [ -f "$_yacf_f" ] || return 0
+  awk '
+    /^[ \t]*#/ || /^[ \t]*$/ { next }
+    {
+      match($0, /^[ \t]*/)
+      indent = RLENGTH
+      trimmed = substr($0, indent + 1)
+    }
+    trimmed ~ /^([#]|$)/ { next }
+
+    # Detect deprecated top-level keys removed in current schema
+    indent == 0 && trimmed ~ /^rnex_hooks:[ \t]*(#.*)?$/ {
+      printf "LEGACY_RNEX_HOOKS|%d|%s\n", NR, trimmed
+      in_rnex_hooks = 0
+      next
+    }
+    indent == 0 && trimmed ~ /^git_hooks:[ \t]*(#.*)?$/ {
+      printf "LEGACY_GIT_HOOKS|%d|%s\n", NR, trimmed
+      in_rnex_hooks = 0
+      next
+    }
+    indent == 0 && trimmed ~ /^sources:[ \t]*(#.*)?$/ {
+      printf "LEGACY_ROOT_SOURCES|%d|%s\n", NR, trimmed
+      in_rnex_hooks = 0
+      next
+    }
+
+    # Track rnex-hooks section for malformed YAML list items (e.g. -"cmd" without space)
+    indent == 0 && trimmed ~ /^rnex-hooks:[ \t]*(#.*)?$/ {
+      in_rnex_hooks = 1
+      in_hooks_sub = 0
+      next
+    }
+    indent == 0 && trimmed ~ /^[a-zA-Z0-9_.-]+:/ {
+      in_rnex_hooks = 0
+      in_hooks_sub = 0
+      next
+    }
+
+    # Track nested git.hooks or plugins.<p>.hooks sections for malformed list syntax
+    trimmed ~ /^hooks:[ \t]*(#.*)?$/ && indent > 0 {
+      in_hooks_sub = 1
+      hooks_sub_indent = indent
+      next
+    }
+    in_hooks_sub && indent <= hooks_sub_indent {
+      in_hooks_sub = 0
+    }
+
+    in_rnex_hooks || in_hooks_sub {
+      # Flag inline sequence syntax immediately attached to hyphen (e.g. -"cmd" instead of - "cmd")
+      if (trimmed ~ /^-[^ \t-]/) {
+        printf "MALFORMED_HOOK_ITEM|%d|%s\n", NR, trimmed
+        next
+      }
+      if (trimmed ~ /^[a-zA-Z0-9_.-]+:[ \t]*-[^ \t-]/) {
+        printf "MALFORMED_HOOK_ITEM|%d|%s\n", NR, trimmed
+        next
+      }
+    }
+  ' "$_yacf_f"
+}
+
+# Validate merged workspace configuration files (rnex.yaml and .local.rnex.yaml)
+# against deprecated keys and malformed YAML hook list syntax.
+#
+# @returns 0 if valid; 1 if any deprecated key or malformed syntax is detected.
+# @sideEffects Writes diagnostic errors via log_err (stderr, always visible).
+validate_workspace_config() {
+  _yaml_resolve_files
+  _vwc_err=0
+  for _vwc_file in "${NEXUS_CONFIG:-$_wy}" "${NEXUS_LOCAL_CONFIG:-$_wly}"; do
+    [ -f "$_vwc_file" ] || continue
+    _vwc_name="$(basename "$_vwc_file")"
+    _vwc_findings="$(_yaml_audit_config_file "$_vwc_file" 2>/dev/null || true)"
+    [ -n "$_vwc_findings" ] || continue
+
+    _vwc_rc_tmp=0
+    while IFS='|' read -r _f_code _f_line _f_detail; do
+      [ -n "$_f_code" ] || continue
+      case "$_f_code" in
+        LEGACY_RNEX_HOOKS)
+          log_err "Deprecated configuration key 'rnex_hooks:' at $_vwc_name:$_f_line — rename it to 'rnex-hooks:'."
+          _vwc_rc_tmp=1
+          ;;
+        LEGACY_GIT_HOOKS)
+          log_err "Deprecated configuration key 'git_hooks:' at $_vwc_name:$_f_line — move Git hooks under 'git: hooks:'."
+          _vwc_rc_tmp=1
+          ;;
+        LEGACY_ROOT_SOURCES)
+          log_err "Deprecated top-level key 'sources:' at $_vwc_name:$_f_line — move 'sources:' under the owning plugin section (plugins.<name>.sources)."
+          _vwc_rc_tmp=1
+          ;;
+        MALFORMED_HOOK_ITEM)
+          log_err "Malformed YAML hook entry at $_vwc_name:$_f_line ('$_f_detail'): add a space after '-' (e.g. '- \"...\"')."
+          _vwc_rc_tmp=1
+          ;;
+      esac
+    done <<EOF_VWC
+$_vwc_findings
+EOF_VWC
+    [ "$_vwc_rc_tmp" -eq 0 ] || _vwc_err=1
+  done
+  return "$_vwc_err"
+}
+
 # Emit a plugin's config_defaults block from plugin.yaml, re-indented for insertion
-# under plugins.<name> in rnex.yaml by shifting indentation +2 spaces.
+# under plugins.<name> in rnex.yaml by shifting indentation +2 spaces and resolving
+# workspace {repos_dir} placeholders deterministically.
+#
+# @param $1 plugin_yaml Path to plugin.yaml manifest.
+# @param $2 repos_dir   Optional relative repos directory (defaults to configured repos_dir).
+# @returns Re-indented YAML block lines on stdout.
+# @pure Read-only manifest inspection.
 plugin_config_default_lines() {
   _pcd_file="$1"
+  _pcd_rdir="${2:-}"
+  if [ -z "$_pcd_rdir" ] && command -v yaml_get_repos_dir >/dev/null 2>&1; then
+    _pcd_rdir="$(yaml_get_repos_dir 2>/dev/null || true)"
+  fi
+  [ -n "$_pcd_rdir" ] || _pcd_rdir="repos"
   [ -f "$_pcd_file" ] || return 0
-  awk '
+  awk -v rdir="$_pcd_rdir" '
     /^config_defaults:[ ]*$/ || /^config_defaults:[ ]*#/ { in_c=1; next }
     in_c && /^[^ #]/ { exit }
     in_c && /^[ ]*#/ { next }
     in_c && /^[ ]*$/ { next }
     in_c {
-      print "  " $0
+      line = $0
+      gsub(/\{repos_dir\}/, rdir, line)
+      print "  " line
     }
   ' "$_pcd_file"
 }

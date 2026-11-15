@@ -1,7 +1,7 @@
 name: llm-wiki
-version: 0.9.26
-description: "Deterministic B-Tree Markdown Wiki in .rnex/wiki for AI agents"
-config:
+version: 0.9.27
+description: "Deterministic B-Tree Markdown Wiki (configurable via plugins.llm-wiki.wiki_dir) for AI agents"
+config_defaults:
   wiki_dir: ".rnex/wiki"
   index_file: "index.md"
   log_file: "log.md"
@@ -9,6 +9,10 @@ config:
   btree_root_max_lines: 80
   btree_shard_max_entries: 100
   relative_links: "rewrite"
+  sources:
+    - "README.md"
+    - "docs"
+    - "{repos_dir}/**/README.md"
 commands:
   ingest:
     script: "bin/ingest.sh"

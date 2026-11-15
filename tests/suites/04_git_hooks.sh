@@ -971,6 +971,86 @@ _v_merge="$(awk '/^[ ]*"version"[ ]*:[ ]*"[0-9]/ { sub(/.*"version"[ ]*:[ ]*"/, 
 git -C "$TEST_MAINT_WS" diff --quiet package.json || { fail "package.json left dirty after merge commit"; exit 1; }
 pass
 
+# --------------------------------------------------------------------------
+run_test "Lifecycle hooks: deprecated rnex_hooks key and malformed -'cmd' syntax trigger errors cleanly"
+TEST_HOOK_AUDIT_WS="$TEST_TMP/hooks-audit-ws"
+mkdir -p "$TEST_HOOK_AUDIT_WS"
+cp "$CLI" "$TEST_HOOK_AUDIT_WS/rnex"
+chmod +x "$TEST_HOOK_AUDIT_WS/rnex"
+cp "$DIR/package.json" "$TEST_HOOK_AUDIT_WS/package.json"
+cp -r "$DIR/lib" "$TEST_HOOK_AUDIT_WS/lib"
+cp -r "$DIR/templates" "$TEST_HOOK_AUDIT_WS/templates"
+cp -r "$DIR/skills" "$TEST_HOOK_AUDIT_WS/skills"
+mkdir -p "$TEST_HOOK_AUDIT_WS/plugins"
+
+(cd "$TEST_HOOK_AUDIT_WS" && ./rnex init -y "$TEST_HOOK_AUDIT_WS" >/dev/null)
+
+# 1. Deprecated rnex_hooks: key must fail sync and instruct user to use rnex-hooks:
+cat <<'EOF_LEG_HOOKS' > "$TEST_HOOK_AUDIT_WS/rnex.yaml"
+version: 1.0.0
+rnex_hooks:
+  after_sync:
+    - "touch should_not_run"
+plugins:
+repos:
+EOF_LEG_HOOKS
+
+set +e
+(cd "$TEST_HOOK_AUDIT_WS" && ./rnex sync --quiet >/dev/null 2>"$TEST_HOOK_AUDIT_WS/err_leg.log")
+_leg_rc=$?
+set -e
+[ "$_leg_rc" -ne 0 ] || { fail "Expected non-zero exit for deprecated rnex_hooks key"; exit 1; }
+grep -q "rnex_hooks:" "$TEST_HOOK_AUDIT_WS/err_leg.log" || { fail "Error missing rnex_hooks reference"; exit 1; }
+grep -q "rnex-hooks:" "$TEST_HOOK_AUDIT_WS/err_leg.log" || { fail "Error missing rnex-hooks migration hint"; exit 1; }
+[ ! -f "$TEST_HOOK_AUDIT_WS/should_not_run" ] || { fail "Deprecated rnex_hooks unexpectedly executed"; exit 1; }
+
+# 2. Malformed list entry without space after hyphen (-"cmd") must fail sync clearly
+cat <<'EOF_BAD_ITEM' > "$TEST_HOOK_AUDIT_WS/rnex.yaml"
+version: 1.0.0
+rnex-hooks:
+  after_sync:
+    -"touch malformed_ran"
+plugins:
+repos:
+EOF_BAD_ITEM
+
+set +e
+(cd "$TEST_HOOK_AUDIT_WS" && ./rnex sync --quiet >/dev/null 2>"$TEST_HOOK_AUDIT_WS/err_bad1.log")
+_bad1_rc=$?
+set -e
+[ "$_bad1_rc" -ne 0 ] || { fail "Expected non-zero exit for malformed -\"cmd\" hook item"; exit 1; }
+grep -q "Malformed YAML hook entry" "$TEST_HOOK_AUDIT_WS/err_bad1.log" || { fail "Missing malformed hook error for -\"cmd\""; exit 1; }
+
+# 3. Inline malformed after_sync: -"cmd" must also fail clearly
+cat <<'EOF_BAD_INLINE' > "$TEST_HOOK_AUDIT_WS/rnex.yaml"
+version: 1.0.0
+rnex-hooks:
+  after_sync: -"touch malformed_inline_ran"
+plugins:
+repos:
+EOF_BAD_INLINE
+
+set +e
+(cd "$TEST_HOOK_AUDIT_WS" && ./rnex sync --quiet >/dev/null 2>"$TEST_HOOK_AUDIT_WS/err_bad2.log")
+_bad2_rc=$?
+set -e
+[ "$_bad2_rc" -ne 0 ] || { fail "Expected non-zero exit for inline after_sync: -\"cmd\""; exit 1; }
+grep -q "Malformed YAML hook entry" "$TEST_HOOK_AUDIT_WS/err_bad2.log" || { fail "Missing malformed hook error for inline -\"cmd\""; exit 1; }
+
+# 4. Valid rnex-hooks.after_sync executes cleanly
+cat <<'EOF_GOOD_HOOKS' > "$TEST_HOOK_AUDIT_WS/rnex.yaml"
+version: 1.0.0
+rnex-hooks:
+  after_sync:
+    - "touch hook_executed_ok"
+plugins:
+repos:
+EOF_GOOD_HOOKS
+
+(cd "$TEST_HOOK_AUDIT_WS" && ./rnex sync --quiet)
+[ -f "$TEST_HOOK_AUDIT_WS/hook_executed_ok" ] || { fail "Valid rnex-hooks.after_sync did not execute"; exit 1; }
+pass
+
 if [ "${_STANDALONE_RUN:-0}" -eq 1 ]; then
   report_results
 fi
