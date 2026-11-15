@@ -124,10 +124,20 @@ cmd_sync() {
     validate_configured_plugins || _sync_validation_failed=1
   fi
 
-  _sync_quiet="$_old_sync_quiet"
   if [ "$_sync_validation_failed" -ne 0 ]; then
+    _sync_quiet="$_old_sync_quiet"
     return 1
   fi
+
+  # 3.6. Reconcile workspace config version with active CLI version (after validation passes)
+  if command -v sync_workspace_config_version >/dev/null 2>&1; then
+    sync_workspace_config_version "$_sync_quiet" || {
+      _sync_quiet="$_old_sync_quiet"
+      return 1
+    }
+  fi
+
+  _sync_quiet="$_old_sync_quiet"
   if [ "$_sync_quiet" -eq 0 ]; then
     log_ok "Sync complete — workspace, plugins, skills, and member repositories reconciled"
   fi

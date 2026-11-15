@@ -695,6 +695,83 @@ grep -qF 'No active member repositories configured.' "$_repos_instr" || { fail "
 ! grep -qF '| Path | Mode |' "$_repos_instr" || { fail "Header table should not be present when zero repos are active"; exit 1; }
 pass
 
+# --------------------------------------------------------------------------
+run_test "Workspace version reconciliation: rnex sync updates outdated/missing version, never downgrades, and skips on invalid config"
+TEST_VER_WS="$TEST_TMP/version-sync-ws"
+mkdir -p "$TEST_VER_WS"
+cp "$CLI" "$TEST_VER_WS/rnex"
+chmod +x "$TEST_VER_WS/rnex"
+cp "$DIR/package.json" "$TEST_VER_WS/package.json"
+cp -r "$DIR/lib" "$TEST_VER_WS/lib"
+cp -r "$DIR/templates" "$TEST_VER_WS/templates"
+cp -r "$DIR/skills" "$TEST_VER_WS/skills"
+mkdir -p "$TEST_VER_WS/plugins"
+
+_cli_ver="$(awk '/"version"[ ]*:/ { sub(/.*"version"[ ]*:[ ]*"/, ""); sub(/".*/, ""); print; exit }' "$DIR/package.json")"
+[ -n "$_cli_ver" ] || { fail "Failed to read CLI version from package.json"; exit 1; }
+
+(cd "$TEST_VER_WS" && ./rnex init -y "$TEST_VER_WS" >/dev/null)
+
+# 1. Invalid config with outdated version must fail sync WITHOUT advancing version
+cat <<'EOF_VER_BAD' > "$TEST_VER_WS/rnex.yaml"
+# Header comment
+version: 0.9.1
+repos_dir: "custom"
+repos:
+EOF_VER_BAD
+
+set +e
+(cd "$TEST_VER_WS" && ./rnex sync -y >/dev/null 2>&1)
+_ver_bad_rc=$?
+set -e
+[ "$_ver_bad_rc" -ne 0 ] || { fail "Expected rnex sync to fail on deprecated repos_dir:"; exit 1; }
+grep -q "^version: 0\.9\.1$" "$TEST_VER_WS/rnex.yaml" || { fail "rnex sync mutated version despite validation failure"; exit 1; }
+
+# 2. Valid config with outdated version updates to CLI version and stays synchronized
+cat <<'EOF_VER_OLD' > "$TEST_VER_WS/rnex.yaml"
+# Header comment
+version: 0.9.1
+reposDir: "repos"
+repos:
+EOF_VER_OLD
+
+_ver_sync_out="$(cd "$TEST_VER_WS" && ./rnex sync -y 2>&1)"
+grep -q "^version: ${_cli_ver}$" "$TEST_VER_WS/rnex.yaml" || {
+  fail "rnex sync did not update version to $_cli_ver: $(cat "$TEST_VER_WS/rnex.yaml")"; exit 1;
+}
+echo "$_ver_sync_out" | grep -q "v$_cli_ver" || {
+  fail "rnex sync output missing version update notice for v$_cli_ver: $_ver_sync_out"; exit 1;
+}
+_ver_status="$(cd "$TEST_VER_WS" && ./rnex status 2>&1)"
+echo "$_ver_status" | grep -q "synchronized" || { fail "Workspace not synchronized immediately after version bump"; exit 1; }
+echo "$_ver_status" | grep -q "v$_cli_ver" || { fail "rnex status did not reflect updated v$_cli_ver"; exit 1; }
+
+# 3. Missing version inserts CLI version cleanly after leading comments
+cat <<'EOF_VER_MISSING' > "$TEST_VER_WS/rnex.yaml"
+---
+# Leading comment
+reposDir: "repos"
+repos:
+EOF_VER_MISSING
+
+(cd "$TEST_VER_WS" && ./rnex sync --quiet)
+grep -q "^version: ${_cli_ver}$" "$TEST_VER_WS/rnex.yaml" || {
+  fail "rnex sync did not insert missing version $_cli_ver: $(cat "$TEST_VER_WS/rnex.yaml")"; exit 1;
+}
+
+# 4. Newer config version is never downgraded
+cat <<'EOF_VER_NEWER' > "$TEST_VER_WS/rnex.yaml"
+version: 99.0.0
+reposDir: "repos"
+repos:
+EOF_VER_NEWER
+
+(cd "$TEST_VER_WS" && ./rnex sync --quiet)
+grep -q "^version: 99\.0\.0$" "$TEST_VER_WS/rnex.yaml" || {
+  fail "rnex sync unexpectedly downgraded newer config version: $(cat "$TEST_VER_WS/rnex.yaml")"; exit 1;
+}
+pass
+
 if [ "${_STANDALONE_RUN:-0}" -eq 1 ]; then
   report_results
 fi

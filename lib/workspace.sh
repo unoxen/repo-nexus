@@ -202,3 +202,47 @@ _load_code_workspace() {
       ;;
   esac
 }
+
+# ----------------------------------------------------------------------------
+# sync_workspace_config_version
+# Summary: Updates the top-level `version:` property in $WORKSPACE_YAML to
+#          match $RNEX_VERSION whenever the existing version is missing or older
+#          than the active CLI version. Never downgrades a newer version.
+# @param $1: quiet - Optional quiet flag (0 = log update notice, 1 = silent).
+# @returns: 0 if up to date or updated successfully; 1 on write failure.
+# @sideEffects: May update `version:` in $WORKSPACE_YAML, reload
+#               WORKSPACE_CONFIG_VERSION, and refresh .rnex/sync_stamp.
+# ----------------------------------------------------------------------------
+sync_workspace_config_version() {
+  _swv_quiet="${1:-0}"
+  [ -n "${RNEX_VERSION:-}" ] || return 0
+  [ -f "${WORKSPACE_YAML:-}" ] || return 0
+
+  # Read version strictly from primary workspace config so local overrides
+  # cannot mask a stale or missing team config version.
+  _swv_cur="$(_yaml_top_level_from_file "$WORKSPACE_YAML" "version")"
+  _swv_norm_cur="${_swv_cur#v}"
+  _swv_norm_cur="${_swv_norm_cur#V}"
+  _swv_norm_cli="${RNEX_VERSION#v}"
+  _swv_norm_cli="${_swv_norm_cli#V}"
+
+  _swv_cmp=0
+  version_cmp "$_swv_norm_cur" "$_swv_norm_cli" || _swv_cmp=$?
+  [ "$_swv_cmp" -eq 2 ] || return 0
+
+  if yaml_set_top_level "version" "$_swv_norm_cli"; then
+    _load_workspace_version
+    if [ -n "${NEXUS_DIR:-}" ]; then
+      update_sync_stamp "$NEXUS_DIR"
+    fi
+    if [ "$_swv_quiet" -eq 0 ]; then
+      if [ -n "$_swv_cur" ]; then
+        log_ok "Updated workspace configuration version from v$_swv_cur to v$_swv_norm_cli"
+      else
+        log_ok "Set workspace configuration version to v$_swv_norm_cli"
+      fi
+    fi
+    return 0
+  fi
+  return 1
+}

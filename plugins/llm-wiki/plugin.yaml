@@ -1,5 +1,5 @@
 name: llm-wiki
-version: 0.10.0
+version: 0.10.1
 description: "Deterministic B-Tree Markdown Wiki (configurable via plugins.llm-wiki.wikiDir) for AI agents"
 config_defaults:
   wikiDir: ".rnex/wiki"

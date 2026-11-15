@@ -2558,43 +2558,88 @@ yaml_set_local() {
 
 # ---- Top-Level Key Setters -------------------------------------------------
 
-# Set a top-level key/value pair in a specific YAML file, inserting before 'plugins:' or 'repos:'.
+# Set or insert a top-level scalar property in a specific YAML file atomically.
+# Updates ONLY the first matching column-0 key in-place; if absent, inserts it
+# after any YAML document start marker ('---') and leading header comments.
+# Avoids rewriting the file when bytes are unchanged.
+#
+# @param $1 file   Target YAML file path.
+# @param $2 key    Top-level property key name (alphanumeric, '_', '.', '-').
+# @param $3 value  Single-line scalar value string.
+# @returns 0 on success; 1 if file missing/unwritable or arguments invalid.
+# @sideEffects Atomically updates target YAML file via mktemp + mv when changed.
 _yaml_set_top_level_in_file() {
   _file="$1"; _key="$2"; _val="$3"
-  [ -f "$_file" ] || return 0
-  _tmp="$(mktemp)"
-  if grep -q "^[ ]*${_key}:" "$_file" 2>/dev/null; then
-    awk -v key="$_key" -v val="$_val" '
-      $0 ~ ("^[ ]*" key ":") {
+  [ -f "$_file" ] && [ -w "$_file" ] || return 1
+
+  # Reject unsafe key names (regex/awk metacharacters) or multi-line values
+  case "$_key" in
+    ""|*[!a-zA-Z0-9_.-]*) return 1 ;;
+  esac
+  case "$_val" in
+    *"
+"*) return 1 ;;
+  esac
+
+  _tmp="$(mktemp)" || return 1
+  _yst_ok=0
+  if awk -v pat="^${_key}[ \t]*:" 'BEGIN { f = 0 } $0 ~ pat { f = 1; exit } END { exit !f }' "$_file" 2>/dev/null; then
+    if _YST_VAL="$_val" awk -v key="$_key" '
+      BEGIN { val = ENVIRON["_YST_VAL"]; updated = 0 }
+      !updated && $0 ~ ("^" key "[ \t]*:") {
         print key ": " val
+        updated = 1
         next
       }
       { print }
-    ' "$_file" > "$_tmp" && mv "$_tmp" "$_file"
+    ' "$_file" > "$_tmp"; then
+      _yst_ok=1
+    fi
   else
-    awk -v key="$_key" -v val="$_val" '
-      BEGIN { inserted=0 }
-      /^[ ]*(plugins|repos):/ && !inserted {
+    if _YST_VAL="$_val" awk -v key="$_key" '
+      BEGIN { val = ENVIRON["_YST_VAL"]; inserted = 0 }
+      !inserted && $0 !~ /^[ \t]*(#.*)?$/ && $0 !~ /^---([ \t]*#.*)?$/ {
         print key ": " val
         print ""
-        inserted=1
+        inserted = 1
       }
       { print }
       END {
         if (!inserted) {
-          print ""
           print key ": " val
         }
       }
-    ' "$_file" > "$_tmp" && mv "$_tmp" "$_file"
+    ' "$_file" > "$_tmp"; then
+      _yst_ok=1
+    fi
   fi
+
+  if [ "$_yst_ok" -eq 1 ]; then
+    if ! cmp -s "$_file" "$_tmp"; then
+      mv "$_tmp" "$_file"
+    else
+      rm -f "$_tmp"
+    fi
+    return 0
+  fi
+
   rm -f "$_tmp"
+  return 1
 }
 
+# Set or insert a top-level scalar property in team workspace config (rnex.yaml).
+# @param $1 key    Top-level scalar key name.
+# @param $2 value  Single-line scalar value string.
+# @returns 0 on success; non-zero on failure.
 yaml_set_top_level() {
-  _yaml_set_top_level_in_file "$WORKSPACE_YAML" "$1" "$2"
+  _yaml_resolve_files
+  _yaml_set_top_level_in_file "${WORKSPACE_YAML:-$_wy}" "$1" "$2"
 }
 
+# Set or insert a top-level scalar property in local override config (.local.rnex.yaml).
+# @param $1 key    Top-level scalar key name.
+# @param $2 value  Single-line scalar value string.
+# @returns 0 on success; non-zero on failure.
 yaml_set_top_level_local() {
   _ensure_local_yaml_file ""
   _yaml_set_top_level_in_file "$WORKSPACE_LOCAL_YAML" "$1" "$2"
