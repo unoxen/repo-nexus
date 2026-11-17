@@ -6,8 +6,7 @@
 # Architectural Layer: Domain Helpers (helpers/)
 # Single Responsibility: Discover candidate Markdown source files from an
 # explicit CLI source argument or configured `plugins.llm-wiki.sources` in
-# rnex YAML configs, and filter them against existing wiki shards so ONLY
-# missing sources are ingested into the B-Tree knowledge store.
+# rnex YAML configs, and optionally filter them against existing wiki shards.
 #
 # Design Patterns & Principles:
 #   - Information Expert (GRASP): Encapsulates knowledge of source file
@@ -15,8 +14,10 @@
 #     shard ID derivation.
 #   - Strategy Pattern (GoF): Supports multiple source discovery strategies
 #     (explicit file, directory scan, globstar recursion, YAML configuration).
-#   - Filter Pipeline: Candidate paths are discovered, deduplicated, and
-#     filtered against already-indexed shard records via set difference (comm).
+#   - Filter Pipeline: Candidate paths are discovered via
+#     resolve_candidate_sources (used directly by `ingest --force`) and
+#     filtered via filter_missing_sources using set difference (`comm -23`)
+#     for default missing-only ingestion.
 #
 # Security & Standards:
 #   - Pure POSIX Shell (/bin/sh): No bashisms, fully quoted expansions.
@@ -287,6 +288,73 @@ expand_single_source_spec() {
 }
 
 # -----------------------------------------------------------------------------
+# resolve_candidate_sources
+# Summary: Expands either an explicit positional source argument ($1 — file,
+#          directory, or glob pattern) or the configured `plugins.llm-wiki.sources`
+#          list into sorted, unique workspace-relative Markdown paths.
+# @param $1: explicit_source_arg - Optional CLI positional path (empty for config).
+# @param $2: out_candidates_file - File receiving sorted candidate workspace_rel_paths.
+# @returns: 0 on success; 1 if an explicit CLI source argument is invalid/missing.
+# @throws: Writes error to stderr on missing or invalid explicit argument.
+# @sideEffects: Writes sorted workspace-relative file paths to $2.
+# -----------------------------------------------------------------------------
+resolve_candidate_sources() {
+    _rcs_arg="$1"
+    _rcs_out="$2"
+    : > "$_rcs_out"
+
+    if [ -n "$_rcs_arg" ]; then
+        if ! expand_single_source_spec "$_rcs_arg" "$_rcs_out"; then
+            rm -f "$_rcs_out"
+            printf 'Error [ingest]: Source "%s" not found or invalid.\n' "$_rcs_arg" >&2
+            return 1
+        fi
+    else
+        _rcs_list="$(parse_configured_workspace_sources "$RNEX_WORKSPACE_ROOT")"
+        _rcs_spec_tmp="${_rcs_out}.specs.$$"
+        printf '%s\n' "$_rcs_list" > "$_rcs_spec_tmp"
+        while IFS= read -r _rcs_entry <&3; do
+            [ -n "$_rcs_entry" ] || continue
+            expand_single_source_spec "$_rcs_entry" "$_rcs_out" < /dev/null || true
+        done 3< "$_rcs_spec_tmp"
+        rm -f "$_rcs_spec_tmp"
+    fi
+
+    atomic_sort_unique_file "$_rcs_out" || true
+    return 0
+}
+
+# -----------------------------------------------------------------------------
+# filter_missing_sources
+# Summary: Computes the set difference (`comm -23`) between a sorted file of
+#          candidate workspace-relative paths ($1) and all paths already
+#          indexed in existing wiki shards, writing only missing paths to $2.
+# @param $1: candidates_file  - Sorted file of candidate workspace_rel_paths.
+# @param $2: out_missing_file - Destination file receiving missing paths.
+# @returns: 0 on success.
+# @sideEffects: Writes sorted missing workspace-relative paths to $2.
+# -----------------------------------------------------------------------------
+filter_missing_sources() {
+    _fms_cand="$1"
+    _fms_out="$2"
+    _fms_idx="${_fms_out}.idx.$$"
+    : > "$_fms_out"
+
+    extract_already_indexed_paths "$_fms_idx"
+
+    if [ -s "$_fms_cand" ]; then
+        if [ -s "$_fms_idx" ]; then
+            LC_ALL=C comm -23 "$_fms_cand" "$_fms_idx" > "$_fms_out"
+        else
+            cp "$_fms_cand" "$_fms_out"
+        fi
+    fi
+
+    rm -f "$_fms_idx"
+    return 0
+}
+
+# -----------------------------------------------------------------------------
 # resolve_missing_sources_to_ingest
 # Summary: Resolves candidate Markdown files from either the passed CLI source
 #          argument ($1) or configured `plugins.llm-wiki.sources` in
@@ -302,39 +370,14 @@ resolve_missing_sources_to_ingest() {
     _explicit_arg="$1"
     _out_missing="$2"
     _candidates_tmp="${_out_missing}.cand.$$"
-    _indexed_tmp="${_out_missing}.idx.$$"
-    : > "$_candidates_tmp"
     : > "$_out_missing"
 
-    if [ -n "$_explicit_arg" ]; then
-        if ! expand_single_source_spec "$_explicit_arg" "$_candidates_tmp"; then
-            rm -f "$_candidates_tmp" "$_indexed_tmp"
-            printf 'Error [ingest]: Source "%s" not found or invalid.\n' "$_explicit_arg" >&2
-            return 1
-        fi
-    else
-        _sources_list="$(parse_configured_workspace_sources "$RNEX_WORKSPACE_ROOT")"
-        _spec_tmp="${_out_missing}.specs.$$"
-        printf '%s\n' "$_sources_list" > "$_spec_tmp"
-        while IFS= read -r _src_entry <&3; do
-            [ -n "$_src_entry" ] || continue
-            expand_single_source_spec "$_src_entry" "$_candidates_tmp" < /dev/null || true
-        done 3< "$_spec_tmp"
-        rm -f "$_spec_tmp"
+    if ! resolve_candidate_sources "$_explicit_arg" "$_candidates_tmp"; then
+        rm -f "$_candidates_tmp"
+        return 1
     fi
 
-    atomic_sort_unique_file "$_candidates_tmp" || true
-    extract_already_indexed_paths "$_indexed_tmp"
-
-    # Keep ONLY candidate paths NOT already present in $_indexed_tmp
-    if [ -s "$_candidates_tmp" ]; then
-        if [ -s "$_indexed_tmp" ]; then
-            LC_ALL=C comm -23 "$_candidates_tmp" "$_indexed_tmp" > "$_out_missing"
-        else
-            cp "$_candidates_tmp" "$_out_missing"
-        fi
-    fi
-
-    rm -f "$_candidates_tmp" "$_indexed_tmp"
+    filter_missing_sources "$_candidates_tmp" "$_out_missing"
+    rm -f "$_candidates_tmp"
     return 0
 }

@@ -126,16 +126,19 @@ The `llm-wiki` plugin exposes a streamlined, focused 2-command CLI surface:
 
 Ingests and indexes authoritative workspace documents and member repository documentation directly in place into flat B-Tree shards in `.rnex/wiki/*.md` (or custom `wikiDir`) and rebalances `index.md`.
 
-Ingestion operates on a **missing-sources-only** basis: it inspects already-indexed workspace paths within the wiki shards and skips them, only compiling newly added or unindexed sources. Existing manual summaries and edits are preserved untouched.
+Ingestion operates on a **missing-sources-only** basis by default: it inspects already-indexed workspace paths within the wiki shards and skips them, only compiling newly added or unindexed sources. Pass `--force` (`-f`) to re-index already-cataloged documents after modifying headers or summaries.
 
 ```sh
 # Ingest missing workspace sources and enabled member repos
 rnex plugin llm-wiki ingest
 
-# Ingest a specific markdown source file directly in place
+# Ingest a specific markdown source file or directory directly in place
 rnex plugin llm-wiki ingest docs/architecture.md
-# Or using the --file flag
-rnex plugin llm-wiki ingest --file docs/architecture.md
+rnex plugin llm-wiki ingest docs/
+
+# Force re-index existing wiki entries for a file, directory, or all configured sources
+rnex plugin llm-wiki ingest --force docs/architecture.md
+rnex plugin llm-wiki ingest -f
 
 # Run quietly
 rnex plugin llm-wiki ingest --quiet
@@ -143,8 +146,8 @@ rnex plugin llm-wiki ingest --quiet
 
 | Argument / Option | Type | Default | Description |
 |:---|:---|:---|:---|
-| `<file_path>` | string | *(all missing sources)* | Ingest a single specified markdown file directly. |
-| `--file, -f <path>` | string | *(all missing sources)* | Ingest a specific markdown file. |
+| `<source_path>` | string | *(all configured sources)* | Ingest a single specified markdown file, directory, or glob pattern directly. |
+| `--force, -f` | boolean | `false` | Replace existing wiki entries and links for the passed path or configured sources. |
 | `--rewrite-links` | boolean | `true` | Rewrite relative links in source summaries to valid paths from wiki. |
 | `--strip-links, --delete-links` | boolean | `false` | Strip relative link formatting in source summaries to plain text. |
 | `--quiet, -q` | boolean | `false` | Suppress non-essential informational output. |
@@ -176,14 +179,14 @@ plugins:
 
 ### `rnex plugin llm-wiki lint`
 
-Standalone structural, reference, and sorting audit for the wiki. Inspects directory structures, auto-heals and recursively subdivides oversized shards exceeding `btreeShardMaxEntries` (max 100 records per leaf shard; splits infinitely by letters, first 2 letters, first 3 letters, etc. without error), verifies link targets, checks sorting order (`LC_ALL=C`), asserts zero symbolic links, and verifies the $\le 80$ line ceiling on `index.md`:
+Standalone content, structural, reference, and sorting audit for the wiki. By default, performs a **deep audit** that validates and auto-heals stale document headers and summaries against their authoritative source files, subdivides oversized shards exceeding `btreeShardMaxEntries` (max 100 records per leaf shard; splits infinitely by letters, first 2 letters, first 3 letters, etc. without error), verifies link targets, checks sorting order (`LC_ALL=C`), asserts zero symbolic links, and verifies the $\le 80$ line ceiling on `index.md`. Pass `--shallow` to validate only links and structure without reading source document content:
 
 ```sh
-# Audit wiki integrity (standalone, zero ingestion)
+# Deep audit & auto-heal (validates headers, summaries, links, and B-Tree shards)
 rnex plugin llm-wiki lint
 
-# Strict mode: fail on any warning
-rnex plugin llm-wiki lint --strict
+# Shallow mode: validate only links and structure without reading document content
+rnex plugin llm-wiki lint --shallow
 
 # Run quietly
 rnex plugin llm-wiki lint --quiet
@@ -191,7 +194,7 @@ rnex plugin llm-wiki lint --quiet
 
 | Option | Type | Default | Description |
 |:---|:---|:---|:---|
-| `--strict, -s` | boolean | `false` | Fail with exit code 1 if any warnings or structural issues are detected. |
+| `--shallow` | boolean | `false` | Validate only links and B-Tree structure without reading source document content. |
 | `--quiet, -q` | boolean | `false` | Suppress non-essential informational output. |
 | `-h, --help` | boolean | `false` | Display command usage and options. |
 
@@ -215,7 +218,7 @@ Integrate wiki integrity checks into your Git workflow using declarative `git.ho
 git:
   hooks:
     pre-commit:
-      - "rnex plugin llm-wiki lint"
+      - "rnex plugin llm-wiki lint --shallow"
     post-merge:
       - "rnex sync --quiet"
 ```

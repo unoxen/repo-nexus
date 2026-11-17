@@ -13,8 +13,17 @@ Use this skill to validate the curated flat wiki catalog inside `{wikiDir}/`, en
 Always invoke the deterministic `rnex` CLI command under the hood:
 
 ```sh
-rnex plugin llm-wiki lint [--strict] [--quiet]
+rnex plugin llm-wiki lint [--shallow] [--quiet|-q]
 ```
+
+- Deep validation and auto-healing (validates and refreshes document headers, summaries, B-Tree shards, and links):
+  ```sh
+  rnex plugin llm-wiki lint
+  ```
+- Shallow link-only validation (validates links and structure without reading source document content):
+  ```sh
+  rnex plugin llm-wiki lint --shallow
+  ```
 
 ## Agent Context Retrieval Protocol
 
@@ -31,6 +40,7 @@ AI coding agents navigate wiki structure through:
    - Enforces zero symbolic links across `{wikiDir}/`.
 
 2. **Auto-Healing & Invariants:**
+   - **Document Headers & Summaries (Deep by Default):** Reconstructs each catalog entry from its authoritative source document (H1 title, link target, and summary paragraph) and refreshes any stale entry in place. Pass `--shallow` to skip reading document content and validate only links and structure.
    - **Root Router:** Validates that `{wikiDir}/{indexFile}` exists and is within {btreeRootMaxLines} lines; auto-rebuilds router to index orphan shards and prune dead shard links.
    - **Workspace References:** Validates that every referenced workspace document in shard entries exists; prunes dead references to deleted files.
    - **Relative Link Integrity:** Validates all relative Markdown links and `[[wikilinks]]`.

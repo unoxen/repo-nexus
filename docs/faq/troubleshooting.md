@@ -38,9 +38,9 @@ Practical diagnostic guidance and step-by-step solutions for everyday multi-repo
 * **Cause**: The repository is marked as disabled in your local `.local.rnex.yaml` or in the team manifest `rnex.yaml`.
 * **Solution**: Run `rnex status` to view current repository states. Re-enable the repository using `rnex repo set <name> --enable --local` (or `--global`) and run `rnex sync`.
 
-### 8. `rnex plugin llm-wiki ingest <file>` reports path validation errors
-* **Cause**: Single-file ingestion validates that the target argument is a valid, readable regular file (`[ -f ]` and `! -L`). It explicitly rejects non-existent paths, directories, and symbolic links.
-* **Solution**: Pass an existing file path (e.g. `rnex plugin llm-wiki ingest docs/spec.md` or `rnex plugin llm-wiki ingest --file docs/spec.md`). To ingest all configured workspace sources, run `rnex plugin llm-wiki ingest` with no arguments.
+### 8. `rnex plugin llm-wiki ingest <path>` reports path validation errors
+* **Cause**: Positional path ingestion validates that the target argument is a valid, readable regular file, directory, or glob pattern within the workspace and explicitly rejects non-existent paths, path traversal (`..`), and symbolic links.
+* **Solution**: Pass an existing file or directory path (e.g. `rnex plugin llm-wiki ingest docs/spec.md` or `rnex plugin llm-wiki ingest docs/`). To ingest all configured workspace sources, run `rnex plugin llm-wiki ingest` with no arguments.
 
 ### 9. Existing local Git hook was overwritten or not running
 * **Cause**: Repo Nexus manages Git hooks via non-destructive wrapper scripts in `.git/hooks/`. When installing wrappers, any pre-existing custom hook script is automatically backed up to `<hook>.user` (e.g. `.git/hooks/pre-commit.user`) and invoked by the wrapper during Git operations.

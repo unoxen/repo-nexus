@@ -3,15 +3,15 @@
 # =============================================================================
 # File: plugins/llm-wiki/bin/ingest.sh
 # Architectural Layer: Plugin CLI Entrypoint (ingest)
-# Single Responsibility: Ingest ONLY missing Markdown documentation sources into
-# the encapsulated .rnex/wiki/ B-Tree store.
+# Single Responsibility: Ingest Markdown documentation sources into the
+# encapsulated .rnex/wiki/ B-Tree store.
 #
 # Constraints & Principles:
-#   - Single Responsibility Principle (SRP): Confined strictly to missing-source
+#   - Single Responsibility Principle (SRP): Confined strictly to source
 #     ingestion. Performs zero linting or graph operations.
-#   - Idempotency & Missing-Only: Never overwrites already-indexed sources;
-#     processes only missing sources discovered via CLI argument or configured
-#     sources in .local.rnex.yaml / rnex.yaml.
+#   - Strategy Pattern: By default ingests ONLY missing sources (preserving
+#     existing entries). With `--force` (`-f`), re-indexes existing entries
+#     matched by the positional path or configured sources.
 #   - POSIX Compliance: Standard /bin/sh syntax without bashisms.
 # =============================================================================
 set -e
@@ -39,8 +39,10 @@ esac
 # main_ingest
 # Summary: Entrypoint for the `rnex plugin llm-wiki ingest` CLI command.
 #          Parses CLI arguments, loads the wiki configuration contract,
-#          resolves missing source files, and ingests them into B-Tree shards.
-# @param $@: CLI arguments ([<source_path>], --file/-f, --rewrite-links,
+#          resolves missing (or forced candidate) source files from a
+#          positional file/directory/glob path or configured sources, and
+#          ingests them into B-Tree shards.
+# @param $@: CLI arguments ([<source_path>], --force/-f, --rewrite-links,
 #            --strip-links, --quiet/-q, --help/-h).
 # @returns: 0 on successful ingestion; 1 on configuration or source error.
 # @sideEffects: Mutates configured wikiDir shards, indexFile, and logFile.
@@ -50,17 +52,13 @@ main_ingest() {
     load_wiki_config_contract "$_ws_root" || exit 1
 
     _source_arg=""
+    _force=0
     _quiet=0
 
     while [ $# -gt 0 ]; do
         case "$1" in
-            --file|-f|--source|-s)
-                shift
-                _source_arg="${1:-}"
-                if [ -z "$_source_arg" ]; then
-                    printf 'Error [ingest]: Missing path argument after flag.\n' >&2
-                    exit 1
-                fi
+            --force|-f)
+                _force=1
                 shift
                 ;;
             --quiet|-q)
@@ -78,14 +76,18 @@ main_ingest() {
                 shift
                 ;;
             --help|-h)
-                printf 'Usage: rnex plugin llm-wiki ingest [<source_path>] [--file <path>] [--rewrite-links] [--strip-links] [--quiet]\n'
+                printf 'Usage: rnex plugin llm-wiki ingest [<source_path>] [--force|-f] [--rewrite-links] [--strip-links] [--quiet|-q]\n'
                 exit 0
                 ;;
             -*)
-                printf 'Error [ingest]: Unknown option "%s". Usage: rnex plugin llm-wiki ingest [<source_path>]\n' "$1" >&2
+                printf 'Error [ingest]: Unknown option "%s". Usage: rnex plugin llm-wiki ingest [<source_path>] [--force|-f] [--rewrite-links] [--strip-links] [--quiet|-q]\n' "$1" >&2
                 exit 1
                 ;;
             *)
+                if [ -n "$_source_arg" ]; then
+                    printf 'Error [ingest]: Unexpected extra argument "%s". Pass at most one <source_path>.\n' "$1" >&2
+                    exit 1
+                fi
                 _source_arg="$1"
                 shift
                 ;;
@@ -93,19 +95,30 @@ main_ingest() {
     done
 
     mkdir -p "$RNEX_WIKI_ROOT"
-    _missing_manifest="${RNEX_WIKI_ROOT}/.missing_sources.$$"
-    if ! resolve_missing_sources_to_ingest "$_source_arg" "$_missing_manifest"; then
-        rm -f "$_missing_manifest"
-        exit 1
-    fi
-
-    if [ "$_quiet" -eq 1 ]; then
-        ingest_missing_sources_into_btree "$_missing_manifest" "$_source_arg" >/dev/null
+    _manifest="${RNEX_WIKI_ROOT}/.ingest_sources.$$"
+    if [ "$_force" -eq 1 ]; then
+        if ! resolve_candidate_sources "$_source_arg" "$_manifest"; then
+            rm -f "$_manifest"
+            exit 1
+        fi
+        if [ "$_quiet" -eq 1 ]; then
+            force_reingest_sources_into_btree "$_manifest" "$_source_arg" >/dev/null
+        else
+            force_reingest_sources_into_btree "$_manifest" "$_source_arg"
+        fi
     else
-        ingest_missing_sources_into_btree "$_missing_manifest" "$_source_arg"
+        if ! resolve_missing_sources_to_ingest "$_source_arg" "$_manifest"; then
+            rm -f "$_manifest"
+            exit 1
+        fi
+        if [ "$_quiet" -eq 1 ]; then
+            ingest_missing_sources_into_btree "$_manifest" "$_source_arg" >/dev/null
+        else
+            ingest_missing_sources_into_btree "$_manifest" "$_source_arg"
+        fi
     fi
     _rc=$?
-    rm -f "$_missing_manifest"
+    rm -f "$_manifest"
     exit "$_rc"
 }
 

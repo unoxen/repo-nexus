@@ -5,6 +5,23 @@ All notable changes to Repo Nexus (`rnex`) are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.2] - 2026-11-17
+
+### Added
+- **LLM Wiki Forced Re-Ingestion (`rnex plugin llm-wiki ingest --force` / `-f`)**:
+  - Added `--force` (`-f`) flag to `rnex plugin llm-wiki ingest` to rebuild existing catalog entries from their authoritative source files, re-route entries across B-Tree sub-shards when titles change, and skip unchanged entries without mutating `log.md`.
+- **LLM Wiki Shallow Lint Mode (`rnex plugin llm-wiki lint --shallow`)**:
+  - Added `--shallow` option to `rnex plugin llm-wiki lint` to validate only links and B-Tree shard structure without reading source document content.
+
+### Changed
+- **LLM Wiki Deep Content Validation by Default**:
+  - `rnex plugin llm-wiki lint` now validates and auto-heals stale document headers and summaries against their authoritative workspace source files by default, ensuring zero stale wiki catalog entries remain.
+
+### Removed
+- **LLM Wiki Deprecated CLI Flags**:
+  - Removed `--file` (`-f`) and `--source` (`-s`) from `rnex plugin llm-wiki ingest`; positional `<path>` automatically detects files, directories, and glob patterns, and `-f` is now the short alias for `--force`.
+  - Removed unused `--strict` flag from `rnex plugin llm-wiki lint`.
+
 ## [0.8.34] - 2026-11-06
 
 ### Added

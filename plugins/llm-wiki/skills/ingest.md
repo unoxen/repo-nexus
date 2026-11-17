@@ -13,7 +13,7 @@ Use this skill when ingesting new reference materials, architecture documentatio
 Always scaffold and ingest missing documentation deterministically using the built-in CLI helper:
 
 ```sh
-rnex plugin llm-wiki ingest [path/to/source] [--file path/to/doc.md] [--rewrite-links] [--strip-links] [--quiet]
+rnex plugin llm-wiki ingest [path/to/source] [--force|-f] [--rewrite-links] [--strip-links] [--quiet|-q]
 ```
 
 - Ingest all missing sources from {sources}:
@@ -23,6 +23,11 @@ rnex plugin llm-wiki ingest [path/to/source] [--file path/to/doc.md] [--rewrite-
 - Ingest a specific missing document, directory, or glob pattern:
   ```sh
   rnex plugin llm-wiki ingest path/to/source.md
+  ```
+- Force-refresh existing wiki entries for a modified document, directory, or all {sources}:
+  ```sh
+  rnex plugin llm-wiki ingest --force path/to/source.md
+  rnex plugin llm-wiki ingest -f
   ```
 
 ## Agent Context Retrieval Protocol
@@ -39,10 +44,10 @@ AI coding agents navigate wiki context via the 3-step zero-token-bloat protocol:
    - Zero symbolic links (`ln -s`) and zero redundant content copies.
    - Generated wiki artifacts reside exclusively inside `{wikiDir}/`: `{wikiDir}/{indexFile}` (root router table), `{wikiDir}/{logFile}` (audit log), and flat leaf shards (`{wikiDir}/repo-nexus*.md`, `{wikiDir}/repos-*.md`).
 
-2. **Deterministic CLI Ingestion (Missing Sources Only):**
-   - Execute `rnex plugin llm-wiki ingest [path/to/source]` under the hood.
+2. **Deterministic CLI Ingestion (Missing Sources by Default, `--force` for Updates):**
+   - Execute `rnex plugin llm-wiki ingest [path/to/source]` under the hood. Pass `--force` (`-f`) to re-index already-cataloged documents after header or summary edits.
    - **NEVER** manually create, sort, or edit `{wikiDir}/{indexFile}` or `{wikiDir}/*.md` shard files.
-   - The CLI identifies which candidate sources from {sources} have not yet been indexed and appends only missing entries into their respective B-Tree shards, preserving all existing shard entries and custom summaries intact.
+   - By default, the CLI identifies which candidate sources from {sources} have not yet been indexed and appends only missing entries into their respective B-Tree shards. When `--force` (`-f`) is passed, existing entries matching the target path (or {sources}) are rebuilt from their authoritative source files and re-routed if their title changed.
    - B-Tree shards are maintained in strict `LC_ALL=C` sort order and split automatically above {btreeShardMaxEntries} entries.
    - `{wikiDir}/{indexFile}` is recompiled atomically (bounded to {btreeRootMaxLines} lines) to route to all existing shards.
    - Relative Markdown links in source summaries use the active `{relativeLinks}` mode from `{wikiDir}/` (pass `--strip-links` or `--rewrite-links` to override for a single run).

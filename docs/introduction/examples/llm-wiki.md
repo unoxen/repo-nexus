@@ -25,9 +25,9 @@ git:
     - "!**/rnex.yaml"
   hooks:
     pre-commit:
-      - "rnex plugin llm-wiki lint"
+      - "rnex plugin llm-wiki lint --shallow"
     pre-push:
-      - "rnex plugin llm-wiki lint --strict"
+      - "rnex plugin llm-wiki lint"
 
 rnexHooks:
   afterSync:
@@ -71,13 +71,16 @@ rnex sync
 # Ingest all intake sources and member repository documentation in place
 rnex plugin llm-wiki ingest
 
-# Ingest a specific research document or design spec in place
+# Ingest a specific research document or directory in place
 rnex plugin llm-wiki ingest specs/architecture.md
-# Or using the --file flag
-rnex plugin llm-wiki ingest --file specs/architecture.md
+rnex plugin llm-wiki ingest specs/
 
-# Validate wiki structure, line budget, and zero-symlink invariants
+# Force re-index existing entries after updating document headers
+rnex plugin llm-wiki ingest -f specs/architecture.md
+
+# Validate wiki structure, headers, line budget, and zero-symlink invariants
 rnex plugin llm-wiki lint
+rnex plugin llm-wiki lint --shallow
 ```
 
 ## Knowledge Base Navigation Architecture

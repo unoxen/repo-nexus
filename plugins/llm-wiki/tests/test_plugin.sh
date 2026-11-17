@@ -325,16 +325,16 @@ grep -q 'repo-nexus-docs-n-z' "$TEST_BTREE_WS/wiki/index.md" || { fail "repo-nex
 pass
 
 # --------------------------------------------------------------------------
-# Test 8: Single-File Ingestion, Options, Error Validation, and Batch Fallback
+# Test 8: Positional File/Directory Ingestion, Error Validation, and Batch Fallback
 # --------------------------------------------------------------------------
-run_test "LLM Wiki: single-file ingestion (--file/--source), error validation, and batch fallback"
+run_test "LLM Wiki: positional file/directory ingestion, removed --file/--source rejection, and batch fallback"
 TEST_SF_WS="$TEST_TMP/llm-wiki-singlefile-ws"
 mkdir -p "$TEST_SF_WS"
 setup_plugin_test_workspace llm-wiki "$TEST_SF_WS"
 cd "$TEST_SF_WS"
 "$TEST_SF_WS/rnex" init -y --llm-wiki "$TEST_SF_WS" >/dev/null
 
-mkdir -p "$TEST_SF_WS/raw"
+mkdir -p "$TEST_SF_WS/raw/sub"
 cat <<'EOF_CFG_SF' > "$TEST_SF_WS/rnex.yaml"
 version: 1.0.0
 plugins:
@@ -346,7 +346,7 @@ EOF_CFG_SF
 (cd "$TEST_SF_WS" && ./rnex sync -y >/dev/null)
 
 printf '# Document A\nSingle file A architecture.\n' > "$TEST_SF_WS/raw/doc-a.md"
-printf '# Document B\nSingle file B architecture.\n' > "$TEST_SF_WS/raw/doc-b.md"
+printf '# Document B\nDirectory file B architecture.\n' > "$TEST_SF_WS/raw/sub/doc-b.md"
 printf '# Document C\nSingle file C architecture.\n' > "$TEST_SF_WS/raw/doc-c.md"
 
 # Test Case 1: Positional single file ingestion
@@ -354,16 +354,24 @@ printf '# Document C\nSingle file C architecture.\n' > "$TEST_SF_WS/raw/doc-c.md
 [ -f "$TEST_SF_WS/wiki/repo-nexus-raw.md" ] || { fail "repo-nexus-raw.md missing after single file ingest"; exit 1; }
 grep -q 'doc-a' "$TEST_SF_WS/wiki/repo-nexus-raw.md" || { fail "doc-a missing in repo-nexus-raw.md after single file ingest"; exit 1; }
 
-# Test Case 2: --file / -f flag single file ingestion
-(cd "$TEST_SF_WS" && ./rnex plugin llm-wiki ingest --file raw/doc-b.md >/dev/null)
-grep -q 'doc-b' "$TEST_SF_WS/wiki/repo-nexus-raw.md" || { fail "doc-b missing in repo-nexus-raw.md after --file ingest"; exit 1; }
+# Test Case 2: Positional directory ingestion (auto-detected without flags)
+(cd "$TEST_SF_WS" && ./rnex plugin llm-wiki ingest raw/sub >/dev/null)
+grep -q 'doc-b' "$TEST_SF_WS/wiki/repo-nexus-raw.md" || { fail "doc-b missing in repo-nexus-raw.md after directory ingest"; exit 1; }
 
-# Test Case 3: Missing file error and exit code non-zero
+# Test Case 3: Removed --file / --source flags are rejected with non-zero exit code
+_file_flag_err=0
+(cd "$TEST_SF_WS" && ./rnex plugin llm-wiki ingest --file raw/doc-c.md >/dev/null 2>&1) || _file_flag_err=1
+[ "$_file_flag_err" -eq 1 ] || { fail "Removed --file flag should be rejected with non-zero exit code"; exit 1; }
+_src_flag_err=0
+(cd "$TEST_SF_WS" && ./rnex plugin llm-wiki ingest --source raw/doc-c.md >/dev/null 2>&1) || _src_flag_err=1
+[ "$_src_flag_err" -eq 1 ] || { fail "Removed --source flag should be rejected with non-zero exit code"; exit 1; }
+
+# Test Case 4: Missing file error and exit code non-zero
 _missing_err=0
 (cd "$TEST_SF_WS" && ./rnex plugin llm-wiki ingest raw/nonexistent.md >/dev/null 2>&1) || _missing_err=1
 [ "$_missing_err" -eq 1 ] || { fail "ingest of nonexistent file expected non-zero exit code"; exit 1; }
 
-# Test Case 4: Batch fallback when no file argument is passed
+# Test Case 5: Batch fallback when no file argument is passed
 (cd "$TEST_SF_WS" && ./rnex plugin llm-wiki ingest >/dev/null)
 grep -q 'doc-c' "$TEST_SF_WS/wiki/repo-nexus-raw.md" || { fail "doc-c missing from repo-nexus-raw.md after batch ingest"; exit 1; }
 [ ! -e "$TEST_SF_WS/wiki/hot.md" ] || { fail "hot.md found in single-file test workspace"; exit 1; }
@@ -963,7 +971,8 @@ echo "$_log_after_del" | grep -q 'deleted: `docs/alpha.md` (pruned dead referenc
 }
 
 # 4. Test updated action during lint (re-sorting entries)
-printf '# Wiki Index Shard: repo-nexus-docs\n\n- **[Zebra](../../docs/beta.md)** (`docs/beta.md`) — Z.\n- **[Alpha](../../docs/beta.md)** (`docs/beta.md`) — A.\n' > "$TEST_DET_LOG_WS/.rnex/wiki/repo-nexus-docs.md"
+printf '# Zebra\nZ.\n' > "$TEST_DET_LOG_WS/docs/zebra.md"
+printf '# Wiki Index Shard: repo-nexus-docs\n\n- **[Zebra](../../docs/zebra.md)** (`docs/zebra.md`) — Z.\n- **[Doc Beta](../../docs/beta.md)** (`docs/beta.md`) — Beta doc with Alpha.\n' > "$TEST_DET_LOG_WS/.rnex/wiki/repo-nexus-docs.md"
 (cd "$TEST_DET_LOG_WS" && ./rnex plugin llm-wiki lint >/dev/null)
 _log_after_sort="$(cat "$TEST_DET_LOG_WS/.rnex/wiki/log.md")"
 echo "$_log_after_sort" | grep -q 'updated: `repo-nexus-docs.md` (auto-healed LC_ALL=C sort order)' || {
@@ -1135,8 +1144,8 @@ _i=1
 while [ "$_i" -le 175 ]; do
   _mod=$(( (_i - 1) % 13 ))
   _ch="$(printf '%s' "nopqrstuvwxyz" | cut -c $((_mod + 1)))"
-  # Create source file so links are valid
-  touch "$TEST_LINT_SPLIT_WS/repos/test-repo/packages/${_ch}-pkg-${_i}.md"
+  # Create source file matching entry header and summary
+  printf '# %s-pkg-%s\nDescription.\n' "$_ch" "$_i" > "$TEST_LINT_SPLIT_WS/repos/test-repo/packages/${_ch}-pkg-${_i}.md"
   printf -- '- **[%s-pkg-%s](../repos/test-repo/packages/%s-pkg-%s.md)** (`repos/test-repo/packages/%s-pkg-%s.md`) — Description.\n' \
     "$_ch" "$_i" "$_ch" "$_i" "$_ch" "$_i" >> "$TEST_LINT_SPLIT_WS/wiki/repos-test-repo-packages-n-z.md"
   _i=$((_i + 1))
@@ -1384,10 +1393,10 @@ mkdir -p "$TEST_NUM_HEAL_WS/repos/test-module/education"
 mkdir -p "$TEST_NUM_HEAL_WS/repos/test-module/example"
 mkdir -p "$TEST_NUM_HEAL_WS/repos/test-module/aa"
 
-# Create valid markdown source files
-touch "$TEST_NUM_HEAL_WS/repos/test-module/education/README.md"
-touch "$TEST_NUM_HEAL_WS/repos/test-module/example/README.md"
-touch "$TEST_NUM_HEAL_WS/repos/test-module/aa/README.md"
+# Create valid markdown source files matching the entry headers
+printf '# education\nEducation module.\n' > "$TEST_NUM_HEAL_WS/repos/test-module/education/README.md"
+printf '# example-module\nExample module.\n' > "$TEST_NUM_HEAL_WS/repos/test-module/example/README.md"
+printf '# aa-service\nAA service.\n' > "$TEST_NUM_HEAL_WS/repos/test-module/aa/README.md"
 
 # Seed shard repos-test-module-aa.md containing misplaced entries for education and example
 cat <<'EOF_NUM_SHARD' > "$TEST_NUM_HEAL_WS/wiki/repos-test-module-aa.md"
@@ -1794,6 +1803,188 @@ grep -q "OVERRIDDEN_HOOK" "$TEST_HOOKS_WS/.rnex/hook_test.log" || {
   fail "Unexpected output from .local.rnex.yaml afterSync hook"; exit 1;
 }
 rm -f "$TEST_HOOKS_WS/.local.rnex.yaml" "$TEST_HOOKS_WS/.rnex/hook_test.log"
+pass
+
+# --------------------------------------------------------------------------
+# Test 32: ingest --force (-f) updates existing entries, re-routes across sub-shards, and skips unchanged docs
+# --------------------------------------------------------------------------
+run_test "LLM Wiki: ingest --force (-f) updates existing headers/summaries, re-routes across sub-shards, and skips unchanged docs"
+TEST_FORCE_WS="$TEST_TMP/llm-wiki-force-ws"
+mkdir -p "$TEST_FORCE_WS"
+setup_plugin_test_workspace llm-wiki "$TEST_FORCE_WS"
+cd "$TEST_FORCE_WS"
+"$TEST_FORCE_WS/rnex" init -y --llm-wiki "$TEST_FORCE_WS" >/dev/null
+
+mkdir -p "$TEST_FORCE_WS/docs"
+printf '# Initial Alpha\nInitial alpha summary.\n' > "$TEST_FORCE_WS/docs/alpha.md"
+printf '# Initial Beta\nInitial beta summary.\n' > "$TEST_FORCE_WS/docs/beta.md"
+
+cat <<'EOF_FORCE_CFG' > "$TEST_FORCE_WS/rnex.yaml"
+version: 1.0.0
+plugins:
+  llm-wiki:
+    wikiDir: ".rnex/wiki"
+    sources: [docs]
+repos:
+EOF_FORCE_CFG
+
+# 1. Initial ingest indexes both files
+(cd "$TEST_FORCE_WS" && ./rnex plugin llm-wiki ingest >/dev/null)
+grep -q '\[Initial Alpha\]' "$TEST_FORCE_WS/.rnex/wiki/repo-nexus-docs.md" || {
+  fail "Initial Alpha title missing after first ingest"; exit 1;
+}
+
+# 2. Update alpha.md header and summary; default ingest must NOT overwrite it
+printf '# Updated Alpha Header\nUpdated alpha summary with [Beta](beta.md).\n' > "$TEST_FORCE_WS/docs/alpha.md"
+(cd "$TEST_FORCE_WS" && ./rnex plugin llm-wiki ingest docs/alpha.md >/dev/null)
+grep -q '\[Initial Alpha\]' "$TEST_FORCE_WS/.rnex/wiki/repo-nexus-docs.md" || {
+  fail "Default ingest unexpectedly overwrote existing entry"; exit 1;
+}
+
+# 3. ingest --force on single file replaces old entry with updated header & rewritten link
+_force_out1="$(cd "$TEST_FORCE_WS" && ./rnex plugin llm-wiki ingest --force docs/alpha.md)"
+echo "$_force_out1" | grep -q "0 created, 1 updated" || {
+  fail "Expected 0 created, 1 updated from ingest --force: $_force_out1"; exit 1;
+}
+grep -q '\[Updated Alpha Header\]' "$TEST_FORCE_WS/.rnex/wiki/repo-nexus-docs.md" || {
+  fail "Updated Alpha Header missing after ingest --force"; exit 1;
+}
+! grep -q '\[Initial Alpha\]' "$TEST_FORCE_WS/.rnex/wiki/repo-nexus-docs.md" || {
+  fail "Stale Initial Alpha title was not removed by ingest --force"; exit 1;
+}
+_alpha_cnt="$(LC_ALL=C grep -c '(`docs/alpha.md`)' "$TEST_FORCE_WS/.rnex/wiki/repo-nexus-docs.md")"
+[ "$_alpha_cnt" -eq 1 ] || {
+  fail "Expected exactly 1 entry for docs/alpha.md after --force, got $_alpha_cnt"; exit 1;
+}
+grep -q 'updated: `docs/alpha.md` (re-indexed into `repo-nexus-docs.md`)' "$TEST_FORCE_WS/.rnex/wiki/log.md" || {
+  fail "Missing updated audit log record for docs/alpha.md"; exit 1;
+}
+
+# 4. Short flag -f on directory updates changed file and ingests new file
+printf '# Updated Beta Header\nUpdated beta summary.\n' > "$TEST_FORCE_WS/docs/beta.md"
+printf '# Brand New Gamma\nGamma summary.\n' > "$TEST_FORCE_WS/docs/gamma.md"
+_force_out2="$(cd "$TEST_FORCE_WS" && ./rnex plugin llm-wiki ingest -f docs)"
+echo "$_force_out2" | grep -q "1 created, 1 updated" || {
+  fail "Expected 1 created, 1 updated from ingest -f docs: $_force_out2"; exit 1;
+}
+grep -q '\[Updated Beta Header\]' "$TEST_FORCE_WS/.rnex/wiki/repo-nexus-docs.md" || {
+  fail "Updated Beta Header missing after ingest -f docs"; exit 1;
+}
+grep -q '\[Brand New Gamma\]' "$TEST_FORCE_WS/.rnex/wiki/repo-nexus-docs.md" || {
+  fail "Brand New Gamma missing after ingest -f docs"; exit 1;
+}
+
+# 5. Idempotency: ingest --force when nothing changed does not mutate shard or log.md
+_log_before_idem="$(cksum < "$TEST_FORCE_WS/.rnex/wiki/log.md")"
+_shard_before_idem="$(cksum < "$TEST_FORCE_WS/.rnex/wiki/repo-nexus-docs.md")"
+_force_out3="$(cd "$TEST_FORCE_WS" && ./rnex plugin llm-wiki ingest --force)"
+echo "$_force_out3" | grep -q "Wiki is up to date (0 sources changed" || {
+  fail "Expected up-to-date message on unchanged ingest --force: $_force_out3"; exit 1;
+}
+_log_after_idem="$(cksum < "$TEST_FORCE_WS/.rnex/wiki/log.md")"
+_shard_after_idem="$(cksum < "$TEST_FORCE_WS/.rnex/wiki/repo-nexus-docs.md")"
+[ "$_log_before_idem" = "$_log_after_idem" ] || {
+  fail "log.md mutated on no-op ingest --force"; exit 1;
+}
+[ "$_shard_before_idem" = "$_shard_after_idem" ] || {
+  fail "Shard mutated on no-op ingest --force"; exit 1;
+}
+
+# 6. Sub-shard re-routing on title change (a-m -> n-z)
+rm -f "$TEST_FORCE_WS/.rnex/wiki/repo-nexus-docs.md"
+cat <<'EOF_SUB_AM' > "$TEST_FORCE_WS/.rnex/wiki/repo-nexus-docs-a-m.md"
+# Wiki Index Shard: repo-nexus-docs-a-m
+<!-- base: repo-nexus-docs -->
+
+- **[Alpha Entry](../../docs/alpha.md)** (`docs/alpha.md`) — Initial alpha summary.
+- **[Beta Entry](../../docs/beta.md)** (`docs/beta.md`) — Updated beta summary.
+EOF_SUB_AM
+cat <<'EOF_SUB_NZ' > "$TEST_FORCE_WS/.rnex/wiki/repo-nexus-docs-n-z.md"
+# Wiki Index Shard: repo-nexus-docs-n-z
+<!-- base: repo-nexus-docs -->
+
+- **[Omega Entry](../../docs/gamma.md)** (`docs/gamma.md`) — Gamma summary.
+EOF_SUB_NZ
+
+printf '# Zebra Renamed\nMoved from a-m to n-z.\n' > "$TEST_FORCE_WS/docs/alpha.md"
+(cd "$TEST_FORCE_WS" && ./rnex plugin llm-wiki ingest -f docs/alpha.md >/dev/null)
+
+! grep -q 'docs/alpha.md' "$TEST_FORCE_WS/.rnex/wiki/repo-nexus-docs-a-m.md" || {
+  fail "docs/alpha.md was not removed from a-m sub-shard after title change to Zebra"; exit 1;
+}
+grep -q '\[Zebra Renamed\].*(`docs/alpha.md`)' "$TEST_FORCE_WS/.rnex/wiki/repo-nexus-docs-n-z.md" || {
+  fail "docs/alpha.md was not routed to n-z sub-shard after title change to Zebra"; exit 1;
+}
+pass
+
+# --------------------------------------------------------------------------
+# Test 33: lint deep validation (default) refreshes stale headers/summaries, --shallow skips content, and --strict is rejected
+# --------------------------------------------------------------------------
+run_test "LLM Wiki: lint deep validation refreshes stale headers/summaries by default, --shallow validates links only, and --strict is rejected"
+TEST_DEEP_LINT_WS="$TEST_TMP/llm-wiki-deep-lint-ws"
+mkdir -p "$TEST_DEEP_LINT_WS"
+setup_plugin_test_workspace llm-wiki "$TEST_DEEP_LINT_WS"
+cd "$TEST_DEEP_LINT_WS"
+"$TEST_DEEP_LINT_WS/rnex" init -y --llm-wiki "$TEST_DEEP_LINT_WS" >/dev/null
+
+mkdir -p "$TEST_DEEP_LINT_WS/docs"
+printf '# Original Header\nOriginal summary paragraph.\n' > "$TEST_DEEP_LINT_WS/docs/spec.md"
+
+cat <<'EOF_DL_CFG' > "$TEST_DEEP_LINT_WS/rnex.yaml"
+version: 1.0.0
+plugins:
+  llm-wiki:
+    wikiDir: ".rnex/wiki"
+    sources: [docs]
+repos:
+EOF_DL_CFG
+
+(cd "$TEST_DEEP_LINT_WS" && ./rnex plugin llm-wiki ingest >/dev/null)
+
+# 1. Removed --strict flag must fail with non-zero exit code
+_strict_err=0
+(cd "$TEST_DEEP_LINT_WS" && ./rnex plugin llm-wiki lint --strict >/dev/null 2>&1) || _strict_err=1
+[ "$_strict_err" -eq 1 ] || {
+  fail "Removed --strict flag should be rejected by lint with non-zero exit code"; exit 1;
+}
+
+# 2. Update the source document header and summary
+printf '# New Architecture Title\nUpdated summary after review.\n' > "$TEST_DEEP_LINT_WS/docs/spec.md"
+
+# 3. lint --shallow validates links/structure only and does NOT overwrite the stale title/summary
+_shallow_out="$(cd "$TEST_DEEP_LINT_WS" && ./rnex plugin llm-wiki lint --shallow)"
+echo "$_shallow_out" | grep -q "all existing docs and references in .rnex/wiki are valid" || {
+  fail "lint --shallow unexpectedly reported repairs on header change: $_shallow_out"; exit 1;
+}
+grep -q '\[Original Header\]' "$TEST_DEEP_LINT_WS/.rnex/wiki/repo-nexus-docs.md" || {
+  fail "lint --shallow unexpectedly modified entry title"; exit 1;
+}
+
+# 4. Default lint (deep) detects stale header/summary and refreshes the entry automatically
+_deep_out="$(cd "$TEST_DEEP_LINT_WS" && ./rnex plugin llm-wiki lint)"
+echo "$_deep_out" | grep -q "repaired 1 issue(s)" || {
+  fail "Expected default deep lint to repair 1 stale entry: $_deep_out"; exit 1;
+}
+grep -q '\[New Architecture Title\].*Updated summary after review\.' "$TEST_DEEP_LINT_WS/.rnex/wiki/repo-nexus-docs.md" || {
+  fail "Default deep lint did not refresh stale title and summary in shard"; exit 1;
+}
+! grep -q '\[Original Header\]' "$TEST_DEEP_LINT_WS/.rnex/wiki/repo-nexus-docs.md" || {
+  fail "Stale Original Header still present after deep lint"; exit 1;
+}
+grep -q 'updated: `docs/spec.md` in `repo-nexus-docs.md` (refreshed stale wiki entry)' "$TEST_DEEP_LINT_WS/.rnex/wiki/log.md" || {
+  fail "Missing refreshed stale wiki entry record in log.md"; exit 1;
+}
+
+# 5. Subsequent default lint is 100% clean with zero mutations
+_log_before_clean="$(cksum < "$TEST_DEEP_LINT_WS/.rnex/wiki/log.md")"
+_deep_out2="$(cd "$TEST_DEEP_LINT_WS" && ./rnex plugin llm-wiki lint)"
+echo "$_deep_out2" | grep -q "all existing docs and references in .rnex/wiki are valid" || {
+  fail "Second deep lint was not clean: $_deep_out2"; exit 1;
+}
+_log_after_clean="$(cksum < "$TEST_DEEP_LINT_WS/.rnex/wiki/log.md")"
+[ "$_log_before_clean" = "$_log_after_clean" ] || {
+  fail "Clean deep lint mutated log.md"; exit 1;
+}
 pass
 
 if [ "${_STANDALONE_RUN:-0}" -eq 1 ]; then

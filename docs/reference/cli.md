@@ -220,8 +220,9 @@ rnex plugin <name> <command> [options...]
 
 * Example: `rnex plugin llm-wiki ingest`
 * Example: `rnex plugin llm-wiki ingest docs/notes.md`
-* Example: `rnex plugin llm-wiki ingest --file docs/notes.md`
+* Example: `rnex plugin llm-wiki ingest -f docs/notes.md`
 * Example: `rnex plugin llm-wiki lint`
+* Example: `rnex plugin llm-wiki lint --shallow`
 * Shorthand execution: `rnex plugin <command> [options...]` when `<command>` is unique across enabled plugins (e.g. `rnex plugin ingest`).
 
 > [!NOTE]

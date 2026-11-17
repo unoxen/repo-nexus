@@ -117,12 +117,18 @@ The `llm-wiki` plugin exposes a streamlined 2-command CLI:
 # Ingest missing sources from configured plugins.llm-wiki.sources
 rnex plugin llm-wiki ingest
 
-# Ingest a specific markdown source file directly in place
+# Ingest a specific markdown source file or directory directly in place
 rnex plugin llm-wiki ingest <source_path>
-rnex plugin llm-wiki ingest --file <source_path>
 
-# Lint existing wiki structure, link integrity, and zero-symlink invariants
+# Force re-index existing entries for a modified file, directory, or all configured sources
+rnex plugin llm-wiki ingest --force [<source_path>]
+rnex plugin llm-wiki ingest -f [<source_path>]
+
+# Validate and auto-heal existing wiki docs, headers, link integrity, and B-Tree shards
 rnex plugin llm-wiki lint
+
+# Fast link-and-structure-only validation without reading source document content
+rnex plugin llm-wiki lint --shallow
 ```
 
 ### Automated Synchronization Hooks (Strictly Opt-In)

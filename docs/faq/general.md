@@ -144,10 +144,12 @@ Plain TSV graphs (`nodes.tsv`, `edges_out.tsv`, `edges_in.tsv`) and nested direc
 ### Can I ingest a single document or specific repository?
 Yes. The `ingest` command supports granular targeting and processes only missing sources by default:
 ```bash
-# Ingest a single source document
+# Ingest a single source document or directory
 rnex plugin llm-wiki ingest docs/spec.md
-# Or using the --file flag
-rnex plugin llm-wiki ingest --file docs/spec.md
+rnex plugin llm-wiki ingest docs/
+
+# Force re-index an already-cataloged document after updating its header
+rnex plugin llm-wiki ingest -f docs/spec.md
 
 # Batch-ingest all configured sources
 rnex plugin llm-wiki ingest

@@ -4,20 +4,34 @@
 # =============================================================================
 # File: plugins/llm-wiki/lib/btree_helpers.sh
 # Architectural Layer: Domain Helpers (helpers/)
-# Single Responsibility: Incrementally merge newly discovered missing sources
-# into flat B-Tree shards (.rnex/wiki/*.md), maintain strict LC_ALL=C sort
-# order, split oversized shards recursively, compile .rnex/wiki/index.md router,
-# and append audit entries to log.md.
+# Single Responsibility: Maintain flat B-Tree shards (.rnex/wiki/*.md): merge
+# missing sources (default ingest), re-index existing sources (forced ingest),
+# maintain strict LC_ALL=C sort order, consolidate/split shards, compile the
+# .rnex/wiki/index.md router, and append audit entries to log.md.
 #
 # Design Patterns Applied:
-#   - Builder Pattern: Incrementally merges missing entries and builds clean
-#     Markdown shard catalogs and root router index tables.
+#   - Builder Pattern: Incrementally merges entries and builds clean Markdown
+#     shard catalogs and root router index tables.
+#   - Strategy Pattern: Two interchangeable ingestion strategies share one
+#     entry builder and one shard writer:
+#       * ingest_missing_sources_into_btree  (missing-only, default)
+#       * force_reingest_sources_into_btree  (--force: replace stale entries)
 #   - Information Expert (GRASP): Encapsulates title extraction, summary
 #     sanitization, B-Tree shard routing, and Markdown shard formatting.
-#   - Don't Repeat Yourself (DRY): Centralizes atomic shard file writing
-#     (write_btree_shard_entries), entry link-depth healing
-#     (heal_entry_title_link_depth), and entry re-routing (reroute_wiki_entry_line),
-#     and reuses RNEX_WIKI_AWK_LIB from utils.sh.
+#   - Don't Repeat Yourself (DRY): Centralizes canonical entry construction
+#     (build_wiki_entry_line — the SINGLE source of truth reused by ingest AND
+#     lint), routed shard upserts (upsert_wiki_entry_line), entry removal
+#     (remove_wiki_entries_for_paths), sub-shard consolidation
+#     (consolidate_gapped_sub_shards), atomic shard writing
+#     (write_btree_shard_entries), link-depth healing
+#     (heal_entry_title_link_depth), and entry re-routing
+#     (reroute_wiki_entry_line), and reuses RNEX_WIKI_AWK_LIB from utils.sh.
+#
+# Variable Scoping Contract:
+#   POSIX sh has no `local`. Helpers that return data on stdout are designed to
+#   be invoked via command substitution "$(...)" (subshell), so their working
+#   variables never leak into the caller. Helpers executed in the caller's
+#   shell use a unique per-function variable prefix (e.g. `_rwe_`, `_cg_`).
 #
 # Standards: Pure POSIX Shell (/bin/sh), OWASP ASVS A03 Atomic File Operations.
 # =============================================================================
@@ -137,18 +151,53 @@ reroute_wiki_entry_line() {
     _rr_rel="$(extract_entry_rel_path "$_rr_line")"
     _rr_title="$(extract_entry_title "$_rr_line")"
 
-    if [ -n "$_rr_rel" ]; then
-        _rr_base_id="$(derive_shard_id_for_workspace_path "$_rr_rel")"
-    else
-        _rr_base_id="$_rr_fallback_base"
-    fi
+    # Entries without a parsable path cannot derive a base shard from their
+    # location, so the caller-supplied fallback base shard is used instead.
+    _rr_base_id=""
+    [ -n "$_rr_rel" ] || _rr_base_id="$_rr_fallback_base"
 
+    # Heal link depth first so the merged line is canonical, then delegate the
+    # routing + atomic merge to the shared upsert helper (DRY).
     _rr_line="$(heal_entry_title_link_depth "$_rr_line" "$_rr_rel" || true)"
-    _rr_target_file="$(resolve_target_btree_shard_file "$_rr_base_id" "$_rr_title" "$_rr_rel")"
-    _rr_target_id="$(basename "$_rr_target_file" .md)"
+    _rr_result="$(upsert_wiki_entry_line "$_rr_line" "$_rr_base_id")"
+    _rr_target_id="${_rr_result%%|*}"
 
-    write_btree_shard_entries "$_rr_target_file" "$_rr_base_id" "$_rr_line" "0"
     printf '%s|%s\n' "$_rr_target_id" "$_rr_title"
+    return 0
+}
+
+# -----------------------------------------------------------------------------
+# upsert_wiki_entry_line
+# Summary: Routes a single canonical catalog entry line to its destination
+#          B-Tree shard (base shard derived from the entry path, sub-shard
+#          derived from the entry title) and merges it atomically in strict
+#          LC_ALL=C sorted unique order.
+# @pattern Information Expert — the entry line itself carries every datum
+#          (path, title) required to determine its shard.
+# @param $1: entry_line       - Canonical catalog entry line.
+# @param $2: base_id_override - Optional base shard ID; when empty the base ID
+#                               is derived from the entry's workspace path.
+# @returns: "<target_shard_id>|<shard_existed 0|1>" on stdout.
+# @sideEffects: Creates or rewrites the resolved target shard file. Invoke via
+#               "$(...)" so working variables stay scoped to a subshell.
+# -----------------------------------------------------------------------------
+upsert_wiki_entry_line() {
+    _ue_line="$1"
+    _ue_base="${2:-}"
+
+    _ue_rel="$(extract_entry_rel_path "$_ue_line")"
+    _ue_title="$(extract_entry_title "$_ue_line")"
+    [ -n "$_ue_base" ] || _ue_base="$(derive_shard_id_for_workspace_path "$_ue_rel")"
+
+    # Sub-shard routing depends on the title, so a title change can legitimately
+    # move an entry to a different sub-shard than the one it previously lived in.
+    _ue_target="$(resolve_target_btree_shard_file "$_ue_base" "$_ue_title" "$_ue_rel")"
+
+    _ue_existed=0
+    [ -f "$_ue_target" ] && _ue_existed=1
+
+    write_btree_shard_entries "$_ue_target" "$_ue_base" "$_ue_line" "0"
+    printf '%s|%s\n' "$(basename "$_ue_target" .md)" "$_ue_existed"
     return 0
 }
 
@@ -193,6 +242,76 @@ extract_markdown_title_and_summary() {
             printf "%s|%s\n", title, summary
         }
     ' "$_file"
+}
+
+# -----------------------------------------------------------------------------
+# resolve_wiki_up_prefix
+# Summary: Resolves the upward relative prefix leading from the wiki directory
+#          back to the workspace root (e.g. ".rnex/wiki" -> "../../"), honoring
+#          a pre-computed RNEX_WIKI_UP_PREFIX when available.
+# @returns: Upward prefix string (always ending in "/") on stdout.
+# @pure (reads only configuration environment variables)
+# -----------------------------------------------------------------------------
+resolve_wiki_up_prefix() {
+    _rup_prefix="${RNEX_WIKI_UP_PREFIX:-}"
+    if [ -z "$_rup_prefix" ] && command -v compute_upward_rel_prefix >/dev/null 2>&1; then
+        _rup_prefix="$(compute_upward_rel_prefix "$RNEX_WIKI_REL_DIR")"
+    fi
+    # Default matches the canonical ".rnex/wiki" depth (two levels deep).
+    [ -n "$_rup_prefix" ] || _rup_prefix="../../"
+    printf '%s\n' "$_rup_prefix"
+}
+
+# -----------------------------------------------------------------------------
+# build_wiki_entry_line
+# Summary: Builds the canonical catalog entry line for a workspace document
+#          directly from its authoritative source content:
+#            - **[<H1 title>](<up_prefix><rel_path>)** (`<rel_path>`) — <summary>
+#          This is the SINGLE source of truth for entry construction. Ingest
+#          uses it to create/replace entries; deep lint uses it to detect and
+#          refresh stale entries. Sharing it guarantees ingest and lint can
+#          never disagree about what a "fresh" entry looks like (zero ping-pong).
+# @pattern Builder
+# @param $1: rel_path   - Workspace-relative path of the source document.
+# @param $2: up_prefix  - Upward prefix from the wiki dir to the workspace root.
+# @param $3: links_mode - Relative link strategy: "rewrite" (default) or "strip".
+# @returns: Canonical entry line on stdout and exit 0; exit 1 (no output) if
+#           the source document does not exist as a regular file.
+# @pure (reads the source document only; invoke via "$(...)")
+# -----------------------------------------------------------------------------
+build_wiki_entry_line() {
+    _bwe_rel="$1"
+    _bwe_up="$2"
+    _bwe_mode="${3:-rewrite}"
+    _bwe_abs="${RNEX_WORKSPACE_ROOT}/${_bwe_rel}"
+
+    # Only regular files can be indexed (symlinks/dirs are rejected upstream).
+    [ -f "$_bwe_abs" ] || return 1
+
+    # 1. Extract raw H1 title and first prose paragraph from the source.
+    _bwe_meta="$(extract_markdown_title_and_summary "$_bwe_abs" "$(basename "$_bwe_rel")")"
+    _bwe_raw_title="${_bwe_meta%%|*}"
+    _bwe_raw_summary="${_bwe_meta#*|}"
+
+    # 2. Title: strip link markup, sanitize, and drop characters that would
+    #    break the "**[title](link)**" entry grammar.
+    _bwe_title="$(sanitize_markdown_summary "$(strip_markdown_links "$_bwe_raw_title")")"
+    _bwe_title="$(printf '%s' "$_bwe_title" | tr -d '[]*')"
+    [ -n "$_bwe_title" ] || _bwe_title="$(basename "$_bwe_rel")"
+
+    # 3. Summary: re-anchor relative links from the wiki dir (or strip them),
+    #    then sanitize to a bounded single line.
+    _bwe_summary="$(rewrite_markdown_links_in_summary \
+        "$_bwe_raw_summary" \
+        "$_bwe_rel" \
+        "$RNEX_WORKSPACE_ROOT" \
+        "$_bwe_up" \
+        "$_bwe_mode")"
+    _bwe_summary="$(sanitize_markdown_summary "$_bwe_summary")"
+
+    printf -- '- **[%s](%s%s)** (`%s`) — %s\n' \
+        "$_bwe_title" "$_bwe_up" "$_bwe_rel" "$_bwe_rel" "$_bwe_summary"
+    return 0
 }
 
 # -----------------------------------------------------------------------------
@@ -1032,45 +1151,22 @@ ingest_missing_sources_into_btree() {
         return 0
     fi
 
-    _up_prefix="${RNEX_WIKI_UP_PREFIX:-}"
-    if [ -z "$_up_prefix" ] && command -v compute_upward_rel_prefix >/dev/null 2>&1; then
-        _up_prefix="$(compute_upward_rel_prefix "$RNEX_WIKI_REL_DIR")"
-    fi
-    [ -n "$_up_prefix" ] || _up_prefix="../../"
+    _up_prefix="$(resolve_wiki_up_prefix)"
+    _links_mode="${RNEX_WIKI_RELATIVE_LINKS:-rewrite}"
 
     _ingested_count=0
 
     if [ -s "$_missing_file" ]; then
         while IFS= read -r _rel_path <&3; do
             [ -n "$_rel_path" ] || continue
-            _abs_path="${RNEX_WORKSPACE_ROOT}/${_rel_path}"
-            [ -f "$_abs_path" ] || continue
 
-            _shard_id="$(derive_shard_id_for_workspace_path "$_rel_path")"
-            _meta="$(extract_markdown_title_and_summary "$_abs_path" "$(basename "$_rel_path")")"
-            _raw_title="${_meta%%|*}"
-            _raw_summary="${_meta#*|}"
-            _title="$(sanitize_markdown_summary "$(strip_markdown_links "$_raw_title")")"
-            _title="$(printf '%s' "$_title" | tr -d '[]*')"
-            [ -n "$_title" ] || _title="$(basename "$_rel_path")"
-            _summary_rewritten="$(rewrite_markdown_links_in_summary \
-                "$_raw_summary" \
-                "$_rel_path" \
-                "$RNEX_WORKSPACE_ROOT" \
-                "$_up_prefix" \
-                "${RNEX_WIKI_RELATIVE_LINKS:-rewrite}")"
-            _summary="$(sanitize_markdown_summary "$_summary_rewritten")"
-            _rel_link="${_up_prefix}${_rel_path}"
+            # Build the canonical entry (skips silently if the file vanished).
+            _entry_line="$(build_wiki_entry_line "$_rel_path" "$_up_prefix" "$_links_mode")" || continue
 
-            _entry_line="- **[${_title}](${_rel_link})** (\`${_rel_path}\`) — ${_summary}"
-
-            _target_shard_file="$(resolve_target_btree_shard_file "$_shard_id" "$_title" "$_rel_path")"
-            _target_shard_id="$(basename "$_target_shard_file" .md)"
-
-            _shard_existed=0
-            [ -f "$_target_shard_file" ] && _shard_existed=1
-
-            write_btree_shard_entries "$_target_shard_file" "$_shard_id" "$_entry_line" "0"
+            # Route + merge into the destination shard (DRY shared upsert).
+            _upsert_res="$(upsert_wiki_entry_line "$_entry_line")"
+            _target_shard_id="${_upsert_res%%|*}"
+            _shard_existed="${_upsert_res#*|}"
 
             _ingested_count=$((_ingested_count + 1))
             append_wiki_log_entry "ingest" "created: \`${_rel_path}\` (indexed into \`${_target_shard_id}.md\`)"
@@ -1100,5 +1196,334 @@ ingest_missing_sources_into_btree() {
         append_wiki_log_entry "ingest" "Ingested ${_ingested_count} missing source(s) from ${_target_desc} into ${RNEX_WIKI_REL_DIR}."
     fi
     printf 'Ingested %s missing source(s) into %s.\n' "$_ingested_count" "$RNEX_WIKI_REL_DIR"
+    return 0
+}
+
+# -----------------------------------------------------------------------------
+# consolidate_gapped_sub_shards
+# Summary: Consolidates gapped sub-shards back into their base shard whenever
+#          both a base shard file and one or more of its sub-shards exist
+#          simultaneously, allowing split_oversized_btree_shards to rebalance
+#          entries into gap-free B-Tree ranges.
+# @param $1: action_name - Audit log context label ("ingest" or "lint").
+# @returns: Number of sub-shards consolidated on stdout.
+# @sideEffects: Merges sub-shard entries into base shard files, removes merged
+#               sub-shards, and appends audit records to log.md. Invoke via
+#               "$(...)" so working variables stay scoped to a subshell.
+# -----------------------------------------------------------------------------
+consolidate_gapped_sub_shards() {
+    _cg_action="${1:-lint}"
+    _cg_count=0
+
+    for _cg_sub in "${RNEX_WIKI_ROOT}"/repo-nexus*.md "${RNEX_WIKI_ROOT}"/repos-*.md; do
+        [ -f "$_cg_sub" ] || continue
+        _cg_bname="$(basename "$_cg_sub")"
+        case "$_cg_bname" in
+            index.md|log.md) continue ;;
+        esac
+        _cg_sid="${_cg_bname%.md}"
+        _cg_base="$(derive_base_id_for_shard "$_cg_sid")"
+        [ "$_cg_sid" != "$_cg_base" ] || continue
+        _cg_base_file="${RNEX_WIKI_ROOT}/${_cg_base}.md"
+        if [ -f "$_cg_base_file" ]; then
+            _cg_entries="${_cg_sub}.entries.$$"
+            LC_ALL=C grep '^- \*\*' "$_cg_sub" > "$_cg_entries" 2>/dev/null || : > "$_cg_entries"
+            write_btree_shard_entries "$_cg_base_file" "$_cg_base" "$_cg_entries" "1"
+            rm -f "$_cg_entries" "$_cg_sub"
+            _cg_count=$((_cg_count + 1))
+            append_wiki_log_entry "$_cg_action" "deleted: \`${_cg_bname}\` (consolidated gapped sub-shard into \`${_cg_base}.md\`)"
+        fi
+    done
+
+    printf '%s\n' "$_cg_count"
+    return 0
+}
+
+# -----------------------------------------------------------------------------
+# remove_wiki_entries_for_paths
+# Summary: Removes all catalog entry lines (`- **...`) whose workspace-relative
+#          path appears in $1 from every leaf shard in $RNEX_WIKI_ROOT. Preserves
+#          shard headers so subsequent upserts into the same shard do not cause
+#          spurious shard deletion/creation churn.
+# @param $1: paths_file - File containing workspace-relative paths (one per line).
+# @returns: 0 on success.
+# @sideEffects: Rewrites any leaf shard that contained one or more target paths.
+# -----------------------------------------------------------------------------
+remove_wiki_entries_for_paths() {
+    _rwe_paths_file="$1"
+    [ -s "$_rwe_paths_file" ] || return 0
+
+    for _rwe_shard in "${RNEX_WIKI_ROOT}"/repo-nexus*.md "${RNEX_WIKI_ROOT}"/repos-*.md; do
+        [ -f "$_rwe_shard" ] || continue
+        _rwe_bname="$(basename "$_rwe_shard")"
+        case "$_rwe_bname" in
+            index.md|log.md) continue ;;
+        esac
+
+        _rwe_tmp="${_rwe_shard}.rm.$$"
+        _rwe_removed="$(LC_ALL=C awk \
+            -v targets_file="$_rwe_paths_file" \
+            -v out_file="$_rwe_tmp" "
+            ${RNEX_WIKI_AWK_LIB}
+            BEGIN {
+                while ((getline p < targets_file) > 0) {
+                    gsub(/\r/, \"\", p)
+                    if (p != \"\") drop[p] = 1
+                }
+                close(targets_file)
+                removed = 0
+            }
+            /^- \*\*/ {
+                rel = get_rel_path(\$0)
+                if (rel != \"\" && (rel in drop)) {
+                    removed++
+                    next
+                }
+            }
+            { print \$0 > out_file }
+            END { print removed }
+        " "$_rwe_shard")"
+
+        if [ -n "$_rwe_removed" ] && [ "$_rwe_removed" -gt 0 ]; then
+            mv "$_rwe_tmp" "$_rwe_shard"
+        else
+            rm -f "$_rwe_tmp"
+        fi
+    done
+
+    return 0
+}
+
+# -----------------------------------------------------------------------------
+# prune_empty_btree_shards
+# Summary: Removes leaf shards that have zero remaining catalog entries after
+#          entry removals or re-routing. If a deleted shard was a sub-shard and
+#          sibling sub-shards still exist for the same base shard, touches the
+#          base shard header so consolidate_gapped_sub_shards merges siblings
+#          back into a gap-free B-Tree partition. Always preserves baseline
+#          flat shards via ensure_baseline_flat_shards.
+# @param $1: action_name - Audit log context label ("ingest" or "lint").
+# @returns: Number of empty shards removed on stdout.
+# @sideEffects: Deletes empty shard files and logs removals to log.md.
+# -----------------------------------------------------------------------------
+prune_empty_btree_shards() {
+    _pes_action="${1:-ingest}"
+    _pes_removed=0
+
+    for _pes_shard in "${RNEX_WIKI_ROOT}"/repo-nexus*.md "${RNEX_WIKI_ROOT}"/repos-*.md; do
+        [ -f "$_pes_shard" ] || continue
+        _pes_bname="$(basename "$_pes_shard")"
+        case "$_pes_bname" in
+            index.md|log.md|repo-nexus.md) continue ;;
+        esac
+
+        _pes_cnt="$(LC_ALL=C grep -c '^- \*\*' "$_pes_shard" 2>/dev/null || true)"
+        [ -n "$_pes_cnt" ] || _pes_cnt=0
+        if [ "$_pes_cnt" -eq 0 ]; then
+            _pes_sid="${_pes_bname%.md}"
+            _pes_base="$(derive_base_id_for_shard "$_pes_sid")"
+            rm -f "$_pes_shard"
+            _pes_removed=$((_pes_removed + 1))
+            append_wiki_log_entry "$_pes_action" "deleted: \`${_pes_bname}\` (empty shard pruned)"
+
+            # If a sub-shard was removed and sibling sub-shards exist, create
+            # the base shard file so consolidate_gapped_sub_shards collapses
+            # the gapped partition cleanly.
+            if [ "$_pes_sid" != "$_pes_base" ]; then
+                for _pes_sib in "${RNEX_WIKI_ROOT}/${_pes_base}-"*.md; do
+                    if [ -f "$_pes_sib" ]; then
+                        _pes_base_file="${RNEX_WIKI_ROOT}/${_pes_base}.md"
+                        if [ ! -f "$_pes_base_file" ]; then
+                            printf '# Wiki Index Shard: %s\n<!-- base: %s -->\n\n' \
+                                "$_pes_base" "$_pes_base" > "$_pes_base_file"
+                        fi
+                        break
+                    fi
+                done
+            fi
+        fi
+    done
+
+    ensure_baseline_flat_shards
+    printf '%s\n' "$_pes_removed"
+    return 0
+}
+
+# -----------------------------------------------------------------------------
+# force_reingest_sources_into_btree
+# Summary: Implements `rnex plugin llm-wiki ingest --force` (-f). Rebuilds
+#          catalog entries from authoritative workspace files for all candidate
+#          paths in $1:
+#            - Missing sources are inserted and logged as `created:`.
+#            - Existing sources whose canonical entry line or target shard
+#              differs from the current shard state are removed from all shards,
+#              re-inserted into their resolved destination shard, and logged as
+#              `updated:`.
+#            - Existing sources that are already up to date in their canonical
+#              shard are skipped with zero file or log mutations.
+# @pattern Strategy (paired with ingest_missing_sources_into_btree)
+# @param $1: candidates_manifest_file - File containing candidate workspace_rel_paths.
+# @param $2: arg_label                - Optional CLI source argument label for logs.
+# @returns: 0 on success.
+# @sideEffects: Updates .rnex/wiki/*.md shards, index.md, and log.md when
+#               additions or updates occur.
+# -----------------------------------------------------------------------------
+force_reingest_sources_into_btree() {
+    _fr_cand_file="$1"
+    _fr_arg_label="$2"
+    mkdir -p "$RNEX_WIKI_ROOT"
+    ensure_baseline_flat_shards
+
+    _fr_up_prefix="$(resolve_wiki_up_prefix)"
+    _fr_links_mode="${RNEX_WIKI_RELATIVE_LINKS:-rewrite}"
+
+    # 1. Snapshot existing catalog entries across all leaf shards in a single
+    #    pass: "<rel_path>\t<shard_id>\t<entry_line>".
+    _fr_existing_map="${RNEX_WIKI_ROOT}/.force_existing.$$"
+    : > "$_fr_existing_map"
+    for _fr_shard in "${RNEX_WIKI_ROOT}"/repo-nexus*.md "${RNEX_WIKI_ROOT}"/repos-*.md; do
+        [ -f "$_fr_shard" ] || continue
+        _fr_bname="$(basename "$_fr_shard")"
+        case "$_fr_bname" in
+            index.md|log.md) continue ;;
+        esac
+        _fr_sid="${_fr_bname%.md}"
+        LC_ALL=C awk -v sid="$_fr_sid" "
+            ${RNEX_WIKI_AWK_LIB}
+            /^- \*\*/ {
+                rel = get_rel_path(\$0)
+                if (rel != \"\") printf \"%s\t%s\t%s\n\", rel, sid, \$0
+            }
+        " "$_fr_shard" >> "$_fr_existing_map"
+    done
+
+    _fr_remove_paths="${RNEX_WIKI_ROOT}/.force_rm_paths.$$"
+    _fr_update_lines="${RNEX_WIKI_ROOT}/.force_upd_lines.$$"
+    _fr_create_lines="${RNEX_WIKI_ROOT}/.force_new_lines.$$"
+    : > "$_fr_remove_paths"
+    : > "$_fr_update_lines"
+    : > "$_fr_create_lines"
+
+    # 2. Classify each candidate path as created, updated, or unchanged.
+    if [ -s "$_fr_cand_file" ]; then
+        while IFS= read -r _fr_rel <&3; do
+            [ -n "$_fr_rel" ] || continue
+            _fr_new_line="$(build_wiki_entry_line "$_fr_rel" "$_fr_up_prefix" "$_fr_links_mode")" || continue
+
+            _fr_base_id="$(derive_shard_id_for_workspace_path "$_fr_rel")"
+            _fr_title="$(extract_entry_title "$_fr_new_line")"
+            _fr_exp_shard_file="$(resolve_target_btree_shard_file "$_fr_base_id" "$_fr_title" "$_fr_rel")"
+            _fr_exp_sid="$(basename "$_fr_exp_shard_file" .md)"
+
+            # Check existing occurrences of $_fr_rel in $_fr_existing_map
+            _fr_status="$(LC_ALL=C awk -F '\t' \
+                -v rel="$_fr_rel" \
+                -v exp_sid="$_fr_exp_sid" \
+                -v new_line="$_fr_new_line" '
+                BEGIN { count = 0; exact = 0 }
+                $1 == rel {
+                    count++
+                    line = substr($0, length($1) + length($2) + 3)
+                    if ($2 == exp_sid && line == new_line) exact = 1
+                }
+                END {
+                    if (count == 0) print "create"
+                    else if (count == 1 && exact == 1) print "unchanged"
+                    else print "update"
+                }
+            ' "$_fr_existing_map")"
+
+            case "$_fr_status" in
+                create)
+                    printf '%s\t%s\n' "$_fr_rel" "$_fr_new_line" >> "$_fr_create_lines"
+                    ;;
+                update)
+                    printf '%s\n' "$_fr_rel" >> "$_fr_remove_paths"
+                    printf '%s\t%s\n' "$_fr_rel" "$_fr_new_line" >> "$_fr_update_lines"
+                    ;;
+            esac
+        done 3< "$_fr_cand_file"
+    fi
+    rm -f "$_fr_existing_map"
+
+    _fr_created_count=0
+    _fr_updated_count=0
+
+    # 3. Remove outdated entry lines across all shards before re-inserting,
+    #    because a title change can route the entry to a different sub-shard.
+    if [ -s "$_fr_remove_paths" ]; then
+        remove_wiki_entries_for_paths "$_fr_remove_paths"
+    fi
+    rm -f "$_fr_remove_paths"
+
+    # 4. Insert newly created entries.
+    if [ -s "$_fr_create_lines" ]; then
+        while IFS="$(printf '\t')" read -r _fr_c_rel _fr_c_line <&3; do
+            [ -n "$_fr_c_rel" ] || continue
+            _fr_up_res="$(upsert_wiki_entry_line "$_fr_c_line")"
+            _fr_t_sid="${_fr_up_res%%|*}"
+            _fr_t_existed="${_fr_up_res#*|}"
+            _fr_created_count=$((_fr_created_count + 1))
+            append_wiki_log_entry "ingest" "created: \`${_fr_c_rel}\` (indexed into \`${_fr_t_sid}.md\`)"
+            if [ "$_fr_t_existed" -eq 0 ]; then
+                append_wiki_log_entry "ingest" "created: \`${_fr_t_sid}.md\` (new shard)"
+            else
+                append_wiki_log_entry "ingest" "updated: \`${_fr_t_sid}.md\` (appended entry)"
+            fi
+        done 3< "$_fr_create_lines"
+    fi
+    rm -f "$_fr_create_lines"
+
+    # 5. Re-insert updated entries into their canonical shards.
+    if [ -s "$_fr_update_lines" ]; then
+        while IFS="$(printf '\t')" read -r _fr_u_rel _fr_u_line <&3; do
+            [ -n "$_fr_u_rel" ] || continue
+            _fr_up_res="$(upsert_wiki_entry_line "$_fr_u_line")"
+            _fr_t_sid="${_fr_up_res%%|*}"
+            _fr_t_existed="${_fr_up_res#*|}"
+            _fr_updated_count=$((_fr_updated_count + 1))
+            append_wiki_log_entry "ingest" "updated: \`${_fr_u_rel}\` (re-indexed into \`${_fr_t_sid}.md\`)"
+            if [ "$_fr_t_existed" -eq 0 ]; then
+                append_wiki_log_entry "ingest" "created: \`${_fr_t_sid}.md\` (new shard)"
+            else
+                append_wiki_log_entry "ingest" "updated: \`${_fr_t_sid}.md\` (updated entry)"
+            fi
+        done 3< "$_fr_update_lines"
+    fi
+    rm -f "$_fr_update_lines"
+
+    # 6. Prune empty shards, consolidate gapped sub-shards, and split oversized shards.
+    _fr_pruned=0
+    _fr_consolidated=0
+    if [ "$_fr_updated_count" -gt 0 ]; then
+        _fr_pruned="$(prune_empty_btree_shards "ingest")"
+        _fr_consolidated="$(consolidate_gapped_sub_shards "ingest")"
+    fi
+    _fr_splits="$(split_oversized_btree_shards "ingest")"
+
+    _fr_total_changes=$((_fr_created_count + _fr_updated_count))
+
+    # 7. Fast exit when nothing changed and index.md is already in place.
+    if [ "$_fr_total_changes" -eq 0 ] && [ "${_fr_pruned:-0}" -eq 0 ] && [ "${_fr_consolidated:-0}" -eq 0 ] && [ "${_fr_splits:-0}" -eq 0 ] && [ -f "$RNEX_WIKI_INDEX_FILE" ]; then
+        printf 'Wiki is up to date (0 sources changed in %s).\n' "$RNEX_WIKI_REL_DIR"
+        return 0
+    fi
+
+    # 8. Recompile root router index.md and record summary log entry.
+    _fr_idx_existed=0
+    [ -f "$RNEX_WIKI_INDEX_FILE" ] && _fr_idx_existed=1
+    compile_root_index_router
+    if [ "$_fr_idx_existed" -eq 1 ]; then
+        append_wiki_log_entry "ingest" "updated: \`index.md\` (recompiled root router table)"
+    else
+        append_wiki_log_entry "ingest" "created: \`index.md\` (root router table)"
+    fi
+
+    _fr_target_desc="${_fr_arg_label:-configured sources}"
+    if [ "$_fr_total_changes" -gt 0 ]; then
+        append_wiki_log_entry "ingest" "Force-ingested ${_fr_total_changes} source(s) (${_fr_created_count} created, ${_fr_updated_count} updated) from ${_fr_target_desc} into ${RNEX_WIKI_REL_DIR}."
+    fi
+    printf 'Ingested %s source(s) (%s created, %s updated) into %s.\n' \
+        "$_fr_total_changes" "$_fr_created_count" "$_fr_updated_count" "$RNEX_WIKI_REL_DIR"
     return 0
 }

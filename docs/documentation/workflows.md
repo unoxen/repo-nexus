@@ -75,9 +75,9 @@ git:
     post-checkout:
       - "rnex sync --quiet"
     pre-commit:
-      - "rnex plugin llm-wiki lint"
+      - "rnex plugin llm-wiki lint --shallow"
     pre-push:
-      - "rnex plugin llm-wiki lint --strict"
+      - "rnex plugin llm-wiki lint"
 ```
 
 ### Automated Lifecycle Events

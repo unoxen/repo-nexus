@@ -1,5 +1,5 @@
 name: llm-wiki
-version: 0.10.1
+version: 0.10.2
 description: "Deterministic B-Tree Markdown Wiki (configurable via plugins.llm-wiki.wikiDir) for AI agents"
 config_defaults:
   wikiDir: ".rnex/wiki"
@@ -16,7 +16,7 @@ config_defaults:
 commands:
   ingest:
     script: "bin/ingest.sh"
-    description: "Ingest only missing sources from passed argument or configured sources into .rnex/wiki"
+    description: "Ingest missing sources (or force-refresh existing entries with --force/-f) into .rnex/wiki"
   lint:
     script: "bin/lint.sh"
-    description: "Lint existing wiki docs, shard links, and target references inside .rnex/wiki"
+    description: "Validate and auto-heal existing wiki docs, headers, shard links, and references (--shallow for links only)"

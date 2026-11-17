@@ -5,15 +5,24 @@
 # File: plugins/llm-wiki/lib/lint_helpers.sh
 # Architectural Layer: Domain Helpers (helpers/)
 # Single Responsibility: Validate and auto-heal existing Markdown files inside
-# .rnex/wiki/ (root router bounds, orphan shards, dead workspace references,
-# deterministic sorting, misplaced entries, relative Markdown links,
-# [[wikilinks]], symlink absence) WITHOUT reading or checking `sources`.
+# .rnex/wiki/ (document headers/summaries in default deep mode, root router
+# bounds, orphan shards, dead workspace references, deterministic sorting,
+# misplaced entries, relative Markdown links, [[wikilinks]], symlink absence)
+# WITHOUT inspecting rnex config `sources` or ingesting unindexed files.
 #
 # Design Patterns & Principles:
 #   - Single Responsibility Principle (SRP): Confined strictly to inspecting,
-#     validating, and auto-healing existing wiki documentation. Zero ingestion.
+#     validating, and auto-healing existing wiki documentation. Zero ingestion
+#     of unindexed workspace files.
+#   - Strategy Pattern (GoF):
+#       * Deep mode (default, `_shallow=0`): Reconstructs each catalog entry
+#         from its authoritative source file via `build_wiki_entry_line` and
+#         heals any stale title, summary, or link target.
+#       * Shallow mode (`--shallow`, `_shallow=1`): Validates and heals link
+#         depths and summary link targets without reading source file content.
 #   - Don't Repeat Yourself (DRY): Reuses RNEX_WIKI_AWK_LIB,
-#     heal_entry_title_link_depth, reroute_wiki_entry_line, and
+#     build_wiki_entry_line, heal_entry_title_link_depth,
+#     reroute_wiki_entry_line, consolidate_gapped_sub_shards, and
 #     write_btree_shard_entries from utils.sh and btree_helpers.sh.
 #   - Conditional Mutation Logging: Appends an audit entry to log.md ONLY when
 #     actual repairs/modifications are made. Clean runs never mutate log.md.
@@ -36,13 +45,106 @@ if ! command -v compile_root_index_router >/dev/null 2>&1; then
 fi
 
 # -----------------------------------------------------------------------------
+# _lint_heal_entry_deep
+# Summary: Deep per-entry healing strategy. Reconstructs the canonical catalog
+#          entry line from the authoritative workspace Markdown file (H1 title,
+#          link target, and summary paragraph) via build_wiki_entry_line.
+# @pattern Strategy (Deep Content Validation)
+# @param $1: entry_line - Current catalog bullet line in the shard.
+# @param $2: doc_rel    - Workspace-relative path of the referenced document.
+# @param $3: shard_name - Basename of the shard file (for audit logging).
+# @returns: Canonical entry line on stdout; exit 0 if repaired, exit 1 if
+#           already up to date.
+# @sideEffects: Appends an `updated:` record to log.md when repaired.
+# -----------------------------------------------------------------------------
+_lint_heal_entry_deep() {
+    _lhd_line="$1"
+    _lhd_rel="$2"
+    _lhd_shard="$3"
+
+    _lhd_expected="$(build_wiki_entry_line \
+        "$_lhd_rel" \
+        "${RNEX_WIKI_UP_PREFIX:-../../}" \
+        "${RNEX_WIKI_RELATIVE_LINKS:-rewrite}")" || {
+        printf '%s\n' "$_lhd_line"
+        return 1
+    }
+
+    if [ "$_lhd_expected" != "$_lhd_line" ]; then
+        append_wiki_log_entry "lint" "updated: \`${_lhd_rel}\` in \`${_lhd_shard}\` (refreshed stale wiki entry)"
+        printf '%s\n' "$_lhd_expected"
+        return 0
+    fi
+
+    printf '%s\n' "$_lhd_line"
+    return 1
+}
+
+# -----------------------------------------------------------------------------
+# _lint_heal_entry_shallow
+# Summary: Shallow per-entry healing strategy (`--shallow`). Validates and
+#          auto-heals only the entry title link depth and relative links inside
+#          the existing summary text without reading the source document.
+# @pattern Strategy (Shallow Link-Only Validation)
+# @param $1: entry_line - Current catalog bullet line in the shard.
+# @param $2: doc_rel    - Workspace-relative path of the referenced document.
+# @param $3: shard_name - Basename of the shard file (for audit logging).
+# @returns: Healed entry line on stdout; exit 0 if repaired, exit 1 if unchanged.
+# @sideEffects: Appends `updated:` record(s) to log.md when repaired.
+# -----------------------------------------------------------------------------
+_lint_heal_entry_shallow() {
+    _lhs_line="$1"
+    _lhs_rel="$2"
+    _lhs_shard="$3"
+    _lhs_changed=0
+
+    # 1. Auto-heal entry title link target depth if it drifted from RNEX_WIKI_UP_PREFIX
+    if _lhs_healed="$(heal_entry_title_link_depth "$_lhs_line" "$_lhs_rel")"; then
+        _lhs_line="$_lhs_healed"
+        _lhs_changed=1
+        append_wiki_log_entry "lint" "updated: \`${_lhs_rel}\` in \`${_lhs_shard}\` (auto-healed entry link depth)"
+    fi
+
+    # 2. Auto-heal links inside catalog entry summary
+    _lhs_marker="** (\`${_lhs_rel}\`) — "
+    case "$_lhs_line" in
+        *"$_lhs_marker"*)
+            _lhs_prefix="${_lhs_line%%"$_lhs_marker"*}** (\`${_lhs_rel}\`)"
+            _lhs_sum="${_lhs_line#*"$_lhs_marker"}"
+            case "$_lhs_sum" in
+                *']('*')'*|*'[['*']]'*)
+                    _lhs_healed_sum="$(rewrite_markdown_links_in_summary \
+                        "$_lhs_sum" \
+                        "$_lhs_rel" \
+                        "$RNEX_WORKSPACE_ROOT" \
+                        "${RNEX_WIKI_UP_PREFIX:-../../}" \
+                        "${RNEX_WIKI_RELATIVE_LINKS:-rewrite}" \
+                        "1")"
+                    _lhs_healed_sum="$(sanitize_markdown_summary "$_lhs_healed_sum")"
+                    if [ "$_lhs_healed_sum" != "$_lhs_sum" ]; then
+                        _lhs_line="${_lhs_prefix} — ${_lhs_healed_sum}"
+                        _lhs_changed=1
+                        append_wiki_log_entry "lint" "updated: \`${_lhs_rel}\` in \`${_lhs_shard}\` (auto-healed broken link targets)"
+                    fi
+                    ;;
+            esac
+            ;;
+    esac
+
+    printf '%s\n' "$_lhs_line"
+    [ "$_lhs_changed" -eq 1 ] && return 0
+    return 1
+}
+
+# -----------------------------------------------------------------------------
 # lint_existing_wiki_directory
-# Summary: Performs structural validation and auto-healing across all existing
-#          Markdown documents inside $RNEX_WIKI_ROOT:
+# Summary: Performs structural and content validation and auto-healing across
+#          all existing Markdown documents inside $RNEX_WIKI_ROOT:
 #            1. Verifies wiki directory exists.
 #            2. Removes prohibited symbolic links.
 #            3. Prunes dead workspace document references (deleted source files)
-#               and auto-heals link targets/depths.
+#               and heals entries (deep content refresh by default; link-only
+#               when shallow=1).
 #            4. Auto-heals deterministic LC_ALL=C sort order, re-routes
 #               misplaced entries, consolidates gapped sub-shards, and splits
 #               oversized shards.
@@ -52,23 +154,19 @@ fi
 #               and shard entry count <= RNEX_WIKI_BTREE_SHARD_MAX_ENTRIES.
 #            7. Validates relative Markdown links and [[wikilinks]].
 #            8. Mutates log.md ONLY if repairs were applied (zero changes on clean runs).
-# @param $1: strict (0 or 1, default 0).
-# @param $2: quiet  (0 or 1, default 0).
+# @param $1: shallow (0 = deep content + link validation [default], 1 = link-only).
+# @param $2: quiet   (0 or 1, default 0).
 # @returns: 0 if valid or healed; 1 if any unresolvable failure or rule fails.
 # @sideEffects: Auto-heals wiki shards, index.md, and appends to log.md when repairs occur.
 # -----------------------------------------------------------------------------
 lint_existing_wiki_directory() {
-    _strict="${1:-0}"
+    _shallow="${1:-0}"
     _quiet="${2:-0}"
     _fixes_count=0
     _errors=0
 
     # Ensure upward relative prefix is reliably initialized
-    _up_prefix="${RNEX_WIKI_UP_PREFIX:-}"
-    if [ -z "$_up_prefix" ] && command -v compute_upward_rel_prefix >/dev/null 2>&1; then
-        _up_prefix="$(compute_upward_rel_prefix "$RNEX_WIKI_REL_DIR")"
-    fi
-    [ -n "$_up_prefix" ] || _up_prefix="../../"
+    _up_prefix="$(resolve_wiki_up_prefix)"
     RNEX_WIKI_UP_PREFIX="$_up_prefix"
     export RNEX_WIKI_UP_PREFIX
 
@@ -117,40 +215,24 @@ lint_existing_wiki_directory() {
                         continue
                     fi
 
-                    # 4a-1. Auto-heal entry title link target depth if it drifted from RNEX_WIKI_UP_PREFIX
-                    if _healed_line="$(heal_entry_title_link_depth "$_line" "$_doc_rel")"; then
-                        _line="$_healed_line"
-                        _shard_pruned=1
-                        _fixes_count=$((_fixes_count + 1))
-                        append_wiki_log_entry "lint" "updated: \`${_doc_rel}\` in \`${_base_md}\` (auto-healed entry link depth)"
+                    # 4a-1. Apply active per-entry healing strategy:
+                    #       - Deep mode (_shallow=0, default): reconstruct canonical
+                    #         entry line from the source document (title, link, summary).
+                    #       - Shallow mode (_shallow=1): heal only link depth and
+                    #         summary relative links without reading source content.
+                    if [ "$_shallow" -eq 1 ]; then
+                        if _healed_line="$(_lint_heal_entry_shallow "$_line" "$_doc_rel" "$_base_md")"; then
+                            _line="$_healed_line"
+                            _shard_pruned=1
+                            _fixes_count=$((_fixes_count + 1))
+                        fi
+                    else
+                        if _healed_line="$(_lint_heal_entry_deep "$_line" "$_doc_rel" "$_base_md")"; then
+                            _line="$_healed_line"
+                            _shard_pruned=1
+                            _fixes_count=$((_fixes_count + 1))
+                        fi
                     fi
-
-                    # 4a-2. Auto-heal links inside catalog entry summary
-                    _marker="** (\`${_doc_rel}\`) — "
-                    case "$_line" in
-                        *"$_marker"*)
-                            _prefix="${_line%%"$_marker"*}** (\`${_doc_rel}\`)"
-                            _sum_part="${_line#*"$_marker"}"
-                            case "$_sum_part" in
-                                *']('*')'*|*'[['*']]'*)
-                                    _healed_sum="$(rewrite_markdown_links_in_summary \
-                                        "$_sum_part" \
-                                        "$_doc_rel" \
-                                        "$RNEX_WORKSPACE_ROOT" \
-                                        "${RNEX_WIKI_UP_PREFIX:-../../}" \
-                                        "${RNEX_WIKI_RELATIVE_LINKS:-rewrite}" \
-                                        "1")"
-                                    _healed_sum="$(sanitize_markdown_summary "$_healed_sum")"
-                                    if [ "$_healed_sum" != "$_sum_part" ]; then
-                                        _line="${_prefix} — ${_healed_sum}"
-                                        _shard_pruned=1
-                                        _fixes_count=$((_fixes_count + 1))
-                                        append_wiki_log_entry "lint" "updated: \`${_doc_rel}\` in \`${_base_md}\` (auto-healed broken link targets)"
-                                    fi
-                                    ;;
-                            esac
-                            ;;
-                    esac
                     ;;
             esac
             printf '%s\n' "$_line" >> "$_shard_tmp"
@@ -162,12 +244,12 @@ lint_existing_wiki_directory() {
             rm -f "$_shard_tmp"
         fi
 
-        # 4b. Check and auto-heal LC_ALL=C sort order of catalog entries
+        # 4b. Check and auto-heal LC_ALL=C sort order (and duplicate lines) of catalog entries
         _entries_tmp="${RNEX_WIKI_ROOT}/.sort_entries.$$"
         _hdr_tmp="${RNEX_WIKI_ROOT}/.sort_header.$$"
         LC_ALL=C grep '^- \*\*' "$_wiki_md" > "$_entries_tmp" 2>/dev/null || : > "$_entries_tmp"
         if [ -s "$_entries_tmp" ]; then
-            if ! LC_ALL=C sort -c "$_entries_tmp" 2>/dev/null; then
+            if ! LC_ALL=C sort -cu "$_entries_tmp" 2>/dev/null; then
                 LC_ALL=C grep -v '^- \*\*' "$_wiki_md" > "$_hdr_tmp" 2>/dev/null || : > "$_hdr_tmp"
                 cat "$_hdr_tmp" > "$_wiki_md"
                 LC_ALL=C sort -u "$_entries_tmp" >> "$_wiki_md"
@@ -295,6 +377,21 @@ lint_existing_wiki_directory() {
             if [ ! -s "$_valid_entries" ]; then
                 rm -f "$_wiki_md"
                 append_wiki_log_entry "lint" "deleted: \`${_base_md}\` (empty after extracting misplaced entries)"
+                # If a valid sub-shard became empty and sibling sub-shards exist,
+                # create the base shard file so Step 4b-3 consolidates the gapped
+                # sibling partition cleanly.
+                if [ "$_is_sub" -eq 1 ]; then
+                    for _sib_f in "${RNEX_WIKI_ROOT}/${_base_id}-"*.md; do
+                        if [ -f "$_sib_f" ]; then
+                            _base_f="${RNEX_WIKI_ROOT}/${_base_id}.md"
+                            if [ ! -f "$_base_f" ]; then
+                                printf '# Wiki Index Shard: %s\n<!-- base: %s -->\n\n' \
+                                    "$_base_id" "$_base_id" > "$_base_f"
+                            fi
+                            break
+                        fi
+                    done
+                fi
             else
                 append_wiki_log_entry "lint" "updated: \`${_base_md}\` (removed ${_mis_count} misplaced entries)"
             fi
@@ -314,25 +411,10 @@ lint_existing_wiki_directory() {
     # 4b-3. Consolidate gapped sub-shards back into their base shard whenever
     #       both a base shard file and its sub-shards exist simultaneously,
     #       allowing Step 4c to cleanly rebalance into gap-free B-Tree ranges.
-    for _sub_cand in "${RNEX_WIKI_ROOT}"/repo-nexus*.md "${RNEX_WIKI_ROOT}"/repos-*.md; do
-        [ -f "$_sub_cand" ] || continue
-        _sc_bname="$(basename "$_sub_cand")"
-        case "$_sc_bname" in
-            index.md|log.md) continue ;;
-        esac
-        _sc_sid="${_sc_bname%.md}"
-        _sc_base="$(derive_base_id_for_shard "$_sc_sid")"
-        [ "$_sc_sid" != "$_sc_base" ] || continue
-        _sc_base_file="${RNEX_WIKI_ROOT}/${_sc_base}.md"
-        if [ -f "$_sc_base_file" ]; then
-            _sub_entries="${_sub_cand}.entries.$$"
-            LC_ALL=C grep '^- \*\*' "$_sub_cand" > "$_sub_entries" 2>/dev/null || : > "$_sub_entries"
-            write_btree_shard_entries "$_sc_base_file" "$_sc_base" "$_sub_entries" "1"
-            rm -f "$_sub_entries" "$_sub_cand"
-            _fixes_count=$((_fixes_count + 1))
-            append_wiki_log_entry "lint" "deleted: \`${_sc_bname}\` (consolidated gapped sub-shard into \`${_sc_base}.md\`)"
-        fi
-    done
+    _consolidated_count="$(consolidate_gapped_sub_shards "lint")"
+    if [ -n "$_consolidated_count" ] && [ "$_consolidated_count" -gt 0 ]; then
+        _fixes_count=$((_fixes_count + _consolidated_count))
+    fi
 
     # 4c. Auto-heal oversized B-Tree leaf shards (> RNEX_WIKI_BTREE_SHARD_MAX_ENTRIES)
     _splits_count="$(split_oversized_btree_shards "lint")"
