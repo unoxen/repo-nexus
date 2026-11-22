@@ -196,7 +196,8 @@ normalize_workspace_rel_path() {
 # -----------------------------------------------------------------------------
 # match_globstar_path
 # Summary: Evaluates whether a workspace-relative candidate path matches a
-#          POSIX glob or recursive globstar (**) pattern.
+#          POSIX glob or recursive globstar (**) pattern (including leading
+#          "**/...", trailing ".../**", and multi-globstar ".../**/.../**").
 # @param $1: candidate_path - Workspace-relative file path.
 # @param $2: target_pattern - Glob or globstar pattern (e.g., "repos/**/README.md").
 # @param $3: workspace_root - Optional workspace root prefix to strip.
@@ -204,32 +205,82 @@ normalize_workspace_rel_path() {
 # @pure
 # -----------------------------------------------------------------------------
 match_globstar_path() {
-    _candidate_path="$(printf '%s' "$1" | tr -d '"'\''' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
-    _target_pat="$(printf '%s' "$2" | tr -d '"'\''' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+    _candidate_path="$1"
+    _target_pat="$2"
     _ws_prefix="${3:-}"
+
+    case "$_candidate_path" in
+        *[\"\'\	\ ]*)
+            _candidate_path="$(printf '%s' "$_candidate_path" | tr -d '"'\''' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+            ;;
+    esac
+    case "$_target_pat" in
+        *[\"\'\	\ ]*)
+            _target_pat="$(printf '%s' "$_target_pat" | tr -d '"'\''' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+            ;;
+    esac
 
     while [ "${_candidate_path#./}" != "$_candidate_path" ]; do _candidate_path="${_candidate_path#./}"; done
     while [ "${_target_pat#./}" != "$_target_pat" ]; do _target_pat="${_target_pat#./}"; done
+    _target_pat="${_target_pat%/}"
 
     if [ -n "$_ws_prefix" ]; then
         _candidate_path="${_candidate_path#"${_ws_prefix%/}/"}"
     fi
 
-    if [ "$_candidate_path" = "$_target_pat" ]; then
+    if [ "$_candidate_path" = "$_target_pat" ] || [ "$_target_pat" = "**" ]; then
         return 0
     fi
 
     case "$_target_pat" in
+        *\*\**\*\**)
+            # Multi-globstar pattern (e.g., "**/.vitepress/**" or "repos/**/dist/**")
+            _p1="${_target_pat%%\*\**}"
+            _rest="${_target_pat#*\*\*}"
+            _mid="${_rest%%\*\**}"
+            _p2="${_rest##*\*\*}"
+            _p1="${_p1#/}"
+            _p2="${_p2#/}"
+            _Virtual="/${_candidate_path}"
+            # shellcheck disable=SC2254
+            case "$_Virtual" in
+                "/${_p1}"*${_mid}*${_p2})
+                    if [ -n "$_p2" ]; then
+                        _exp_fn="${_p2##*/}"
+                        _act_fn="${_candidate_path##*/}"
+                        if [ -n "$_exp_fn" ] && [ "$_exp_fn" != "*" ]; then
+                            case "$_act_fn" in
+                                $_exp_fn) return 0 ;;
+                                *) return 1 ;;
+                            esac
+                        fi
+                    fi
+                    return 0
+                    ;;
+                *)
+                    return 1
+                    ;;
+            esac
+            ;;
         *\*\**)
             _prefix="${_target_pat%%\*\**}"
             _suffix="${_target_pat##*\*\*}"
             _suffix="${_suffix#/}"
 
+            if [ -z "$_suffix" ]; then
+                # Trailing globstar (e.g., "docs/**" or "docs/.vitepress/**")
+                # shellcheck disable=SC2254
+                case "$_candidate_path" in
+                    $_prefix*) return 0 ;;
+                    *) return 1 ;;
+                esac
+            fi
+
             # shellcheck disable=SC2254
             case "$_candidate_path" in
                 "$_prefix"*$_suffix)
-                    _expected_filename="$(basename "$_suffix")"
-                    _actual_filename="$(basename "$_candidate_path")"
+                    _expected_filename="${_suffix##*/}"
+                    _actual_filename="${_candidate_path##*/}"
                     if [ -n "$_expected_filename" ] && [ "$_expected_filename" != "*" ]; then
                         case "$_actual_filename" in
                             $_expected_filename) return 0 ;;
@@ -446,21 +497,27 @@ normalize_relative_path() {
 # sanitize_markdown_summary
 # Summary: Sanitizes a single-line summary string by stripping control chars,
 #          tabs, pipes, and newlines that could corrupt Markdown table or list
-#          formatting. Collapses consecutive whitespace and truncates to 140 chars
-#          without slicing through unclosed Markdown links or brackets.
+#          formatting. Collapses consecutive whitespace and truncates to the
+#          configured maximum character length (default: 100) without slicing
+#          through unclosed Markdown links or brackets.
 # @param $1: raw_text - Input summary string.
-# @returns: Sanitized summary truncated to at most 140 characters on stdout.
+# @param $2: max_len  - Optional maximum character length (positive integer, default: 100).
+# @returns: Sanitized summary truncated to at most max_len characters on stdout.
 # @pure
 # -----------------------------------------------------------------------------
 sanitize_markdown_summary() {
     [ -n "$1" ] || return 0
+    _sms_max="${2:-100}"
+    case "$_sms_max" in
+        ''|*[!0-9]*|0) _sms_max=100 ;;
+    esac
     printf '%s\n' "$1" \
         | tr '\t\r\n|' '    ' \
         | sed 's/  */ /g; s/^ //; s/ $//' \
-        | LC_ALL=C awk '
-            function safe_truncate(s, max_len,   sub_s, i, ch, p, p_bra, p_open) {
-                if (length(s) <= max_len) return s
-                sub_s = substr(s, 1, max_len)
+        | LC_ALL=C awk -v max_len="$_sms_max" '
+            function safe_truncate(s, m_len,   sub_s, i, ch, p, p_bra, p_open, anchor, pfx_end) {
+                if (length(s) <= m_len) return s
+                sub_s = substr(s, 1, m_len)
                 p = 0
                 for (i = length(sub_s); i >= 1; i--) {
                     ch = substr(sub_s, i, 1)
@@ -470,7 +527,11 @@ sanitize_markdown_summary() {
                 if (p > 0) {
                     if (p > 1 && substr(sub_s, p - 1, 1) == "[") p--
                     if (p > 1 && substr(sub_s, p - 1, 1) == "!") p--
-                    sub_s = substr(sub_s, 1, p - 1)
+                    if (p > 1) {
+                        sub_s = substr(sub_s, 1, p - 1)
+                    } else {
+                        sub(/^!?\[\[?/, "", sub_s)
+                    }
                 } else {
                     p_bra = 0
                     for (i = length(sub_s); i >= 1; i--) {
@@ -483,8 +544,14 @@ sanitize_markdown_summary() {
                             if (substr(sub_s, i, 1) == "[") { p_open = i; break }
                         }
                         if (p_open > 0) {
-                            if (p_open > 1 && substr(sub_s, p_open - 1, 1) == "!") p_open--
-                            sub_s = substr(sub_s, 1, p_open - 1)
+                            anchor = substr(sub_s, p_open + 1, p_bra - p_open - 1)
+                            pfx_end = p_open - 1
+                            if (pfx_end >= 1 && substr(sub_s, pfx_end, 1) == "!") pfx_end--
+                            if (pfx_end >= 1) {
+                                sub_s = substr(sub_s, 1, pfx_end)
+                            } else {
+                                sub_s = anchor
+                            }
                         }
                     }
                 }
@@ -492,7 +559,7 @@ sanitize_markdown_summary() {
                 return sub_s
             }
             {
-                print safe_truncate($0, 140)
+                print safe_truncate($0, max_len + 0)
             }
         '
 }

@@ -98,6 +98,8 @@ plugins:
     sources:
       - docs
       - "repos/**/README.md"
+    # Optional excluded files, directories, and/or glob patterns (default: [])
+    exclude: []
 
     # Directory paths and control files relative to workspace root (defaults shown)
     wikiDir: ".rnex/wiki"           # Directory for curated flat markdown shards
@@ -105,6 +107,7 @@ plugins:
     logFile: "log.md"               # Chronological audit log filename
     btreeRootMaxLines: 80           # Maximum allowed lines in root indexFile
     btreeShardMaxEntries: 100       # Threshold before splitting a B-Tree shard
+    recordSummaryMaxLength: 100     # Maximum character length of each wiki record summary
     logMaxRecords: 1000             # Maximum rolling records in logFile
     relativeLinks: "rewrite"        # Relative link strategy: "rewrite" or "strip"
 ```

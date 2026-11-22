@@ -120,9 +120,13 @@ _lint_heal_entry_shallow() {
                         "${RNEX_WIKI_UP_PREFIX:-../../}" \
                         "${RNEX_WIKI_RELATIVE_LINKS:-rewrite}" \
                         "1")"
-                    _lhs_healed_sum="$(sanitize_markdown_summary "$_lhs_healed_sum")"
+                    _lhs_healed_sum="$(sanitize_markdown_summary "$_lhs_healed_sum" "${RNEX_WIKI_RECORD_SUMMARY_MAX_LENGTH:-100}")"
                     if [ "$_lhs_healed_sum" != "$_lhs_sum" ]; then
-                        _lhs_line="${_lhs_prefix} — ${_lhs_healed_sum}"
+                        if [ -n "$_lhs_healed_sum" ]; then
+                            _lhs_line="${_lhs_prefix} — ${_lhs_healed_sum}"
+                        else
+                            _lhs_line="${_lhs_prefix}"
+                        fi
                         _lhs_changed=1
                         append_wiki_log_entry "lint" "updated: \`${_lhs_rel}\` in \`${_lhs_shard}\` (auto-healed broken link targets)"
                     fi

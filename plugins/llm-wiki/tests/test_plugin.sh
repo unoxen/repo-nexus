@@ -44,6 +44,8 @@ _yaml_file="$_kl_pdir/plugin.yaml"
 # Assert flat B-Tree configuration defaults
 grep -q 'btreeShardMaxEntries:' "$_yaml_file" || { fail "btreeShardMaxEntries missing in plugin.yaml"; exit 1; }
 grep -q 'btreeRootMaxLines:' "$_yaml_file" || { fail "btreeRootMaxLines missing in plugin.yaml"; exit 1; }
+grep -q 'recordSummaryMaxLength: 100' "$_yaml_file" || { fail "recordSummaryMaxLength default missing in plugin.yaml"; exit 1; }
+grep -q 'exclude: \[\]' "$_yaml_file" || { fail "exclude: [] default missing in plugin.yaml"; exit 1; }
 grep -q 'wikiDir: "\.rnex/wiki"' "$_yaml_file" || { fail "wikiDir default missing in plugin.yaml"; exit 1; }
 grep -q 'indexFile: "index.md"' "$_yaml_file" || { fail "indexFile default missing in plugin.yaml"; exit 1; }
 grep -q 'logFile: "log.md"' "$_yaml_file" || { fail "logFile default missing in plugin.yaml"; exit 1; }
@@ -789,12 +791,12 @@ mkdir -p "$TEST_REWRITE_WS/docs/sub"
 printf '# Guide\nGuide content.\n' > "$TEST_REWRITE_WS/docs/guide.md"
 printf '# Submodule\nSubmodule content.\n' > "$TEST_REWRITE_WS/docs/sub/module.md"
 
-# Create a source document with intra-folder link, parent link, anchor link, and external link
+# Create a source document with intra-folder link, parent link, anchor link, and external link in headers
 cat <<'EOF_INT_MD' > "$TEST_REWRITE_WS/docs/intro.md"
 # Introduction
-See [guide](guide.md), [sub/mod](sub/module.md), [sec](#setup), [web](https://example.com).
+## See [guide](guide.md), [sub/mod](sub/module.md), [sec](#setup), [web](https://example.com).
 
-## Setup
+### Setup
 Setup details here.
 EOF_INT_MD
 
@@ -802,6 +804,7 @@ cat <<'EOF_REW_YAML' > "$TEST_REWRITE_WS/rnex.yaml"
 version: 1.0.0
 plugins:
   llm-wiki:
+    recordSummaryMaxLength: 180
     sources: [docs]
 repos:
 EOF_REW_YAML
@@ -843,10 +846,10 @@ setup_plugin_test_workspace llm-wiki "$TEST_STRIP_WS"
 cd "$TEST_STRIP_WS"
 
 mkdir -p "$TEST_STRIP_WS/docs"
-# Document with link in title and dead link in summary
+# Document with link in title and dead link in header summary
 cat <<'EOF_DEAD_MD' > "$TEST_STRIP_WS/docs/dead.md"
 # [Getting Started](nonexistent/setup.md)
-Please consult [Dead Target](nonexistent/target.md) and [Real Real](real.md) for info.
+## Please consult [Dead Target](nonexistent/target.md) and [Real Real](real.md) for info.
 EOF_DEAD_MD
 printf '# Real Doc\nReal content.\n' > "$TEST_STRIP_WS/docs/real.md"
 
@@ -889,7 +892,7 @@ mkdir -p "$TEST_MODE_WS/docs"
 printf '# Target Doc\nTarget content.\n' > "$TEST_MODE_WS/docs/target.md"
 cat <<'EOF_MODE_MD' > "$TEST_MODE_WS/docs/source.md"
 # Source Doc
-Check out [Target Doc](target.md) and [External](https://repo-nexus.dev).
+## Check out [Target Doc](target.md) and [External](https://repo-nexus.dev).
 EOF_MODE_MD
 
 cat <<'EOF_MODE_YAML' > "$TEST_MODE_WS/rnex.yaml"
@@ -916,7 +919,7 @@ echo "$_mode_shard" | grep -q 'Check out Target Doc and \[External\](https://rep
 }
 
 # Test CLI flag --strip-links override
-printf '# Fresh One\nSee [Target Doc](target.md).\n' > "$TEST_MODE_WS/docs/fresh-one.md"
+printf '# Fresh One\n## See [Target Doc](target.md).\n' > "$TEST_MODE_WS/docs/fresh-one.md"
 (cd "$TEST_MODE_WS" && ./rnex plugin llm-wiki ingest --strip-links docs/fresh-one.md >/dev/null)
 _fresh_shard="$(cat "$TEST_MODE_WS/.rnex/wiki/repo-nexus-docs.md")"
 echo "$_fresh_shard" | grep -q 'See Target Doc\.' || {
@@ -1675,6 +1678,7 @@ plugins:
     logMaxRecords: 250
     btreeRootMaxLines: 42
     btreeShardMaxEntries: 15
+    recordSummaryMaxLength: 175
     relativeLinks: "strip"
     sources:
       - "guides"
@@ -1697,6 +1701,7 @@ grep -qF "services/" "$_proj_rules" || { fail "Custom reposDir missing in rules/
 grep -qF "42" "$_proj_rules" || { fail "Custom btreeRootMaxLines missing in rules/behavioral.md"; exit 1; }
 grep -qF "strip" "$_proj_ingest" || { fail "Custom relativeLinks missing in skills/ingest.md"; exit 1; }
 grep -qF "250" "$_proj_ingest" || { fail "Custom logMaxRecords missing in skills/ingest.md"; exit 1; }
+grep -qF "175" "$_proj_ingest" || { fail "Custom recordSummaryMaxLength missing in skills/ingest.md"; exit 1; }
 grep -qF "15" "$_proj_lint" || { fail "Custom btreeShardMaxEntries missing in skills/lint.md"; exit 1; }
 
 for _proj_f in "$_proj_ai" "$_proj_arch" "$_proj_rules" "$_proj_ingest" "$_proj_lint"; do
@@ -1949,7 +1954,7 @@ _strict_err=0
 }
 
 # 2. Update the source document header and summary
-printf '# New Architecture Title\nUpdated summary after review.\n' > "$TEST_DEEP_LINT_WS/docs/spec.md"
+printf '# New Architecture Title\n## Updated summary after review.\n' > "$TEST_DEEP_LINT_WS/docs/spec.md"
 
 # 3. lint --shallow validates links/structure only and does NOT overwrite the stale title/summary
 _shallow_out="$(cd "$TEST_DEEP_LINT_WS" && ./rnex plugin llm-wiki lint --shallow)"
@@ -1984,6 +1989,204 @@ echo "$_deep_out2" | grep -q "all existing docs and references in .rnex/wiki are
 _log_after_clean="$(cksum < "$TEST_DEEP_LINT_WS/.rnex/wiki/log.md")"
 [ "$_log_before_clean" = "$_log_after_clean" ] || {
   fail "Clean deep lint mutated log.md"; exit 1;
+}
+pass
+
+# --------------------------------------------------------------------------
+# Test 34: recordSummaryMaxLength, hierarchy-ordered Markdown headers, '#' comments, and summary-less files
+# --------------------------------------------------------------------------
+run_test "LLM Wiki: recordSummaryMaxLength, Markdown header hierarchy (# -> ## -> ###), '#' comments, and summary-less files"
+TEST_RECLEN_WS="$TEST_TMP/llm-wiki-reclen-ws"
+mkdir -p "$TEST_RECLEN_WS"
+setup_plugin_test_workspace llm-wiki "$TEST_RECLEN_WS"
+cd "$TEST_RECLEN_WS"
+"$TEST_RECLEN_WS/rnex" init -y --llm-wiki "$TEST_RECLEN_WS" >/dev/null
+
+mkdir -p "$TEST_RECLEN_WS/docs" "$TEST_RECLEN_WS/scripts" "$TEST_RECLEN_WS/data"
+
+# 1. Markdown document with out-of-order header hierarchy (#, ###, ##, ####)
+cat <<'EOF_MD_HIER' > "$TEST_RECLEN_WS/docs/hierarchy.md"
+# TopOne
+Body prose that should not appear in summary.
+### SubThreeA
+More prose ignored.
+## MidTwoA
+#### DeepFourA
+## MidTwoB
+### SubThreeB
+# TopTwo
+EOF_MD_HIER
+
+# 2. Shell script with shebang, divider, and '#' comments
+cat <<'EOF_SH_COMM' > "$TEST_RECLEN_WS/scripts/deploy.sh"
+#!/bin/sh
+# shellcheck shell=sh
+# ============================================================================
+# Deployment automation script for microservices.
+# Verifies cluster health and rolls out containers.
+# ============================================================================
+echo "Deploying..."
+EOF_SH_COMM
+
+# 3. File without any readable headers or '#' comments (JSON)
+cat <<'EOF_JSON_NO_COMM' > "$TEST_RECLEN_WS/data/config.json"
+{
+  "port": 8080,
+  "env": "production"
+}
+EOF_JSON_NO_COMM
+
+# 4. Markdown file without any headers
+cat <<'EOF_MD_NO_HDR' > "$TEST_RECLEN_WS/docs/plain.md"
+Just plain text without any markdown headers at all.
+EOF_MD_NO_HDR
+
+# 5. Binary image asset inside data/ (even if bytes contain '#FakeHeader')
+printf '\001\002\n#FakeBinaryComment\n\003' > "$TEST_RECLEN_WS/data/logo.png"
+printf '\001\002\n#FakeBinaryRaw\n\003' > "$TEST_RECLEN_WS/data/raw.dat"
+
+cat <<'EOF_RECLEN_CFG' > "$TEST_RECLEN_WS/rnex.yaml"
+version: 1.0.0
+plugins:
+  llm-wiki:
+    wikiDir: ".rnex/wiki"
+    sources:
+      - docs
+      - "scripts/*.sh"
+      - "data/*"
+repos:
+EOF_RECLEN_CFG
+
+(cd "$TEST_RECLEN_WS" && ./rnex plugin llm-wiki ingest >/dev/null)
+
+# Verify Markdown headers are ordered by level (# then ## then ### then ####):
+# TopOne TopTwo MidTwoA MidTwoB SubThreeA SubThreeB DeepFourA
+_docs_shard="$(cat "$TEST_RECLEN_WS/.rnex/wiki/repo-nexus-docs.md")"
+echo "$_docs_shard" | grep -qF -- '- **[TopOne](../../docs/hierarchy.md)** (`docs/hierarchy.md`) — TopOne TopTwo MidTwoA MidTwoB SubThreeA SubThreeB DeepFourA' || {
+  fail "Markdown headers were not ordered by hierarchy (# -> ## -> ### -> ####): $_docs_shard"; exit 1;
+}
+
+# Verify plain.md without headers emits only link and title without ' — ' summary
+echo "$_docs_shard" | grep -q '^- \*\*\[plain\.md\](\.\./\.\./docs/plain\.md)\*\* (`docs/plain\.md`)$' || {
+  fail "Header-free Markdown file should emit only title link without summary: $_docs_shard"; exit 1;
+}
+
+# Verify shell script '#' comments are extracted (excluding shebang, shellcheck, and '====' dividers)
+_scripts_shard="$(cat "$TEST_RECLEN_WS/.rnex/wiki/repo-nexus-scripts.md")"
+echo "$_scripts_shard" | grep -qF -- '- **[deploy.sh](../../scripts/deploy.sh)** (`scripts/deploy.sh`) — Deployment automation script for microservices. Verifies cluster health and rolls out containers.' || {
+  fail "Script '#' comments were not properly extracted into summary: $_scripts_shard"; exit 1;
+}
+
+# Verify JSON and binary files without readable '#' comments emit only link and title without summary
+_data_shard="$(cat "$TEST_RECLEN_WS/.rnex/wiki/repo-nexus-data.md")"
+echo "$_data_shard" | grep -q '^- \*\*\[config\.json\](\.\./\.\./data/config\.json)\*\* (`data/config\.json`)$' || {
+  fail "Comment-free JSON file should emit only title link without summary: $_data_shard"; exit 1;
+}
+echo "$_data_shard" | grep -q '^- \*\*\[logo\.png\](\.\./\.\./data/logo\.png)\*\* (`data/logo\.png`)$' || {
+  fail "Binary PNG file should emit only title link without summary: $_data_shard"; exit 1;
+}
+echo "$_data_shard" | grep -q '^- \*\*\[raw\.dat\](\.\./\.\./data/raw\.dat)\*\* (`data/raw\.dat`)$' || {
+  fail "Binary data file with control bytes should emit only title link without summary: $_data_shard"; exit 1;
+}
+
+# Verify custom recordSummaryMaxLength (e.g. 28 chars) truncates summary portion cleanly
+cat <<'EOF_RECLEN_SHORT' > "$TEST_RECLEN_WS/rnex.yaml"
+version: 1.0.0
+plugins:
+  llm-wiki:
+    wikiDir: ".rnex/wiki"
+    recordSummaryMaxLength: 28
+    sources:
+      - docs
+      - "scripts/*.sh"
+      - "data/*"
+repos:
+EOF_RECLEN_SHORT
+
+(cd "$TEST_RECLEN_WS" && ./rnex plugin llm-wiki ingest --force >/dev/null)
+
+_hier_sum="$(grep '(`docs/hierarchy\.md`)' "$TEST_RECLEN_WS/.rnex/wiki/repo-nexus-docs.md" | sed 's/^.* — //')"
+_hier_len="${#_hier_sum}"
+[ "$_hier_len" -le 28 ] && [ "$_hier_len" -gt 0 ] || {
+  fail "Expected hierarchy.md summary length <= 28, got $_hier_len ('$_hier_sum')"; exit 1;
+}
+
+_sh_sum="$(grep '(`scripts/deploy\.sh`)' "$TEST_RECLEN_WS/.rnex/wiki/repo-nexus-scripts.md" | sed 's/^.* — //')"
+_sh_len="${#_sh_sum}"
+[ "$_sh_len" -le 28 ] && [ "$_sh_len" -gt 0 ] || {
+  fail "Expected deploy.sh summary length <= 28, got $_sh_len ('$_sh_sum')"; exit 1;
+}
+
+# Verify both deep lint and shallow lint pass cleanly with zero repairs
+_lint_deep_reclen="$(cd "$TEST_RECLEN_WS" && ./rnex plugin llm-wiki lint)"
+echo "$_lint_deep_reclen" | grep -q "all existing docs and references in .rnex/wiki are valid" || {
+  fail "Deep lint failed or reported unexpected repairs: $_lint_deep_reclen"; exit 1;
+}
+_lint_shallow_reclen="$(cd "$TEST_RECLEN_WS" && ./rnex plugin llm-wiki lint --shallow)"
+echo "$_lint_shallow_reclen" | grep -q "all existing docs and references in .rnex/wiki are valid" || {
+  fail "Shallow lint failed or reported unexpected repairs: $_lint_shallow_reclen"; exit 1;
+}
+
+# 6. Test 'exclude' setting: by default nothing is excluded (.DS_Store and .vitepress ARE ingested if present),
+#    and when listed in 'exclude' (via file path, directory path, or glob pattern) they are excluded!
+mkdir -p "$TEST_RECLEN_WS/docs/.vitepress/dist"
+printf '# VitePress Config\n' > "$TEST_RECLEN_WS/docs/.vitepress/config.mts"
+printf '# VitePress Dist\n' > "$TEST_RECLEN_WS/docs/.vitepress/dist/index.html"
+printf '# DS Store\n' > "$TEST_RECLEN_WS/docs/.DS_Store"
+printf '# Draft Doc\n' > "$TEST_RECLEN_WS/docs/draft.md"
+
+# First, with no exclude configured (default []), .DS_Store and .vitepress files ARE discovered
+rm -rf "$TEST_RECLEN_WS/.rnex/wiki"
+(cd "$TEST_RECLEN_WS" && ./rnex plugin llm-wiki ingest >/dev/null)
+grep -q 'docs/\.DS_Store' "$TEST_RECLEN_WS/.rnex/wiki/repo-nexus-docs.md" || {
+  fail "With default empty exclude, docs/.DS_Store should not be hardcoded-excluded"; exit 1;
+}
+grep -q 'docs/\.vitepress/config\.mts' "$TEST_RECLEN_WS/.rnex/wiki/repo-nexus-docs.md" || {
+  fail "With default empty exclude, docs/.vitepress/config.mts should not be hardcoded-excluded"; exit 1;
+}
+
+# Now configure 'exclude' with glob pattern (**/.DS_Store), directory path (docs/.vitepress),
+# file path (docs/draft.md), and wildcard glob (data/*.png)
+rm -rf "$TEST_RECLEN_WS/.rnex/wiki"
+cat <<'EOF_EXCLUDE_CFG' > "$TEST_RECLEN_WS/rnex.yaml"
+version: 1.0.0
+plugins:
+  llm-wiki:
+    wikiDir: ".rnex/wiki"
+    sources:
+      - docs
+      - "scripts/*.sh"
+      - "data/*"
+    exclude:
+      - "**/.DS_Store"
+      - "docs/.vitepress"
+      - "docs/draft.md"
+      - "data/*.png"
+repos:
+EOF_EXCLUDE_CFG
+
+(cd "$TEST_RECLEN_WS" && ./rnex plugin llm-wiki ingest >/dev/null)
+
+_docs_after_ex="$(cat "$TEST_RECLEN_WS/.rnex/wiki/repo-nexus-docs.md")"
+! echo "$_docs_after_ex" | grep -q '\.DS_Store' || {
+  fail "exclude pattern '**/.DS_Store' did not exclude docs/.DS_Store: $_docs_after_ex"; exit 1;
+}
+! echo "$_docs_after_ex" | grep -q '\.vitepress' || {
+  fail "exclude directory 'docs/.vitepress' did not exclude .vitepress files: $_docs_after_ex"; exit 1;
+}
+! echo "$_docs_after_ex" | grep -q 'docs/draft\.md' || {
+  fail "exclude file 'docs/draft.md' did not exclude docs/draft.md: $_docs_after_ex"; exit 1;
+}
+echo "$_docs_after_ex" | grep -q 'docs/hierarchy\.md' || {
+  fail "Non-excluded docs/hierarchy.md was missing after exclude filtering: $_docs_after_ex"; exit 1;
+}
+
+_data_after_ex="$(cat "$TEST_RECLEN_WS/.rnex/wiki/repo-nexus-data.md")"
+! echo "$_data_after_ex" | grep -q 'data/logo\.png' || {
+  fail "exclude glob 'data/*.png' did not exclude data/logo.png: $_data_after_ex"; exit 1;
+}
+echo "$_data_after_ex" | grep -q 'data/config\.json' || {
+  fail "Non-excluded data/config.json was missing after exclude filtering: $_data_after_ex"; exit 1;
 }
 pass
 

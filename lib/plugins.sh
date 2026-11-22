@@ -439,7 +439,7 @@ _plugin_config_default_keys() {
         k = $0
         sub(/^[ ]*/, "", k)
         sub(/:.*/, "", k)
-        if (k != "sources" && k != "hooks") print k
+        if (k != "sources" && k != "exclude" && k != "hooks") print k
       }
     }
   ' "$_pcdk_file"
@@ -785,13 +785,21 @@ _src_normalize_entry() {
 }
 
 # True if a normalized entry names a file rather than a directory
-# (glob pattern, .md/.txt suffix, or an existing regular file)
+# (glob pattern, existing regular file, or path whose basename carries a file extension)
 _src_is_file_like() {
   _src_has_glob "$1" && return 0
-  case "$1" in
-    *.md|*.txt) return 0 ;;
-  esac
+  [ -d "${NEXUS_DIR:-.}/$1" ] && return 1
   [ -f "${NEXUS_DIR:-.}/$1" ] && return 0
+  _sifl_base="${1##*/}"
+  case "$_sifl_base" in
+    .*.*) return 0 ;;
+    *.*)
+      case "$_sifl_base" in
+        .*) return 1 ;;
+        *)  return 0 ;;
+      esac
+      ;;
+  esac
   return 1
 }
 

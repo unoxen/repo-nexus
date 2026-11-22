@@ -99,6 +99,34 @@ load_wiki_config_contract() {
 
     RNEX_WORKSPACE_ROOT="${_ws_root%/}"
 
+    # Resolve workspace member repositories directory (default: repos)
+    if [ -z "${RNEX_CFG_REPOS_DIR:-}" ]; then
+        _cfg_rdir=""
+        if command -v yaml_get_repos_dir >/dev/null 2>&1; then
+            _cfg_rdir="$(yaml_get_repos_dir 2>/dev/null || true)"
+        fi
+        if [ -z "$_cfg_rdir" ]; then
+            for _rcf in "${RNEX_WORKSPACE_ROOT}/.local.rnex.yaml" "${RNEX_WORKSPACE_ROOT}/rnex.yaml"; do
+                [ -f "$_rcf" ] || continue
+                _cfg_rdir="$(LC_ALL=C awk '
+                    /^reposDir:[ ]*/ {
+                        line = $0
+                        sub(/^[^:]+:[ ]*/, "", line)
+                        sub(/[ ]*#.*$/, "", line)
+                        gsub(/^["\047]|["\047]$/, "", line)
+                        print line
+                        exit
+                    }
+                ' "$_rcf" 2>/dev/null)"
+                [ -n "$_cfg_rdir" ] && break
+            done
+        fi
+        _cfg_rdir="${_cfg_rdir#./}"
+        _cfg_rdir="${_cfg_rdir%/}"
+        [ -n "$_cfg_rdir" ] || _cfg_rdir="repos"
+        RNEX_CFG_REPOS_DIR="$_cfg_rdir"
+    fi
+
     # Default wiki directory is strictly encapsulated inside .rnex/wiki
     if [ -n "${RNEX_CFG_WIKI_DIR:-}" ]; then
         _wiki_rel="$RNEX_CFG_WIKI_DIR"
@@ -166,8 +194,16 @@ load_wiki_config_contract() {
         [ -n "$RNEX_WIKI_LOG_MAX_RECORDS" ] || RNEX_WIKI_LOG_MAX_RECORDS=1000
     fi
 
+    # Record summary capacity: maximum character length of each wiki record summary (default: 100)
+    if [ -n "${RNEX_CFG_RECORD_SUMMARY_MAX_LENGTH:-}" ]; then
+        RNEX_WIKI_RECORD_SUMMARY_MAX_LENGTH="$RNEX_CFG_RECORD_SUMMARY_MAX_LENGTH"
+    else
+        RNEX_WIKI_RECORD_SUMMARY_MAX_LENGTH="$(_lookup_llm_wiki_cfg "recordSummaryMaxLength")"
+        [ -n "$RNEX_WIKI_RECORD_SUMMARY_MAX_LENGTH" ] || RNEX_WIKI_RECORD_SUMMARY_MAX_LENGTH=100
+    fi
+
     # Enforce strictly positive integers for capacity thresholds
-    for _num_val in "$RNEX_WIKI_BTREE_MAX_ROOT_LINES" "$RNEX_WIKI_BTREE_SHARD_MAX_ENTRIES" "$RNEX_WIKI_LOG_MAX_RECORDS"; do
+    for _num_val in "$RNEX_WIKI_BTREE_MAX_ROOT_LINES" "$RNEX_WIKI_BTREE_SHARD_MAX_ENTRIES" "$RNEX_WIKI_LOG_MAX_RECORDS" "$RNEX_WIKI_RECORD_SUMMARY_MAX_LENGTH"; do
         case "$_num_val" in
             ''|*[!0-9]*|0)
                 printf 'Error [config]: Numeric threshold "%s" must be a positive integer.\n' "$_num_val" >&2
@@ -193,10 +229,11 @@ load_wiki_config_contract() {
             ;;
     esac
 
-    export RNEX_WORKSPACE_ROOT RNEX_WIKI_REL_DIR RNEX_WIKI_ROOT \
+    export RNEX_WORKSPACE_ROOT RNEX_CFG_REPOS_DIR RNEX_WIKI_REL_DIR RNEX_WIKI_ROOT \
            RNEX_WIKI_INDEX_FILE RNEX_WIKI_LOG_FILE RNEX_WIKI_UP_PREFIX \
            RNEX_WIKI_BTREE_MAX_ROOT_LINES RNEX_WIKI_BTREE_SHARD_MAX_ENTRIES \
-           RNEX_WIKI_RELATIVE_LINKS RNEX_WIKI_LOG_MAX_RECORDS
+           RNEX_WIKI_RELATIVE_LINKS RNEX_WIKI_LOG_MAX_RECORDS \
+           RNEX_WIKI_RECORD_SUMMARY_MAX_LENGTH
 
     return 0
 }

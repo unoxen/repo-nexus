@@ -48,6 +48,7 @@ AI coding agents navigate wiki context via the 3-step zero-token-bloat protocol:
    - Execute `rnex plugin llm-wiki ingest [path/to/source]` under the hood. Pass `--force` (`-f`) to re-index already-cataloged documents after header or summary edits.
    - **NEVER** manually create, sort, or edit `{wikiDir}/{indexFile}` or `{wikiDir}/*.md` shard files.
    - By default, the CLI identifies which candidate sources from {sources} have not yet been indexed and appends only missing entries into their respective B-Tree shards. When `--force` (`-f`) is passed, existing entries matching the target path (or {sources}) are rebuilt from their authoritative source files and re-routed if their title changed.
+   - Each catalog entry extracts Markdown headers ordered by level (`#`, then `##`, then `###` and lower) or `#` comments for non-Markdown files up to {recordSummaryMaxLength} characters (emitting only the title link when no readable headers or comments exist).
    - B-Tree shards are maintained in strict `LC_ALL=C` sort order and split automatically above {btreeShardMaxEntries} entries.
    - `{wikiDir}/{indexFile}` is recompiled atomically (bounded to {btreeRootMaxLines} lines) to route to all existing shards.
    - Relative Markdown links in source summaries use the active `{relativeLinks}` mode from `{wikiDir}/` (pass `--strip-links` or `--rewrite-links` to override for a single run).

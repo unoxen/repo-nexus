@@ -203,42 +203,140 @@ upsert_wiki_entry_line() {
 
 # -----------------------------------------------------------------------------
 # extract_markdown_title_and_summary
-# Summary: Extracts the first H1 heading and first non-empty prose paragraph
-#          from a Markdown file, skipping YAML frontmatter and code blocks.
-# @param $1: abs_file_path  - Absolute path to the Markdown document.
-# @param $2: fallback_title - Fallback title if no H1 heading exists.
+# Summary: Extracts a canonical entry title and bounded summary from any
+#          workspace source file:
+#            - For Markdown files (*.md, *.mdx, *.markdown): extracts the first
+#              H1 heading as title (falling back to $2) and reads all readable
+#              Markdown headers ordered by level (#, then ##, then ### and
+#              lower) up to max_summary_len, skipping YAML frontmatter and
+#              fenced code blocks.
+#            - For non-Markdown files: uses $2 (filename) as title and reads
+#              all readable '#' comment lines (skipping shebangs, shellcheck
+#              directives, and decorative dividers) up to max_summary_len.
+#            - If a file has no readable headers or '#' comments, returns an
+#              empty summary string so only the title link is emitted.
+# @param $1: abs_file_path   - Absolute path to the workspace source file.
+# @param $2: fallback_title  - Fallback title (e.g. basename) if no H1 exists.
+# @param $3: max_summary_len - Maximum summary character length (default: 100).
 # @returns: "<title>|<summary>" on stdout.
 # @pure
 # -----------------------------------------------------------------------------
 extract_markdown_title_and_summary() {
     _file="$1"
     _fallback="$2"
-    LC_ALL=C awk -v def_title="$_fallback" '
-        BEGIN { in_frontmatter=0; in_code=0; title=""; summary="" }
-        NR == 1 && /^---[[:space:]]*$/ { in_frontmatter=1; next }
-        in_frontmatter == 1 {
-            if (/^(---|\.\.\.)[[:space:]]*$/) in_frontmatter=0
+    _max_len="${3:-${RNEX_WIKI_RECORD_SUMMARY_MAX_LENGTH:-100}}"
+    case "$_max_len" in
+        ''|*[!0-9]*|0) _max_len=100 ;;
+    esac
+
+    _is_md=0
+    case "$_file" in
+        *.md|*.MD|*.mdx|*.MDX|*.markdown|*.MARKDOWN)
+            _is_md=1
+            ;;
+        *.png|*.PNG|*.jpg|*.JPG|*.jpeg|*.JPEG|*.gif|*.GIF|*.webp|*.WEBP|*.ico|*.ICO|*.bmp|*.BMP|*.tiff|*.TIFF|*.pdf|*.PDF|*.zip|*.ZIP|*.tar|*.TAR|*.gz|*.GZ|*.tgz|*.TGZ|*.bz2|*.BZ2|*.xz|*.XZ|*.7z|*.7Z|*.rar|*.RAR|*.woff|*.WOFF|*.woff2|*.WOFF2|*.ttf|*.TTF|*.otf|*.OTF|*.eot|*.EOT|*.mp3|*.MP3|*.mp4|*.MP4|*.wav|*.WAV|*.ogg|*.OGG|*.webm|*.WEBM|*.mov|*.MOV|*.avi|*.AVI|*.wasm|*.WASM|*.o|*.a|*.so|*.dylib|*.dll|*.DLL|*.exe|*.EXE|*.bin|*.BIN|*.pyc|*.class|*.jar|*.JAR|*.db|*.DB|*.sqlite|*.sqlite3)
+            printf '%s|\n' "$_fallback"
+            return 0
+            ;;
+    esac
+
+    LC_ALL=C awk -v def_title="$_fallback" -v is_md="$_is_md" -v max_len="$_max_len" '
+        function clean_line(s) {
+            gsub(/\r/, "", s)
+            gsub(/[\001-\037\177|]/, " ", s)
+            gsub(/  +/, " ", s)
+            sub(/^ +/, "", s)
+            sub(/ +$/, "", s)
+            return s
+        }
+        function is_readable(s) {
+            return (s ~ /[a-zA-Z0-9]/)
+        }
+        function visible_len(s,   tmp) {
+            tmp = s
+            while (match(tmp, /\]\([^()]*\)/)) {
+                tmp = substr(tmp, 1, RSTART) substr(tmp, RSTART + RLENGTH)
+            }
+            return length(tmp)
+        }
+        BEGIN {
+            in_frontmatter = 0
+            in_code = 0
+            title = ""
+            summary = ""
+            max_lvl = 0
+        }
+        /[\001-\010\013\014\016-\037\177]/ {
+            if (is_md == 0) {
+                summary = ""
+                exit
+            }
+        }
+        is_md == 1 {
+            if (NR == 1 && /^---[[:space:]]*$/) {
+                in_frontmatter = 1
+                next
+            }
+            if (in_frontmatter == 1) {
+                if (/^(---|\.\.\.)[[:space:]]*$/) in_frontmatter = 0
+                next
+            }
+            if (/^[[:space:]]*(```|~~~)/) {
+                in_code = !in_code
+                next
+            }
+            if (in_code == 1) next
+
+            if (/^[[:space:]]*#+[[:space:]]+/) {
+                line = $0
+                sub(/^[[:space:]]*/, "", line)
+                match(line, /^#+/)
+                lvl = RLENGTH
+                sub(/^#+[[:space:]]+/, "", line)
+                sub(/[[:space:]]+#+[[:space:]]*$/, "", line)
+                line = clean_line(line)
+                if (is_readable(line)) {
+                    if (lvl == 1 && title == "") {
+                        t_line = line
+                        gsub(/[*]/, " ", t_line)
+                        t_line = clean_line(t_line)
+                        if (t_line != "") title = t_line
+                    }
+                    hdr_cnt[lvl]++
+                    hdrs[lvl, hdr_cnt[lvl]] = line
+                    if (lvl > max_lvl) max_lvl = lvl
+                }
+            }
             next
         }
-        /^```/ { in_code = !in_code; next }
-        in_code == 1 { next }
-        title == "" && /^#[[:space:]]+/ {
-            line = $0
-            sub(/^#[[:space:]]+/, "", line)
-            gsub(/\r/, "", line)
-            gsub(/[|*]/, " ", line)
-            title = line
-            next
-        }
-        title != "" && summary == "" && $0 !~ /^[[:space:]]*$/ && $0 !~ /^[#>-]/ && $0 !~ /^\|/ {
-            line = $0
-            gsub(/\r/, "", line)
-            summary = line
-            exit
+        is_md == 0 {
+            if (NR == 1 && /^#!/) next
+            if (/^[[:space:]]*#[[:space:]]*shellcheck[[:space:]]/) next
+            if (/^[[:space:]]*#[[:space:]]*(include|define|undef|ifdef|ifndef|if|elif|else|endif|pragma|error|line)([[:space:]<"(]|$)/) next
+            if (/^[[:space:]]*#/) {
+                line = $0
+                sub(/^[[:space:]]*#+[[:space:]]*/, "", line)
+                sub(/[[:space:]]*#+[[:space:]]*$/, "", line)
+                line = clean_line(line)
+                if (is_readable(line)) {
+                    summary = (summary == "") ? line : (summary " " line)
+                    if (visible_len(summary) >= (max_len + 0)) exit
+                }
+            }
         }
         END {
             if (title == "") title = def_title
-            if (summary == "") summary = "Workspace documentation page."
+            if (is_md == 1) {
+                for (l = 1; l <= max_lvl; l++) {
+                    c = hdr_cnt[l] + 0
+                    for (i = 1; i <= c; i++) {
+                        h = hdrs[l, i]
+                        summary = (summary == "") ? h : (summary " " h)
+                        if (visible_len(summary) >= (max_len + 0)) break
+                    }
+                    if (visible_len(summary) >= (max_len + 0)) break
+                }
+            }
             printf "%s|%s\n", title, summary
         }
     ' "$_file"
@@ -266,7 +364,9 @@ resolve_wiki_up_prefix() {
 # build_wiki_entry_line
 # Summary: Builds the canonical catalog entry line for a workspace document
 #          directly from its authoritative source content:
-#            - **[<H1 title>](<up_prefix><rel_path>)** (`<rel_path>`) — <summary>
+#            - **[<title>](<up_prefix><rel_path>)** (`<rel_path>`) — <summary>
+#          or, when the file has no readable headers or '#' comments:
+#            - **[<title>](<up_prefix><rel_path>)** (`<rel_path>`)
 #          This is the SINGLE source of truth for entry construction. Ingest
 #          uses it to create/replace entries; deep lint uses it to detect and
 #          refresh stale entries. Sharing it guarantees ingest and lint can
@@ -275,6 +375,7 @@ resolve_wiki_up_prefix() {
 # @param $1: rel_path   - Workspace-relative path of the source document.
 # @param $2: up_prefix  - Upward prefix from the wiki dir to the workspace root.
 # @param $3: links_mode - Relative link strategy: "rewrite" (default) or "strip".
+# @param $4: max_len    - Optional max summary length (defaults to RNEX_WIKI_RECORD_SUMMARY_MAX_LENGTH or 100).
 # @returns: Canonical entry line on stdout and exit 0; exit 1 (no output) if
 #           the source document does not exist as a regular file.
 # @pure (reads the source document only; invoke via "$(...)")
@@ -283,34 +384,44 @@ build_wiki_entry_line() {
     _bwe_rel="$1"
     _bwe_up="$2"
     _bwe_mode="${3:-rewrite}"
+    _bwe_max_len="${4:-${RNEX_WIKI_RECORD_SUMMARY_MAX_LENGTH:-100}}"
     _bwe_abs="${RNEX_WORKSPACE_ROOT}/${_bwe_rel}"
 
     # Only regular files can be indexed (symlinks/dirs are rejected upstream).
     [ -f "$_bwe_abs" ] || return 1
 
-    # 1. Extract raw H1 title and first prose paragraph from the source.
-    _bwe_meta="$(extract_markdown_title_and_summary "$_bwe_abs" "$(basename "$_bwe_rel")")"
+    # 1. Extract raw title and headers/comments summary from the source.
+    _bwe_meta="$(extract_markdown_title_and_summary "$_bwe_abs" "$(basename "$_bwe_rel")" "$_bwe_max_len")"
     _bwe_raw_title="${_bwe_meta%%|*}"
     _bwe_raw_summary="${_bwe_meta#*|}"
 
     # 2. Title: strip link markup, sanitize, and drop characters that would
     #    break the "**[title](link)**" entry grammar.
-    _bwe_title="$(sanitize_markdown_summary "$(strip_markdown_links "$_bwe_raw_title")")"
+    _bwe_title="$(sanitize_markdown_summary "$(strip_markdown_links "$_bwe_raw_title")" 140)"
     _bwe_title="$(printf '%s' "$_bwe_title" | tr -d '[]*')"
     [ -n "$_bwe_title" ] || _bwe_title="$(basename "$_bwe_rel")"
 
-    # 3. Summary: re-anchor relative links from the wiki dir (or strip them),
-    #    then sanitize to a bounded single line.
-    _bwe_summary="$(rewrite_markdown_links_in_summary \
-        "$_bwe_raw_summary" \
-        "$_bwe_rel" \
-        "$RNEX_WORKSPACE_ROOT" \
-        "$_bwe_up" \
-        "$_bwe_mode")"
-    _bwe_summary="$(sanitize_markdown_summary "$_bwe_summary")"
+    # 3. Summary: if readable headers or comments exist, re-anchor relative
+    #    links from the wiki dir (or strip them), then sanitize and truncate
+    #    to the configured recordSummaryMaxLength.
+    _bwe_summary=""
+    if [ -n "$_bwe_raw_summary" ]; then
+        _bwe_summary="$(rewrite_markdown_links_in_summary \
+            "$_bwe_raw_summary" \
+            "$_bwe_rel" \
+            "$RNEX_WORKSPACE_ROOT" \
+            "$_bwe_up" \
+            "$_bwe_mode")"
+        _bwe_summary="$(sanitize_markdown_summary "$_bwe_summary" "$_bwe_max_len")"
+    fi
 
-    printf -- '- **[%s](%s%s)** (`%s`) — %s\n' \
-        "$_bwe_title" "$_bwe_up" "$_bwe_rel" "$_bwe_rel" "$_bwe_summary"
+    if [ -n "$_bwe_summary" ]; then
+        printf -- '- **[%s](%s%s)** (`%s`) — %s\n' \
+            "$_bwe_title" "$_bwe_up" "$_bwe_rel" "$_bwe_rel" "$_bwe_summary"
+    else
+        printf -- '- **[%s](%s%s)** (`%s`)\n' \
+            "$_bwe_title" "$_bwe_up" "$_bwe_rel" "$_bwe_rel"
+    fi
     return 0
 }
 

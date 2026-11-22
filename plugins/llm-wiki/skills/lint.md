@@ -40,7 +40,7 @@ AI coding agents navigate wiki structure through:
    - Enforces zero symbolic links across `{wikiDir}/`.
 
 2. **Auto-Healing & Invariants:**
-   - **Document Headers & Summaries (Deep by Default):** Reconstructs each catalog entry from its authoritative source document (H1 title, link target, and summary paragraph) and refreshes any stale entry in place. Pass `--shallow` to skip reading document content and validate only links and structure.
+   - **Document Headers & Summaries (Deep by Default):** Reconstructs each catalog entry from its authoritative source file (reading Markdown headers `#`, `##`, `###` and lower, or `#` comments up to {recordSummaryMaxLength} characters, or title link only when absent) and refreshes any stale entry in place. Pass `--shallow` to skip reading document content and validate only links and structure.
    - **Root Router:** Validates that `{wikiDir}/{indexFile}` exists and is within {btreeRootMaxLines} lines; auto-rebuilds router to index orphan shards and prune dead shard links.
    - **Workspace References:** Validates that every referenced workspace document in shard entries exists; prunes dead references to deleted files.
    - **Relative Link Integrity:** Validates all relative Markdown links and `[[wikilinks]]`.

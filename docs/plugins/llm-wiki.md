@@ -80,14 +80,16 @@ plugins:
     wikiDir: ".rnex/wiki"       # Directory for curated flat markdown shards (default: .rnex/wiki)
     indexFile: "index.md"       # B-Tree Root Router filename (default: index.md)
     logFile: "log.md"           # Chronological audit log filename (default: log.md)
-    logMaxRecords: 1000         # Maximum records in log.md before oldest are pruned (default: 1000)
-    btreeRootMaxLines: 80       # Maximum allowed lines in root index.md router (default: 80)
-    btreeShardMaxEntries: 100   # Threshold before splitting a B-Tree shard (default: 100)
-    relativeLinks: "rewrite"    # Link strategy: "rewrite" (default) or "strip"/"delete"
-    sources:                    # Intake documents: directories and/or glob patterns
-      - docs                    #   directory: all files (hidden dirs and node_modules pruned)
-      - "repos/**/README.md"    #   recursive glob (quote it); disabled repos are excluded
-                                # A sources list in .local.rnex.yaml replaces this list entirely.
+    logMaxRecords: 1000             # Maximum records in log.md before oldest are pruned (default: 1000)
+    btreeRootMaxLines: 80           # Maximum allowed lines in root index.md router (default: 80)
+    btreeShardMaxEntries: 100       # Threshold before splitting a B-Tree shard (default: 100)
+    recordSummaryMaxLength: 100     # Maximum character length of each wiki record summary (default: 100)
+    relativeLinks: "rewrite"        # Link strategy: "rewrite" (default) or "strip"/"delete"
+    sources:                        # Intake documents: directories and/or glob patterns
+      - docs                        #   directory: all files
+      - "repos/**/README.md"        #   recursive glob (quote it); disabled repos are excluded
+                                    # A sources list in .local.rnex.yaml replaces this list entirely.
+    exclude: []                     # Optional files, directories, and/or glob patterns excluded from sources (default: [])
 
     # Enable or disable
     enabled: true
@@ -101,20 +103,23 @@ plugins:
 | `logMaxRecords` | integer | `1000` | Maximum records in `log.md` before oldest entries are pruned (FIFO rolling window). |
 | `btreeRootMaxLines` | integer | `80` | Ceiling on lines allowed in `index.md`. |
 | `btreeShardMaxEntries` | integer | `100` | Maximum records allowed per leaf shard (default: 100). All wiki files (excluding `index.md` and `log.md`) strictly enforce this limit; shards exceeding this threshold are automatically and recursively subdivided to arbitrary depths (by letters `a-m`/`n-z`, by first 2 letters `pa-pm`/`pn-pz`, by first 3 letters `paa-pam`/`pan-paz`, etc.). |
+| `recordSummaryMaxLength` | integer | `100` | Maximum character length of the summary/content portion (after ` — `) for each wiki record. For Markdown files, reads all headers ordered by level (`#`, then `##`, then `###` and lower) up to this limit. For non-Markdown files matched by `sources`, reads `#` comments up to this limit. Files without readable headers or `#` comments emit only the title link without a summary. |
 | `relativeLinks` | string | `"rewrite"` | Handling strategy for relative links in ingested markdown summaries: `"rewrite"` (resolves relative links against source directory to valid paths from wiki, stripping broken links) or `"strip"` / `"delete"` (removes relative link markup, preserving anchor text). External links are always preserved. |
-| `sources` | list | `[docs, "repos/**/README.md"]` | Intake directories and/or glob patterns relative to workspace root. Overridable in `.local.rnex.yaml`. |
+| `sources` | list | `[README.md, docs, "{reposDir}/**/README.md"]` | Intake files, directories, and/or glob patterns relative to workspace root. Overridable in `.local.rnex.yaml`. |
+| `exclude` | list | `[]` | Files, directories, and/or glob patterns excluded from `sources` (e.g., `["**/.DS_Store", "docs/.vitepress"]`). Nothing is excluded by default. Overridable in `.local.rnex.yaml`. |
 | `enabled` | boolean | `true` | Enable or disable the plugin. Overridable in `.local.rnex.yaml`. |
 
 ---
 
-### Intake Sources (`sources`)
+### Intake Sources (`sources`) & Exclusions (`exclude`)
 
-The `sources` setting defines where the LLM Wiki discovers documentation for in-place indexing:
+The `sources` and `exclude` settings define where the LLM Wiki discovers and filters files for in-place indexing:
 
-- **Directory Paths (e.g. `docs`, `notes`)**: Repo Nexus recursively scans the directory for all Markdown files. Hidden directories (starting with `.`) and `node_modules` are automatically pruned.
-- **Recursive Globs (e.g. `"repos/**/README.md"`)**: Pure POSIX `/bin/sh` pattern resolution matches files at arbitrary directory depths. Always quote globs containing `*` in YAML. Directories named `.git`, `.rnex`, and `node_modules` are pruned during traversal.
+- **Directory Paths (e.g. `docs`, `notes`)**: Repo Nexus recursively scans the directory for all regular files. To exclude subdirectories or build artifacts (such as `docs/.vitepress` or `.DS_Store`), list them in `exclude`.
+- **Recursive Globs (e.g. `"repos/**/README.md"`, `"**/.DS_Store"`)**: Pure POSIX `/bin/sh` pattern resolution matches files at arbitrary directory depths. Always quote globs containing `*` in YAML.
+- **Exclusion Filtering (`exclude`)**: Accepts the exact same syntax as `sources` (file paths, directory paths, and glob/globstar patterns). Defaults to `[]` (nothing excluded by default).
 - **Active Repository Filtering**: Any resolved path located within `<reposDir>/<name>/` (default `repos/<name>/`) is checked against member repository status. If a repository is disabled (`enabled: false`) in `rnex.yaml` or `.local.rnex.yaml`, its files are automatically excluded.
-- **Two-Level Configuration Precedence**: If `sources` is declared in `.local.rnex.yaml`, it completely overrides the `sources` list defined in `rnex.yaml`.
+- **Two-Level Configuration Precedence**: If `sources` or `exclude` is declared in `.local.rnex.yaml`, it completely overrides the corresponding list defined in `rnex.yaml`.
 
 ---
 

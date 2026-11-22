@@ -33,22 +33,27 @@ fi
 RNEX_LLM_WIKI_SOURCE_HELPERS_SH_SOURCED=1
 
 # -----------------------------------------------------------------------------
-# parse_configured_workspace_sources
-# Summary: Parses the `plugins.llm-wiki.sources` list from .local.rnex.yaml
-#          (Priority 1) or rnex.yaml (Priority 2). Supports both YAML block
-#          sequences (`- item`) and inline arrays (`sources: [...]`).
-#          Falls back to default sources when unconfigured.
+# _parse_llm_wiki_config_list
+# Summary: Parses a list-valued key (`sources` or `exclude`) under
+#          `plugins.llm-wiki` from .local.rnex.yaml (Priority 1) or rnex.yaml
+#          (Priority 2). Supports YAML block sequences (`- item`), inline
+#          arrays (`key: [...]`), and empty arrays (`key: []`), and expands
+#          `{reposDir}`.
 # @param $1: workspace_root - Absolute path to workspace root.
-# @returns: Newline-delimited source specifications on stdout.
+# @param $2: list_key       - Configuration list key name ("sources" or "exclude").
+# @returns: 0 and newline-delimited items on stdout if key was explicitly found
+#           in config (even if empty); 1 if key was not configured in either file.
 # @pure (Read-only configuration inspection)
 # -----------------------------------------------------------------------------
-parse_configured_workspace_sources() {
-    _ws_root="$1"
-    _found_sources=""
+_parse_llm_wiki_config_list() {
+    _pcl_ws_root="$1"
+    _pcl_key="$2"
+    _pcl_repos_dir="${RNEX_CFG_REPOS_DIR:-repos}"
+    _pcl_repos_dir="${_pcl_repos_dir%/}"
 
-    for _cfg_file in "${_ws_root}/.local.rnex.yaml" "${_ws_root}/rnex.yaml"; do
-        [ -f "$_cfg_file" ] || continue
-        _extracted="$(LC_ALL=C awk '
+    for _pcl_cfg_file in "${_pcl_ws_root}/.local.rnex.yaml" "${_pcl_ws_root}/rnex.yaml"; do
+        [ -f "$_pcl_cfg_file" ] || continue
+        _pcl_res="$(LC_ALL=C awk -v target_key="$_pcl_key" '
             function clean_token(s) {
                 gsub(/\r/, "", s)
                 sub(/[[:space:]]+#.*$/, "", s)
@@ -67,6 +72,7 @@ parse_configured_workspace_sources() {
                     if (tok != "") print tok
                 }
             }
+            BEGIN { found_key = 0 }
             /^[[:space:]]*#/ || /^[[:space:]]*$/ { next }
             {
                 match($0, /^[ ]*/)
@@ -74,40 +80,63 @@ parse_configured_workspace_sources() {
                 line = substr($0, indent + 1)
 
                 if (indent == 0) {
-                    in_plugins = (line ~ /^plugins:[[:space:]]*$/)
+                    in_plugins = (line ~ /^plugins:[[:space:]]*(#.*)?$/)
                     in_llm_wiki = 0
-                    in_llm_wiki_sources = 0
+                    in_target_list = 0
                     next
                 }
                 if (in_plugins) {
                     if (indent == 2 && line ~ /^[^[:space:]-][^:]*:/) {
-                        in_llm_wiki = (line ~ /^llm-wiki:[[:space:]]*$/)
-                        in_llm_wiki_sources = 0
+                        in_llm_wiki = (line ~ /^llm-wiki:[[:space:]]*(#.*)?$/)
+                        in_target_list = 0
                         next
                     }
                     if (in_llm_wiki) {
-                        if (line ~ /^sources:[[:space:]]*\[.*\][[:space:]]*$/) {
-                            sub(/^sources:[[:space:]]*/, "", line)
+                        if (line ~ ("^" target_key ":[[:space:]]*\\[.*\\][[:space:]]*(#.*)?$")) {
+                            found_key = 1
+                            sub(("^" target_key ":[[:space:]]*"), "", line)
+                            sub(/[[:space:]]+#.*$/, "", line)
                             emit_inline(line)
-                            in_llm_wiki_sources = 0
-                        } else if (line ~ /^sources:[[:space:]]*$/) {
-                            in_llm_wiki_sources = 1
-                        } else if (in_llm_wiki_sources && line ~ /^-[[:space:]]+/) {
+                            in_target_list = 0
+                        } else if (line ~ ("^" target_key ":[[:space:]]*(#.*)?$")) {
+                            found_key = 1
+                            in_target_list = 1
+                        } else if (in_target_list && line ~ /^-[[:space:]]+/) {
                             sub(/^-[[:space:]]+/, "", line)
                             tok = clean_token(line)
                             if (tok != "") print tok
                         } else if (line !~ /^-[[:space:]]+/) {
-                            in_llm_wiki_sources = 0
+                            in_target_list = 0
                         }
                     }
                 }
             }
-        ' "$_cfg_file")"
-        if [ -n "$_extracted" ]; then
-            _found_sources="$_extracted"
-            break
-        fi
+            END {
+                if (found_key == 1) exit 0
+                exit 1
+            }
+        ' "$_pcl_cfg_file")" && {
+            if [ -n "$_pcl_res" ]; then
+                printf '%s\n' "$_pcl_res" | sed "s|{reposDir}|${_pcl_repos_dir}|g"
+            fi
+            return 0
+        }
     done
+    return 1
+}
+
+# -----------------------------------------------------------------------------
+# parse_configured_workspace_sources
+# Summary: Parses the `plugins.llm-wiki.sources` list from .local.rnex.yaml
+#          (Priority 1) or rnex.yaml (Priority 2). Falls back to default
+#          sources when unconfigured.
+# @param $1: workspace_root - Absolute path to workspace root.
+# @returns: Newline-delimited source specifications on stdout.
+# @pure (Read-only configuration inspection)
+# -----------------------------------------------------------------------------
+parse_configured_workspace_sources() {
+    _ws_root="$1"
+    _found_sources="$(_parse_llm_wiki_config_list "$_ws_root" "sources" || true)"
 
     # Fall back to default candidate sources defined in plugin.yaml config_defaults
     if [ -z "$_found_sources" ]; then
@@ -119,6 +148,105 @@ ${_repos_dir}/**/README.md"
     fi
 
     printf '%s\n' "$_found_sources"
+    return 0
+}
+
+# -----------------------------------------------------------------------------
+# parse_configured_workspace_excludes
+# Summary: Parses the `plugins.llm-wiki.exclude` list from .local.rnex.yaml
+#          (Priority 1) or rnex.yaml (Priority 2). Defaults to empty (nothing
+#          excluded by default).
+# @param $1: workspace_root - Absolute path to workspace root.
+# @returns: Newline-delimited exclude specifications on stdout (empty if unset).
+# @pure (Read-only configuration inspection)
+# -----------------------------------------------------------------------------
+parse_configured_workspace_excludes() {
+    _ws_root="$1"
+    _parse_llm_wiki_config_list "$_ws_root" "exclude" || true
+    return 0
+}
+
+# -----------------------------------------------------------------------------
+# is_path_excluded_by_spec
+# Summary: Evaluates whether a workspace-relative file path matches a single
+#          `plugins.llm-wiki.exclude` specification (exact file path, directory
+#          path prefix, or POSIX glob / globstar pattern).
+# @param $1: candidate_rel_path - Normalized workspace-relative file path.
+# @param $2: exclude_spec       - Configured exclude file, directory, or glob pattern.
+# @returns: 0 if the path is excluded by the specification; 1 otherwise.
+# @pure
+# -----------------------------------------------------------------------------
+is_path_excluded_by_spec() {
+    _ipe_path="$1"
+    _ipe_spec="$(printf '%s' "$2" | tr -d '\r')"
+    [ -n "$_ipe_path" ] && [ -n "$_ipe_spec" ] || return 1
+
+    while [ "${_ipe_spec#./}" != "$_ipe_spec" ]; do _ipe_spec="${_ipe_spec#./}"; done
+    _ipe_spec="${_ipe_spec%/}"
+    [ -n "$_ipe_spec" ] || return 1
+
+    # 1. Exact file path match
+    if [ "$_ipe_path" = "$_ipe_spec" ]; then
+        return 0
+    fi
+
+    # 2. Directory path prefix match (e.g., exclude: ["docs/.vitepress"])
+    case "$_ipe_path" in
+        "${_ipe_spec}/"*)
+            return 0
+            ;;
+    esac
+
+    # 3. Glob or globstar pattern match (for files or directory trees)
+    if match_globstar_path "$_ipe_path" "$_ipe_spec" "$RNEX_WORKSPACE_ROOT"; then
+        return 0
+    fi
+    if match_globstar_path "$_ipe_path" "${_ipe_spec}/**" "$RNEX_WORKSPACE_ROOT"; then
+        return 0
+    fi
+
+    return 1
+}
+
+# -----------------------------------------------------------------------------
+# filter_excluded_sources
+# Summary: Filters a file of candidate workspace-relative paths in-place,
+#          removing any path that matches a pattern, file, or directory in
+#          `plugins.llm-wiki.exclude`. When `exclude` is empty (default),
+#          performs zero filtering.
+# @param $1: candidates_file - File containing candidate workspace_rel_paths.
+# @returns: 0 on success.
+# @sideEffects: Atomically updates $1 with excluded paths removed.
+# -----------------------------------------------------------------------------
+filter_excluded_sources() {
+    _fes_file="$1"
+    [ -s "$_fes_file" ] || return 0
+
+    _fes_excludes="$(parse_configured_workspace_excludes "$RNEX_WORKSPACE_ROOT")"
+    [ -n "$_fes_excludes" ] || return 0
+
+    _fes_ex_tmp="${_fes_file}.exspecs.$$"
+    _fes_out_tmp="${_fes_file}.exout.$$"
+    printf '%s\n' "$_fes_excludes" > "$_fes_ex_tmp"
+    : > "$_fes_out_tmp"
+
+    while IFS= read -r _fes_cand <&3; do
+        [ -n "$_fes_cand" ] || continue
+        _fes_drop=0
+        while IFS= read -r _fes_spec <&4; do
+            [ -n "$_fes_spec" ] || continue
+            if is_path_excluded_by_spec "$_fes_cand" "$_fes_spec"; then
+                _fes_drop=1
+                break
+            fi
+        done 4< "$_fes_ex_tmp"
+        if [ "$_fes_drop" -eq 0 ]; then
+            printf '%s\n' "$_fes_cand" >> "$_fes_out_tmp"
+        fi
+    done 3< "$_fes_file"
+
+    mv "$_fes_out_tmp" "$_fes_file"
+    rm -f "$_fes_ex_tmp"
     return 0
 }
 
@@ -212,7 +340,7 @@ derive_shard_id_for_workspace_path() {
 # expand_single_source_spec
 # Summary: Expands a single source specification (regular file, directory, or
 #          glob pattern including "**") into normalized workspace-relative
-#          Markdown file paths, rejecting symlinks, disabled member repos,
+#          file paths, rejecting symlinks, disabled member repos,
 #          and the wiki directory itself.
 # @param $1: source_spec         - File path, directory path, or glob pattern.
 # @param $2: out_candidates_file - Output file to append discovered paths.
@@ -243,7 +371,7 @@ expand_single_source_spec() {
             [ -n "$_prefix" ] && _search_root="${RNEX_WORKSPACE_ROOT}/${_prefix#./}"
             [ -d "$_search_root" ] || return 0
 
-            find "$_search_root" -type f \( -name '*.md' -o -name '*.mdx' \) \
+            find "$_search_root" -type f \
                 ! -path "${RNEX_WIKI_ROOT}/*" ! -path '*/.rnex/*' ! -path '*/.git/*' ! -path '*/node_modules/*' -print \
             | while IFS= read -r _found_abs; do
                 [ -L "$_found_abs" ] && continue
@@ -271,9 +399,9 @@ expand_single_source_spec() {
         return 0
     fi
 
-    # Case 4: Directory -> recursively find all regular .md/.mdx files
+    # Case 4: Directory -> recursively find all regular files
     if [ -d "$_abs_spec" ]; then
-        find "$_abs_spec" -type f \( -name '*.md' -o -name '*.mdx' \) \
+        find "$_abs_spec" -type f \
             ! -path "${RNEX_WIKI_ROOT}/*" ! -path '*/.rnex/*' ! -path '*/.git/*' ! -path '*/node_modules/*' -print \
         | while IFS= read -r _found_abs; do
             [ -L "$_found_abs" ] && continue
@@ -321,6 +449,7 @@ resolve_candidate_sources() {
     fi
 
     atomic_sort_unique_file "$_rcs_out" || true
+    filter_excluded_sources "$_rcs_out"
     return 0
 }
 
