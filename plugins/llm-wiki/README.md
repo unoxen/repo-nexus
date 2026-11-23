@@ -19,7 +19,7 @@ No external vector databases, embedding pipelines, or MCP servers required — j
 * Deterministic 3-step retrieval protocol: B-Tree Root Router (`<wikiDir>/<indexFile>`) $\to$ Targeted Leaf Shard (`<wikiDir>/<shard>.md`) $\to$ In-Place Source Document.
 
 ### 3. Zero-Dependency Flat B-Tree Architecture (`instructions/rnex-wiki-architecture.md`)
-* **Intake Sources (`plugins.llm-wiki.sources`, default: `["docs", "repos/**/README.md"]`):** Multi-value array of directory paths, file paths, and glob patterns for unmodified source material (articles, transcripts, docs, meeting notes, repo READMEs).
+* **Intake Sources (`plugins.llm-wiki.sources`, default: `["README.md", "docs", "{reposDir}/**/README.md"]`):** Multi-value array of directory paths, file paths, and glob patterns for unmodified source material (articles, transcripts, docs, meeting notes, repo READMEs).
 * **Zero-Duplication In-Place Architecture:** Source files configured in `plugins.llm-wiki.sources` are indexed directly where they reside in the workspace. Zero redundant copies and zero symbolic links.
 * **B-Tree Root Router (`<wikiDir>/<indexFile>`):** Compact, strictly bounded routing table (bounded by `plugins.llm-wiki.btreeRootMaxLines`, default: $\le 80$ lines) mapping lexicographic key ranges to leaf shard files in `<wikiDir>/`.
 * **Flat Leaf Shards (`<wikiDir>/repo-nexus*.md`, `<wikiDir>/repos-*.md`):** Lexicographically sorted catalogs bounded by `plugins.llm-wiki.btreeShardMaxEntries` (default: 100 entries).
@@ -96,8 +96,9 @@ plugins:
   llm-wiki:
     # Intake sources (files, directories, and/or glob patterns)
     sources:
+      - README.md
       - docs
-      - "repos/**/README.md"
+      - "{reposDir}/**/README.md"
     # Optional excluded files, directories, and/or glob patterns (default: [])
     exclude: []
 

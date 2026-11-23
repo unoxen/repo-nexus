@@ -277,10 +277,10 @@ lint_existing_wiki_directory() {
         _base_id="$(derive_base_id_for_shard "$_sid")"
 
         # Heal embedded base metadata comment if it drifted from canonical _base_id
-        _curr_meta_base="$(sed -n 's/^<!-- base: \(.*\) -->$/\1/p' "$_wiki_md" 2>/dev/null | head -n 1)"
+        _curr_meta_base="$(LC_ALL=C sed -n 's/^<!-- base: \(.*\) -->$/\1/p' "$_wiki_md" 2>/dev/null | head -n 1)"
         if [ -n "$_curr_meta_base" ] && [ "$_curr_meta_base" != "$_base_id" ]; then
             _meta_tmp="${_wiki_md}.meta.$$"
-            sed "s/^<!-- base: .* -->$/<!-- base: ${_base_id} -->/" "$_wiki_md" > "$_meta_tmp" && mv "$_meta_tmp" "$_wiki_md"
+            LC_ALL=C sed "s/^<!-- base: .* -->$/<!-- base: ${_base_id} -->/" "$_wiki_md" > "$_meta_tmp" && mv "$_meta_tmp" "$_wiki_md"
             rm -f "$_meta_tmp"
         fi
 
@@ -440,7 +440,7 @@ lint_existing_wiki_directory() {
 
     # 6. Post-healing invariant checks
     # 6a. Verify index.md line count <= RNEX_WIKI_BTREE_MAX_ROOT_LINES
-    _root_lines="$(wc -l < "$RNEX_WIKI_INDEX_FILE" | tr -d ' ')"
+    _root_lines="$(wc -l < "$RNEX_WIKI_INDEX_FILE" | LC_ALL=C tr -d ' ')"
     if [ "$_root_lines" -gt "$RNEX_WIKI_BTREE_MAX_ROOT_LINES" ]; then
         printf 'Lint Error: "%s/index.md" has %s lines (exceeds max %s).\n' \
             "$RNEX_WIKI_REL_DIR" "$_root_lines" "$RNEX_WIKI_BTREE_MAX_ROOT_LINES" >&2

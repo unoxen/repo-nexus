@@ -53,6 +53,7 @@ _lookup_llm_wiki_cfg() {
             _v="$(LC_ALL=C awk -v target_k="$_k" '
                 BEGIN { in_plugin=0 }
                 /^[ ]*llm-wiki:[ ]*(#.*)?$/ { in_plugin=1; next }
+                in_plugin && /^[ ]{1,2}[a-zA-Z0-9._-]+:/ { in_plugin=0 }
                 in_plugin && /^[^ ]/ { in_plugin=0 }
                 in_plugin && $1 ~ ("^" target_k ":") {
                     line = $0

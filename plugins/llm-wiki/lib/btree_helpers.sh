@@ -122,7 +122,7 @@ heal_entry_title_link_depth() {
     _hl_rel="$2"
     if [ -n "$_hl_rel" ] && [ -f "${RNEX_WORKSPACE_ROOT}/${_hl_rel}" ]; then
         _hl_expected="${RNEX_WIKI_UP_PREFIX:-../../}${_hl_rel}"
-        _hl_curr="$(printf '%s\n' "$_hl_line" | sed -n 's/^- \*\*\[[^]]*\](\([^)]*\)).*/\1/p')"
+        _hl_curr="$(printf '%s\n' "$_hl_line" | LC_ALL=C sed -n 's/^- \*\*\[[^]]*\](\([^)]*\)).*/\1/p')"
         if [ -n "$_hl_curr" ] && [ "$_hl_curr" != "$_hl_expected" ]; then
             _hl_title="$(extract_entry_title "$_hl_line")"
             _hl_rest="${_hl_line#*\*\* (\`"${_hl_rel}"\`)}"
@@ -240,13 +240,15 @@ extract_markdown_title_and_summary() {
             ;;
     esac
 
-    LC_ALL=C awk -v def_title="$_fallback" -v is_md="$_is_md" -v max_len="$_max_len" '
+    LC_ALL=C tr '\000' '\001' < "$_file" | LC_ALL=C awk -v def_title="$_fallback" -v is_md="$_is_md" -v max_len="$_max_len" "
+        ${RNEX_WIKI_AWK_LIB}
         function clean_line(s) {
-            gsub(/\r/, "", s)
-            gsub(/[\001-\037\177|]/, " ", s)
-            gsub(/  +/, " ", s)
-            sub(/^ +/, "", s)
-            sub(/ +$/, "", s)
+            gsub(/\r/, \"\", s)
+            gsub(/[\001-\037\177|]/, \" \", s)
+            s = sanitize_utf8(s)
+            gsub(/  +/, \" \", s)
+            sub(/^ +/, \"\", s)
+            sub(/ +\$/, \"\", s)
             return s
         }
         function is_readable(s) {
@@ -262,45 +264,45 @@ extract_markdown_title_and_summary() {
         BEGIN {
             in_frontmatter = 0
             in_code = 0
-            title = ""
-            summary = ""
+            title = \"\"
+            summary = \"\"
             max_lvl = 0
         }
         /[\001-\010\013\014\016-\037\177]/ {
             if (is_md == 0) {
-                summary = ""
+                summary = \"\"
                 exit
             }
         }
         is_md == 1 {
-            if (NR == 1 && /^---[[:space:]]*$/) {
+            if (NR == 1 && /^---[[:space:]]*\$/) {
                 in_frontmatter = 1
                 next
             }
             if (in_frontmatter == 1) {
-                if (/^(---|\.\.\.)[[:space:]]*$/) in_frontmatter = 0
+                if (/^(---|\.\.\.)[[:space:]]*\$/) in_frontmatter = 0
                 next
             }
-            if (/^[[:space:]]*(```|~~~)/) {
+            if (/^[[:space:]]*(\`\`\`|~~~)/) {
                 in_code = !in_code
                 next
             }
             if (in_code == 1) next
 
             if (/^[[:space:]]*#+[[:space:]]+/) {
-                line = $0
-                sub(/^[[:space:]]*/, "", line)
+                line = \$0
+                sub(/^[[:space:]]*/, \"\", line)
                 match(line, /^#+/)
                 lvl = RLENGTH
-                sub(/^#+[[:space:]]+/, "", line)
-                sub(/[[:space:]]+#+[[:space:]]*$/, "", line)
+                sub(/^#+[[:space:]]+/, \"\", line)
+                sub(/[[:space:]]+#+[[:space:]]*\$/, \"\", line)
                 line = clean_line(line)
                 if (is_readable(line)) {
-                    if (lvl == 1 && title == "") {
+                    if (lvl == 1 && title == \"\") {
                         t_line = line
-                        gsub(/[*]/, " ", t_line)
+                        gsub(/[*]/, \" \", t_line)
                         t_line = clean_line(t_line)
-                        if (t_line != "") title = t_line
+                        if (t_line != \"\") title = t_line
                     }
                     hdr_cnt[lvl]++
                     hdrs[lvl, hdr_cnt[lvl]] = line
@@ -312,34 +314,34 @@ extract_markdown_title_and_summary() {
         is_md == 0 {
             if (NR == 1 && /^#!/) next
             if (/^[[:space:]]*#[[:space:]]*shellcheck[[:space:]]/) next
-            if (/^[[:space:]]*#[[:space:]]*(include|define|undef|ifdef|ifndef|if|elif|else|endif|pragma|error|line)([[:space:]<"(]|$)/) next
+            if (/^[[:space:]]*#[[:space:]]*(include|define|undef|ifdef|ifndef|if|elif|else|endif|pragma|error|line)([[:space:]<\"(]|\$)/) next
             if (/^[[:space:]]*#/) {
-                line = $0
-                sub(/^[[:space:]]*#+[[:space:]]*/, "", line)
-                sub(/[[:space:]]*#+[[:space:]]*$/, "", line)
+                line = \$0
+                sub(/^[[:space:]]*#+[[:space:]]*/, \"\", line)
+                sub(/[[:space:]]*#+[[:space:]]*\$/, \"\", line)
                 line = clean_line(line)
                 if (is_readable(line)) {
-                    summary = (summary == "") ? line : (summary " " line)
+                    summary = (summary == \"\") ? line : (summary \" \" line)
                     if (visible_len(summary) >= (max_len + 0)) exit
                 }
             }
         }
         END {
-            if (title == "") title = def_title
+            if (title == \"\") title = def_title
             if (is_md == 1) {
                 for (l = 1; l <= max_lvl; l++) {
                     c = hdr_cnt[l] + 0
                     for (i = 1; i <= c; i++) {
                         h = hdrs[l, i]
-                        summary = (summary == "") ? h : (summary " " h)
+                        summary = (summary == \"\") ? h : (summary \" \" h)
                         if (visible_len(summary) >= (max_len + 0)) break
                     }
                     if (visible_len(summary) >= (max_len + 0)) break
                 }
             }
-            printf "%s|%s\n", title, summary
+            printf \"%s|%s\n\", title, summary
         }
-    ' "$_file"
+    "
 }
 
 # -----------------------------------------------------------------------------
@@ -398,7 +400,7 @@ build_wiki_entry_line() {
     # 2. Title: strip link markup, sanitize, and drop characters that would
     #    break the "**[title](link)**" entry grammar.
     _bwe_title="$(sanitize_markdown_summary "$(strip_markdown_links "$_bwe_raw_title")" 140)"
-    _bwe_title="$(printf '%s' "$_bwe_title" | tr -d '[]*')"
+    _bwe_title="$(printf '%s' "$_bwe_title" | LC_ALL=C tr -d '[]*')"
     [ -n "$_bwe_title" ] || _bwe_title="$(basename "$_bwe_rel")"
 
     # 3. Summary: if readable headers or comments exist, re-anchor relative
@@ -955,7 +957,7 @@ derive_base_id_for_shard() {
 
     # 2. Read embedded metadata tag if present (for synthetic/unmounted test shards)
     if [ -f "$_shard_path" ]; then
-        _meta_base="$(sed -n 's/^<!-- base: \(.*\) -->$/\1/p' "$_shard_path" 2>/dev/null | head -n 1)"
+        _meta_base="$(LC_ALL=C sed -n 's/^<!-- base: \(.*\) -->$/\1/p' "$_shard_path" 2>/dev/null | head -n 1)"
         if [ -n "$_meta_base" ]; then
             printf '%s\n' "$_meta_base"
             return 0

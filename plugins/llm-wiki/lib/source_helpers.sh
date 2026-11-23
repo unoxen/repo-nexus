@@ -117,7 +117,7 @@ _parse_llm_wiki_config_list() {
             }
         ' "$_pcl_cfg_file")" && {
             if [ -n "$_pcl_res" ]; then
-                printf '%s\n' "$_pcl_res" | sed "s|{reposDir}|${_pcl_repos_dir}|g"
+                printf '%s\n' "$_pcl_res" | LC_ALL=C sed "s|{reposDir}|${_pcl_repos_dir}|g"
             fi
             return 0
         }
@@ -178,7 +178,7 @@ parse_configured_workspace_excludes() {
 # -----------------------------------------------------------------------------
 is_path_excluded_by_spec() {
     _ipe_path="$1"
-    _ipe_spec="$(printf '%s' "$2" | tr -d '\r')"
+    _ipe_spec="$(printf '%s' "$2" | LC_ALL=C tr -d '\r')"
     [ -n "$_ipe_path" ] && [ -n "$_ipe_spec" ] || return 1
 
     while [ "${_ipe_spec#./}" != "$_ipe_spec" ]; do _ipe_spec="${_ipe_spec#./}"; done
@@ -314,9 +314,9 @@ derive_shard_id_for_workspace_path() {
     case "$_rel" in
         "${_repos_dir}/"*)
             _after_repos="${_rel#"${_repos_dir}/"}"
-            _member_name="$(printf '%s' "$_after_repos" | cut -d'/' -f1)"
-            _second_seg="$(printf '%s' "$_after_repos" | cut -d'/' -f2)"
-            _third_seg="$(printf '%s' "$_after_repos" | cut -d'/' -f3)"
+            _member_name="$(printf '%s' "$_after_repos" | LC_ALL=C cut -d'/' -f1)"
+            _second_seg="$(printf '%s' "$_after_repos" | LC_ALL=C cut -d'/' -f2)"
+            _third_seg="$(printf '%s' "$_after_repos" | LC_ALL=C cut -d'/' -f3)"
             _member_slug="$(normalize_slug_id "$_member_name")"
             if [ -n "$_third_seg" ]; then
                 _scope_slug="$(normalize_slug_id "$_second_seg")"
@@ -326,7 +326,7 @@ derive_shard_id_for_workspace_path() {
             fi
             ;;
         */*)
-            _top_dir="$(printf '%s' "$_rel" | cut -d'/' -f1)"
+            _top_dir="$(printf '%s' "$_rel" | LC_ALL=C cut -d'/' -f1)"
             _top_slug="$(normalize_slug_id "$_top_dir")"
             printf 'repo-nexus-%s\n' "$_top_slug"
             ;;
@@ -349,7 +349,7 @@ derive_shard_id_for_workspace_path() {
 # @sideEffects: Appends workspace-relative paths to $2.
 # -----------------------------------------------------------------------------
 expand_single_source_spec() {
-    _spec="$(printf '%s' "$1" | tr -d '\r')"
+    _spec="$(printf '%s' "$1" | LC_ALL=C tr -d '\r')"
     _out_file="$2"
     [ -n "$_spec" ] || return 0
 

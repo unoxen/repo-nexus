@@ -118,6 +118,51 @@ function expected_base_shard(rel_path, rdir,   rest, n, parts) {
         return "repo-nexus"
     }
 }
+function is_utf8_cont(b) {
+    return (b >= "\200" && b <= "\277")
+}
+function sanitize_utf8(str,   out, i, n, b1, b2, b3, b4) {
+    out = ""
+    n = length(str)
+    i = 1
+    while (i <= n) {
+        b1 = substr(str, i, 1)
+        if (b1 < "\200") {
+            out = out b1
+            i++
+        } else if (b1 >= "\302" && b1 <= "\337" && (i + 1) <= n) {
+            b2 = substr(str, i + 1, 1)
+            if (is_utf8_cont(b2)) {
+                out = out b1 b2
+                i += 2
+            } else {
+                i++
+            }
+        } else if (b1 >= "\340" && b1 <= "\357" && (i + 2) <= n) {
+            b2 = substr(str, i + 1, 1)
+            b3 = substr(str, i + 2, 1)
+            if (is_utf8_cont(b2) && is_utf8_cont(b3)) {
+                out = out b1 b2 b3
+                i += 3
+            } else {
+                i++
+            }
+        } else if (b1 >= "\360" && b1 <= "\364" && (i + 3) <= n) {
+            b2 = substr(str, i + 1, 1)
+            b3 = substr(str, i + 2, 1)
+            b4 = substr(str, i + 3, 1)
+            if (is_utf8_cont(b2) && is_utf8_cont(b3) && is_utf8_cont(b4)) {
+                out = out b1 b2 b3 b4
+                i += 4
+            } else {
+                i++
+            }
+        } else {
+            i++
+        }
+    }
+    return out
+}
 '
 # shellcheck disable=SC2090
 export RNEX_WIKI_AWK_LIB
@@ -167,7 +212,7 @@ normalize_slug_id() {
 # -----------------------------------------------------------------------------
 normalize_workspace_rel_path() {
     _ws_root="${1%/}"
-    _raw_path="$(printf '%s' "$2" | tr -d '\r')"
+    _raw_path="$(printf '%s' "$2" | LC_ALL=C tr -d '\r')"
 
     case "$_raw_path" in
         "${_ws_root}/"*)
@@ -183,7 +228,7 @@ normalize_workspace_rel_path() {
     esac
 
     # Strip leading "./", collapse redundant slashes, and strip trailing slash
-    _rel="$(printf '%s' "$_rel" | sed 's#^\./##; s#///*#/#g; s#/$##')"
+    _rel="$(printf '%s' "$_rel" | LC_ALL=C sed 's#^\./##; s#///*#/#g; s#/$##')"
     case "$_rel" in
         ''|*..*|/*)
             return 1
@@ -211,12 +256,12 @@ match_globstar_path() {
 
     case "$_candidate_path" in
         *[\"\'\	\ ]*)
-            _candidate_path="$(printf '%s' "$_candidate_path" | tr -d '"'\''' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+            _candidate_path="$(printf '%s' "$_candidate_path" | LC_ALL=C tr -d '"'\''' | LC_ALL=C sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
             ;;
     esac
     case "$_target_pat" in
         *[\"\'\	\ ]*)
-            _target_pat="$(printf '%s' "$_target_pat" | tr -d '"'\''' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+            _target_pat="$(printf '%s' "$_target_pat" | LC_ALL=C tr -d '"'\''' | LC_ALL=C sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
             ;;
     esac
 
@@ -314,7 +359,7 @@ match_globstar_path() {
 # @pure
 # -----------------------------------------------------------------------------
 compute_upward_rel_prefix() {
-    _clean_dir="$(printf '%s' "$1" | sed 's#^\./##; s#/$##')"
+    _clean_dir="$(printf '%s' "$1" | LC_ALL=C sed 's#^\./##; s#/$##')"
     if [ -z "$_clean_dir" ] || [ "$_clean_dir" = "." ]; then
         return 0
     fi
@@ -350,8 +395,8 @@ extract_entry_rel_path() {
 # @pure
 # -----------------------------------------------------------------------------
 extract_entry_title() {
-    _t="$(printf '%s\n' "$1" | sed -n 's/^- \*\*\[\([^]]*\)\].*/\1/p')"
-    [ -n "$_t" ] || _t="$(printf '%s\n' "$1" | sed -n 's/^- \*\*\([^*]*\)\*\*.*/\1/p')"
+    _t="$(printf '%s\n' "$1" | LC_ALL=C sed -n 's/^- \*\*\[\([^]]*\)\].*/\1/p')"
+    [ -n "$_t" ] || _t="$(printf '%s\n' "$1" | LC_ALL=C sed -n 's/^- \*\*\([^*]*\)\*\*.*/\1/p')"
     [ -n "$_t" ] || _t="untitled"
     printf '%s\n' "$_t"
 }
@@ -512,41 +557,43 @@ sanitize_markdown_summary() {
         ''|*[!0-9]*|0) _sms_max=100 ;;
     esac
     printf '%s\n' "$1" \
-        | tr '\t\r\n|' '    ' \
-        | sed 's/  */ /g; s/^ //; s/ $//' \
-        | LC_ALL=C awk -v max_len="$_sms_max" '
+        | LC_ALL=C tr '\t\r\n|' '    ' \
+        | LC_ALL=C sed 's/  */ /g; s/^ //; s/ $//' \
+        | LC_ALL=C awk -v max_len="$_sms_max" "
+            ${RNEX_WIKI_AWK_LIB}
             function safe_truncate(s, m_len,   sub_s, i, ch, p, p_bra, p_open, anchor, pfx_end) {
+                s = sanitize_utf8(s)
                 if (length(s) <= m_len) return s
-                sub_s = substr(s, 1, m_len)
+                sub_s = sanitize_utf8(substr(s, 1, m_len))
                 p = 0
                 for (i = length(sub_s); i >= 1; i--) {
                     ch = substr(sub_s, i, 1)
-                    if (ch == "]") break
-                    if (ch == "[") { p = i; break }
+                    if (ch == \"]\") break
+                    if (ch == \"[\") { p = i; break }
                 }
                 if (p > 0) {
-                    if (p > 1 && substr(sub_s, p - 1, 1) == "[") p--
-                    if (p > 1 && substr(sub_s, p - 1, 1) == "!") p--
+                    if (p > 1 && substr(sub_s, p - 1, 1) == \"[\") p--
+                    if (p > 1 && substr(sub_s, p - 1, 1) == \"!\") p--
                     if (p > 1) {
                         sub_s = substr(sub_s, 1, p - 1)
                     } else {
-                        sub(/^!?\[\[?/, "", sub_s)
+                        sub(/^!?\[\[?/, \"\", sub_s)
                     }
                 } else {
                     p_bra = 0
                     for (i = length(sub_s); i >= 1; i--) {
-                        if (substr(sub_s, i, 1) == ")") break
-                        if (substr(sub_s, i, 2) == "](") { p_bra = i; break }
+                        if (substr(sub_s, i, 1) == \")\") break
+                        if (substr(sub_s, i, 2) == \"](\") { p_bra = i; break }
                     }
                     if (p_bra > 0) {
                         p_open = 0
                         for (i = p_bra; i >= 1; i--) {
-                            if (substr(sub_s, i, 1) == "[") { p_open = i; break }
+                            if (substr(sub_s, i, 1) == \"[\") { p_open = i; break }
                         }
                         if (p_open > 0) {
                             anchor = substr(sub_s, p_open + 1, p_bra - p_open - 1)
                             pfx_end = p_open - 1
-                            if (pfx_end >= 1 && substr(sub_s, pfx_end, 1) == "!") pfx_end--
+                            if (pfx_end >= 1 && substr(sub_s, pfx_end, 1) == \"!\") pfx_end--
                             if (pfx_end >= 1) {
                                 sub_s = substr(sub_s, 1, pfx_end)
                             } else {
@@ -555,13 +602,13 @@ sanitize_markdown_summary() {
                         }
                     }
                 }
-                sub(/[[:space:]]+$/, "", sub_s)
+                sub(/[[:space:]]+\$/, \"\", sub_s)
                 return sub_s
             }
             {
-                print safe_truncate($0, max_len + 0)
+                print safe_truncate(\$0, max_len + 0)
             }
-        '
+        "
 }
 
 # -----------------------------------------------------------------------------
@@ -573,7 +620,7 @@ sanitize_markdown_summary() {
 # @pure
 # -----------------------------------------------------------------------------
 sanitize_single_line_text() {
-    printf '%s' "$1" | tr '\t\r\n' '   ' | sed 's/  */ /g; s/^ //; s/ $//'
+    printf '%s' "$1" | LC_ALL=C tr '\t\r\n' '   ' | LC_ALL=C sed 's/  */ /g; s/^ //; s/ $//'
 }
 
 # -----------------------------------------------------------------------------

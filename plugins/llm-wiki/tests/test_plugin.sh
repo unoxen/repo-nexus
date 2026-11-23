@@ -2190,6 +2190,77 @@ echo "$_data_after_ex" | grep -q 'data/config\.json' || {
 }
 pass
 
+# --------------------------------------------------------------------------
+# Test 35: Multi-byte UTF-8 boundary truncation, NUL-prefixed binary files, and non-UTF-8 byte safety under UTF-8 locale
+# --------------------------------------------------------------------------
+run_test "LLM Wiki: multi-byte UTF-8 boundary truncation, NUL-prefixed binary files, and non-UTF-8 byte safety (zero sed/tr illegal byte sequence)"
+TEST_UTF8_WS="$TEST_TMP/llm-wiki-utf8-ws"
+mkdir -p "$TEST_UTF8_WS"
+setup_plugin_test_workspace llm-wiki "$TEST_UTF8_WS"
+cd "$TEST_UTF8_WS"
+"$TEST_UTF8_WS/rnex" init -y --llm-wiki "$TEST_UTF8_WS" >/dev/null
+
+mkdir -p "$TEST_UTF8_WS/docs"
+
+# 1. Markdown document where 3-byte UTF-8 em-dash (—) and arrow (→) straddle byte 100 boundary
+printf '# Architecture Overview\n## Section One: Core Multi-Repo Engine Design Principles and System Contracts A — Detailed → Walkthrough\n' > "$TEST_UTF8_WS/docs/utf8-boundary.md"
+
+# 2. Markdown document with 4-byte emoji (🚀) and 2-byte accented characters (é, ü) straddling custom summary boundary
+printf '# Unicode Café & Über Guide\n## Deployment 🚀 Pipeline — Café & Über Microservices Orchestration\n' > "$TEST_UTF8_WS/docs/unicode.md"
+
+# 3. Real NUL-prefixed binary file (.DS_Store style) with embedded newline, '#', and invalid UTF-8 bytes (\377\376)
+printf '\000\000\000\001Bud1\n#BinaryCommentAfterNul\377\376\n' > "$TEST_UTF8_WS/docs/binary-nul.dat"
+
+# 4. Non-UTF-8 Latin-1 / high-byte comment in a script file
+printf '#!/bin/sh\n# Latin-1 comment with raw high bytes \351\377\376 in header\necho ok\n' > "$TEST_UTF8_WS/docs/latin1.sh"
+
+cat <<'EOF_UTF8_CFG' > "$TEST_UTF8_WS/rnex.yaml"
+version: 1.0.0
+plugins:
+  llm-wiki:
+    wikiDir: ".rnex/wiki"
+    recordSummaryMaxLength: 100
+    sources:
+      - docs
+repos:
+EOF_UTF8_CFG
+
+# Run ingest, ingest --force, lint, and lint --shallow under strict en_US.UTF-8 locale with LC_* unset
+# Capturing stderr to assert zero "illegal byte sequence" warnings from sed/tr/cut
+_utf8_stderr="$(
+  unset LC_ALL LC_COLLATE LC_CTYPE LC_MESSAGES LC_MONETARY LC_NUMERIC LC_TIME
+  export LANG=en_US.UTF-8
+  cd "$TEST_UTF8_WS"
+  ./rnex plugin llm-wiki ingest 2>&1 >/dev/null
+  ./rnex plugin llm-wiki ingest --force 2>&1 >/dev/null
+  ./rnex plugin llm-wiki lint 2>&1 >/dev/null
+  ./rnex plugin llm-wiki lint --shallow 2>&1 >/dev/null
+)"
+if printf '%s' "$_utf8_stderr" | LC_ALL=C grep -qi "illegal byte sequence"; then
+  fail "Encountered illegal byte sequence error during ingest/lint under UTF-8 locale: $_utf8_stderr"; exit 1
+fi
+[ -z "$_utf8_stderr" ] || {
+  fail "Unexpected stderr output during UTF-8 ingest/lint: $_utf8_stderr"; exit 1;
+}
+
+_utf8_shard="$(cat "$TEST_UTF8_WS/.rnex/wiki/repo-nexus-docs.md")"
+
+# Verify title of utf8-boundary.md was extracted properly (not fallback 'untitled')
+echo "$_utf8_shard" | LC_ALL=C grep -q '^\- \*\*\[Architecture Overview\](\.\./\.\./docs/utf8-boundary\.md)\*\* (`docs/utf8-boundary\.md`) — ' || {
+  fail "utf8-boundary.md title or summary corrupted: $_utf8_shard"; exit 1;
+}
+
+# Verify NUL-prefixed binary file emitted title-only entry without binary garbage summary
+echo "$_utf8_shard" | LC_ALL=C grep -q '^\- \*\*\[binary-nul\.dat\](\.\./\.\./docs/binary-nul\.dat)\*\* (`docs/binary-nul\.dat`)$' || {
+  fail "NUL-prefixed binary file should emit title-only entry without summary: $_utf8_shard"; exit 1;
+}
+
+# Verify Latin-1 file was indexed cleanly with invalid bytes stripped
+echo "$_utf8_shard" | LC_ALL=C grep -q '^\- \*\*\[latin1\.sh\](\.\./\.\./docs/latin1\.sh)\*\* (`docs/latin1\.sh`) — Latin-1 comment with raw high bytes in header$' || {
+  fail "Latin-1 script summary did not strip invalid bytes cleanly: $_utf8_shard"; exit 1;
+}
+pass
+
 if [ "${_STANDALONE_RUN:-0}" -eq 1 ]; then
   report_results
 fi
