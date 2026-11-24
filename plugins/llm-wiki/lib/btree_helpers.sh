@@ -547,6 +547,32 @@ EOF
 }
 
 # -----------------------------------------------------------------------------
+# _resolve_existing_doc_target
+# Summary: Resolves a relative link path against a base directory inside the
+#          workspace root, probing exact path, `.md` suffix, and `/README.md`.
+# @param $1: ws_root   - Absolute workspace root path.
+# @param $2: base_dir  - Workspace-relative base directory (or empty for root).
+# @param $3: cand_path - Candidate relative target path.
+# @returns: Existing workspace-relative target path on stdout and 0; 1 if missing.
+# @pure (Read-only existence check)
+# -----------------------------------------------------------------------------
+_resolve_existing_doc_target() {
+    _red_ws="$1"; _red_base="$2"; _red_cand="$3"
+    _red_norm="$(normalize_relative_path "$_red_base" "$_red_cand")" || return 1
+    if [ -e "${_red_ws}/${_red_norm}" ]; then
+        printf '%s\n' "$_red_norm"
+        return 0
+    elif [ -e "${_red_ws}/${_red_norm}.md" ]; then
+        printf '%s.md\n' "$_red_norm"
+        return 0
+    elif [ -e "${_red_ws}/${_red_norm}/README.md" ]; then
+        printf '%s/README.md\n' "$_red_norm"
+        return 0
+    fi
+    return 1
+}
+
+# -----------------------------------------------------------------------------
 # rewrite_markdown_links_in_summary
 # Summary: Resolves and rewrites relative Markdown links, anchors, and wikilinks
 #          inside an extracted documentation summary line so they point accurately
@@ -712,45 +738,19 @@ rewrite_markdown_links_in_summary() {
                         if [ "$_from_wiki" = "1" ]; then
                             case "$_target_path" in
                                 "${_up_prefix}"*)
-                                    _rel_from_up="${_target_path#"$_up_prefix"}"
-                                    if _norm_up="$(normalize_relative_path "" "$_rel_from_up")"; then
-                                        if [ -e "${_ws_root}/${_norm_up}" ]; then
-                                            _resolved="$_norm_up"
-                                        elif [ -e "${_ws_root}/${_norm_up}.md" ]; then
-                                            _resolved="${_norm_up}.md"
-                                        elif [ -e "${_ws_root}/${_norm_up}/README.md" ]; then
-                                            _resolved="${_norm_up}/README.md"
-                                        fi
-                                    fi
+                                    _resolved="$(_resolve_existing_doc_target "$_ws_root" "" "${_target_path#"$_up_prefix"}" || true)"
                                     ;;
                             esac
                         fi
 
                         if [ -z "$_resolved" ]; then
-                            if _norm_rel="$(normalize_relative_path "$_source_dir" "$_target_path")"; then
-                                if [ -e "${_ws_root}/${_norm_rel}" ]; then
-                                    _resolved="$_norm_rel"
-                                elif [ -e "${_ws_root}/${_norm_rel}.md" ]; then
-                                    _resolved="${_norm_rel}.md"
-                                elif [ -e "${_ws_root}/${_norm_rel}/README.md" ]; then
-                                    _resolved="${_norm_rel}/README.md"
-                                fi
-                            fi
+                            _resolved="$(_resolve_existing_doc_target "$_ws_root" "$_source_dir" "$_target_path" || true)"
                         fi
 
                         if [ -z "$_resolved" ] && [ "$_from_wiki" != "1" ]; then
                             case "$_target_path" in
                                 "${_up_prefix}"*)
-                                    _rel_from_up="${_target_path#"$_up_prefix"}"
-                                    if _norm_up="$(normalize_relative_path "" "$_rel_from_up")"; then
-                                        if [ -e "${_ws_root}/${_norm_up}" ]; then
-                                            _resolved="$_norm_up"
-                                        elif [ -e "${_ws_root}/${_norm_up}.md" ]; then
-                                            _resolved="${_norm_up}.md"
-                                        elif [ -e "${_ws_root}/${_norm_up}/README.md" ]; then
-                                            _resolved="${_norm_up}/README.md"
-                                        fi
-                                    fi
+                                    _resolved="$(_resolve_existing_doc_target "$_ws_root" "" "${_target_path#"$_up_prefix"}" || true)"
                                     ;;
                             esac
                         fi
@@ -1408,6 +1408,31 @@ remove_wiki_entries_for_paths() {
 }
 
 # -----------------------------------------------------------------------------
+# touch_base_shard_if_siblings_exist
+# Summary: When a sub-shard becomes empty and is removed while sibling
+#          sub-shards still exist for the same base shard, creates the empty
+#          base shard header so consolidate_gapped_sub_shards merges siblings
+#          into a gap-free B-Tree partition.
+# @param $1: base_shard_id - Canonical base shard identifier.
+# @returns: 0 on completion.
+# @sideEffects: May create ${RNEX_WIKI_ROOT}/${base_shard_id}.md header file.
+# -----------------------------------------------------------------------------
+touch_base_shard_if_siblings_exist() {
+    _tbs_base="$1"
+    for _tbs_sib in "${RNEX_WIKI_ROOT}/${_tbs_base}-"*.md; do
+        if [ -f "$_tbs_sib" ]; then
+            _tbs_base_file="${RNEX_WIKI_ROOT}/${_tbs_base}.md"
+            if [ ! -f "$_tbs_base_file" ]; then
+                printf '# Wiki Index Shard: %s\n<!-- base: %s -->\n\n' \
+                    "$_tbs_base" "$_tbs_base" > "$_tbs_base_file"
+            fi
+            break
+        fi
+    done
+    return 0
+}
+
+# -----------------------------------------------------------------------------
 # prune_empty_btree_shards
 # Summary: Removes leaf shards that have zero remaining catalog entries after
 #          entry removals or re-routing. If a deleted shard was a sub-shard and
@@ -1439,20 +1464,8 @@ prune_empty_btree_shards() {
             _pes_removed=$((_pes_removed + 1))
             append_wiki_log_entry "$_pes_action" "deleted: \`${_pes_bname}\` (empty shard pruned)"
 
-            # If a sub-shard was removed and sibling sub-shards exist, create
-            # the base shard file so consolidate_gapped_sub_shards collapses
-            # the gapped partition cleanly.
             if [ "$_pes_sid" != "$_pes_base" ]; then
-                for _pes_sib in "${RNEX_WIKI_ROOT}/${_pes_base}-"*.md; do
-                    if [ -f "$_pes_sib" ]; then
-                        _pes_base_file="${RNEX_WIKI_ROOT}/${_pes_base}.md"
-                        if [ ! -f "$_pes_base_file" ]; then
-                            printf '# Wiki Index Shard: %s\n<!-- base: %s -->\n\n' \
-                                "$_pes_base" "$_pes_base" > "$_pes_base_file"
-                        fi
-                        break
-                    fi
-                done
+                touch_base_shard_if_siblings_exist "$_pes_base"
             fi
         fi
     done

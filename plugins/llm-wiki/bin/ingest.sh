@@ -96,15 +96,17 @@ main_ingest() {
 
     mkdir -p "$RNEX_WIKI_ROOT"
     _manifest="${RNEX_WIKI_ROOT}/.ingest_sources.$$"
+    trap 'rm -f "$_manifest"' EXIT INT TERM
+    _rc=0
     if [ "$_force" -eq 1 ]; then
         if ! resolve_candidate_sources "$_source_arg" "$_manifest"; then
             rm -f "$_manifest"
             exit 1
         fi
         if [ "$_quiet" -eq 1 ]; then
-            force_reingest_sources_into_btree "$_manifest" "$_source_arg" >/dev/null
+            force_reingest_sources_into_btree "$_manifest" "$_source_arg" >/dev/null || _rc=$?
         else
-            force_reingest_sources_into_btree "$_manifest" "$_source_arg"
+            force_reingest_sources_into_btree "$_manifest" "$_source_arg" || _rc=$?
         fi
     else
         if ! resolve_missing_sources_to_ingest "$_source_arg" "$_manifest"; then
@@ -112,12 +114,11 @@ main_ingest() {
             exit 1
         fi
         if [ "$_quiet" -eq 1 ]; then
-            ingest_missing_sources_into_btree "$_manifest" "$_source_arg" >/dev/null
+            ingest_missing_sources_into_btree "$_manifest" "$_source_arg" >/dev/null || _rc=$?
         else
-            ingest_missing_sources_into_btree "$_manifest" "$_source_arg"
+            ingest_missing_sources_into_btree "$_manifest" "$_source_arg" || _rc=$?
         fi
     fi
-    _rc=$?
     rm -f "$_manifest"
     exit "$_rc"
 }

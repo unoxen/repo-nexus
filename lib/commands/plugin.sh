@@ -57,7 +57,6 @@ cmd_plugin_info() {
   [ -n "$_pname" ] || die "Usage: rnex plugin info <name>"
 
   _pdir="$(plugin_resolve_dir "$_pname" 2>/dev/null || true)"
-  [ -n "$_pdir" ] || _pdir="$(find_plugin_dir "$_pname" 2>/dev/null || true)"
   [ -n "$_pdir" ] || die "Plugin '$_pname' not found."
 
   _name="$(plugin_get_field "$_pdir" "name")"
@@ -132,8 +131,8 @@ cmd_plugin_info() {
           ' "$_pdir/plugin.yaml")"
         fi
         case "$_opt" in
-          *_dir)
-            _cur="$(printf '%s' "$_cur" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's#^\./##' -e 's#^/##' -e 's#/$##')"
+          *Dir|*_dir|dir)
+            _cur="$(normalize_rel_path "$_cur")"
             ;;
         esac
         printf '  - %s: %s  (current: %s)\n' "$_opt" "$_desc" "${_cur:-default}"
@@ -188,7 +187,6 @@ cmd_plugin_enable() {
   [ -n "$_pname" ] || die "Usage: rnex plugin enable [--local] <name>"
 
   _pdir="$(plugin_resolve_dir "$_pname" 2>/dev/null || true)"
-  [ -n "$_pdir" ] || _pdir="$(find_plugin_dir "$_pname" 2>/dev/null || true)"
   [ -n "$_pdir" ] || die "Plugin '$_pname' not found."
 
   _name="$(plugin_get_field "$_pdir" "name")"
@@ -222,7 +220,6 @@ cmd_plugin_disable() {
   [ -n "$_pname" ] || die "Usage: rnex plugin disable [--local] <name>"
 
   _pdir="$(plugin_resolve_dir "$_pname" 2>/dev/null || true)"
-  [ -n "$_pdir" ] || _pdir="$(find_plugin_dir "$_pname" 2>/dev/null || true)"
   _name="$_pname"
   if [ -n "$_pdir" ]; then
     _n="$(plugin_get_field "$_pdir" "name")"
@@ -254,7 +251,6 @@ cmd_plugin_update() {
   if [ -n "$_update_pname" ]; then
     yaml_has_plugin "$_update_pname" || die "Plugin '$_update_pname' is not enabled in workspace"
     _pdir="$(plugin_resolve_dir "$_update_pname" 2>/dev/null || true)"
-    [ -n "$_pdir" ] || _pdir="$(find_plugin_dir "$_update_pname" 2>/dev/null || true)"
     [ -n "$_pdir" ] || die "Plugin '$_update_pname' not found."
     log_info "Updating plugin '$_update_pname'..."
     cmd_sync
@@ -300,7 +296,7 @@ cmd_plugin() {
       shift
       _h_pname=""
       for _arg in "$@"; do
-        case "$_arg" in --*) ;; *) _h_pname="$_arg" ;; esac
+        case "$_arg" in -*) ;; *) _h_pname="$_arg" ;; esac
       done
       RNEX_PLUGIN_NAME="$_h_pname"
       export RNEX_PLUGIN_NAME
@@ -314,7 +310,7 @@ cmd_plugin() {
       shift
       _h_pname=""
       for _arg in "$@"; do
-        case "$_arg" in --*) ;; *) _h_pname="$_arg" ;; esac
+        case "$_arg" in -*) ;; *) _h_pname="$_arg" ;; esac
       done
       RNEX_PLUGIN_NAME="$_h_pname"
       export RNEX_PLUGIN_NAME

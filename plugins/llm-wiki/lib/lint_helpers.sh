@@ -381,20 +381,8 @@ lint_existing_wiki_directory() {
             if [ ! -s "$_valid_entries" ]; then
                 rm -f "$_wiki_md"
                 append_wiki_log_entry "lint" "deleted: \`${_base_md}\` (empty after extracting misplaced entries)"
-                # If a valid sub-shard became empty and sibling sub-shards exist,
-                # create the base shard file so Step 4b-3 consolidates the gapped
-                # sibling partition cleanly.
                 if [ "$_is_sub" -eq 1 ]; then
-                    for _sib_f in "${RNEX_WIKI_ROOT}/${_base_id}-"*.md; do
-                        if [ -f "$_sib_f" ]; then
-                            _base_f="${RNEX_WIKI_ROOT}/${_base_id}.md"
-                            if [ ! -f "$_base_f" ]; then
-                                printf '# Wiki Index Shard: %s\n<!-- base: %s -->\n\n' \
-                                    "$_base_id" "$_base_id" > "$_base_f"
-                            fi
-                            break
-                        fi
-                    done
+                    touch_base_shard_if_siblings_exist "$_base_id"
                 fi
             else
                 append_wiki_log_entry "lint" "updated: \`${_base_md}\` (removed ${_mis_count} misplaced entries)"

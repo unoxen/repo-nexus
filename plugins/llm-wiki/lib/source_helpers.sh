@@ -337,6 +337,36 @@ derive_shard_id_for_workspace_path() {
 }
 
 # -----------------------------------------------------------------------------
+# _scan_workspace_regular_files
+# Summary: Recursively discovers regular non-symlink files under $1, excluding
+#          the wiki directory, .rnex/, .git/, node_modules/, and disabled repos,
+#          and optionally matching against a globstar pattern ($3).
+# @param $1: search_root     - Absolute directory path to scan.
+# @param $2: out_file        - Output file receiving normalized workspace_rel_paths.
+# @param $3: optional_glob   - Optional glob/globstar pattern to filter against.
+# @returns: 0 on completion.
+# @sideEffects: Appends discovered workspace-relative paths to $2.
+# -----------------------------------------------------------------------------
+_scan_workspace_regular_files() {
+    _swr_root="$1"
+    _swr_out="$2"
+    _swr_pat="${3:-}"
+    [ -d "$_swr_root" ] || return 0
+
+    find "$_swr_root" -type f \
+        ! -path "${RNEX_WIKI_ROOT}/*" ! -path '*/.rnex/*' ! -path '*/.git/*' ! -path '*/node_modules/*' -print \
+    | while IFS= read -r _found_abs; do
+        [ -L "$_found_abs" ] && continue
+        _rel="$(normalize_workspace_rel_path "$RNEX_WORKSPACE_ROOT" "$_found_abs")" || continue
+        _is_workspace_source_enabled "$_rel" || continue
+        if [ -z "$_swr_pat" ] || match_globstar_path "$_rel" "$_swr_pat" "$RNEX_WORKSPACE_ROOT"; then
+            printf '%s\n' "$_rel" >> "$_swr_out"
+        fi
+    done
+    return 0
+}
+
+# -----------------------------------------------------------------------------
 # expand_single_source_spec
 # Summary: Expands a single source specification (regular file, directory, or
 #          glob pattern including "**") into normalized workspace-relative
@@ -369,18 +399,7 @@ expand_single_source_spec() {
             _prefix="${_prefix%/}"
             _search_root="${RNEX_WORKSPACE_ROOT}"
             [ -n "$_prefix" ] && _search_root="${RNEX_WORKSPACE_ROOT}/${_prefix#./}"
-            [ -d "$_search_root" ] || return 0
-
-            find "$_search_root" -type f \
-                ! -path "${RNEX_WIKI_ROOT}/*" ! -path '*/.rnex/*' ! -path '*/.git/*' ! -path '*/node_modules/*' -print \
-            | while IFS= read -r _found_abs; do
-                [ -L "$_found_abs" ] && continue
-                _rel="$(normalize_workspace_rel_path "$RNEX_WORKSPACE_ROOT" "$_found_abs")" || continue
-                _is_workspace_source_enabled "$_rel" || continue
-                if match_globstar_path "$_rel" "$_spec" "$RNEX_WORKSPACE_ROOT"; then
-                    printf '%s\n' "$_rel" >> "$_out_file"
-                fi
-            done
+            _scan_workspace_regular_files "$_search_root" "$_out_file" "$_spec"
             return 0
             ;;
     esac
@@ -401,14 +420,7 @@ expand_single_source_spec() {
 
     # Case 4: Directory -> recursively find all regular files
     if [ -d "$_abs_spec" ]; then
-        find "$_abs_spec" -type f \
-            ! -path "${RNEX_WIKI_ROOT}/*" ! -path '*/.rnex/*' ! -path '*/.git/*' ! -path '*/node_modules/*' -print \
-        | while IFS= read -r _found_abs; do
-            [ -L "$_found_abs" ] && continue
-            _rel="$(normalize_workspace_rel_path "$RNEX_WORKSPACE_ROOT" "$_found_abs")" || continue
-            _is_workspace_source_enabled "$_rel" || continue
-            printf '%s\n' "$_rel" >> "$_out_file"
-        done
+        _scan_workspace_regular_files "$_abs_spec" "$_out_file"
         return 0
     fi
 

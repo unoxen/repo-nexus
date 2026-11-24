@@ -26,7 +26,7 @@ printf '\n%b==>%b Installing Repo Nexus (rnex)...\n' "$_C" "$_NC"
 mkdir -p "$INSTALL_DIR" "$BIN_DIR"
 
 _tmp_dir="$(mktemp -d)"
-trap 'rm -rf "$_tmp_dir"' EXIT INT TERM
+trap 'rm -rf "${_tmp_dir:?}"' EXIT INT TERM
 _src_dir="$_tmp_dir/src"
 
 _script_root=""
@@ -82,9 +82,9 @@ if [ "$_src_dir" != "$INSTALL_DIR" ]; then
       cp -R "$_src_dir/$_asset" "$INSTALL_DIR/$_asset"
     fi
   done
-  rm -rf "$INSTALL_DIR/plugins"/*/tests 2>/dev/null || true
+  rm -rf "${INSTALL_DIR:?}/plugins"/*/tests 2>/dev/null || true
 fi
-rm -rf "$_tmp_dir"
+rm -rf "${_tmp_dir:?}"
 
 chmod +x "$INSTALL_DIR/rnex"
 if [ "$BIN_DIR" != "$INSTALL_DIR" ]; then

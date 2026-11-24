@@ -278,10 +278,6 @@ merge_rnex_instructions() {
   log_ok "Merged Repo Nexus routing instructions with existing $(basename "$_dst")"
 }
 
-rnex_block_merge() {
-  merge_rnex_instructions "$@"
-}
-
 # Strip delimited Repo Nexus routing instructions block from an AI context file,
 # removing the file entirely if it was solely created by Repo Nexus (empty outside the block).
 clean_rnex_instructions() {
@@ -320,10 +316,6 @@ clean_rnex_instructions() {
       [ "${RNEX_QUIET:-0}" -eq 0 ] && [ "${_sync_quiet:-0}" -eq 0 ] && log_ok "Removed Repo Nexus routing instructions from $(basename "$_dst")"
     fi
   fi
-}
-
-rnex_block_clean() {
-  clean_rnex_instructions "$@"
 }
 
 # ---- Ignore File Helpers (!repos/*) ----------------------------------------
@@ -400,10 +392,6 @@ EPI_EOF
   rm -f "$_user_tmp" "$_sec_tmp"
 }
 
-rnex_ignore_ensure() {
-  ensure_provider_ignore "$@"
-}
-
 # Clean scoped ignore rules, removing the file entirely if it contains no other instructions
 clean_provider_ignore() {
   _file="$1"
@@ -454,10 +442,6 @@ clean_provider_ignore() {
       [ "${RNEX_QUIET:-0}" -eq 0 ] && [ "${_sync_quiet:-0}" -eq 0 ] && log_ok "Removed un-ignore rule from $(basename "$_file")"
     fi
   fi
-}
-
-rnex_ignore_clean() {
-  clean_provider_ignore "$@"
 }
 
 # ---- User Skill & Agent Management -----------------------------------------
@@ -560,7 +544,7 @@ clean_provider_user_skills() {
   rm -f "$_sk_dir"/rnex-*.md 2>/dev/null || true
   for _d in "$_sk_dir"/rnex-*; do
     [ -d "$_d" ] || continue
-    rm -rf "$_d" 2>/dev/null || true
+    rm -rf "${_d:?}" 2>/dev/null || true
   done
   rmdir "$_sk_dir" 2>/dev/null || true
 }
@@ -886,6 +870,65 @@ rnex_sdk_clean_provider_hooks() {
   esac
 }
 
+# Render the inner `"hooks": { ... }` JSON property block for a given schema style.
+# @param $1 Schema style: "copilot" | "flat" | "envelope".
+# @param $2 Temp directory containing `ev_<event>.cmds` files.
+# @param $3 Space-separated list of mapped event names.
+# @returns Formatted `"hooks": { ... }` lines (indented 2 spaces, no trailing newline) on stdout.
+# @pure
+_sdk_render_hooks_property_block() {
+  _srh_style="$1"
+  _srh_dir="$2"
+  _srh_events="$3"
+
+  printf '  "hooks": {\n'
+  _first_ev=1
+  for _tev in $_srh_events; do
+    [ "$_first_ev" -eq 0 ] && printf ',\n'
+    _first_ev=0
+    printf '    "%s": [\n' "$_tev"
+    if [ "$_srh_style" = "envelope" ]; then
+      printf '      {\n'
+      printf '        "hooks": [\n'
+    fi
+    _first_cmd=1
+    while IFS= read -r _cmd || [ -n "$_cmd" ]; do
+      [ -n "$_cmd" ] || continue
+      [ "$_first_cmd" -eq 0 ] && printf ',\n'
+      _first_cmd=0
+      _esc_cmd="$(rnex_sdk_escape_json_string "$_cmd")"
+      case "$_srh_style" in
+        copilot)
+          printf '      {\n'
+          printf '        "type": "command",\n'
+          printf '        "bash": "%s",\n' "$_esc_cmd"
+          printf '        "command": "%s"\n' "$_esc_cmd"
+          printf '      }'
+          ;;
+        flat)
+          printf '      {\n'
+          printf '        "command": "%s"\n' "$_esc_cmd"
+          printf '      }'
+          ;;
+        envelope)
+          printf '          {\n'
+          printf '            "type": "command",\n'
+          printf '            "command": "%s"\n' "$_esc_cmd"
+          printf '          }'
+          ;;
+      esac
+    done < "$_srh_dir/ev_${_tev}.cmds"
+    if [ "$_srh_style" = "envelope" ]; then
+      printf '\n        ]\n'
+      printf '      }\n'
+    else
+      printf '\n'
+    fi
+    printf '    ]'
+  done
+  printf '\n  }\n'
+}
+
 # ============================================================================
 # rnex_sdk_sync_provider_hooks
 # ============================================================================
@@ -962,163 +1005,33 @@ rnex_sdk_sync_provider_hooks() {
 
   # Zero-Hook Invariant: if zero commands configured, clean up managed files and return 0
   if [ "$_sph_total_cmds" -eq 0 ]; then
-    rm -rf "$_sph_tmp_dir"
+    rm -rf "${_sph_tmp_dir:?}"
     rnex_sdk_clean_provider_hooks "$_sph_ws" "$_sph_provider"
     return 0
   fi
 
+  mkdir -p "$_sph_ws/.rnex/tmp"
   case "$_sph_provider" in
-    copilot)
-      _sph_target_file="$_sph_ws/.github/hooks/rnex.json"
-      _sph_tmp_out="$_sph_ws/.rnex/tmp/copilot_hooks_$$.tmp"
-      mkdir -p "$_sph_ws/.github/hooks" "$_sph_ws/.rnex/tmp"
+    copilot|cursor|windsurf|codex)
+      case "$_sph_provider" in
+        copilot)  _sph_target_file="$_sph_ws/.github/hooks/rnex.json"; _sph_style="copilot";  _sph_v1=1 ;;
+        cursor)   _sph_target_file="$_sph_ws/.cursor/hooks.json";      _sph_style="flat";     _sph_v1=1 ;;
+        windsurf) _sph_target_file="$_sph_ws/.windsurf/hooks.json";    _sph_style="flat";     _sph_v1=0 ;;
+        codex)    _sph_target_file="$_sph_ws/.codex/hooks.json";       _sph_style="envelope"; _sph_v1=0 ;;
+      esac
+      mkdir -p "$(dirname "$_sph_target_file")"
+      _sph_tmp_out="$_sph_ws/.rnex/tmp/${_sph_provider}_hooks_$$.tmp"
       {
         printf '{\n'
-        printf '  "version": 1,\n'
-        printf '  "hooks": {\n'
-        _first_ev=1
-        for _tev in $_sph_target_events; do
-          [ "$_first_ev" -eq 0 ] && printf ',\n'
-          _first_ev=0
-          printf '    "%s": [\n' "$_tev"
-          _first_cmd=1
-          while IFS= read -r _cmd || [ -n "$_cmd" ]; do
-            [ -n "$_cmd" ] || continue
-            [ "$_first_cmd" -eq 0 ] && printf ',\n'
-            _first_cmd=0
-            _esc_cmd="$(rnex_sdk_escape_json_string "$_cmd")"
-            printf '      {\n'
-            printf '        "type": "command",\n'
-            printf '        "bash": "%s",\n' "$_esc_cmd"
-            printf '        "command": "%s"\n' "$_esc_cmd"
-            printf '      }'
-          done < "$_sph_tmp_dir/ev_${_tev}.cmds"
-          printf '\n    ]'
-        done
-        printf '\n  }\n}\n'
-      } > "$_sph_tmp_out"
-      mv "$_sph_tmp_out" "$_sph_target_file"
-      ;;
-    cursor)
-      _sph_target_file="$_sph_ws/.cursor/hooks.json"
-      _sph_tmp_out="$_sph_ws/.rnex/tmp/cursor_hooks_$$.tmp"
-      mkdir -p "$_sph_ws/.cursor" "$_sph_ws/.rnex/tmp"
-      {
-        printf '{\n'
-        printf '  "version": 1,\n'
-        printf '  "hooks": {\n'
-        _first_ev=1
-        for _tev in $_sph_target_events; do
-          [ "$_first_ev" -eq 0 ] && printf ',\n'
-          _first_ev=0
-          printf '    "%s": [\n' "$_tev"
-          _first_cmd=1
-          while IFS= read -r _cmd || [ -n "$_cmd" ]; do
-            [ -n "$_cmd" ] || continue
-            [ "$_first_cmd" -eq 0 ] && printf ',\n'
-            _first_cmd=0
-            _esc_cmd="$(rnex_sdk_escape_json_string "$_cmd")"
-            printf '      {\n'
-            printf '        "command": "%s"\n' "$_esc_cmd"
-            printf '      }'
-          done < "$_sph_tmp_dir/ev_${_tev}.cmds"
-          printf '\n    ]'
-        done
-        printf '\n  }\n}\n'
-      } > "$_sph_tmp_out"
-      mv "$_sph_tmp_out" "$_sph_target_file"
-      ;;
-    windsurf)
-      _sph_target_file="$_sph_ws/.windsurf/hooks.json"
-      _sph_tmp_out="$_sph_ws/.rnex/tmp/windsurf_hooks_$$.tmp"
-      mkdir -p "$_sph_ws/.windsurf" "$_sph_ws/.rnex/tmp"
-      {
-        printf '{\n'
-        printf '  "hooks": {\n'
-        _first_ev=1
-        for _tev in $_sph_target_events; do
-          [ "$_first_ev" -eq 0 ] && printf ',\n'
-          _first_ev=0
-          printf '    "%s": [\n' "$_tev"
-          _first_cmd=1
-          while IFS= read -r _cmd || [ -n "$_cmd" ]; do
-            [ -n "$_cmd" ] || continue
-            [ "$_first_cmd" -eq 0 ] && printf ',\n'
-            _first_cmd=0
-            _esc_cmd="$(rnex_sdk_escape_json_string "$_cmd")"
-            printf '      {\n'
-            printf '        "command": "%s"\n' "$_esc_cmd"
-            printf '      }'
-          done < "$_sph_tmp_dir/ev_${_tev}.cmds"
-          printf '\n    ]'
-        done
-        printf '\n  }\n}\n'
-      } > "$_sph_tmp_out"
-      mv "$_sph_tmp_out" "$_sph_target_file"
-      ;;
-    codex)
-      _sph_target_file="$_sph_ws/.codex/hooks.json"
-      _sph_tmp_out="$_sph_ws/.rnex/tmp/codex_hooks_$$.tmp"
-      mkdir -p "$_sph_ws/.codex" "$_sph_ws/.rnex/tmp"
-      {
-        printf '{\n'
-        printf '  "hooks": {\n'
-        _first_ev=1
-        for _tev in $_sph_target_events; do
-          [ "$_first_ev" -eq 0 ] && printf ',\n'
-          _first_ev=0
-          printf '    "%s": [\n' "$_tev"
-          printf '      {\n'
-          printf '        "hooks": [\n'
-          _first_cmd=1
-          while IFS= read -r _cmd || [ -n "$_cmd" ]; do
-            [ -n "$_cmd" ] || continue
-            [ "$_first_cmd" -eq 0 ] && printf ',\n'
-            _first_cmd=0
-            _esc_cmd="$(rnex_sdk_escape_json_string "$_cmd")"
-            printf '          {\n'
-            printf '            "type": "command",\n'
-            printf '            "command": "%s"\n' "$_esc_cmd"
-            printf '          }'
-          done < "$_sph_tmp_dir/ev_${_tev}.cmds"
-          printf '\n        ]\n'
-          printf '      }\n'
-          printf '    ]'
-        done
-        printf '\n  }\n}\n'
+        [ "$_sph_v1" -eq 1 ] && printf '  "version": 1,\n'
+        _sdk_render_hooks_property_block "$_sph_style" "$_sph_tmp_dir" "$_sph_target_events"
+        printf '}\n'
       } > "$_sph_tmp_out"
       mv "$_sph_tmp_out" "$_sph_target_file"
       ;;
     claude|gemini)
       _sph_block_tmp="$_sph_ws/.rnex/tmp/${_sph_provider}_block_$$.tmp"
-      mkdir -p "$_sph_ws/.rnex/tmp"
-      {
-        printf '  "hooks": {\n'
-        _first_ev=1
-        for _tev in $_sph_target_events; do
-          [ "$_first_ev" -eq 0 ] && printf ',\n'
-          _first_ev=0
-          printf '    "%s": [\n' "$_tev"
-          printf '      {\n'
-          printf '        "hooks": [\n'
-          _first_cmd=1
-          while IFS= read -r _cmd || [ -n "$_cmd" ]; do
-            [ -n "$_cmd" ] || continue
-            [ "$_first_cmd" -eq 0 ] && printf ',\n'
-            _first_cmd=0
-            _esc_cmd="$(rnex_sdk_escape_json_string "$_cmd")"
-            printf '          {\n'
-            printf '            "type": "command",\n'
-            printf '            "command": "%s"\n' "$_esc_cmd"
-            printf '          }'
-          done < "$_sph_tmp_dir/ev_${_tev}.cmds"
-          printf '\n        ]\n'
-          printf '      }\n'
-          printf '    ]'
-        done
-        printf '\n  }\n'
-      } > "$_sph_block_tmp"
-
+      _sdk_render_hooks_property_block "envelope" "$_sph_tmp_dir" "$_sph_target_events" > "$_sph_block_tmp"
       if [ "$_sph_provider" = "claude" ]; then
         _sph_target_file="$_sph_ws/.claude/settings.json"
       else
@@ -1129,7 +1042,7 @@ rnex_sdk_sync_provider_hooks() {
       ;;
   esac
 
-  rm -rf "$_sph_tmp_dir"
+  rm -rf "${_sph_tmp_dir:?}"
   return 0
 }
 
@@ -1149,33 +1062,39 @@ _sdk_get_provider_manifest_field() {
   _sgm_ws="$1"
   _sgm_prov="$2"
   _sgm_key="$3"
-  _sgm_yaml=""
-  if command -v _get_plugin_yaml_path >/dev/null 2>&1; then
-    _sgm_yaml="$(_get_plugin_yaml_path "$_sgm_prov" 2>/dev/null || true)"
+  _sgm_pdir=""
+  if command -v plugin_resolve_dir >/dev/null 2>&1; then
+    _sgm_pdir="$(plugin_resolve_dir "$_sgm_prov" 2>/dev/null || true)"
   fi
-  if [ -z "$_sgm_yaml" ] || [ ! -f "$_sgm_yaml" ]; then
-    for _sgm_cand in \
-      "${RNEX_PLUGINS_DIR:-}/${_sgm_prov}/plugin.yaml" \
-      "${SCRIPT_LOCATION:-$_sgm_ws}/plugins/${_sgm_prov}/plugin.yaml" \
-      "${_sgm_ws}/plugins/${_sgm_prov}/plugin.yaml"; do
-      if [ -f "$_sgm_cand" ]; then
-        _sgm_yaml="$_sgm_cand"
+  if [ -z "$_sgm_pdir" ] || [ ! -f "$_sgm_pdir/plugin.yaml" ]; then
+    for _sgm_cand_dir in \
+      "${RNEX_PLUGINS_DIR:-}/${_sgm_prov}" \
+      "${SCRIPT_LOCATION:-$_sgm_ws}/plugins/${_sgm_prov}" \
+      "${_sgm_ws}/plugins/${_sgm_prov}" \
+      "${_sgm_ws}/.rnex/plugins/${_sgm_prov}"; do
+      if [ -f "$_sgm_cand_dir/plugin.yaml" ]; then
+        _sgm_pdir="$_sgm_cand_dir"
         break
       fi
     done
   fi
-  [ -n "$_sgm_yaml" ] && [ -f "$_sgm_yaml" ] || return 0
+  [ -n "$_sgm_pdir" ] && [ -f "$_sgm_pdir/plugin.yaml" ] || return 0
+  if command -v plugin_get_field >/dev/null 2>&1; then
+    plugin_get_field "$_sgm_pdir" "$_sgm_key"
+    return 0
+  fi
   awk -v k="$_sgm_key" '
-    $0 ~ ("^" k ":[ ]*") {
+    $0 ~ ("^" k ":[ \t]*") {
       val = $0
-      sub("^" k ":[ ]*", "", val)
-      sub(/[ ]*#.*$/, "", val)
-      gsub(/^["'\'']|["'\'']$/, "", val)
-      gsub(/^[ \t]+|[ \t]+$/, "", val)
+      sub("^" k ":[ \t]*", "", val)
+      sub(/[ \t]*#.*$/, "", val)
+      sub(/^[ \t]+/, "", val)
+      sub(/[ \t\r]+$/, "", val)
+      gsub(/^["\047]|["\047]$/, "", val)
       print val
       exit
     }
-  ' "$_sgm_yaml"
+  ' "$_sgm_pdir/plugin.yaml"
 }
 
 # ============================================================================
@@ -1268,18 +1187,4 @@ rnex_sdk_disable_provider() {
     [ "$_sdp_iparent" != "." ] && rmdir "$_sdp_ws/$_sdp_iparent" 2>/dev/null || true
   fi
   return 0
-}
-
-# ---- AI Provider Hooks Compatibility Delegates ----------------------------
-
-sync_provider_hooks() {
-  _sph_provider="$1"
-  _sph_ws="${RNEX_ROOT:-${NEXUS_DIR:-$PWD}}"
-  rnex_sdk_sync_provider_hooks "$_sph_ws" "$_sph_provider"
-}
-
-clean_provider_hooks() {
-  _cph_provider="$1"
-  _cph_ws="${RNEX_ROOT:-${NEXUS_DIR:-$PWD}}"
-  rnex_sdk_clean_provider_hooks "$_cph_ws" "$_cph_provider"
 }

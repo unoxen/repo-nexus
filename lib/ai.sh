@@ -158,32 +158,6 @@ reconcile_gitignore() {
     "!${_active_repos_dir}/*"
 }
 
-# Clean managed Repo Nexus ignore block from .gitignore, removing file if empty
-clean_rnex_gitignore() {
-  _dir="${1:-$NEXUS_DIR}"
-  _gi="$_dir/.gitignore"
-  [ -f "$_gi" ] || return 0
-  if grep -qFx -- "${GITIGNORE_MARKER_START:-# REPO-NEXUS:START}" "$_gi" 2>/dev/null; then
-    _user_content="$(awk -v s="${GITIGNORE_MARKER_START:-# REPO-NEXUS:START}" -v e="${GITIGNORE_MARKER_END:-# REPO-NEXUS:END}" '
-      $0 == s { in_b = 1; next }
-      $0 == e { in_b = 0; next }
-      !in_b { print }
-    ' "$_gi" | sed -e '/^[[:space:]]*$/d' -e '/^[[:space:]]*#/d')"
-    if [ -z "$_user_content" ]; then
-      rm -f "$_gi"
-      [ "${RNEX_QUIET:-0}" -eq 0 ] && [ "${_sync_quiet:-0}" -eq 0 ] && log_ok "Removed .gitignore"
-    else
-      _tmp="$(mktemp)"
-      awk -v s="${GITIGNORE_MARKER_START:-# REPO-NEXUS:START}" -v e="${GITIGNORE_MARKER_END:-# REPO-NEXUS:END}" '
-        $0 == s { in_b = 1; next }
-        $0 == e { in_b = 0; next }
-        !in_b { print }
-      ' "$_gi" > "$_tmp" && mv "$_tmp" "$_gi"
-      [ "${RNEX_QUIET:-0}" -eq 0 ] && [ "${_sync_quiet:-0}" -eq 0 ] && log_ok "Removed Repo Nexus rules from .gitignore"
-    fi
-  fi
-}
-
 # ---- AI Instructions Compilation (.rnex/ai-instructions.md) ----------------
 
 # Resolve the primary instruction file for an AI provider plugin from plugin.yaml
@@ -191,7 +165,6 @@ plugin_get_instruction_file() {
   _pif_name="$1"
   _pif_pdir="${2:-}"
   [ -n "$_pif_pdir" ] || _pif_pdir="$(plugin_resolve_dir "$_pif_name" 2>/dev/null || true)"
-  [ -n "$_pif_pdir" ] || _pif_pdir="$(find_plugin_dir "$_pif_name" 2>/dev/null || true)"
   _pif_file=""
   if [ -n "$_pif_pdir" ]; then
     _pif_file="$(plugin_get_field "$_pif_pdir" "instruction_file" 2>/dev/null || true)"
@@ -215,23 +188,6 @@ get_active_provider_instruction_files() {
     fi
   done
   printf '%s' "$_gap_files"
-}
-
-# Check if an instruction file contains custom user instructions outside the rnex block
-file_has_user_content() {
-  _fhuc_file="$1"
-  [ -f "$_fhuc_file" ] || return 1
-  _content=""
-  if grep -qF "${AI_MARKER_START:-<!-- REPO-NEXUS:START -->}" "$_fhuc_file" 2>/dev/null; then
-    _content="$(awk -v s="${AI_MARKER_START:-<!-- REPO-NEXUS:START -->}" -v e="${AI_MARKER_END:-<!-- REPO-NEXUS:END -->}" '
-      $0 == s { in_b = 1; next }
-      $0 == e { in_b = 0; next }
-      !in_b { print }
-    ' "$_fhuc_file" | sed -e '/^[[:space:]]*$/d')"
-  else
-    _content="$(grep -v "CRITICAL: .* \`.rnex/ai-instructions.md\`" "$_fhuc_file" 2>/dev/null | grep -v "Multi-Repo AI Workspace Context" | sed -e '/^[[:space:]]*$/d')"
-  fi
-  [ -n "$_content" ]
 }
 
 # Reconcile AI provider instruction files:
@@ -277,24 +233,6 @@ reconcile_ai_instructions_files() {
         ;;
     esac
   done
-}
-
-# Return 0 if a plugin is an IDE/AI provider integration (explicitly declares
-# type: provider or owns a top-level instruction file such as CLAUDE.md).
-# Provider setup docs are never compiled into .rnex/ai-instructions.md.
-plugin_is_provider() {
-  _pip_name="$1"
-  _pip_pdir="${2:-}"
-  [ -n "$_pip_pdir" ] || _pip_pdir="$(plugin_resolve_dir "$_pip_name" 2>/dev/null || true)"
-  [ -n "$_pip_pdir" ] || _pip_pdir="$(find_plugin_dir "$_pip_name" 2>/dev/null || true)"
-  if [ -n "$_pip_pdir" ] && [ -f "$_pip_pdir/plugin.yaml" ]; then
-    _pip_type="$(plugin_get_field "$_pip_pdir" "type" 2>/dev/null || true)"
-    case "$_pip_type" in
-      provider) return 0 ;;
-      workflow) return 1 ;;
-    esac
-  fi
-  [ -n "$(plugin_get_instruction_file "$_pip_name" "$_pip_pdir" 2>/dev/null || true)" ]
 }
 
 # ==============================================================================
@@ -379,13 +317,8 @@ EOF
     _rai_pdir=""
     if [ -d "$_rai_dir/plugins/$_rai_p" ]; then
       _rai_pdir="$_rai_dir/plugins/$_rai_p"
-    fi
-    if [ -z "$_rai_pdir" ] && command -v plugin_resolve_dir >/dev/null 2>&1; then
+    elif command -v plugin_resolve_dir >/dev/null 2>&1; then
       _rai_pdir="$(plugin_resolve_dir "$_rai_p" 2>/dev/null || true)"
-    fi
-    if [ -z "$_rai_pdir" ] && command -v find_plugin_dir >/dev/null 2>&1; then
-      _rai_pdir="$(find_plugin_dir "$_rai_p" "$_rai_dir" 2>/dev/null || true)"
-      [ -n "$_rai_pdir" ] || _rai_pdir="$(find_plugin_dir "$_rai_p" 2>/dev/null || true)"
     fi
 
     if [ -n "$_rai_pdir" ] && [ -d "$_rai_pdir" ]; then
@@ -443,12 +376,7 @@ rnex_ai_generate_repos_instructions() {
 
   _rd="$(yaml_get_repos_dir 2>/dev/null || true)"
   [ -n "$_rd" ] || _rd="repos"
-  case "$_rd" in
-    ./*) _rd="${_rd#./}" ;;
-  esac
-  while [ "$_rd" != "${_rd%/}" ] && [ -n "${_rd%/}" ]; do
-    _rd="${_rd%/}"
-  done
+  _rd="$(clean_rel_subpath "$_rd")"
 
   cat <<'EOF'
 # Active Member Repositories
@@ -480,13 +408,7 @@ EOF
     else
       _r_path="${_rd}/${_r}"
     fi
-
-    case "$_r_path" in
-      ./*) _r_path="${_r_path#./}" ;;
-    esac
-    while [ "$_r_path" != "${_r_path%/}" ] && [ -n "${_r_path%/}" ]; do
-      _r_path="${_r_path%/}"
-    done
+    _r_path="$(clean_rel_subpath "$_r_path")"
 
     _rows="${_rows}| \`${_r_path}\` | \`${_mode}\` |
 "
@@ -551,18 +473,6 @@ build_ai_instructions() {
   rnex_ai_write_repos_instructions "$_dir"
 }
 
-rnex_ai_generate_instructions() {
-  render_ai_instructions "$@"
-}
-
-rnex_ai_write_instructions() {
-  build_ai_instructions "$@"
-}
-
-generate_ai_instructions() {
-  build_ai_instructions "$@"
-}
-
 # ---- Multi-Root IDE Workspace (.code-workspace) ----------------------------
 
 # Generate and maintain a multi-root VS Code / Cursor workspace file (.code-workspace).
@@ -585,7 +495,13 @@ sync_code_workspace() {
     if yaml_repo_enabled "$_rname"; then
       _rdir="$(resolve_repo_path "$_rname")"
       if [ -d "$_rdir" ]; then
-        printf ',\n    {\n      "name": "%s",\n      "path": "%s/%s"\n    }' "$_rname" "$_repos_rel" "$_rname" >> "$_f_tmp"
+        _custom_p="$(yaml_get "$_rname" "path" 2>/dev/null || true)"
+        if [ -n "$_custom_p" ]; then
+          _folder_p="$(clean_rel_subpath "$_custom_p")"
+        else
+          _folder_p="$_repos_rel/$_rname"
+        fi
+        printf ',\n    {\n      "name": "%s",\n      "path": "%s"\n    }' "$_rname" "$_folder_p" >> "$_f_tmp"
       fi
     fi
   done
@@ -708,7 +624,7 @@ sync_rnex_base_assets() {
   # Clean old skill subdirectories if any exist in .rnex/skills/
   for _item in "$NEXUS_DIR/.rnex/skills"/*; do
     [ -e "$_item" ] || continue
-    [ -d "$_item" ] && rm -rf "$_item"
+    [ -d "$_item" ] && rm -rf "${_item:?}"
   done
 
   # Sync base skills to .rnex/skills/
@@ -727,7 +643,7 @@ sync_rnex_base_assets() {
         rm -f "$NEXUS_DIR/.rnex/skills/$_sbase" "$NEXUS_DIR/.rnex/skills/rnex-$_sbase" 2>/dev/null || true
         for _p_dir in $_active_prov_skill_dirs; do
           rm -f "$NEXUS_DIR/$_p_dir/rnex-$_sbase" 2>/dev/null || true
-          rm -rf "$NEXUS_DIR/$_p_dir/rnex-$_sname" 2>/dev/null || true
+          rm -rf "${NEXUS_DIR:?}/${_p_dir:?}/rnex-${_sname:?}" 2>/dev/null || true
         done
       done
     fi

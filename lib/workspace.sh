@@ -73,6 +73,39 @@ update_sync_stamp() {
 }
 
 # ----------------------------------------------------------------------------
+# try_find_workspace
+# Summary: Non-fatally resolves the active workspace root directory from
+#          NEXUS_DIR, CUSTOM_CONFIG, current directory, or parent traversal.
+# @returns: Canonical workspace root path on stdout and 0 if found; 1 otherwise.
+# @pure (Read-only filesystem inspection)
+# ----------------------------------------------------------------------------
+try_find_workspace() {
+  _tfw_ws="${NEXUS_DIR:-}"
+  if [ -z "$_tfw_ws" ]; then
+    if [ -n "${CUSTOM_CONFIG:-}" ]; then
+      _tfw_cfg="$(resolve_path "$CUSTOM_CONFIG" 2>/dev/null || true)"
+      if [ -f "$_tfw_cfg" ]; then
+        _tfw_ws="$(cd -P "$(dirname "$_tfw_cfg")" 2>/dev/null && pwd -P)"
+      fi
+    elif [ -f "$RNEX_CONFIG_FILE" ] || [ -f ".rnex.yaml" ]; then
+      _tfw_ws="$(pwd -P 2>/dev/null || pwd)"
+    else
+      _tfw_ws="$(find_workspace_dir 2>/dev/null || true)"
+    fi
+  fi
+  [ -n "$_tfw_ws" ] || return 1
+  _tfw_ws="$(cd "$_tfw_ws" 2>/dev/null && pwd -P)" || return 1
+  if [ -n "${CUSTOM_CONFIG:-}" ]; then
+    _tfw_cfg_check="$(resolve_path "$CUSTOM_CONFIG" 2>/dev/null || true)"
+    [ -f "$_tfw_cfg_check" ] || return 1
+  elif [ ! -f "$_tfw_ws/$RNEX_CONFIG_FILE" ] && [ ! -f "$_tfw_ws/.rnex.yaml" ]; then
+    return 1
+  fi
+  printf '%s' "$_tfw_ws"
+  return 0
+}
+
+# ----------------------------------------------------------------------------
 # check_auto_sync
 # Summary: Compares the current configuration checksum against .rnex/sync_stamp
 #          and triggers a silent reconciliation (`cmd_sync -y --quiet`) if stale.
@@ -80,25 +113,8 @@ update_sync_stamp() {
 # @sideEffects: May invoke cmd_sync if configuration checksum changed.
 # ----------------------------------------------------------------------------
 check_auto_sync() {
-  _ws="${NEXUS_DIR:-}"
-  if [ -z "$_ws" ]; then
-    if [ -n "$CUSTOM_CONFIG" ]; then
-      _cfg_path="$(resolve_path "$CUSTOM_CONFIG" 2>/dev/null || true)"
-      if [ -f "$_cfg_path" ]; then
-        _ws="$(cd -P "$(dirname "$_cfg_path")" 2>/dev/null && pwd -P)"
-      fi
-    elif [ -f rnex.yaml ]; then
-      _ws="."
-    else
-      _ws="$(find_workspace_dir 2>/dev/null || true)"
-    fi
-  fi
-  [ -z "$_ws" ] && return 0
-  _cfg_file="$_ws/rnex.yaml"
-  if [ -n "$CUSTOM_CONFIG" ]; then
-    _cfg_file="$(resolve_path "$CUSTOM_CONFIG" 2>/dev/null || true)"
-  fi
-  [ -f "$_cfg_file" ] || return 0
+  _ws="$(try_find_workspace 2>/dev/null || true)"
+  [ -n "$_ws" ] || return 0
   _stamp="$_ws/.rnex/sync_stamp"
   if [ ! -f "$_stamp" ] || [ "$(get_config_sum "$_ws")" != "$(cat "$_stamp" 2>/dev/null)" ]; then
     _prev_ignore="${RNEX_IGNORE_HOOKS:-0}"

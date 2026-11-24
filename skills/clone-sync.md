@@ -11,8 +11,8 @@ Use this skill when onboarding to a workspace, restoring missing member reposito
 ## Operational Protocol
 
 1. **Inspect Workspace Configuration:**
-   - Use **Section 2 (Merged Workspace Configuration)** of the already-loaded `.rnex/ai-instructions.md` to identify the `reposDir`, active and disabled member repositories, and enabled plugins. Do NOT read `rnex.yaml` or `.local.rnex.yaml`.
-   - If configuration was just edited, run `rnex sync` first so `.rnex/ai-instructions.md` reflects the merged state.
+   - Read `.rnex/repos-instructions.md` and `.rnex/ai-instructions.md` (or run `rnex status`) to identify active member repositories, repository paths, and enabled plugins. Do NOT read `rnex.yaml` or `.local.rnex.yaml` directly.
+   - If configuration was just edited, run `rnex sync` first so `.rnex/ai-instructions.md` and `.rnex/repos-instructions.md` reflect the merged state.
 
 2. **Clone Missing Repositories:**
    - Run `rnex clone` to clone any missing member repositories declared in the configuration into `<reposDir>/<name>` (default: `repos/<name>`).
@@ -20,9 +20,9 @@ Use this skill when onboarding to a workspace, restoring missing member reposito
 
 3. **Reconcile Workspace State:**
    - Run `rnex sync` to reconcile:
-     - Root `.rnex/` and member repository `<reposDir>/<name>/.rnex/` harnesses.
+     - Root `.rnex/` harness, compiled AI instructions, and `.rnex/repos-instructions.md` (member repositories remain 100% clean without internal `.rnex/` folders).
      - Core agentic skills in `.rnex/skills/` and active plugin skills.
-     - Universal routing directives in `AGENTS.md`.
+     - Universal routing directives in `AGENTS.md` (or active provider instruction files).
      - Git ignores (`.gitignore` and `.ignore`).
      - VS Code / Cursor `.code-workspace` folder mappings.
 

@@ -193,7 +193,6 @@ cmd_status() {
     echo "$_active_plugins" | while read -r _pname; do
       [ -n "$_pname" ] || continue
       _pdir="$(plugin_resolve_dir "$_pname" 2>/dev/null || true)"
-      [ -n "$_pdir" ] || _pdir="$(find_plugin_dir "$_pname" 2>/dev/null || true)"
       if [ -n "$_pdir" ]; then
         _ver="$(plugin_get_version "$_pname" "$_pdir")"
         _desc="$(plugin_get_field "$_pdir" "description")"
@@ -238,7 +237,8 @@ cmd_status() {
       if ! yaml_repo_enabled "$_name"; then
         printf '  %b○%b %-18s %b[disabled]%b %s\n' "$_DIM" "$_NC" "$_name" "$_DIM" "$_NC" "${_url:+- $_url}"
       elif [ -d "$_rdir/.git" ]; then
-        _b="$(git -C "$_rdir" symbolic-ref --short HEAD 2>/dev/null || git -C "$_rdir" rev-parse --short HEAD 2>/dev/null || echo "head")"
+        _b="$(get_repo_active_branch "$_rdir")"
+        [ -n "$_b" ] || _b="head"
         _tags=""
         if yaml_repo_readonly "$_name"; then
           _tags=" ${_Y}[readonly]${_NC}"

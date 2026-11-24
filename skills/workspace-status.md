@@ -12,7 +12,7 @@ Use this skill when auditing workspace health, verifying git tracking status acr
 
 1. **Workspace Health Audit:**
    - Run `rnex status` to inspect:
-     - Merged workspace configuration (pre-compiled into `.rnex/ai-instructions.md`, including configured `reposDir`). Do NOT read `rnex.yaml` or `.local.rnex.yaml` directly.
+     - Merged workspace configuration, `.rnex/ai-instructions.md`, and `.rnex/repos-instructions.md` (including configured `reposDir`). Do NOT read `rnex.yaml` or `.local.rnex.yaml` directly.
      - Universal routing directives in `AGENTS.md`.
      - Compiled AI context at `.rnex/ai-instructions.md`.
      - Multi-root workspace mapping (`.code-workspace`).

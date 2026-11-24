@@ -37,27 +37,19 @@ if [ -z "${RNEX_LIB_DIR:-}" ]; then
   done
 fi
 
-if [ -n "${RNEX_LIB_DIR:-}" ] && [ -f "$RNEX_LIB_DIR/core.sh" ]; then
-  # shellcheck source=/dev/null
-  . "$RNEX_LIB_DIR/core.sh" 2>/dev/null || true
-  # shellcheck source=/dev/null
-  [ -f "$RNEX_LIB_DIR/yaml.sh" ] && . "$RNEX_LIB_DIR/yaml.sh" 2>/dev/null || true
-fi
-
-# Dynamically export RNEX_REPOS_DIR and REPOS_DIR
-if command -v yaml_get_repos_dir >/dev/null 2>&1; then
-  RNEX_REPOS_DIR="$(yaml_get_repos_dir 2>/dev/null || printf 'repos')"
-else
-  RNEX_REPOS_DIR="${REPOS_DIR_REL:-repos}"
-fi
-[ -n "$RNEX_REPOS_DIR" ] || RNEX_REPOS_DIR="repos"
-export RNEX_REPOS_DIR
-
-REPOS_DIR="${REPOS_DIR:-$RNEX_ROOT/$RNEX_REPOS_DIR}"
-export REPOS_DIR
-
-# Source SDK helpers if present
+# Source SDK helpers (which also bootstrap core.sh, yaml.sh, RNEX_REPOS_DIR, and REPOS_DIR)
 if [ -n "${RNEX_LIB_DIR:-}" ] && [ -f "$RNEX_LIB_DIR/sdk.sh" ]; then
   # shellcheck source=/dev/null
   . "$RNEX_LIB_DIR/sdk.sh" 2>/dev/null || true
+else
+  if [ -n "${RNEX_LIB_DIR:-}" ] && [ -f "$RNEX_LIB_DIR/core.sh" ]; then
+    # shellcheck source=/dev/null
+    . "$RNEX_LIB_DIR/core.sh" 2>/dev/null || true
+    # shellcheck source=/dev/null
+    [ -f "$RNEX_LIB_DIR/yaml.sh" ] && . "$RNEX_LIB_DIR/yaml.sh" 2>/dev/null || true
+  fi
+  RNEX_REPOS_DIR="${REPOS_DIR_REL:-repos}"
+  [ -n "$RNEX_REPOS_DIR" ] || RNEX_REPOS_DIR="repos"
+  REPOS_DIR="${REPOS_DIR:-$RNEX_ROOT/$RNEX_REPOS_DIR}"
+  export RNEX_REPOS_DIR REPOS_DIR
 fi

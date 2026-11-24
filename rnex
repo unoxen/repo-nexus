@@ -94,6 +94,7 @@ while [ "$i" -lt "$ORIG_COUNT" ]; do
       ;;
     --config=*)
       CUSTOM_CONFIG="${1#*=}"
+      [ -n "$CUSTOM_CONFIG" ] || die "Option --config requires a file path argument"
       shift
       ;;
     --config|-c)
@@ -136,15 +137,14 @@ while [ "$i" -lt "$ORIG_COUNT" ]; do
 done
 
 # Export workspace root and repos directory variables if inside a workspace
-_ws_cand=""
 if [ -n "$CUSTOM_CONFIG" ]; then
   _cfg_p="$(resolve_path "$CUSTOM_CONFIG" 2>/dev/null || true)"
-  [ -f "$_cfg_p" ] && _ws_cand="$(cd -P "$(dirname "$_cfg_p")" 2>/dev/null && pwd -P)"
-elif [ -f rnex.yaml ]; then
-  _ws_cand="$PWD"
-else
-  _ws_cand="$(find_workspace_dir 2>/dev/null || true)"
+  if [ -f "$_cfg_p" ]; then
+    WORKSPACE_YAML="$_cfg_p"
+    export WORKSPACE_YAML
+  fi
 fi
+_ws_cand="$(try_find_workspace 2>/dev/null || true)"
 if [ -n "$_ws_cand" ]; then
   NEXUS_DIR="${NEXUS_DIR:-$_ws_cand}"
   RNEX_ROOT="${RNEX_ROOT:-$_ws_cand}"

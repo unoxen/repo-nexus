@@ -4,8 +4,6 @@
 # lib/hooks.sh — Automated Git hooks management and event dispatch
 # ============================================================================
 
-RNEX_MANAGED_GIT_HOOKS="post-merge post-checkout post-commit pre-commit pre-push"
-
 # Validate that a hook name adheres strictly to POSIX Git hook naming conventions.
 # Pattern: ^[a-z][a-z0-9-]*$ (prevents path traversal and shell injection attacks).
 #
@@ -26,24 +24,14 @@ hooks_validate_name() {
 
 # Resolve active workspace root for hook execution without mutating global state
 _resolve_hook_workspace() {
-  _ws="${NEXUS_DIR:-}"
-  if [ -z "$_ws" ]; then
-    if [ -n "$CUSTOM_CONFIG" ]; then
-      _cfg_path="$(resolve_path "$CUSTOM_CONFIG" 2>/dev/null || true)"
-      if [ -f "$_cfg_path" ]; then
-        _ws="$(cd -P "$(dirname "$_cfg_path")" 2>/dev/null && pwd -P)"
-      fi
-    elif [ -f rnex.yaml ]; then
-      _ws="."
-    else
-      _ws="$(find_workspace_dir 2>/dev/null || true)"
-    fi
-  fi
-  [ -n "$_ws" ] || return 1
-  _hook_root="$(cd "$_ws" 2>/dev/null && pwd -P)"
-  _hook_config_merged="$_hook_root/rnex.yaml"
+  _hook_root="$(try_find_workspace 2>/dev/null || true)"
+  [ -n "$_hook_root" ] || return 1
   if [ -n "$CUSTOM_CONFIG" ]; then
     _hook_config_merged="$(resolve_path "$CUSTOM_CONFIG" 2>/dev/null || true)"
+  elif [ -f "$_hook_root/$RNEX_CONFIG_FILE" ]; then
+    _hook_config_merged="$_hook_root/$RNEX_CONFIG_FILE"
+  else
+    _hook_config_merged="$_hook_root/.rnex.yaml"
   fi
   [ -f "$_hook_config_merged" ] || return 1
   return 0
@@ -180,12 +168,14 @@ _run_hook_internal() {
   fi
 
   # 2. Execute configured commands from rnexHooks.<hookName>
+  _stage_rc=0
   if [ -z "$_hook_target_plugin" ] && [ "${_RNEX_INTERNAL_PLUGIN_ONLY:-0}" != "1" ] && [ "$_ignore_hooks" != "1" ]; then
-    rnex_hooks_run_stage "$_hook_root" "$_hook_phase_cmd" "$@"
+    rnex_hooks_run_stage "$_hook_root" "$_hook_phase_cmd" "$@" || _stage_rc=$?
   fi
   WORKSPACE_LOCAL_YAML="$_old_local_yaml"
   WORKSPACE_YAML="$_old_yaml"
   NEXUS_DIR="$_old_nexus"
+  return "$_stage_rc"
 }
 
 # ==============================================================================
@@ -282,36 +272,22 @@ rnex_hooks_run_stage() {
   for _rcmd in $_stage_cmds; do
     IFS="$_old_ifs"
     [ -n "$_rcmd" ] || continue
-    if [ "$_is_blocking" -eq 1 ]; then
-      (
-        RNEX_ROOT="$_rhrs_root"
-        RNEX_CONFIG_MERGED="$_rhrs_config"
-        RNEX_CMD="$_rhrs_cmd"
-        RNEX_ARGS="$_rhrs_args"
-        RNEX_HOOK_EVENT="$_stage_camel"
-        RNEX_HOOK_ARGS="$_rhrs_args"
-        RNEX_QUIET="$_rhrs_quiet"
-        RNEX_PROVIDER_SKILL_DIRS="$_rhrs_skill_dirs"
-        export RNEX_ROOT RNEX_CONFIG_MERGED RNEX_CMD RNEX_ARGS RNEX_HOOK_EVENT RNEX_HOOK_ARGS RNEX_QUIET RNEX_PROVIDER_SKILL_DIRS RNEX_LIB_DIR NEXUS_DIR WORKSPACE_YAML WORKSPACE_LOCAL_YAML
-        _exec_hook_cmd "$_rhrs_root" "$_rcmd"
-      ) || {
-        _cmd_rc=$?
-        export RNEX_HOOK_ACTIVE="$_prev_active"
-        return "$_cmd_rc"
-      }
-    else
-      (
-        RNEX_ROOT="$_rhrs_root"
-        RNEX_CONFIG_MERGED="$_rhrs_config"
-        RNEX_CMD="$_rhrs_cmd"
-        RNEX_ARGS="$_rhrs_args"
-        RNEX_HOOK_EVENT="$_stage_camel"
-        RNEX_HOOK_ARGS="$_rhrs_args"
-        RNEX_QUIET="$_rhrs_quiet"
-        RNEX_PROVIDER_SKILL_DIRS="$_rhrs_skill_dirs"
-        export RNEX_ROOT RNEX_CONFIG_MERGED RNEX_CMD RNEX_ARGS RNEX_HOOK_EVENT RNEX_HOOK_ARGS RNEX_QUIET RNEX_PROVIDER_SKILL_DIRS RNEX_LIB_DIR NEXUS_DIR WORKSPACE_YAML WORKSPACE_LOCAL_YAML
-        _exec_hook_cmd "$_rhrs_root" "$_rcmd"
-      ) || true
+    _cmd_rc=0
+    (
+      RNEX_ROOT="$_rhrs_root"
+      RNEX_CONFIG_MERGED="$_rhrs_config"
+      RNEX_CMD="$_rhrs_cmd"
+      RNEX_ARGS="$_rhrs_args"
+      RNEX_HOOK_EVENT="$_stage_camel"
+      RNEX_HOOK_ARGS="$_rhrs_args"
+      RNEX_QUIET="$_rhrs_quiet"
+      RNEX_PROVIDER_SKILL_DIRS="$_rhrs_skill_dirs"
+      export RNEX_ROOT RNEX_CONFIG_MERGED RNEX_CMD RNEX_ARGS RNEX_HOOK_EVENT RNEX_HOOK_ARGS RNEX_QUIET RNEX_PROVIDER_SKILL_DIRS RNEX_LIB_DIR NEXUS_DIR WORKSPACE_YAML WORKSPACE_LOCAL_YAML
+      _exec_hook_cmd "$_rhrs_root" "$_rcmd"
+    ) || _cmd_rc=$?
+    if [ "$_cmd_rc" -ne 0 ] && [ "$_is_blocking" -eq 1 ]; then
+      export RNEX_HOOK_ACTIVE="$_prev_active"
+      return "$_cmd_rc"
     fi
   done
   IFS="$_old_ifs"
@@ -564,7 +540,7 @@ hooks_sync_all() {
   if [ "$_hp" = ".rnex/hooks" ] || [ "$_hp" = "$_hsa_ws/.rnex/hooks" ]; then
     git -C "$_hsa_ws" config --unset core.hooksPath 2>/dev/null || true
   fi
-  rm -rf "$_hsa_ws/.rnex/hooks" 2>/dev/null || true
+  rm -rf "${_hsa_ws:?}/.rnex/hooks" 2>/dev/null || true
   return 0
 }
 

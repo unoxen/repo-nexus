@@ -28,7 +28,7 @@ fi
 # Fallback: if package.json was bumped in HEAD without pre-commit queueing it
 if [ -z "$TAG_NAME" ] && [ -f "$REPO_ROOT/package.json" ]; then
   if git diff-tree --no-commit-id --name-only -r HEAD 2>/dev/null | grep -qx "package.json"; then
-    _cur_ver="$(node -p 'require("./package.json").version' 2>/dev/null || awk '/^[ ]*"version"[ ]*:[ ]*"[0-9]/ { sub(/.*"version"[ ]*:[ ]*"/, ""); sub(/".*/, ""); print; exit }' "$REPO_ROOT/package.json")"
+    _cur_ver="$(awk '/^[ \t]*"version"[ \t]*:[ \t]*"[0-9]/ { sub(/.*"version"[ \t]*:[ \t]*"/, ""); sub(/".*/, ""); print; exit }' "$REPO_ROOT/package.json")"
     if [ -n "$_cur_ver" ]; then
       TAG_NAME="v$_cur_ver"
     fi

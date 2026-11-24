@@ -11,7 +11,7 @@ Use this skill when inspecting, testing, building, or modifying multiple member 
 ## Operational Protocol
 
 1. **Verify Active Repositories:**
-   - Use **Section 2 (Merged Workspace Configuration)** of `.rnex/ai-instructions.md` (or run `rnex list`) to verify which member repositories are active vs disabled. Do NOT read `rnex.yaml` or `.local.rnex.yaml`.
+   - Read `.rnex/repos-instructions.md` (or run `rnex list`) to verify which member repositories are active and check their `Mode` (`read-write` vs `read-only`). Do NOT read `rnex.yaml` or `.local.rnex.yaml` directly.
    - Disabled repositories are intentionally skipped during batch execution.
 
 2. **Execute Staged Batch Commands:**

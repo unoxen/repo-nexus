@@ -90,7 +90,7 @@ _rnex() {
     'clone:Clone missing member repositories'
     'exec:Execute a command across all member repositories'
     'list:List member repositories'
-    'sync:Reconcile workspace, plugins, skills, and member .rnex directories'
+    'sync:Reconcile workspace, plugins, skills, and member repositories'
     'status:Inspect workspace health and status (read-only)'
     'plugin:Manage plugins'
     'completion:Generate shell completions'

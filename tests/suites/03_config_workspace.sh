@@ -772,6 +772,56 @@ grep -q "^version: 99\.0\.0$" "$TEST_VER_WS/rnex.yaml" || {
 }
 pass
 
+# ==============================================================================
+# Regression: init --repos-dir plugin defaults, dotted repo names, custom
+# .code-workspace folder paths, and standalone scoped plugin manifest lookup
+# ==============================================================================
+run_test "Regression: init --repos-dir plugin defaults, dotted repo keys, custom .code-workspace path, and scoped SDK manifest lookup"
+TEST_REG_WS="$TEST_TMP/regression-fixes-ws"
+setup_test_workspace
+mkdir -p "$TEST_REG_WS"
+cp "$CLI" "$TEST_REG_WS/rnex"
+chmod +x "$TEST_REG_WS/rnex"
+cp "$DIR/package.json" "$TEST_REG_WS/package.json"
+link_dir_contents "$DIR/lib" "$TEST_REG_WS/lib"
+link_dir_contents "$DIR/plugins" "$TEST_REG_WS/plugins"
+link_dir_contents "$DIR/skills" "$TEST_REG_WS/skills"
+
+# 1. init --repos-dir <custom> --llm-wiki expands {reposDir} using the custom dir
+(cd "$TEST_REG_WS" && ./rnex init -y --repos-dir packages-src --code-workspace reg.code-workspace --llm-wiki --copilot >/dev/null)
+grep -q 'packages-src/\*\*/README.md' "$TEST_REG_WS/rnex.yaml" || {
+  fail "init --repos-dir did not expand {reposDir} in plugin defaults: $(cat "$TEST_REG_WS/rnex.yaml")"; exit 1;
+}
+
+# 2. Dotted repo names match literally (never treat '.' as regex wildcard)
+(cd "$TEST_REG_WS" && ./rnex repo add "$TEST_REPO" --name acmeXio >/dev/null)
+(cd "$TEST_REG_WS" && ./rnex repo add "$TEST_REPO" --name acme.io >/dev/null)
+(cd "$TEST_REG_WS" && ./rnex repo set acme.io --readonly --global >/dev/null)
+(cd "$TEST_REG_WS" && ./rnex repo remove acme.io -y >/dev/null)
+grep -q '^  acmeXio:' "$TEST_REG_WS/rnex.yaml" || { fail "Removing acme.io accidentally removed acmeXio"; exit 1; }
+! grep -q '^  acme\.io:' "$TEST_REG_WS/rnex.yaml" || { fail "acme.io was not removed from rnex.yaml"; exit 1; }
+
+# 3. Custom repo path is reflected in .code-workspace folders
+mkdir -p "$TEST_REG_WS/external/custom-svc"
+cat <<EOF_REG_CUSTOM >> "$TEST_REG_WS/rnex.yaml"
+  custom-svc:
+    path: external/custom-svc
+    url: $TEST_REPO
+EOF_REG_CUSTOM
+(cd "$TEST_REG_WS" && ./rnex sync --quiet)
+grep -q '"path": "external/custom-svc"' "$TEST_REG_WS/reg.code-workspace" || {
+  fail ".code-workspace did not honor custom repo path: $(cat "$TEST_REG_WS/reg.code-workspace")"; exit 1;
+}
+
+# 4. Standalone env -i provider hook resolves .rnex/plugins/<name>/plugin.yaml without root plugins/
+rm -rf "$TEST_REG_WS/plugins" "$TEST_REG_WS/.github/copilot-instructions.md"
+env -i PATH="$PATH" HOME="$HOME" RNEX_ROOT="$TEST_REG_WS" RNEX_LIB_DIR="$DIR/lib" \
+  sh "$TEST_REG_WS/.rnex/plugins/copilot/hooks/after_sync.sh" >/dev/null 2>&1
+[ -f "$TEST_REG_WS/.github/copilot-instructions.md" ] || {
+  fail "Standalone provider hook failed to resolve manifest from .rnex/plugins/copilot/plugin.yaml"; exit 1;
+}
+pass
+
 if [ "${_STANDALONE_RUN:-0}" -eq 1 ]; then
   report_results
 fi

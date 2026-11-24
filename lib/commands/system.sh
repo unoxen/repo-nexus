@@ -28,7 +28,7 @@ cmd_install() {
 
   mkdir -p "$_install_dir"
   if [ "$_src_root" != "$_install_dir" ]; then
-    rm -rf "$_install_dir/docs"
+    rm -rf "${_install_dir:?}/docs"
     cp "$_source_cli" "$_install_dir/rnex"
     [ -f "$_src_root/package.json" ] && cp "$_src_root/package.json" "$_install_dir/package.json"
     for _asset in lib templates plugins skills; do
@@ -37,7 +37,7 @@ cmd_install() {
         cp -R "$_src_root/$_asset" "$_install_dir/$_asset"
       fi
     done
-    rm -rf "$_install_dir/plugins"/*/tests 2>/dev/null || true
+    rm -rf "${_install_dir:?}/plugins"/*/tests 2>/dev/null || true
   fi
 
   _installed_cli="$_install_dir/rnex"
@@ -83,7 +83,7 @@ cmd_help() {
     init [-y] [--repos-dir <dir>] [--code-workspace [file]] [--hooks|--no-hooks] [--copilot] [--claude] [--gemini] [--codex] [--cursor] [--windsurf] [--llm-wiki] [dir]
                             Initialize a new Repo Nexus workspace (default: AGENTS.md)
     install [dir]           Install rnex & repo-nexus globally into ~/.local/bin (or custom dir)
-    sync [-y] [--quiet]     Reconcile workspace, plugins, skills, member .rnex directories, and compile AI instructions
+    sync [-y] [--quiet]     Reconcile workspace, plugins, skills, repositories, and compile AI instructions
     status                  Inspect workspace health, active repos, loaded config, git hooks, and plugins (read-only)
     completion <shell>      Generate shell completion script (bash, zsh, fish)
 
@@ -123,7 +123,7 @@ cmd_help() {
     rnex exec npm test                          # Run tests in all repos
     rnex list                                   # List all member repos and active branches
     rnex status                                 # Inspect workspace configuration and health
-    rnex sync                                   # Reconcile all repos, plugins, skills, and .rnex directories
+    rnex sync                                   # Reconcile all repos, plugins, skills, and AI instructions
     rnex plugin <name> <command>                # Execute a plugin-provided command
     rnex completion zsh                         # Generate Zsh completion script
 

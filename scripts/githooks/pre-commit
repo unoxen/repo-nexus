@@ -37,10 +37,20 @@ if git diff --cached --quiet; then
   exit 0
 fi
 
+# Extract top-level semver version from package.json
+read_pkg_version() {
+  awk '/^[ \t]*"version"[ \t]*:[ \t]*"[0-9]/ { sub(/.*"version"[ \t]*:[ \t]*"/, ""); sub(/".*/, ""); print; exit }' "$PKG_JSON"
+}
+
 # Synchronize version across all built-in plugin manifests
 sync_plugin_versions() {
   _target_ver="$1"
   [ -n "$_target_ver" ] || return 0
+  if [ -x "$REPO_ROOT/scripts/sync-plugin-versions.sh" ]; then
+    "$REPO_ROOT/scripts/sync-plugin-versions.sh" "$_target_ver" >/dev/null
+    git add "$REPO_ROOT"/plugins/*/plugin.yaml 2>/dev/null || true
+    return 0
+  fi
   for _manifest in "$REPO_ROOT"/plugins/*/plugin.yaml; do
     [ -f "$_manifest" ] || continue
     _tmp_m="$_manifest.tmp.$$"
@@ -54,7 +64,7 @@ sync_plugin_versions() {
 # Matches: '+' followed by whitespace, '"version"', ':', and a semver starting with a digit.
 # This prevents falsely matching script keys (e.g. "version": "./scripts/...") or dependency changes.
 if git diff --cached "$PKG_JSON" 2>/dev/null | grep -q '^[+][ ]*"version"[ ]*:[ ]*"[0-9]'; then
-  CUR_VERSION="$(awk '/^[ ]*"version"[ ]*:[ ]*"[0-9]/ { sub(/.*"version"[ ]*:[ ]*"/, ""); sub(/".*/, ""); print; exit }' "$PKG_JSON")"
+  CUR_VERSION="$(read_pkg_version)"
   if [ -n "$CUR_VERSION" ]; then
     sync_plugin_versions "$CUR_VERSION"
     printf 'v%s\n' "$CUR_VERSION" > "$GIT_DIR/PENDING_VERSION_TAG"
@@ -83,7 +93,7 @@ if [ "$_is_amend" -eq 0 ] && [ -n "$GIT_AUTHOR_DATE" ] && git rev-parse --verify
 fi
 
 if [ "$_is_amend" -eq 1 ]; then
-  CUR_VERSION="$(awk '/^[ ]*"version"[ ]*:[ ]*"[0-9]/ { sub(/.*"version"[ ]*:[ ]*"/, ""); sub(/".*/, ""); print; exit }' "$PKG_JSON")"
+  CUR_VERSION="$(read_pkg_version)"
   if [ -n "$CUR_VERSION" ]; then
     sync_plugin_versions "$CUR_VERSION"
     printf 'v%s\n' "$CUR_VERSION" > "$GIT_DIR/PENDING_VERSION_TAG"
@@ -99,7 +109,7 @@ fi
 npm version patch --no-git-tag-version >/dev/null 2>&1 || npm version patch --no-git-tag-version
 
 # Read the newly bumped version directly from package.json (single source of truth)
-NEW_VERSION="$(awk '/^[ ]*"version"[ ]*:[ ]*"[0-9]/ { sub(/.*"version"[ ]*:[ ]*"/, ""); sub(/".*/, ""); print; exit }' "$PKG_JSON")"
+NEW_VERSION="$(read_pkg_version)"
 if [ -z "$NEW_VERSION" ]; then
   printf 'Error: Unable to extract bumped version from %s\n' "$PKG_JSON" >&2
   exit 1

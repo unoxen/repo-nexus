@@ -12,12 +12,14 @@ set -e
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PKG_JSON="$REPO_ROOT/package.json"
 
-if [ ! -f "$PKG_JSON" ]; then
-  printf 'Error: package.json not found in %s\n' "$REPO_ROOT" >&2
-  exit 1
+VERSION="${1:-}"
+if [ -z "$VERSION" ]; then
+  if [ ! -f "$PKG_JSON" ]; then
+    printf 'Error: package.json not found in %s\n' "$REPO_ROOT" >&2
+    exit 1
+  fi
+  VERSION="$(awk '/^[ \t]*"version"[ \t]*:[ \t]*"[0-9]/ { sub(/.*"version"[ \t]*:[ \t]*"/, ""); sub(/".*/, ""); print; exit }' "$PKG_JSON")"
 fi
-
-VERSION="$(awk '/"version"[ ]*:/ { sub(/.*"version"[ ]*:[ ]*"/, ""); sub(/".*/, ""); print; exit }' "$PKG_JSON")"
 if [ -z "$VERSION" ]; then
   printf 'Error: Unable to extract version from %s\n' "$PKG_JSON" >&2
   exit 1

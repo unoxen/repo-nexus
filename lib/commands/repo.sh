@@ -101,6 +101,14 @@ Subcommands:
 EOF
 }
 
+# Refresh derived workspace artifacts (.rnex/ai-instructions.md, .code-workspace, sync_stamp)
+# after mutating repository configuration.
+_refresh_workspace_repo_views() {
+  build_ai_instructions "$NEXUS_DIR"
+  sync_code_workspace
+  update_sync_stamp "$NEXUS_DIR"
+}
+
 # Register a new repository in workspace configuration and clone it into ./repos/<name>.
 # Usage:
 #   rnex repo add <url> [--name <name>] [--branch <branch>] [--local] [--disabled] [--readonly]
@@ -180,14 +188,10 @@ cmd_repo_add() {
   _repo_add_cloned=0
   if [ "$_enabled" = "true" ] && [ ! -d "$_target_dir" ]; then
     run_hook "before_clone" "$_name"
-    if [ -n "$_branch" ]; then
-      log_info "Cloning $_name (branch: $_branch) from $_url into $_target_dir..."
-      if ! git clone -b "$_branch" "$_url" "$_target_dir"; then
+    if ! git_clone_member_repo "$_name" "$_url" "$_target_dir" "$_branch"; then
+      if [ -n "$_branch" ]; then
         die "Failed to clone repository from $_url (branch: $_branch)"
-      fi
-    else
-      log_info "Cloning $_name from $_url into $_target_dir..."
-      if ! git clone "$_url" "$_target_dir"; then
+      else
         die "Failed to clone repository from $_url"
       fi
     fi
@@ -199,15 +203,13 @@ cmd_repo_add() {
     [ -n "$_branch" ] && yaml_set_local "$_name" "branch" "$_branch"
     [ "$_readonly" = "true" ] && yaml_set_local "$_name" "readonly" "true"
     [ "$_enabled" = "false" ] && yaml_set_local "$_name" "enabled" "false"
-    build_ai_instructions "$NEXUS_DIR"
-    sync_code_workspace
-    update_sync_stamp "$NEXUS_DIR"
+    _refresh_workspace_repo_views
     printf '\n'
     log_ok "Registered repo '${_name}' in $(basename "$WORKSPACE_LOCAL_YAML")"
     return 0
   fi
 
-  if grep -q "^  $_name:" "$WORKSPACE_YAML" 2>/dev/null; then
+  if _yaml_list_repos_from_file "$WORKSPACE_YAML" | grep -Fxq -- "$_name" 2>/dev/null; then
     _existing_url="$(_yaml_get_from_file "$WORKSPACE_YAML" "$_name" "url")"
     [ -n "$_existing_url" ] || _existing_url="$(_yaml_get_from_file "$WORKSPACE_YAML" "$_name" "path")"
     if [ -n "$_existing_url" ]; then
@@ -217,9 +219,7 @@ cmd_repo_add() {
       [ -n "$_branch" ] && yaml_set "$_name" "branch" "$_branch"
       [ "$_readonly" = "true" ] && yaml_set "$_name" "readonly" "true"
       [ "$_enabled" = "false" ] && yaml_set "$_name" "enabled" "false"
-      build_ai_instructions "$NEXUS_DIR"
-      sync_code_workspace
-      update_sync_stamp "$NEXUS_DIR"
+      _refresh_workspace_repo_views
       printf '\n'
       log_ok "Updated repo '${_name}' in $(basename "$WORKSPACE_YAML")"
       return 0
@@ -227,9 +227,7 @@ cmd_repo_add() {
   fi
 
   yaml_add_repo "$_name" "$_url" "$_enabled" "$_readonly" "$_branch"
-  build_ai_instructions "$NEXUS_DIR"
-  sync_code_workspace
-  update_sync_stamp "$NEXUS_DIR"
+  _refresh_workspace_repo_views
   printf '\n'
   log_ok "Registered and added repo '${_name}'"
 }
@@ -264,15 +262,8 @@ cmd_repo_remove() {
   _target_dir="$(resolve_repo_path "$_name")"
   yaml_remove_repo "$_name"
 
-  _ws_root="${NEXUS_DIR:-${RNEX_ROOT:-.}}"
-  while [ "$_ws_root" != "${_ws_root%/}" ] && [ -n "${_ws_root%/}" ]; do
-    _ws_root="${_ws_root%/}"
-  done
-
-  _clean_target="$_target_dir"
-  while [ "$_clean_target" != "${_clean_target%/}" ] && [ -n "${_clean_target%/}" ]; do
-    _clean_target="${_clean_target%/}"
-  done
+  _ws_root="$(strip_trailing_slashes "${NEXUS_DIR:-${RNEX_ROOT:-.}}")"
+  _clean_target="$(strip_trailing_slashes "$_target_dir")"
 
   if [ -n "$_clean_target" ] && \
      [ "$_clean_target" != "/" ] && \
@@ -283,9 +274,7 @@ cmd_repo_remove() {
   else
     log_ok "Removed repo '$_name'"
   fi
-  update_sync_stamp "$NEXUS_DIR"
-  build_ai_instructions "$NEXUS_DIR"
-  sync_code_workspace
+  _refresh_workspace_repo_views
 }
 
 # Modify repository configuration flags (--enable, --disable, --readonly, --readwrite).
@@ -328,44 +317,31 @@ cmd_repo_set() {
   [ -n "$_enable_val" ] || [ -n "$_ro_val" ] || die "Specify at least one setting to change (--enable/--disable, --readonly/--readwrite)"
 
   if [ "$_target" = "local" ]; then
-    if [ -n "$_enable_val" ]; then
-      yaml_set_local "$_name" "enabled" "$_enable_val"
-      if [ "$_enable_val" = "true" ]; then
-        log_ok "Enabled repo '$_name' locally in $(basename "$WORKSPACE_LOCAL_YAML")"
-      else
-        log_ok "Disabled repo '$_name' locally in $(basename "$WORKSPACE_LOCAL_YAML")"
-      fi
-    fi
-    if [ -n "$_ro_val" ]; then
-      yaml_set_local "$_name" "readonly" "$_ro_val"
-      if [ "$_ro_val" = "true" ]; then
-        log_ok "Marked repo '$_name' as read-only locally in $(basename "$WORKSPACE_LOCAL_YAML")"
-      else
-        log_ok "Disabled read-only mode for '$_name' locally in $(basename "$WORKSPACE_LOCAL_YAML")"
-      fi
-    fi
+    _setter="yaml_set_local"
+    _where="locally in $(basename "$WORKSPACE_LOCAL_YAML")"
   else
-    if [ -n "$_enable_val" ]; then
-      yaml_set "$_name" "enabled" "$_enable_val"
-      if [ "$_enable_val" = "true" ]; then
-        log_ok "Enabled repo '$_name' in $(basename "$WORKSPACE_YAML")"
-      else
-        log_ok "Disabled repo '$_name' in $(basename "$WORKSPACE_YAML")"
-      fi
+    _setter="yaml_set"
+    _where="in $(basename "$WORKSPACE_YAML")"
+  fi
+
+  if [ -n "$_enable_val" ]; then
+    "$_setter" "$_name" "enabled" "$_enable_val"
+    if [ "$_enable_val" = "true" ]; then
+      log_ok "Enabled repo '$_name' $_where"
+    else
+      log_ok "Disabled repo '$_name' $_where"
     fi
-    if [ -n "$_ro_val" ]; then
-      yaml_set "$_name" "readonly" "$_ro_val"
-      if [ "$_ro_val" = "true" ]; then
-        log_ok "Marked repo '$_name' as read-only in $(basename "$WORKSPACE_YAML")"
-      else
-        log_ok "Disabled read-only mode for '$_name' in $(basename "$WORKSPACE_YAML")"
-      fi
+  fi
+  if [ -n "$_ro_val" ]; then
+    "$_setter" "$_name" "readonly" "$_ro_val"
+    if [ "$_ro_val" = "true" ]; then
+      log_ok "Marked repo '$_name' as read-only $_where"
+    else
+      log_ok "Disabled read-only mode for '$_name' $_where"
     fi
   fi
 
-  build_ai_instructions "$NEXUS_DIR"
-  sync_code_workspace
-  update_sync_stamp "$NEXUS_DIR"
+  _refresh_workspace_repo_views
 }
 
 # Clone a single member repository declared in configuration.
@@ -391,24 +367,12 @@ cmd_repo_clone() {
   fi
 
   _branch="$(yaml_get_repo_branch "$_name")"
-  if [ -n "$_branch" ]; then
-    log_info "Cloning $_name (branch: $_branch) from $_url into $_dest..."
-    if git clone -b "$_branch" "$_url" "$_dest"; then
-      log_ok "Successfully cloned '$_name'"
-      sync_code_workspace
-      update_sync_stamp "$NEXUS_DIR"
-    else
-      die "Failed to clone '$_name' from $_url"
-    fi
+  if git_clone_member_repo "$_name" "$_url" "$_dest" "$_branch"; then
+    log_ok "Successfully cloned '$_name'"
+    sync_code_workspace
+    update_sync_stamp "$NEXUS_DIR"
   else
-    log_info "Cloning $_name from $_url into $_dest..."
-    if git clone "$_url" "$_dest"; then
-      log_ok "Successfully cloned '$_name'"
-      sync_code_workspace
-      update_sync_stamp "$NEXUS_DIR"
-    else
-      die "Failed to clone '$_name' from $_url"
-    fi
+    die "Failed to clone '$_name' from $_url"
   fi
 }
 
@@ -438,7 +402,7 @@ cmd_repo_status() {
   [ -n "$_branch" ] && printf '  Target Branch: %s\n' "$_branch"
 
   if [ -d "$_dest/.git" ]; then
-    _curr_b="$(git -C "$_dest" symbolic-ref --short HEAD 2>/dev/null || git -C "$_dest" rev-parse --short HEAD 2>/dev/null || true)"
+    _curr_b="$(get_repo_active_branch "$_dest")"
     printf '  Active Branch: %s\n' "${_curr_b:-(detached)}"
     printf '\n%bGit Status:%b\n' "$_DIM" "$_NC"
     (cd "$_dest" && git status -s)
@@ -462,7 +426,7 @@ cmd_repo_exec() {
   _repo_dir="$(resolve_repo_path "$_name")"
   [ -d "$_repo_dir" ] || die "Repo '$_name' is not cloned yet at $_repo_dir"
 
-  _b="$(git -C "$_repo_dir" symbolic-ref --short HEAD 2>/dev/null || git -C "$_repo_dir" rev-parse --short HEAD 2>/dev/null || true)"
+  _b="$(get_repo_active_branch "$_repo_dir")"
   _cmd="$*"
   printf '%b[%s]%b %s\n' "$_B" "$_name" "$_NC" "$_cmd"
   printf '%s\n' "----------------------------------------"
@@ -508,20 +472,10 @@ cmd_clone() {
       log_warn "Destination $_dest already exists but is not a Git repo"
     else
       _branch="$(yaml_get_repo_branch "$_name")"
-      if [ -n "$_branch" ]; then
-        log_info "Cloning $_name (branch: $_branch) from $_url..."
-        if git clone -b "$_branch" "$_url" "$_dest"; then
-          log_ok "Successfully cloned '$_name'"
-        else
-          log_err "Failed to clone '$_name' from $_url"
-        fi
+      if git_clone_member_repo "$_name" "$_url" "$_dest" "$_branch"; then
+        log_ok "Successfully cloned '$_name'"
       else
-        log_info "Cloning $_name from $_url..."
-        if git clone "$_url" "$_dest"; then
-          log_ok "Successfully cloned '$_name'"
-        else
-          log_err "Failed to clone '$_name' from $_url"
-        fi
+        log_err "Failed to clone '$_name' from $_url"
       fi
     fi
   done
@@ -556,7 +510,7 @@ cmd_exec() {
 
     printf '\n%b[%s]%b %s\n' "$_B" "$_name" "$_NC" "$_cmd"
     printf '%s\n' "----------------------------------------"
-    _b="$(git -C "$_repo_dir" symbolic-ref --short HEAD 2>/dev/null || git -C "$_repo_dir" rev-parse --short HEAD 2>/dev/null || true)"
+    _b="$(get_repo_active_branch "$_repo_dir")"
     if (
       RNEX_REPO_NAME="$_name"
       RNEX_REPO_PATH="$_repo_dir"
@@ -602,7 +556,7 @@ cmd_list() {
     _branch="-"
     if [ -d "$_rdir/.git" ]; then
       _cloned="${_G}cloned${_NC}"
-      _b="$(git -C "$_rdir" symbolic-ref --short HEAD 2>/dev/null || git -C "$_rdir" rev-parse --short HEAD 2>/dev/null || true)"
+      _b="$(get_repo_active_branch "$_rdir")"
       [ -n "$_b" ] && _branch="$_b"
     fi
 

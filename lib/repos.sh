@@ -16,16 +16,40 @@
 #   /path/to/my-repo/               -> my-repo
 #   ./relative/repo                 -> repo
 repo_name_from_path() {
-  _rn_raw="$1"
-  # Strip trailing slashes safely in POSIX shell
-  while [ "$_rn_raw" != "${_rn_raw%/}" ] && [ -n "${_rn_raw%/}" ]; do
-    _rn_raw="${_rn_raw%/}"
-  done
+  _rn_raw="$(strip_trailing_slashes "$1")"
   # Extract the last component after the last / or : delimiter
   _rn_base="${_rn_raw##*[/:]}"
   # Strip trailing .git suffix if present
   _rn_base="${_rn_base%.git}"
   printf '%s' "$_rn_base"
+}
+
+# Resolve the active Git branch name (or short commit SHA if detached) for a cloned repository.
+# @param $1 Cloned repository directory path.
+# @returns Branch name or short SHA on stdout (empty if unreadable).
+# @pure
+get_repo_active_branch() {
+  _grab_dir="$1"
+  [ -d "$_grab_dir/.git" ] || [ -e "$_grab_dir/.git" ] || return 0
+  git -C "$_grab_dir" symbolic-ref --short HEAD 2>/dev/null || git -C "$_grab_dir" rev-parse --short HEAD 2>/dev/null || true
+}
+
+# Clone a member repository into its destination directory, honoring an optional target branch.
+# @param $1 Repository logical name.
+# @param $2 Git clone URL or local path.
+# @param $3 Destination directory path.
+# @param $4 Optional target branch name.
+# @returns 0 on successful clone; non-zero on git clone failure.
+# @sideEffects Clones git repository into $3 and logs progress.
+git_clone_member_repo() {
+  _gcm_name="$1"; _gcm_url="$2"; _gcm_dest="$3"; _gcm_branch="${4:-}"
+  if [ -n "$_gcm_branch" ]; then
+    log_info "Cloning $_gcm_name (branch: $_gcm_branch) from $_gcm_url into $_gcm_dest..."
+    git clone -b "$_gcm_branch" "$_gcm_url" "$_gcm_dest"
+  else
+    log_info "Cloning $_gcm_name from $_gcm_url into $_gcm_dest..."
+    git clone "$_gcm_url" "$_gcm_dest"
+  fi
 }
 
 # Resolve the absolute filesystem path for a member repository.
@@ -63,20 +87,17 @@ ensure_repos_dir() {
 prune_unlisted_repos() {
   _pur_rd="${1:-$REPOS_DIR}"
   [ -n "$_pur_rd" ] || _pur_rd="$(get_repos_root)"
-  while [ "$_pur_rd" != "${_pur_rd%/}" ] && [ -n "${_pur_rd%/}" ]; do
-    _pur_rd="${_pur_rd%/}"
-  done
+  _pur_rd="$(strip_trailing_slashes "$_pur_rd")"
   [ -d "$_pur_rd" ] || return 0
 
   # Collect all resolved filesystem paths for currently listed repositories
   _pur_listed_paths="$(yaml_list_repos 2>/dev/null | while read -r _pur_name; do
     [ -n "$_pur_name" ] || continue
-    _pur_p="$(resolve_repo_path "$_pur_name")"
-    while [ "$_pur_p" != "${_pur_p%/}" ] && [ -n "${_pur_p%/}" ]; do
-      _pur_p="${_pur_p%/}"
-    done
-    printf '%s\n' "$_pur_p"
+    strip_trailing_slashes "$(resolve_repo_path "$_pur_name")"
+    printf '\n'
   done)"
+
+  _pur_ws_root="$(strip_trailing_slashes "${NEXUS_DIR:-${RNEX_ROOT:-.}}")"
 
   # Inspect every non-hidden entry in the repos directory
   for _pur_entry in "$_pur_rd"/*; do
@@ -86,11 +107,7 @@ prune_unlisted_repos() {
       .*|"*") continue ;;
     esac
 
-    # Normalize trailing slashes on entry path for robust comparison
-    _pur_clean_entry="$_pur_entry"
-    while [ "$_pur_clean_entry" != "${_pur_clean_entry%/}" ] && [ -n "${_pur_clean_entry%/}" ]; do
-      _pur_clean_entry="${_pur_clean_entry%/}"
-    done
+    _pur_clean_entry="$(strip_trailing_slashes "$_pur_entry")"
 
     # If the entry matches the resolved path of a registered repository, keep it
     if [ -n "$_pur_listed_paths" ] && printf '%s\n' "$_pur_listed_paths" | grep -F -x "$_pur_clean_entry" >/dev/null 2>&1; then
@@ -98,11 +115,6 @@ prune_unlisted_repos() {
     fi
 
     # Security check: guard against accidental deletion of root or workspace dirs
-    _pur_ws_root="${NEXUS_DIR:-${RNEX_ROOT:-.}}"
-    while [ "$_pur_ws_root" != "${_pur_ws_root%/}" ] && [ -n "${_pur_ws_root%/}" ]; do
-      _pur_ws_root="${_pur_ws_root%/}"
-    done
-
     if [ -n "$_pur_clean_entry" ] && \
        [ "$_pur_clean_entry" != "/" ] && \
        [ "$_pur_clean_entry" != "$_pur_ws_root" ] && \
@@ -112,9 +124,4 @@ prune_unlisted_repos() {
     fi
   done
   return 0
-}
-
-# Check if a member repository is configured as read-only (information-only).
-repo_readonly() {
-  yaml_repo_readonly "$1"
 }

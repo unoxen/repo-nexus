@@ -48,9 +48,7 @@ plugin_resolve_dir() {
         plugin.yaml)   _prd_path="." ;;
       esac
       # Strip trailing slashes
-      while [ "$_prd_path" != "${_prd_path%/}" ] && [ -n "${_prd_path%/}" ]; do
-        _prd_path="${_prd_path%/}"
-      done
+      _prd_path="$(strip_trailing_slashes "$_prd_path")"
       # If relative path, prefix with workspace root if needed
       case "$_prd_path" in
         /*) _prd_full="$_prd_path" ;;
@@ -98,38 +96,7 @@ plugin_resolve_dir() {
 
 # Search all candidate plugin directories and locate a plugin by name containing plugin.yaml.
 find_plugin_dir() {
-  _query="$1"
-  [ -n "$_query" ] || return 1
-
-  # OWASP A03 / Path Traversal Guard: plugin query must strictly match allowlist
-  case "$_query" in
-    *[!a-zA-Z0-9._-]*|"") return 1 ;;
-    .|..) return 1 ;;
-  esac
-  if command -v plugin_resolve_dir >/dev/null 2>&1; then
-    _res="$(plugin_resolve_dir "$_query" 2>/dev/null || true)"
-    if [ -n "$_res" ]; then
-      printf '%s' "$_res"
-      return 0
-    fi
-  fi
-
-  _sdir="$(dirname "$SCRIPT_LOCATION")"
-  for _cand in \
-    "${RNEX_ROOT:-}/plugins/$_query" \
-    "${RNEX_PLUGINS_DIR:-}/$_query" \
-    "${PLUGINS_DIR:-}/$_query" \
-    "$SCRIPT_LOCATION/plugins/$_query" \
-    "$_sdir/plugins/$_query" \
-    "$NEXUS_DIR/plugins/$_query" \
-    "$NEXUS_DIR/.rnex/plugins/$_query"; do
-    [ -n "$_cand" ] || continue
-    if [ -f "$_cand/plugin.yaml" ]; then
-      printf '%s' "$_cand"
-      return 0
-    fi
-  done
-  return 1
+  plugin_resolve_dir "$1"
 }
 
 # ==============================================================================
@@ -279,14 +246,24 @@ list_all_available_plugin_dirs() {
 }
 
 # Extract a top-level scalar field (e.g. name, version, description) from plugin.yaml.
+# Strips inline comments, surrounding whitespace, and enclosing single/double quotes.
 plugin_get_field() {
   _pdir="$1"; _fld="$2"
   [ -f "$_pdir/plugin.yaml" ] || return 1
+  if command -v _yaml_top_level_from_file >/dev/null 2>&1; then
+    _yaml_top_level_from_file "$_pdir/plugin.yaml" "$_fld"
+    return 0
+  fi
   awk -v fld="$_fld" '
-    $0 ~ ("^" fld ":") {
-      sub("^" fld ":[ ]*", "");
-      sub(/[ ]*#.*/, "");
-      print
+    $0 ~ ("^" fld ":[ \t]*") {
+      line = $0
+      sub("^" fld ":[ \t]*", "", line)
+      sub(/[ \t]*#.*/, "", line)
+      sub(/^[ \t]+/, "", line)
+      sub(/[ \t\r]+$/, "", line)
+      gsub(/^["\047]|["\047]$/, "", line)
+      print line
+      exit
     }
   ' "$_pdir/plugin.yaml"
 }
@@ -317,10 +294,7 @@ plugin_get_version() {
 
   # If directory was not provided, attempt resolution
   if [ -z "$_pgv_dir" ]; then
-    if command -v plugin_resolve_dir >/dev/null 2>&1; then
-      _pgv_dir="$(plugin_resolve_dir "$_pgv_name" 2>/dev/null || true)"
-    fi
-    [ -n "$_pgv_dir" ] || _pgv_dir="$(find_plugin_dir "$_pgv_name" 2>/dev/null || true)"
+    _pgv_dir="$(plugin_resolve_dir "$_pgv_name" 2>/dev/null || true)"
   fi
 
   # Resolve canonical path for the built-in plugin directory
@@ -337,7 +311,7 @@ plugin_get_version() {
 
   # Case 1: The resolved directory directly matches the built-in plugin
   if [ -n "$_tk_plugin_dir" ] && [ -n "$_res_plugin_dir" ] && [ "$_tk_plugin_dir" = "$_res_plugin_dir" ]; then
-    printf '%s' "${RNEX_VERSION:-0.8.16}"
+    printf '%s' "${RNEX_VERSION:-0.10.4}"
     return 0
   fi
 
@@ -346,7 +320,7 @@ plugin_get_version() {
   case "$_res_plugin_dir" in
     */.rnex/plugins/$_pgv_name)
       if [ -n "$_tk_plugin_dir" ] && [ -d "$_tk_plugin_dir" ]; then
-        printf '%s' "${RNEX_VERSION:-0.8.16}"
+        printf '%s' "${RNEX_VERSION:-0.10.4}"
         return 0
       fi
       ;;
@@ -370,7 +344,6 @@ plugin_get_skill_dir() {
   _pgs_name="$1"
   _pgs_pdir="${2:-}"
   [ -n "$_pgs_pdir" ] || _pgs_pdir="$(plugin_resolve_dir "$_pgs_name" 2>/dev/null || true)"
-  [ -n "$_pgs_pdir" ] || _pgs_pdir="$(find_plugin_dir "$_pgs_name" 2>/dev/null || true)"
   _pgs_dir=""
   if [ -n "$_pgs_pdir" ]; then
     _pgs_dir="$(plugin_get_field "$_pgs_pdir" "skill_dir" 2>/dev/null || true)"
@@ -389,21 +362,6 @@ plugin_list_templates() {
       sub(/^[ ]*-[ ]*/, "");
       sub(/[ ]*#.*/, "");
       gsub(/["\047]/, "");
-      if (length($0) > 0) print $0
-    }
-  ' "$_pdir/plugin.yaml"
-}
-
-# Parse declared instruction files from plugin.yaml.
-plugin_list_instructions() {
-  _pdir="$1"
-  [ -f "$_pdir/plugin.yaml" ] || return 0
-  awk '
-    /^instructions:/ { t=1; next }
-    t && /^[^ #]/ { exit }
-    t && /^[ ]*-[ ]*/ {
-      sub(/^[ ]*-[ ]*/, "");
-      sub(/[ ]*#.*/, "");
       if (length($0) > 0) print $0
     }
   ' "$_pdir/plugin.yaml"
@@ -551,26 +509,29 @@ plugin_instantiate_template() {
   # {today}: current UTC date (ISO-8601, YYYY-MM-DD)
   _t_val="$(date -u +%Y-%m-%d 2>/dev/null || date +%Y-%m-%d 2>/dev/null || date +%F 2>/dev/null || echo "2026-10-15")"
 
-  cp "$_src" "$_dest"
+  # Compile all placeholder substitutions into a single sed script for one-pass execution
+  _sed_scr="$(mktemp)"
+  _tmp_inst="$(mktemp)"
   if [ -f "$_pd/plugin.yaml" ]; then
     for _k in $(_plugin_config_default_keys "$_pd/plugin.yaml"); do
       _v="$(_plugin_resolve_scalar_value "$_p" "$_pd" "$_k")"
       if [ -n "$_v" ]; then
         _v_esc="$(_sed_escape_replacement "$_v")"
-        _tmp_inst="$(mktemp)"
-        sed -e "s|{$_k}|$_v_esc|g" "$_dest" > "$_tmp_inst" && mv "$_tmp_inst" "$_dest"
+        printf 's|{%s}|%s|g\n' "$_k" "$_v_esc" >> "$_sed_scr"
       fi
     done
   fi
+  {
+    printf 's|{reposDir}|%s|g\n' "$_r_val"
+    printf 's|{skill_dir}|%s|g\n' "$_sd_val"
+    printf 's|{instruction_file}|%s|g\n' "$_if_val"
+    printf 's|{plugin_dir}|%s|g\n' "$_pdir_val"
+    printf 's|{sources}|%s|g\n' "$_s_val"
+    printf 's|{today}|%s|g\n' "$_t_val"
+  } >> "$_sed_scr"
 
-  _tmp_inst="$(mktemp)"
-  sed -e "s|{reposDir}|$_r_val|g" \
-      -e "s|{skill_dir}|$_sd_val|g" \
-      -e "s|{instruction_file}|$_if_val|g" \
-      -e "s|{plugin_dir}|$_pdir_val|g" \
-      -e "s|{sources}|$_s_val|g" \
-      -e "s|{today}|$_t_val|g" \
-      "$_dest" > "$_tmp_inst" && mv "$_tmp_inst" "$_dest"
+  sed -f "$_sed_scr" "$_src" > "$_tmp_inst" && mv "$_tmp_inst" "$_dest"
+  rm -f "$_sed_scr" "$_tmp_inst"
 }
 
 # Deterministically sync plugin asset directories and manifest files into destination.
@@ -649,7 +610,7 @@ sync_plugins() {
       *[!a-zA-Z0-9._-]*|""|.|..) continue ;;
     esac
     if ! yaml_plugin_enabled "$_pname" 2>/dev/null; then
-      _p_out="$(plugin_manifest_get "$_pdir" "output_file" 2>/dev/null || true)"
+      _p_out="$(plugin_get_field "$_pdir" "output_file" 2>/dev/null || true)"
       if [ -d "$NEXUS_DIR/.rnex/plugins/$_pname" ] || { [ -n "$_p_out" ] && [ -e "$NEXUS_DIR/$_p_out" ]; }; then
         run_plugin_hook "$_pname" "before_plugin_disable"
       fi
@@ -666,7 +627,6 @@ sync_plugins() {
     esac
 
     _pdir="$(plugin_resolve_dir "$_pname" 2>/dev/null || true)"
-    [ -n "$_pdir" ] || _pdir="$(find_plugin_dir "$_pname" 2>/dev/null || true)"
     [ -n "$_pdir" ] || continue
 
     sync_plugin_bundle "$_pdir" "$NEXUS_DIR/.rnex/plugins/$_pname" "$_pname"
@@ -738,7 +698,6 @@ validate_configured_plugins() {
     esac
 
     _vcp_dir="$(plugin_resolve_dir "$_vcp_name" 2>/dev/null || true)"
-    [ -n "$_vcp_dir" ] || _vcp_dir="$(find_plugin_dir "$_vcp_name" 2>/dev/null || true)"
     if [ -z "$_vcp_dir" ]; then
       log_err "Unknown plugin '$_vcp_name' declared in configuration: plugin does not exist in built-in plugins or via a valid 'path:'. Remove or update 'plugins.$_vcp_name'."
       _vcp_rc=1
@@ -852,151 +811,6 @@ plugin_sources_display() {
       printf '\140%s/\140\n' "$_psy_e"
     fi
   done | awk '{ out = (NR == 1) ? $0 : out ", " $0 } END { if (NR) print out }'
-}
-
-# Split a pattern into its leading wildcard-free directory prefix and the rest.
-# The last component always stays in the rest. Sets _sp_base (default ".") and _sp_rest.
-_src_static_prefix() {
-  _sp_base=""
-  _sp_rest="$1"
-  while :; do
-    _sp_comp="${_sp_rest%%/*}"
-    [ "$_sp_comp" = "$_sp_rest" ] && break
-    _src_has_glob "$_sp_comp" && break
-    _sp_base="${_sp_base:+$_sp_base/}$_sp_comp"
-    _sp_rest="${_sp_rest#*/}"
-  done
-  [ -z "$_sp_base" ] && _sp_base="."
-  return 0
-}
-
-# List all files under a directory, pruning hidden directories/files and node_modules
-_src_find_dir() {
-  find "$1" ! -path "$1" -type d \( -name '.*' -o -name node_modules \) -prune -o -type f ! -name '.*' -print 2>/dev/null
-}
-
-# Resolve a recursive glob: <base>/**/<rest>  (base "." for a leading **/)
-_src_find_recursive() {
-  _fr_base="$1"; _fr_rest="$2"
-  if [ "${_fr_rest#*/}" = "$_fr_rest" ] && ! _src_has_glob "$_fr_base"; then
-    # Single trailing component: exact semantics via -name at any depth
-    [ -d "$_fr_base" ] || return 0
-    find "$_fr_base" ! -path "$_fr_base" -type d \( -name .git -o -name .rnex -o -name node_modules \) -prune \
-      -o -type f -name "$_fr_rest" -print 2>/dev/null
-    return 0
-  fi
-  _fr_start="$_fr_base"
-  if _src_has_glob "$_fr_base"; then
-    _src_static_prefix "$_fr_base/x"
-    _fr_start="$_sp_base"
-  fi
-  [ -d "$_fr_start" ] || return 0
-  find "$_fr_start" ! -path "$_fr_start" -type d \( -name .git -o -name .rnex -o -name node_modules \) -prune \
-    -o -type f \( -path "$_fr_base/$_fr_rest" -o -path "$_fr_base/*/$_fr_rest" \) -print 2>/dev/null
-}
-
-# Resolve a single-level glob (e.g. repos/*/README.md, docs/*.md) with bounded depth
-_src_find_glob() {
-  _src_static_prefix "$1"
-  [ -d "$_sp_base" ] || return 0
-  # Prune directories at (or below) the pattern depth so find never descends further
-  _fg_depth="$_sp_base"
-  _fg_r="$_sp_rest"
-  while :; do
-    _fg_depth="$_fg_depth/*"
-    case "$_fg_r" in
-      */*) _fg_r="${_fg_r#*/}" ;;
-      *) break ;;
-    esac
-  done
-  find "$_sp_base" ! -path "$_sp_base" -type d \( -name .git -o -name .rnex -o -name node_modules -o -path "$_fg_depth" \) -prune \
-    -o -type f -path "$_sp_base/$_sp_rest" -print 2>/dev/null
-}
-
-# Resolve one normalized source entry (run from the workspace root)
-_src_resolve_entry() {
-  _re="$1"
-  case "$_re" in
-    '**')
-      _src_find_dir "."
-      ;;
-    */'**')
-      _re="${_re%/\*\*}"
-      [ -d "$_re" ] && _src_find_dir "$_re"
-      ;;
-    '**/'*)
-      _src_find_recursive "." "${_re#\*\*/}"
-      ;;
-    *'/**/'*)
-      _src_find_recursive "${_re%%/\*\*/*}" "${_re#*/\*\*/}"
-      ;;
-    *)
-      if [ -d "$_re" ]; then
-        _src_find_dir "$_re"
-      elif [ -f "$_re" ]; then
-        printf '%s\n' "$_re"
-      elif _src_has_glob "$_re"; then
-        _src_find_glob "$_re"
-      fi
-      ;;
-  esac
-  return 0
-}
-
-# Resolve plugin source entries (directories, files, glob patterns) into a
-# deduplicated, sorted list of workspace-relative file paths.
-# Input: newline-separated entries as $1 (or stdin), e.g. from get_plugin_config_list.
-# Files inside member repositories disabled via `enabled: false` are excluded.
-resolve_plugin_sources() {
-  _rs_root="${NEXUS_DIR:-${RNEX_ROOT:-.}}"
-
-  _saved_wy="${WORKSPACE_YAML:-}"
-  _saved_wly="${WORKSPACE_LOCAL_YAML:-}"
-  [ -z "$WORKSPACE_YAML" ] && WORKSPACE_YAML="$_rs_root/${RNEX_CONFIG_FILE:-rnex.yaml}"
-  [ -z "$WORKSPACE_LOCAL_YAML" ] && WORKSPACE_LOCAL_YAML="$_rs_root/${RNEX_LOCAL_CONFIG_FILE:-.local.rnex.yaml}"
-
-  # Workspace-relative member repositories directory (default: repos)
-  _rs_rdir="$(_plugin_repos_rel_dir)"
-
-  # Space-separated list of disabled repositories (local config overrides repo config)
-  _rs_disabled="$(yaml_list_repos 2>/dev/null | while IFS= read -r _rs_r; do
-    [ -n "$_rs_r" ] || continue
-    yaml_repo_enabled "$_rs_r" || printf '%s ' "$_rs_r"
-  done)"
-
-  _rs_out="$(
-    if [ "$#" -gt 0 ]; then
-      printf '%s\n' "$1"
-    else
-      cat
-    fi | (
-      cd "$_rs_root" || exit 0
-      while IFS= read -r _rs_e || [ -n "$_rs_e" ]; do
-        _rs_e="$(printf '%s' "$_rs_e" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
-        while [ "${_rs_e#./}" != "$_rs_e" ]; do _rs_e="${_rs_e#./}"; done
-        [ "$_rs_e" = "." ] || _rs_e="${_rs_e%/}"
-        [ -n "$_rs_e" ] || continue
-        _src_resolve_entry "$_rs_e"
-      done
-    ) | sed -e 's#^\(\./\)*##' | awk -v prefix="$_rs_rdir/" -v disabled="$_rs_disabled" '
-      BEGIN {
-        n = split(disabled, d, " ")
-        for (i = 1; i <= n; i++) off[d[i]] = 1
-      }
-      length($0) == 0 { next }
-      index($0, prefix) == 1 {
-        name = substr($0, length(prefix) + 1)
-        sub(/\/.*/, "", name)
-        if (name in off) next
-      }
-      { print }
-    ' | sort -u
-  )"
-
-  WORKSPACE_YAML="$_saved_wy"
-  WORKSPACE_LOCAL_YAML="$_saved_wly"
-
-  printf '%s\n' "$_rs_out" | awk 'NF'
 }
 
 # ---- Plugin Command Engine (discovery, execution, and listings) -------------

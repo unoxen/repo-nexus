@@ -12,10 +12,10 @@ set -e
 
 # Register plugin User Skills via contract helper
 if ! command -v rnex_generate_user_skill >/dev/null 2>&1; then
-  if [ -f "$RNEX_ROOT/.rnex/bin/rnex-env.sh" ]; then
+  for _env_cand in "$RNEX_ROOT/.rnex/bin/rnex-env.sh" "$RNEX_ROOT/.rnex/rnex-env.sh" "${RNEX_LIB_DIR:-}/sdk.sh" "$RNEX_ROOT/lib/sdk.sh"; do
     # shellcheck source=/dev/null
-    . "$RNEX_ROOT/.rnex/bin/rnex-env.sh"
-  fi
+    [ -n "$_env_cand" ] && [ -f "$_env_cand" ] && { . "$_env_cand"; break; }
+  done
 fi
 
 if command -v rnex_generate_user_skill >/dev/null 2>&1; then

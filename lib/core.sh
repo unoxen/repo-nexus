@@ -38,6 +38,9 @@ die()      { log_err "$1"; exit 1; }
 
 # Canonicalize any relative, absolute, or tilde-prefixed path into an absolute physical path.
 # Preserves non-existent destination targets while resolving parent directories.
+# @param $1 Raw path string.
+# @returns Canonical absolute path on stdout.
+# @pure
 resolve_path() {
   _input="$1"
   # Expand tilde (~ or ~/path) to user HOME directory
@@ -46,27 +49,40 @@ resolve_path() {
     \~)   _input="$HOME" ;;
   esac
 
-  # Canonicalize absolute or relative paths
-  case "$_input" in
-    /*)
-      if [ -d "$_input" ]; then
-        (cd "$_input" 2>/dev/null && pwd -P)
-      elif [ -d "$(dirname "$_input")" ]; then
-        printf '%s/%s' "$(cd "$(dirname "$_input")" 2>/dev/null && pwd -P)" "$(basename "$_input")"
-      else
-        printf '%s' "$_input"
-      fi
-      ;;
-    *)
-      if [ -d "$_input" ]; then
-        (cd "$_input" 2>/dev/null && pwd -P)
-      elif [ -d "$(dirname "$_input")" ]; then
-        printf '%s/%s' "$(cd "$(dirname "$_input")" 2>/dev/null && pwd -P)" "$(basename "$_input")"
-      else
-        printf '%s/%s' "$PWD" "$_input"
-      fi
-      ;;
-  esac
+  if [ -d "$_input" ]; then
+    (cd "$_input" 2>/dev/null && pwd -P)
+  elif [ -d "$(dirname "$_input")" ]; then
+    printf '%s/%s' "$(cd "$(dirname "$_input")" 2>/dev/null && pwd -P)" "$(basename "$_input")"
+  else
+    case "$_input" in
+      /*) printf '%s' "$_input" ;;
+      *)  printf '%s/%s' "$PWD" "$_input" ;;
+    esac
+  fi
+}
+
+# Strip trailing slashes from a path while preserving root '/'.
+# @param $1 Path string.
+# @returns Path without trailing slashes on stdout.
+# @pure
+strip_trailing_slashes() {
+  _sts="$1"
+  while [ "$_sts" != "${_sts%/}" ] && [ -n "${_sts%/}" ]; do
+    _sts="${_sts%/}"
+  done
+  printf '%s' "$_sts"
+}
+
+# Strip leading './' prefixes and trailing slashes from a relative subpath.
+# @param $1 Relative path string.
+# @returns Cleaned relative path on stdout.
+# @pure
+clean_rel_subpath() {
+  _crs="$1"
+  while [ "${_crs#./}" != "$_crs" ]; do
+    _crs="${_crs#./}"
+  done
+  strip_trailing_slashes "$_crs"
 }
 
 # Determine if a configuration value is enabled.
@@ -98,43 +114,50 @@ normalize_rel_path() {
 
 # ---- Version Resolution (package.json is single source of truth) ----------
 
-# Dynamically locate the nearest package.json and extract its "version" field.
-# Falls back to 0.8.7 if package.json cannot be read.
+# Dynamically locate the nearest package.json and extract its top-level semver "version" field.
+# Anchored to semver digits so script keys (e.g. "version": "./scripts/...") are never matched.
+# Falls back to 0.10.4 if package.json cannot be read.
 resolve_version() {
   _sdir="$(dirname "$SCRIPT_LOCATION")"
   for _cand in "$SCRIPT_LOCATION/package.json" "$_sdir/package.json" "$_sdir/../package.json"; do
     if [ -f "$_cand" ]; then
-      _v="$(awk '/"version"[ ]*:/ { sub(/.*"version"[ ]*:[ ]*"/, ""); sub(/".*/, ""); print; exit }' "$_cand")"
+      _v="$(awk '/^[ \t]*"version"[ \t]*:[ \t]*"[0-9]/ { sub(/.*"version"[ \t]*:[ \t]*"/, ""); sub(/".*/, ""); print; exit }' "$_cand")"
       if [ -n "$_v" ]; then
         printf '%s' "$_v"
         return 0
       fi
     fi
   done
-  printf '0.8.7'
+  printf '0.10.4'
 }
 
 RNEX_VERSION="$(resolve_version)"
 
-# Locate the built-in plugins directory containing embedded plugins.
-# Priority: explicit RNEX_PLUGINS_DIR > pre-set PLUGINS_DIR > RNEX_ROOT/plugins >
-# SCRIPT_LOCATION/plugins > parent/plugins > NEXUS_DIR/plugins.
-find_plugins_root() {
-  if [ -n "$RNEX_PLUGINS_DIR" ] && [ -d "$RNEX_PLUGINS_DIR" ]; then
-    printf '%s' "$RNEX_PLUGINS_DIR"
+# Shared directory locator for built-in Repo Nexus asset directories (plugins, skills).
+# @param $1 Subdirectory name ("plugins" or "skills").
+# @param $2 Primary explicit override path (e.g. $RNEX_PLUGINS_DIR).
+# @param $3 Secondary explicit override path (e.g. $PLUGINS_DIR).
+# @returns Resolved directory path on stdout; returns 0 if found, 1 otherwise.
+# @pure
+_find_asset_dir() {
+  _fad_sub="$1"
+  _fad_ovr1="${2:-}"
+  _fad_ovr2="${3:-}"
+  if [ -n "$_fad_ovr1" ] && [ -d "$_fad_ovr1" ]; then
+    printf '%s' "$_fad_ovr1"
     return 0
   fi
-  if [ -n "$PLUGINS_DIR" ] && [ -d "$PLUGINS_DIR" ]; then
-    printf '%s' "$PLUGINS_DIR"
+  if [ -n "$_fad_ovr2" ] && [ -d "$_fad_ovr2" ]; then
+    printf '%s' "$_fad_ovr2"
     return 0
   fi
   _sdir="$(dirname "$SCRIPT_LOCATION")"
   for _cand in \
-    "${RNEX_ROOT:-}/plugins" \
-    "$SCRIPT_LOCATION/plugins" \
-    "$_sdir/plugins" \
-    "$_sdir/../plugins" \
-    "${NEXUS_DIR:-}/plugins"; do
+    "${RNEX_ROOT:+$RNEX_ROOT/$_fad_sub}" \
+    "$SCRIPT_LOCATION/$_fad_sub" \
+    "$_sdir/$_fad_sub" \
+    "$_sdir/../$_fad_sub" \
+    "${NEXUS_DIR:+$NEXUS_DIR/$_fad_sub}"; do
     if [ -n "$_cand" ] && [ -d "$_cand" ]; then
       printf '%s' "$_cand"
       return 0
@@ -143,31 +166,14 @@ find_plugins_root() {
   return 1
 }
 
+# Locate the built-in plugins directory containing embedded plugins.
+find_plugins_root() {
+  _find_asset_dir "plugins" "${RNEX_PLUGINS_DIR:-}" "${PLUGINS_DIR:-}"
+}
+
 # Locate the built-in skills directory containing core agentic skills.
-# Priority: explicit RNEX_SKILLS_DIR > pre-set SKILLS_DIR > RNEX_ROOT/skills >
-# SCRIPT_LOCATION/skills > parent/skills > NEXUS_DIR/skills.
 find_skills_dir() {
-  if [ -n "$RNEX_SKILLS_DIR" ] && [ -d "$RNEX_SKILLS_DIR" ]; then
-    printf '%s' "$RNEX_SKILLS_DIR"
-    return 0
-  fi
-  if [ -n "$SKILLS_DIR" ] && [ -d "$SKILLS_DIR" ]; then
-    printf '%s' "$SKILLS_DIR"
-    return 0
-  fi
-  _sdir="$(dirname "$SCRIPT_LOCATION")"
-  for _cand in \
-    "${RNEX_ROOT:-}/skills" \
-    "$SCRIPT_LOCATION/skills" \
-    "$_sdir/skills" \
-    "$_sdir/../skills" \
-    "${NEXUS_DIR:-}/skills"; do
-    if [ -n "$_cand" ] && [ -d "$_cand" ]; then
-      printf '%s' "$_cand"
-      return 0
-    fi
-  done
-  return 1
+  _find_asset_dir "skills" "${RNEX_SKILLS_DIR:-}" "${SKILLS_DIR:-}"
 }
 
 RNEX_PLUGINS_DIR="${RNEX_PLUGINS_DIR:-$(find_plugins_root 2>/dev/null || true)}"

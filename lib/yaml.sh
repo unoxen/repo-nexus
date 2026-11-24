@@ -31,6 +31,78 @@ EOF
   fi
 }
 
+# ---- Shared AWK Snippets (DRY Primitives) ----------------------------------
+
+# Shared POSIX AWK unquote function: strips surrounding whitespace, quotes, and inline comments.
+# shellcheck disable=SC2016
+_YAML_AWK_UNQUOTE='
+function unquote(v) {
+  sub(/^[ \t]+/, "", v)
+  if (v ~ /^"/) {
+    sub(/^"/, "", v)
+    sub(/"[ \t]*(#.*)?$/, "", v)
+  } else if (v ~ /^\047/) {
+    sub(/^\047/, "", v)
+    sub(/\047[ \t]*(#.*)?$/, "", v)
+  } else {
+    sub(/[ \t]+#.*$/, "", v)
+    sub(/[ \t]+$/, "", v)
+  }
+  return v
+}
+'
+
+# Shared POSIX AWK list item cleaner and quote-aware inline flow array parser.
+# shellcheck disable=SC2016
+_YAML_AWK_LIST_LIB='
+function clean_item(v) {
+  sub(/^[ \t]+/, "", v)
+  if (v ~ /^"[^"]*"/) {
+    match(v, /^"[^"]*"/)
+    v = substr(v, 2, RLENGTH - 2)
+  } else if (v ~ /^\047[^\047]*\047/) {
+    match(v, /^\047[^\047]*\047/)
+    v = substr(v, 2, RLENGTH - 2)
+  } else {
+    sub(/[ \t]*#.*$/, "", v)
+    sub(/[ \t]+$/, "", v)
+    sub(/^["\047]/, "", v)
+    sub(/["\047]$/, "", v)
+  }
+  sub(/^[ \t]+/, "", v)
+  sub(/[ \t]+$/, "", v)
+  sub(/^\.\//, "", v)
+  return v
+}
+
+function parse_inline_array(str,   len, in_dquote, in_squote, curr, i, c, item) {
+  len = length(str)
+  in_dquote = 0
+  in_squote = 0
+  curr = ""
+  for (i = 1; i <= len; i++) {
+    c = substr(str, i, 1)
+    if (c == "\"" && !in_squote) {
+      in_dquote = !in_dquote
+      curr = curr c
+    } else if (c == "\047" && !in_dquote) {
+      in_squote = !in_squote
+      curr = curr c
+    } else if (c == "," && !in_dquote && !in_squote) {
+      item = clean_item(curr)
+      if (length(item) > 0) print item
+      curr = ""
+    } else {
+      curr = curr c
+    }
+  }
+  if (length(curr) > 0) {
+    item = clean_item(curr)
+    if (length(item) > 0) print item
+  }
+}
+'
+
 # ---- Generic Top-Level & Section YAML Primitives ---------------------------
 
 # Read a top-level scalar property matching a regex pattern from a YAML file.
@@ -75,40 +147,23 @@ yaml_get_repos_dir() {
   _ygrd_val="$(_yaml_top_level_from_file "$_wly" "reposDir")"
   [ -n "$_ygrd_val" ] || _ygrd_val="$(_yaml_top_level_from_file "$_wy" "reposDir")"
 
-  # Strip leading whitespace
+  # Strip surrounding whitespace
   while :; do
     case "$_ygrd_val" in
       [[:space:]]*) _ygrd_val="${_ygrd_val#[[:space:]]}" ;;
-      *) break ;;
-    esac
-  done
-  # Strip trailing whitespace
-  while :; do
-    case "$_ygrd_val" in
       *[[:space:]]) _ygrd_val="${_ygrd_val%[[:space:]]}" ;;
       *) break ;;
     esac
   done
 
-  # Strip leading './'
-  while :; do
-    case "$_ygrd_val" in
-      ./*) _ygrd_val="${_ygrd_val#./}" ;;
-      *) break ;;
-    esac
-  done
-
-  # Strip trailing '/'
-  while [ "$_ygrd_val" != "${_ygrd_val%/}" ] && [ -n "${_ygrd_val%/}" ]; do
-    _ygrd_val="${_ygrd_val%/}"
-  done
-
-  # Check if empty or '.'
-  if [ -z "$_ygrd_val" ] || [ "$_ygrd_val" = "." ]; then
-    _ygrd_val="repos"
+  if command -v clean_rel_subpath >/dev/null 2>&1; then
+    _ygrd_val="$(clean_rel_subpath "$_ygrd_val")"
+  else
+    while [ "${_ygrd_val#./}" != "$_ygrd_val" ]; do _ygrd_val="${_ygrd_val#./}"; done
+    while [ "$_ygrd_val" != "${_ygrd_val%/}" ] && [ -n "${_ygrd_val%/}" ]; do _ygrd_val="${_ygrd_val%/}"; done
   fi
 
-  # Security / validation: reject absolute paths or path traversal escaping workspace root
+  # Security / validation: reject empty, '.', absolute paths, or path traversal escaping workspace root
   case "$_ygrd_val" in
     ''|.|/*|..|../*|*/..|*/../*)
       _ygrd_val="repos"
@@ -236,7 +291,8 @@ _yaml_section_get() {
 }
 
 # Update or insert a key-value property ($field: $value) under a specific item ($item)
-# within a top-level section ($sec). Preserves comments and formatting.
+# within a top-level section ($sec). Matches keys literally (safe for names containing '.')
+# and passes values via ENVIRON to preserve backslashes.
 _yaml_section_set() {
   _yss_file="$1"; _yss_sec="$2"; _yss_item="$3"; _yss_field="$4"; _yss_value="$5"
   if [ ! -f "$_yss_file" ]; then
@@ -246,30 +302,52 @@ _yaml_section_set() {
     printf '\n%s:\n' "$_yss_sec" >> "$_yss_file"
   fi
 
-  if ! awk -v sec="$_yss_sec" -v item="$_yss_item" '
-    $0 ~ ("^" sec ":[ ]*$") || $0 ~ ("^" sec ":[ ]*#") { in_s=1; next }
-    in_s && /^[^ #]/ { in_s=0 }
-    in_s && match($0, "^  " item ":[ ]*(#.*)?$") { found=1; exit }
+  if ! _YSS_SEC="$_yss_sec" _YSS_ITEM="$_yss_item" awk '
+    BEGIN { sec = ENVIRON["_YSS_SEC"]; item = ENVIRON["_YSS_ITEM"] }
+    /^[^ #]/ {
+      hdr = $0; sub(/:[ ]*(#.*)?$/, "", hdr)
+      in_s = (hdr == sec && $0 ~ /^[^:]+:[ ]*(#.*)?$/)
+      next
+    }
+    in_s && /^  [^ #]/ {
+      k = substr($0, 3); sub(/:.*/, "", k)
+      if (k == item && $0 ~ /^  [^:]+:[ ]*(#.*)?$/) { found = 1; exit }
+    }
     END { exit !found }
   ' "$_yss_file" 2>/dev/null; then
-    if grep -qE "^  $_yss_item:[ ]*(\{\}|\[\])?$" "$_yss_file" 2>/dev/null; then
+    if _YSS_ITEM="$_yss_item" awk '
+      BEGIN { item = ENVIRON["_YSS_ITEM"] }
+      /^  [^ #]/ {
+        k = substr($0, 3); sub(/:.*/, "", k)
+        if (k == item && $0 ~ /^  [^:]+:[ ]*(\{\}|\[\])?[ ]*(#.*)?$/) { found = 1; exit }
+      }
+      END { exit !found }
+    ' "$_yss_file" 2>/dev/null; then
       _tmp="$(mktemp)"
-      awk -v item="$_yss_item" -v field="$_yss_field" -v value="$_yss_value" '
-        match($0, "^  " item ":[ ]*(\\{\\}|\\[\\])?$") {
-          printf "  %s:\n    %s: %s\n", item, field, value
-          next
+      _YSS_ITEM="$_yss_item" _YSS_FIELD="$_yss_field" _YSS_VAL="$_yss_value" awk '
+        BEGIN { item = ENVIRON["_YSS_ITEM"]; field = ENVIRON["_YSS_FIELD"]; value = ENVIRON["_YSS_VAL"] }
+        /^  [^ #]/ {
+          k = substr($0, 3); sub(/:.*/, "", k)
+          if (k == item && $0 ~ /^  [^:]+:[ ]*(\{\}|\[\])?[ ]*(#.*)?$/) {
+            printf "  %s:\n    %s: %s\n", item, field, value
+            next
+          }
         }
         { print }
       ' "$_yss_file" > "$_tmp" && mv "$_tmp" "$_yss_file"
       return 0
     fi
     _tmp="$(mktemp)"
-    awk -v sec="$_yss_sec" -v item="$_yss_item" -v field="$_yss_field" -v value="$_yss_value" '
-      $0 ~ ("^" sec ":[ ]*$") || $0 ~ ("^" sec ":[ ]*#") {
-        print
-        printf "  %s:\n    %s: %s\n", item, field, value
-        added=1
-        next
+    _YSS_SEC="$_yss_sec" _YSS_ITEM="$_yss_item" _YSS_FIELD="$_yss_field" _YSS_VAL="$_yss_value" awk '
+      BEGIN { sec = ENVIRON["_YSS_SEC"]; item = ENVIRON["_YSS_ITEM"]; field = ENVIRON["_YSS_FIELD"]; value = ENVIRON["_YSS_VAL"] }
+      !added && /^[^ #]/ {
+        hdr = $0; sub(/:[ ]*(#.*)?$/, "", hdr)
+        if (hdr == sec && $0 ~ /^[^:]+:[ ]*(#.*)?$/) {
+          print
+          printf "  %s:\n    %s: %s\n", item, field, value
+          added = 1
+          next
+        }
       }
       { print }
       END {
@@ -282,29 +360,39 @@ _yaml_section_set() {
   fi
 
   _tmp="$(mktemp)"
-  awk -v sec="$_yss_sec" -v item="$_yss_item" -v field="$_yss_field" -v value="$_yss_value" '
-    $0 ~ ("^" sec ":") { in_sec=1; print; next }
-    in_sec && /^[^ #]/ {
+  _YSS_SEC="$_yss_sec" _YSS_ITEM="$_yss_item" _YSS_FIELD="$_yss_field" _YSS_VAL="$_yss_value" awk '
+    BEGIN { sec = ENVIRON["_YSS_SEC"]; item = ENVIRON["_YSS_ITEM"]; field = ENVIRON["_YSS_FIELD"]; value = ENVIRON["_YSS_VAL"] }
+    /^[^ #]/ {
       if (in_target && !field_set) {
         printf "    %s: %s\n", field, value
-        field_set=1
+        field_set = 1
       }
-      in_sec=0; in_target=0
-    }
-    in_sec && match($0, "^  " item ":[ ]*(#.*)?$") {
-      in_target=1; print; next
-    }
-    in_target && /^  [^ #]/ {
-      if (!field_set) {
-        printf "    %s: %s\n", field, value
-        field_set=1
-      }
-      in_target=0
-    }
-    in_target && match($0, "^    " field ":") {
-      printf "    %s: %s\n", field, value
-      field_set=1
+      hdr = $0; sub(/:.*/, "", hdr)
+      in_sec = (hdr == sec)
+      in_target = 0
+      print
       next
+    }
+    in_sec && /^  [^ #]/ {
+      if (in_target && !field_set) {
+        printf "    %s: %s\n", field, value
+        field_set = 1
+      }
+      k = substr($0, 3); sub(/:.*/, "", k)
+      if (k == item && $0 ~ /^  [^:]+:[ ]*(#.*)?$/) {
+        in_target = 1
+        print
+        next
+      }
+      in_target = 0
+    }
+    in_target && /^    [^ #]/ {
+      fk = substr($0, 5); sub(/:.*/, "", fk)
+      if (fk == field) {
+        printf "    %s: %s\n", field, value
+        field_set = 1
+        next
+      }
     }
     { print }
     END {
@@ -319,11 +407,23 @@ _yaml_section_remove() {
   _ysr_file="$1"; _ysr_sec="$2"; _ysr_name="$3"
   [ -f "$_ysr_file" ] || return 0
   _tmp="$(mktemp)"
-  awk -v sec="$_ysr_sec" -v name="$_ysr_name" '
-    $0 ~ ("^" sec ":") { in_sec=1; print; next }
-    in_sec && /^[^ #]/ { in_sec=0; skip=0 }
-    in_sec && match($0, "^  " name ":[ ]*(\\{\\})?[ ]*(#.*)?$") { skip=1; next }
-    in_sec && skip && /^  [^ #]/ { skip=0 }
+  _YSR_SEC="$_ysr_sec" _YSR_NAME="$_ysr_name" awk '
+    BEGIN { sec = ENVIRON["_YSR_SEC"]; name = ENVIRON["_YSR_NAME"] }
+    /^[^ #]/ {
+      hdr = $0; sub(/:.*/, "", hdr)
+      in_sec = (hdr == sec)
+      skip = 0
+      print
+      next
+    }
+    in_sec && /^  [^ #]/ {
+      k = substr($0, 3); sub(/:.*/, "", k)
+      if (k == name && $0 ~ /^  [^:]+:[ ]*(\{\})?[ ]*(#.*)?$/) {
+        skip = 1
+        next
+      }
+      skip = 0
+    }
     skip && /^    / { next }
     { print }
   ' "$_ysr_file" > "$_tmp" && mv "$_tmp" "$_ysr_file"
@@ -335,21 +435,7 @@ _yaml_section_remove() {
 _yaml_git_ignore_from_file() {
   _ygif_f="$1"
   [ -f "$_ygif_f" ] || return 0
-  awk '
-    function unquote(v) {
-      sub(/^[ \t]+/, "", v)
-      if (v ~ /^"/) {
-        sub(/^"/, "", v)
-        sub(/"[ \t]*(#.*)?$/, "", v)
-      } else if (v ~ /^\047/) {
-        sub(/^\047/, "", v)
-        sub(/\047[ \t]*(#.*)?$/, "", v)
-      } else {
-        sub(/[ \t]+#.*$/, "", v)
-        sub(/[ \t]+$/, "", v)
-      }
-      return v
-    }
+  awk "${_YAML_AWK_UNQUOTE}"'
     /^[ \t]*git:[ \t]*(#.*)?$/ { in_git=1; in_ignore=0; next }
     in_git && /^[^ \t#]/ { exit }
     !in_git { next }
@@ -407,37 +493,19 @@ yaml_get_git_ignore() {
   } | awk '!seen[$0]++'
 }
 
-# ---- Git Configuration Operations (git.ignore & git.hooks) -----------------
-
-# Extract list of hook names defined under git.hooks from a single YAML file.
-# Supports all three canonical YAML schemas:
-# 1. Nested map:      git.hooks.<hook_name>: [commands] | enabled: false
-# 2. Block sequence: - <hook_name>
-# 3. Inline array:   hooks: [<hook_name>, ...]
+# Parse Git hook declarations under git.hooks from a single YAML file, filtering by state.
+# Supports nested maps (git.hooks.<hook>: [cmds] | false | enabled: false), block sequences,
+# and inline arrays.
 #
-# @param $1 Absolute or relative path to the YAML file to inspect.
-# @returns Newline-delimited list of valid hook names.
-# @pure Does not mutate any external state or global variables.
-_yaml_parse_git_hooks_from_file() {
-  _ypgh_f="$1"
-  [ -f "$_ypgh_f" ] || return 0
-  awk '
-    function unquote(v) {
-      sub(/^[ \t]+/, "", v)
-      if (v ~ /^"/) {
-        sub(/^"/, "", v)
-        sub(/"[ \t]*(#.*)?$/, "", v)
-      } else if (v ~ /^\047/) {
-        sub(/^\047/, "", v)
-        sub(/\047[ \t]*(#.*)?$/, "", v)
-      } else {
-        sub(/[ \t]+#.*$/, "", v)
-        sub(/[ \t]+$/, "", v)
-      }
-      return v
-    }
-
-    # Locate top-level git: section
+# @param $1 Path to YAML file.
+# @param $2 Filter mode: "enabled" (default) or "disabled".
+# @returns Newline-delimited list of matching hook names.
+# @pure
+_yaml_parse_git_hooks_by_state() {
+  _ypghs_f="$1"
+  _ypghs_mode="${2:-enabled}"
+  [ -f "$_ypghs_f" ] || return 0
+  awk -v mode="$_ypghs_mode" "${_YAML_AWK_UNQUOTE}"'
     /^[ \t]*git:[ \t]*(#.*)?$/ { in_git=1; next }
     in_git && /^[^ \t#]/ { exit }
     !in_git { next }
@@ -449,7 +517,6 @@ _yaml_parse_git_hooks_from_file() {
     }
     trimmed ~ /^([#]|$)/ { next }
 
-    # Detect exit from hooks subsection when indentation drops
     in_hooks && (indent <= hooks_indent) { in_hooks=0 }
 
     !in_hooks {
@@ -461,7 +528,6 @@ _yaml_parse_git_hooks_from_file() {
         val = trimmed
         sub(/^hooks:[ \t]*/, "", val)
         val = unquote(val)
-        # Handle inline array on declaration line: hooks: [pre-commit, post-merge]
         if (val ~ /^\[/) {
           sub(/^\[/, "", val)
           sub(/\][ \t]*(#.*)?$/, "", val)
@@ -488,11 +554,9 @@ _yaml_parse_git_hooks_from_file() {
       }
 
       if (indent == hook_item_indent) {
-        # 1. Block sequence item: - <hook_name>
         if (trimmed ~ /^-([ \t]|$)/) {
           current_hook = ""
-          val = substr(trimmed, 2)
-          item = unquote(val)
+          item = unquote(substr(trimmed, 2))
           if (item ~ /^[a-z][a-z0-9-]*$/) {
             if (!(item in hook_seen)) {
               hook_seen[item] = 1
@@ -503,7 +567,6 @@ _yaml_parse_git_hooks_from_file() {
           next
         }
 
-        # 2. Nested map key: <hook_name>: [value]
         if (trimmed ~ /^[a-z0-9"\047][^:]*:[ \t]*/) {
           k = trimmed
           sub(/:.*/, "", k)
@@ -529,7 +592,6 @@ _yaml_parse_git_hooks_from_file() {
         }
       }
 
-      # 3. Child property under current_hook (e.g., enabled: false)
       if (current_hook != "" && indent > hook_item_indent) {
         if (trimmed ~ /^enabled:[ \t]*false([ \t]|$|#)/) {
           hook_enabled[current_hook] = 0
@@ -538,124 +600,30 @@ _yaml_parse_git_hooks_from_file() {
     }
 
     END {
+      want = (mode == "disabled") ? 0 : 1
       for (i = 1; i <= hook_count; i++) {
         h = hook_names[i]
-        if (hook_enabled[h]) {
+        if (hook_enabled[h] == want) {
           print h
         }
       }
     }
-  ' "$_ypgh_f"
+  ' "$_ypghs_f"
 }
 
-# Extract list of hook names explicitly disabled under git.hooks from a single YAML file.
-# Matches hooks set to false or with enabled: false.
-#
-# @param $1 Path to YAML file.
-# @returns Newline-delimited list of explicitly disabled hook names.
-# @pure
+# Extract list of enabled hook names defined under git.hooks from a single YAML file.
+_yaml_parse_git_hooks_from_file() {
+  _yaml_parse_git_hooks_by_state "$1" "enabled"
+}
+
+# Extract list of explicitly disabled hook names under git.hooks from a single YAML file.
 _yaml_parse_disabled_git_hooks_from_file() {
-  _ypdgh_f="$1"
-  [ -f "$_ypdgh_f" ] || return 0
-  awk '
-    function unquote(v) {
-      sub(/^[ \t]+/, "", v)
-      if (v ~ /^"/) {
-        sub(/^"/, "", v)
-        sub(/"[ \t]*(#.*)?$/, "", v)
-      } else if (v ~ /^\047/) {
-        sub(/^\047/, "", v)
-        sub(/\047[ \t]*(#.*)?$/, "", v)
-      } else {
-        sub(/[ \t]+#.*$/, "", v)
-        sub(/[ \t]+$/, "", v)
-      }
-      return v
-    }
-
-    /^[ \t]*git:[ \t]*(#.*)?$/ { in_git=1; next }
-    in_git && /^[^ \t#]/ { exit }
-    !in_git { next }
-
-    {
-      match($0, /^[ \t]*/)
-      indent = RLENGTH
-      trimmed = substr($0, indent + 1)
-    }
-    trimmed ~ /^([#]|$)/ { next }
-
-    in_hooks && (indent <= hooks_indent) { in_hooks=0 }
-
-    !in_hooks {
-      if (trimmed ~ /^hooks:[ \t]*/) {
-        in_hooks = 1
-        hooks_indent = indent
-        hook_item_indent = -1
-        current_hook = ""
-      }
-      next
-    }
-
-    in_hooks {
-      if (hook_item_indent == -1) {
-        hook_item_indent = indent
-      }
-
-      if (indent == hook_item_indent) {
-        if (trimmed ~ /^[a-z0-9"\047][^:]*:[ \t]*/) {
-          k = trimmed
-          sub(/:.*/, "", k)
-          k = unquote(k)
-          if (k ~ /^[a-z][a-z0-9-]*$/) {
-            current_hook = k
-            if (!(k in hook_seen)) {
-              hook_seen[k] = 1
-              hook_names[++hook_count] = k
-            }
-            val = trimmed
-            sub(/^[^:]*:[ \t]*/, "", val)
-            val = unquote(val)
-            if (val == "false" || val ~ /^\{[ \t]*enabled:[ \t]*false[ \t]*\}/) {
-              hook_disabled[k] = 1
-            } else {
-              hook_disabled[k] = 0
-            }
-          } else {
-            current_hook = ""
-          }
-          next
-        }
-      }
-
-      if (current_hook != "" && indent > hook_item_indent) {
-        if (trimmed ~ /^enabled:[ \t]*false([ \t]|$|#)/) {
-          hook_disabled[current_hook] = 1
-        }
-      }
-    }
-
-    END {
-      for (i = 1; i <= hook_count; i++) {
-        h = hook_names[i]
-        if (hook_disabled[h]) {
-          print h
-        }
-      }
-    }
-  ' "$_ypdgh_f"
-}
-
-# Compatibility alias for legacy callers
-_yaml_git_hooks_list_from_file() {
-  _yaml_parse_git_hooks_from_file "$@"
+  _yaml_parse_git_hooks_by_state "$1" "disabled"
 }
 
 # Enumerate configured hook names under git.hooks merged from rnex.yaml and .local.rnex.yaml.
 # Respects .local.rnex.yaml priority: hooks explicitly disabled in .local.rnex.yaml are excluded.
 # Results are strictly deduplicated and sorted deterministically.
-#
-# @returns Newline-delimited list of configured Git hook names.
-# @pure Stateless read-only YAML parsing.
 yaml_get_git_hooks() {
   _yaml_resolve_files
   _local_hooks=""
@@ -682,36 +650,11 @@ yaml_get_git_hooks() {
   } | awk 'NF' | LC_ALL=C sort -u
 }
 
-# Backward compatibility alias for yaml_get_git_hooks
-yaml_list_git_hooks() {
-  yaml_get_git_hooks "$@"
-}
-
 # Extract command list for a specific hook under git.hooks.<hook_name> from a YAML file.
-# Supports block lists, inline string arrays, and single command strings.
-#
-# @param $1 Path to YAML file.
-# @param $2 Target hook name.
-# @returns Newline-delimited list of shell command strings.
-# @pure
 _yaml_git_hook_commands_from_file() {
   _yghc_f="$1"; _yghc_hook="$2"
   [ -f "$_yghc_f" ] || return 0
-  awk -v target_hook="$_yghc_hook" '
-    function unquote(v) {
-      sub(/^[ \t]+/, "", v)
-      if (v ~ /^"/) {
-        sub(/^"/, "", v)
-        sub(/"[ \t]*(#.*)?$/, "", v)
-      } else if (v ~ /^\047/) {
-        sub(/^\047/, "", v)
-        sub(/\047[ \t]*(#.*)?$/, "", v)
-      } else {
-        sub(/[ \t]+#.*$/, "", v)
-        sub(/[ \t]+$/, "", v)
-      }
-      return v
-    }
+  awk -v target_hook="$_yghc_hook" "${_YAML_AWK_UNQUOTE}"'
     /^[ \t]*git:[ \t]*(#.*)?$/ { in_git=1; next }
     in_git && /^[^ \t#]/ { exit }
     !in_git { next }
@@ -883,35 +826,11 @@ _yaml_rnex_hooks_list_from_file() {
   ' "$_yrhl_f" | awk '!seen[$0]++'
 }
 
-# Enumerate configured hook names under rnex-hooks merged from rnex.yaml and .local.rnex.yaml.
-yaml_list_rnex_hooks() {
-  _yaml_resolve_files
-  {
-    _yaml_rnex_hooks_list_from_file "$_wy"
-    _yaml_rnex_hooks_list_from_file "$_wly"
-  } | awk '!seen[$0]++'
-}
-
-# Extract command list for a specific hook under rnex-hooks.<event_name> from a YAML file.
-# Supports both underscore and hyphenated keys (e.g. after_sync or after-sync).
+# Extract command list for a specific hook under rnexHooks.<event_name> from a YAML file.
 _yaml_rnex_hook_commands_from_file() {
   _yrhc_f="$1"; _yrhc_hook="$2"
   [ -f "$_yrhc_f" ] || return 0
-  awk -v target_hook="$_yrhc_hook" '
-    function unquote(v) {
-      sub(/^[ \t]+/, "", v)
-      if (v ~ /^"/) {
-        sub(/^"/, "", v)
-        sub(/"[ \t]*(#.*)?$/, "", v)
-      } else if (v ~ /^\047/) {
-        sub(/^\047/, "", v)
-        sub(/\047[ \t]*(#.*)?$/, "", v)
-      } else {
-        sub(/[ \t]+#.*$/, "", v)
-        sub(/[ \t]+$/, "", v)
-      }
-      return v
-    }
+  awk -v target_hook="$_yrhc_hook" "${_YAML_AWK_UNQUOTE}"'
     BEGIN {
       in_hooks = 0
       in_hook_cmds = 0
@@ -1195,62 +1114,7 @@ _yaml_parse_plugin_list_from_file() {
   _yppl_plugin="$2"
   _yppl_key="$3"
   [ -f "$_yppl_file" ] || return 0
-  awk -v plugin="$_yppl_plugin" -v key="$_yppl_key" '
-    # Normalize an item: trim spaces, unquote, strip comments, and strip leading ./
-    function clean_item(v) {
-      # Strip leading whitespace
-      sub(/^[ \t]+/, "", v)
-      # If quoted, extract content between quotes and ignore outside comments
-      if (v ~ /^"[^"]*"/) {
-        match(v, /^"[^"]*"/)
-        v = substr(v, 2, RLENGTH - 2)
-      } else if (v ~ /^\047[^\047]*\047/) {
-        match(v, /^\047[^\047]*\047/)
-        v = substr(v, 2, RLENGTH - 2)
-      } else {
-        # Unquoted: strip trailing comment and trailing whitespace
-        sub(/[ \t]*#.*$/, "", v)
-        sub(/[ \t]+$/, "", v)
-        # Strip any loose quotes if present
-        sub(/^["\047]/, "", v)
-        sub(/["\047]$/, "", v)
-      }
-      # Re-trim whitespace after quote stripping
-      sub(/^[ \t]+/, "", v)
-      sub(/[ \t]+$/, "", v)
-      # Strip leading ./ for clean, relative path normalization
-      sub(/^\.\//, "", v)
-      return v
-    }
-
-    # Parse inline array content between [ and ], splitting on commas outside quotes
-    function parse_inline_array(str) {
-      len = length(str)
-      in_dquote = 0
-      in_squote = 0
-      curr = ""
-      for (i = 1; i <= len; i++) {
-        c = substr(str, i, 1)
-        if (c == "\"" && !in_squote) {
-          in_dquote = !in_dquote
-          curr = curr c
-        } else if (c == "\047" && !in_dquote) {
-          in_squote = !in_squote
-          curr = curr c
-        } else if (c == "," && !in_dquote && !in_squote) {
-          item = clean_item(curr)
-          if (length(item) > 0) print item
-          curr = ""
-        } else {
-          curr = curr c
-        }
-      }
-      if (length(curr) > 0) {
-        item = clean_item(curr)
-        if (length(item) > 0) print item
-      }
-    }
-
+  awk -v plugin="$_yppl_plugin" -v key="$_yppl_key" "${_YAML_AWK_LIST_LIB}"'
     # Step 1: Detect top-level plugins: block
     /^[ \t]*plugins:[ \t]*(#.*)?$/ {
       in_plugins = 1
@@ -1362,11 +1226,6 @@ _yaml_parse_plugin_list_from_file() {
       }
     }
   ' "$_yppl_file"
-}
-
-# Backward-compatible wrapper delegating to _yaml_parse_plugin_list_from_file.
-_yaml_plugin_list_from_file() {
-  _yaml_parse_plugin_list_from_file "$1" "$2" "$3"
 }
 
 # ==============================================================================
@@ -1786,66 +1645,11 @@ _yaml_plugin_hooks_list_from_file() {
   ' "$_yphl_f" | awk '!seen[$0]++'
 }
 
-# Extract list of hook event names under config_defaults.hooks from a plugin.yaml manifest.
-_yaml_plugin_manifest_hooks_list() {
-  _ypmhl_f="$1"
-  [ -f "$_ypmhl_f" ] || return 0
-  awk '
-    /^config_defaults:[ \t]*(#.*)?$/ { in_c = 1; in_hooks = 0; next }
-    in_c && /^[^ \t#]/ { exit }
-    !in_c { next }
-    {
-      match($0, /^[ \t]*/)
-      indent = RLENGTH
-      trimmed = substr($0, indent + 1)
-    }
-    trimmed ~ /^([#]|$)/ { next }
-    in_hooks && (indent <= hooks_indent) { in_hooks = 0 }
-    !in_hooks {
-      k = trimmed
-      sub(/:.*/, "", k)
-      gsub(/^["\047]|["\047]$/, "", k)
-      gsub(/[[:space:]]/, "", k)
-      if (k == "hooks" && trimmed ~ /:[ \t]*(#.*)?$/) {
-        in_hooks = 1
-        hooks_indent = indent
-        hook_item_indent = -1
-      }
-      next
-    }
-    in_hooks && (indent > hooks_indent) {
-      if (trimmed ~ /^-([ \t]|$)/) next
-      if (hook_item_indent == -1 || indent <= hook_item_indent) {
-        hook_item_indent = indent
-        k = trimmed
-        sub(/:.*/, "", k)
-        gsub(/^["\047]|["\047]$/, "", k)
-        gsub(/[[:space:]]/, "", k)
-        if (length(k) > 0) print k
-      }
-    }
-  ' "$_ypmhl_f" | awk '!seen[$0]++'
-}
-
 # Extract command list for plugins.<plugin>.hooks.<event> from a YAML file.
 _yaml_plugin_hook_commands_from_file() {
   _yphc_f="$1"; _yphc_plugin="$2"; _yphc_event="$3"
   [ -f "$_yphc_f" ] || return 0
-  awk -v plugin="$_yphc_plugin" -v target_event="$_yphc_event" '
-    function unquote(v) {
-      sub(/^[ \t]+/, "", v)
-      if (v ~ /^"/) {
-        sub(/^"/, "", v)
-        sub(/"[ \t]*(#.*)?$/, "", v)
-      } else if (v ~ /^\047/) {
-        sub(/^\047/, "", v)
-        sub(/\047[ \t]*(#.*)?$/, "", v)
-      } else {
-        sub(/[ \t]+#.*$/, "", v)
-        sub(/[ \t]+$/, "", v)
-      }
-      return v
-    }
+  awk -v plugin="$_yphc_plugin" -v target_event="$_yphc_event" "${_YAML_AWK_UNQUOTE}"'
     /^[ \t]*plugins:[ \t]*(#.*)?$/ {
       in_plugins = 1
       in_plugin = 0
@@ -1926,111 +1730,36 @@ _yaml_plugin_hook_commands_from_file() {
   ' "$_yphc_f"
 }
 
-# Extract command list for config_defaults.hooks.<event> from a plugin.yaml manifest.
-_yaml_plugin_manifest_hook_commands() {
-  _ypmhc_f="$1"; _ypmhc_event="$2"
-  [ -f "$_ypmhc_f" ] || return 0
-  awk -v target_event="$_ypmhc_event" '
-    function unquote(v) {
-      sub(/^[ \t]+/, "", v)
-      if (v ~ /^"/) {
-        sub(/^"/, "", v)
-        sub(/"[ \t]*(#.*)?$/, "", v)
-      } else if (v ~ /^\047/) {
-        sub(/^\047/, "", v)
-        sub(/\047[ \t]*(#.*)?$/, "", v)
-      } else {
-        sub(/[ \t]+#.*$/, "", v)
-        sub(/[ \t]+$/, "", v)
-      }
-      return v
-    }
-    /^config_defaults:[ \t]*(#.*)?$/ { in_c = 1; in_hooks = 0; in_cmds = 0; next }
-    in_c && /^[^ \t#]/ { exit }
-    !in_c { next }
-    {
-      match($0, /^[ \t]*/)
-      indent = RLENGTH
-      trimmed = substr($0, indent + 1)
-    }
-    trimmed ~ /^([#]|$)/ { next }
-    in_cmds {
-      if (indent > event_indent || (indent == event_indent && trimmed ~ /^-([ \t]|$)/)) {
-        if (trimmed ~ /^-([ \t]|$)/) {
-          item = unquote(substr(trimmed, 2))
-          if (length(item) > 0) print item
-        }
-        next
-      }
-      in_cmds = 0
-    }
-    in_hooks && (indent <= hooks_indent) { in_hooks = 0 }
-    !in_hooks {
-      k = trimmed
-      sub(/:.*/, "", k)
-      gsub(/^["\047]|["\047]$/, "", k)
-      gsub(/[[:space:]]/, "", k)
-      if (k == "hooks" && trimmed ~ /:[ \t]*(#.*)?$/) {
-        in_hooks = 1
-        hooks_indent = indent
-      }
-      next
-    }
-    in_hooks && (indent > hooks_indent) {
-      k = trimmed
-      sub(/:.*/, "", k)
-      gsub(/^["\047]|["\047]$/, "", k)
-      gsub(/[[:space:]]/, "", k)
-      if ((k == target_event || tolower(k) == tolower(target_event)) && trimmed ~ /:[ \t]*/) {
-        event_indent = indent
-        val = trimmed
-        sub(/^[^:]*:[ \t]*/, "", val)
-        if (val ~ /^(#.*)?$/) {
-          in_cmds = 1
-          next
-        }
-        if (val ~ /^\[/) {
-          sub(/^\[/, "", val)
-          sub(/\][ \t]*(#.*)?$/, "", val)
-          n = split(val, parts, ",")
-          for (i = 1; i <= n; i++) {
-            item = unquote(parts[i])
-            if (length(item) > 0) print item
-          }
-          next
-        }
-        item = unquote(val)
-        if (length(item) > 0 && item != "false" && item != "none" && item != "off" && item != "0" && item != "{}") print item
-        next
-      }
-    }
-  ' "$_ypmhc_f"
-}
+# Resolve the winning workspace config file (.local.rnex.yaml > rnex.yaml) that
+# explicitly defines active hooks for plugins.<plugin>.hooks.
+# @param $1 Workspace root path (or empty for ambient globals).
+# @param $2 Plugin identifier name.
+# @returns Winning YAML file path on stdout and 0 if active; returns 1 if absent/disabled.
+# @pure
+_yaml_resolve_active_plugin_hooks_file() {
+  _yraph_arg1="${1:-}"
+  _yraph_ws="${_yraph_arg1:-${NEXUS_DIR:-${RNEX_ROOT:-.}}}"
+  _yraph_plugin="${2:-}"
+  [ -n "$_yraph_plugin" ] || return 1
 
-# Resolve plugin directory for manifest lookups.
-_yaml_resolve_plugin_manifest_path() {
-  _yrpm_p="$1"
-  _yrpm_dir=""
-  if command -v plugin_resolve_dir >/dev/null 2>&1; then
-    _yrpm_dir="$(plugin_resolve_dir "$_yrpm_p" 2>/dev/null || true)"
-  elif command -v find_plugin_dir >/dev/null 2>&1; then
-    _yrpm_dir="$(find_plugin_dir "$_yrpm_p" 2>/dev/null || true)"
+  if [ -n "$_yraph_arg1" ]; then
+    _yraph_wly="$_yraph_ws/${RNEX_LOCAL_CONFIG_FILE:-.local.rnex.yaml}"
+    _yraph_wy="$_yraph_ws/${RNEX_CONFIG_FILE:-rnex.yaml}"
+  else
+    _yraph_wly="${WORKSPACE_LOCAL_YAML:-$_yraph_ws/${RNEX_LOCAL_CONFIG_FILE:-.local.rnex.yaml}}"
+    _yraph_wy="${WORKSPACE_YAML:-$_yraph_ws/${RNEX_CONFIG_FILE:-rnex.yaml}}"
   fi
-  if [ -z "$_yrpm_dir" ]; then
-    for _cand in \
-      "${NEXUS_DIR:-${RNEX_ROOT:-.}}/plugins/$_yrpm_p" \
-      "${NEXUS_DIR:-${RNEX_ROOT:-.}}/.rnex/plugins/$_yrpm_p" \
-      "${SCRIPT_LOCATION:-.}/plugins/$_yrpm_p"; do
-      if [ -f "$_cand/plugin.yaml" ]; then
-        _yrpm_dir="$_cand"
-        break
-      fi
-    done
-  fi
-  if [ -n "$_yrpm_dir" ] && [ -f "$_yrpm_dir/plugin.yaml" ]; then
-    printf '%s' "$_yrpm_dir/plugin.yaml"
-    return 0
-  fi
+
+  for _yraph_cand in "$_yraph_wly" "$_yraph_wy"; do
+    if [ -f "$_yraph_cand" ] && _yaml_plugin_hooks_defined_in_file "$_yraph_cand" "$_yraph_plugin"; then
+      _scalar_h="$(_yaml_plugin_get_from_file "$_yraph_cand" "$_yraph_plugin" "hooks")"
+      case "$_scalar_h" in
+        false|off|none|0|"{}"|"[]") return 1 ;;
+      esac
+      printf '%s' "$_yraph_cand"
+      return 0
+    fi
+  done
   return 1
 }
 
@@ -2041,66 +1770,18 @@ _yaml_resolve_plugin_manifest_path() {
 #   Extracts list of hook event names declared strictly under
 #   plugins.<plugin_name>.hooks from rnex.yaml or .local.rnex.yaml.
 #   Adheres to strict opt-in execution: NEVER merges or falls back to
-#   plugin.yaml manifest defaults. If no hooks are explicitly declared,
-#   returns nothing.
-#
-# Architectural Layer:
-#   Configuration Parser Layer (YAML Reader)
-#
-# Design Pattern:
-#   Strategy / Information Expert
-#
-# Arguments:
-#   $1 - Optional workspace root directory (defaults to NEXUS_DIR or .).
-#   $2 - Plugin identifier name (e.g. "<plugin>").
-#
-# Returns:
-#   Outputs newline-delimited hook event names to stdout.
-#
-# Purity:
-#   @pure (stateless file inspection, zero side effects)
+#   plugin.yaml manifest defaults.
 # ==============================================================================
 rnex_yaml_get_plugin_hook_events() {
-  _rygpe_ws="${1:-${NEXUS_DIR:-${RNEX_ROOT:-.}}}"
   _rygpe_plugin="${2:-}"
   [ -n "$_rygpe_plugin" ] || return 0
-
-  if [ -n "${1:-}" ]; then
-    _rygpe_wly="$_rygpe_ws/${RNEX_LOCAL_CONFIG_FILE:-.local.rnex.yaml}"
-    _rygpe_wy="$_rygpe_ws/${RNEX_CONFIG_FILE:-rnex.yaml}"
-  else
-    _rygpe_wly="${WORKSPACE_LOCAL_YAML:-$_rygpe_ws/${RNEX_LOCAL_CONFIG_FILE:-.local.rnex.yaml}}"
-    _rygpe_wy="${WORKSPACE_YAML:-$_rygpe_ws/${RNEX_CONFIG_FILE:-rnex.yaml}}"
-  fi
-
-  # 1. Check .local.rnex.yaml (local override)
-  if [ -f "$_rygpe_wly" ] && _yaml_plugin_hooks_defined_in_file "$_rygpe_wly" "$_rygpe_plugin"; then
-    _scalar_h="$(_yaml_plugin_get_from_file "$_rygpe_wly" "$_rygpe_plugin" "hooks")"
-    case "$_scalar_h" in
-      false|off|none|0|"{}"|"[]") return 0 ;;
-    esac
-    _yaml_plugin_hooks_list_from_file "$_rygpe_wly" "$_rygpe_plugin"
-    return 0
-  fi
-
-  # 2. Fall back to rnex.yaml
-  if [ -f "$_rygpe_wy" ] && _yaml_plugin_hooks_defined_in_file "$_rygpe_wy" "$_rygpe_plugin"; then
-    _scalar_h="$(_yaml_plugin_get_from_file "$_rygpe_wy" "$_rygpe_plugin" "hooks")"
-    case "$_scalar_h" in
-      false|off|none|0|"{}"|"[]") return 0 ;;
-    esac
-    _yaml_plugin_hooks_list_from_file "$_rygpe_wy" "$_rygpe_plugin"
-    return 0
-  fi
-
-  # 3. Strict opt-in invariant: zero fallback to plugin.yaml manifest
-  return 0
+  _rygpe_file="$(_yaml_resolve_active_plugin_hooks_file "${1:-}" "$_rygpe_plugin")" || return 0
+  _yaml_plugin_hooks_list_from_file "$_rygpe_file" "$_rygpe_plugin"
 }
 
 # Backward compatibility alias for rnex_yaml_get_plugin_hook_events
 yaml_list_plugin_hooks() {
-  _ylph_p="$1"
-  rnex_yaml_get_plugin_hook_events "${NEXUS_DIR:-${RNEX_ROOT:-.}}" "$_ylph_p"
+  rnex_yaml_get_plugin_hook_events "${NEXUS_DIR:-${RNEX_ROOT:-.}}" "$1"
 }
 
 # ==============================================================================
@@ -2110,62 +1791,14 @@ yaml_list_plugin_hooks() {
 #   Extracts command list for plugins.<plugin_name>.hooks.<event_name> strictly
 #   from rnex.yaml or .local.rnex.yaml.
 #   Adheres to strict opt-in execution: NEVER merges or falls back to
-#   plugin.yaml manifest defaults. If the event is not explicitly configured,
-#   returns nothing.
-#
-# Architectural Layer:
-#   Configuration Parser Layer (YAML Reader)
-#
-# Design Pattern:
-#   Strategy / Information Expert
-#
-# Arguments:
-#   $1 - Optional workspace root directory (defaults to NEXUS_DIR or .).
-#   $2 - Plugin identifier name.
-#   $3 - Hook event name (e.g. "SessionStart", "sessionStart").
-#
-# Returns:
-#   Outputs newline-delimited command strings to stdout.
-#
-# Purity:
-#   @pure (stateless file inspection, zero side effects)
+#   plugin.yaml manifest defaults.
 # ==============================================================================
 rnex_yaml_get_plugin_hook_commands() {
-  _rygpc_ws="${1:-${NEXUS_DIR:-${RNEX_ROOT:-.}}}"
   _rygpc_plugin="${2:-}"
   _rygpc_event="${3:-}"
   [ -n "$_rygpc_plugin" ] && [ -n "$_rygpc_event" ] || return 0
-
-  if [ -n "${1:-}" ]; then
-    _rygpc_wly="$_rygpc_ws/${RNEX_LOCAL_CONFIG_FILE:-.local.rnex.yaml}"
-    _rygpc_wy="$_rygpc_ws/${RNEX_CONFIG_FILE:-rnex.yaml}"
-  else
-    _rygpc_wly="${WORKSPACE_LOCAL_YAML:-$_rygpc_ws/${RNEX_LOCAL_CONFIG_FILE:-.local.rnex.yaml}}"
-    _rygpc_wy="${WORKSPACE_YAML:-$_rygpc_ws/${RNEX_CONFIG_FILE:-rnex.yaml}}"
-  fi
-
-  # 1. Check .local.rnex.yaml (local override)
-  if [ -f "$_rygpc_wly" ] && _yaml_plugin_hooks_defined_in_file "$_rygpc_wly" "$_rygpc_plugin"; then
-    _scalar_h="$(_yaml_plugin_get_from_file "$_rygpc_wly" "$_rygpc_plugin" "hooks")"
-    case "$_scalar_h" in
-      false|off|none|0|"{}"|"[]") return 0 ;;
-    esac
-    _yaml_plugin_hook_commands_from_file "$_rygpc_wly" "$_rygpc_plugin" "$_rygpc_event"
-    return 0
-  fi
-
-  # 2. Fall back to rnex.yaml
-  if [ -f "$_rygpc_wy" ] && _yaml_plugin_hooks_defined_in_file "$_rygpc_wy" "$_rygpc_plugin"; then
-    _scalar_h="$(_yaml_plugin_get_from_file "$_rygpc_wy" "$_rygpc_plugin" "hooks")"
-    case "$_scalar_h" in
-      false|off|none|0|"{}"|"[]") return 0 ;;
-    esac
-    _yaml_plugin_hook_commands_from_file "$_rygpc_wy" "$_rygpc_plugin" "$_rygpc_event"
-    return 0
-  fi
-
-  # 3. Strict opt-in invariant: zero fallback to plugin.yaml manifest
-  return 0
+  _rygpc_file="$(_yaml_resolve_active_plugin_hooks_file "${1:-}" "$_rygpc_plugin")" || return 0
+  _yaml_plugin_hook_commands_from_file "$_rygpc_file" "$_rygpc_plugin" "$_rygpc_event"
 }
 
 # Backward compatibility alias for rnex_yaml_get_plugin_hook_commands
@@ -2196,10 +1829,6 @@ provider_option_enabled() {
 
 _yaml_plugin_set_in_file() {
   _yaml_section_set "$1" "plugins" "$2" "$3" "$4"
-}
-
-yaml_plugin_set() {
-  _yaml_plugin_set_in_file "$WORKSPACE_YAML" "$1" "$2" "$3"
 }
 
 yaml_plugin_set_local() {
@@ -2340,28 +1969,11 @@ yaml_list_all_repos_sorted() {
   yaml_list_repos | LC_ALL=C sort -u
 }
 
-yaml_list_merged_repos() {
-  yaml_list_all_repos_sorted
-}
-
 # Resolve repos.<repo>.<field> (local > project), falling back to <default>.
 yaml_get_merged_repo_field() {
   _ygmr_val="$(yaml_get "$1" "$2")"
   [ -n "$_ygmr_val" ] || _ygmr_val="${3:-}"
   printf '%s' "$_ygmr_val"
-}
-
-# List plugins whose merged 'enabled' value resolves to true, sorted.
-yaml_list_enabled_plugins_sorted() {
-  for _ylep_p in $(yaml_list_plugins | LC_ALL=C sort -u); do
-    if is_enabled_val "$(yaml_plugin_get "$_ylep_p" "enabled")"; then
-      printf '%s\n' "$_ylep_p"
-    fi
-  done
-}
-
-yaml_list_enabled_plugins() {
-  yaml_list_enabled_plugins_sorted
 }
 
 # ==============================================================================
@@ -2380,54 +1992,7 @@ _yaml_parse_plugin_default_from_manifest() {
   _ypdm_f="$1"
   _ypdm_key="$2"
   [ -f "$_ypdm_f" ] || return 0
-  awk -v key="$_ypdm_key" '
-    function clean_item(v) {
-      sub(/^[ \t]+/, "", v)
-      if (v ~ /^"[^"]*"/) {
-        match(v, /^"[^"]*"/)
-        v = substr(v, 2, RLENGTH - 2)
-      } else if (v ~ /^\047[^\047]*\047/) {
-        match(v, /^\047[^\047]*\047/)
-        v = substr(v, 2, RLENGTH - 2)
-      } else {
-        sub(/[ \t]*#.*$/, "", v)
-        sub(/[ \t]+$/, "", v)
-        sub(/^["\047]/, "", v)
-        sub(/["\047]$/, "", v)
-      }
-      sub(/^[ \t]+/, "", v)
-      sub(/[ \t]+$/, "", v)
-      sub(/^\.\//, "", v)
-      return v
-    }
-
-    function parse_inline_array(str) {
-      len = length(str)
-      in_dquote = 0
-      in_squote = 0
-      curr = ""
-      for (i = 1; i <= len; i++) {
-        c = substr(str, i, 1)
-        if (c == "\"" && !in_squote) {
-          in_dquote = !in_dquote
-          curr = curr c
-        } else if (c == "\047" && !in_dquote) {
-          in_squote = !in_squote
-          curr = curr c
-        } else if (c == "," && !in_dquote && !in_squote) {
-          item = clean_item(curr)
-          if (length(item) > 0) print item
-          curr = ""
-        } else {
-          curr = curr c
-        }
-      }
-      if (length(curr) > 0) {
-        item = clean_item(curr)
-        if (length(item) > 0) print item
-      }
-    }
-
+  awk -v key="$_ypdm_key" "${_YAML_AWK_LIST_LIB}"'
     /^config_defaults:[ \t]*(#.*)?$/ { in_defaults = 1; next }
     in_defaults && /^[^ \t#]/ { exit }
     !in_defaults { next }
@@ -2488,27 +2053,6 @@ _yaml_parse_plugin_default_from_manifest() {
   ' "$_ypdm_f"
 }
 
-# Backward-compatible wrapper delegating to _yaml_parse_plugin_default_from_manifest.
-_yaml_plugin_default_from_manifest() {
-  _yaml_parse_plugin_default_from_manifest "$1" "$2"
-}
-
-# Resolve plugins.<plugin>.<key> as newline-separated items (scalars yield one line).
-# Precedence: .local.rnex.yaml > rnex.yaml > plugin.yaml config_defaults > <default>.
-yaml_get_merged_plugin_config() {
-  _ygmp_p="$1"; _ygmp_k="$2"; _ygmp_def="${3:-}"
-  _yaml_resolve_files
-  _ygmp_val="$(_yaml_plugin_list_from_file "$_wly" "$_ygmp_p" "$_ygmp_k")"
-  [ -n "$_ygmp_val" ] || _ygmp_val="$(_yaml_plugin_list_from_file "$_wy" "$_ygmp_p" "$_ygmp_k")"
-  [ -n "$_ygmp_val" ] || _ygmp_val="$(yaml_plugin_get "$_ygmp_p" "$_ygmp_k" 2>/dev/null || true)"
-  if [ -z "$_ygmp_val" ]; then
-    _ygmp_dir="$(find_plugin_dir "$_ygmp_p" 2>/dev/null || true)"
-    [ -z "$_ygmp_dir" ] || _ygmp_val="$(_yaml_plugin_default_from_manifest "$_ygmp_dir/plugin.yaml" "$_ygmp_k")"
-  fi
-  [ -n "$_ygmp_val" ] || _ygmp_val="$_ygmp_def"
-  [ -z "$_ygmp_val" ] || printf '%s\n' "$_ygmp_val"
-}
-
 # Add a new repository entry under 'repos:' in the main workspace configuration (rnex.yaml).
 yaml_add_repo() {
   _name="$1"; _url="$2"; _enabled="${3:-true}"; _readonly="${4:-false}"; _branch="${5:-}"
@@ -2516,14 +2060,21 @@ yaml_add_repo() {
     printf '\nrepos:\n' >> "$WORKSPACE_YAML"
   fi
   _tmp="$(mktemp)"
-  awk -v name="$_name" -v url="$_url" -v en="$_enabled" -v ro="$_readonly" -v br="$_branch" '
-    /^repos:/ {
+  _YAR_NAME="$_name" _YAR_URL="$_url" _YAR_EN="$_enabled" _YAR_RO="$_readonly" _YAR_BR="$_branch" awk '
+    BEGIN {
+      name = ENVIRON["_YAR_NAME"]
+      url = ENVIRON["_YAR_URL"]
+      en = ENVIRON["_YAR_EN"]
+      ro = ENVIRON["_YAR_RO"]
+      br = ENVIRON["_YAR_BR"]
+    }
+    !added && /^repos:/ {
       print
       printf "  %s:\n    url: %s\n", name, url
       if (en == "false") printf "    enabled: false\n"
       if (ro == "true") printf "    readonly: true\n"
       if (br != "") printf "    branch: %s\n", br
-      added=1
+      added = 1
       next
     }
     { print }
@@ -2634,13 +2185,4 @@ _yaml_set_top_level_in_file() {
 yaml_set_top_level() {
   _yaml_resolve_files
   _yaml_set_top_level_in_file "${WORKSPACE_YAML:-$_wy}" "$1" "$2"
-}
-
-# Set or insert a top-level scalar property in local override config (.local.rnex.yaml).
-# @param $1 key    Top-level scalar key name.
-# @param $2 value  Single-line scalar value string.
-# @returns 0 on success; non-zero on failure.
-yaml_set_top_level_local() {
-  _ensure_local_yaml_file ""
-  _yaml_set_top_level_in_file "$WORKSPACE_LOCAL_YAML" "$1" "$2"
 }

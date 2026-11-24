@@ -24,16 +24,18 @@ cmd_init() {
       --hooks) _cli_hooks="true" ;;
       --no-hooks) _cli_no_hooks=1; _cli_hooks="false" ;;
       --repos-dir)
+        [ $# -ge 2 ] && [ -n "${2:-}" ] || die "Option $1 requires a directory path"
         shift
-        [ -n "${1:-}" ] || die "Option $1 requires a directory path"
         _cli_repos_dir="$1"
         ;;
       --repos-dir=*)
         _cli_repos_dir="${1#*=}"
+        [ -n "$_cli_repos_dir" ] || die "Option --repos-dir requires a directory path"
         ;;
       --plugin|--enable-plugin)
+        [ $# -ge 2 ] && [ -n "${2:-}" ] || die "Option $1 requires a plugin name"
         shift
-        [ -n "$1" ] && _cli_plugins="${_cli_plugins:+$_cli_plugins }$1"
+        _cli_plugins="${_cli_plugins:+$_cli_plugins }$1"
         ;;
       --code-workspace|--vscode)
         _cli_code_workspace="true"
@@ -112,10 +114,12 @@ cmd_init() {
     log_dim "To reconcile repos and plugins, run:"
     log_dim "  rnex sync"
   else
+    _init_repos_dir="$(clean_rel_subpath "${_cli_repos_dir:-repos}")"
+    [ -n "$_init_repos_dir" ] || _init_repos_dir="repos"
+
     _init_plugins=""
     for _p in $_cli_plugins; do
       _pdir="$(plugin_resolve_dir "$_p" 2>/dev/null || true)"
-      [ -n "$_pdir" ] || _pdir="$(find_plugin_dir "$_p" 2>/dev/null || true)"
       _cfg_lines=""
       if [ -n "$_pdir" ] && [ -f "$_pdir/plugin.yaml" ]; then
         _cfg_lines="$(plugin_config_default_lines "$_pdir/plugin.yaml" "$_init_repos_dir")"
@@ -126,18 +130,6 @@ cmd_init() {
         _init_plugins="${_init_plugins}  ${_p}: {}\n"
       fi
     done
-
-    _init_repos_dir="${_cli_repos_dir:-repos}"
-    while :; do
-      case "$_init_repos_dir" in
-        ./*) _init_repos_dir="${_init_repos_dir#./}" ;;
-        *) break ;;
-      esac
-    done
-    while [ "$_init_repos_dir" != "${_init_repos_dir%/}" ] && [ -n "${_init_repos_dir%/}" ]; do
-      _init_repos_dir="${_init_repos_dir%/}"
-    done
-    [ -n "$_init_repos_dir" ] || _init_repos_dir="repos"
 
     _existing_repos=""
     if [ -d "$_init_dir/$_init_repos_dir" ]; then
