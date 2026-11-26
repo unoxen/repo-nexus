@@ -32,7 +32,14 @@ version: "1"
 name: "acme-platform"
 description: "Multi-repo platform workspace and shared AI context"
 reposDir: "repos"
-codeWorkspace: "acme.code-workspace"
+codeWorkspace:
+  enabled: true
+  name: "acme"
+  settings:
+    search.exclude:
+      "**/node_modules": true
+      "**/.git": true
+      "**/.rnex": true
 
 # Git Integration (Ignore rules & Git hooks)
 git:
@@ -168,7 +175,33 @@ plugins:
 | `version` | string | `"1"` | Schema version compatibility check. |
 | `name` | string | basename | Workspace identifier. |
 | `reposDir` | string | `"repos"` | Directory where member repositories are cloned (automatically managed in `.gitignore` and `.ignore`). |
-| `codeWorkspace`| string / bool | `false` | Path to generated `.code-workspace` file. |
+| `codeWorkspace`| object | `{ enabled: false }` | VS Code / Cursor multi-root workspace configuration (`enabled`, optional `name`, optional `settings`). Legacy scalar `codeWorkspace: true\|false` is deprecated. |
+
+### VS Code / Cursor Workspace (`codeWorkspace`)
+
+Configure `.code-workspace` generation using the structured `codeWorkspace` object:
+
+```yaml
+codeWorkspace:
+  enabled: true
+  name: my-workspace          # Optional; omitted uses <workspaceDir>.code-workspace
+  settings:                   # Optional; omitted uses built-in defaults, provided replaces entirely
+    search.exclude:
+      "**/node_modules": true
+      "**/.git": true
+      "**/.rnex": true
+```
+
+| Field | Type | Default | Description |
+|:---|:---|:---|:---|
+| `codeWorkspace.enabled` | boolean | `false` | Enables or disables `.code-workspace` generation during `rnex sync`. |
+| `codeWorkspace.name` | string | `<workspaceDir>` | Optional workspace filename (`.code-workspace` is appended automatically if omitted). Must match `^[A-Za-z0-9][A-Za-z0-9._-]*$` without `..` or path separators. Changing `name` writes the new file; remove any previously named `.code-workspace` file manually if no longer needed. |
+| `codeWorkspace.settings` | object | Default `search.exclude` | VS Code `"settings"` JSON object. When omitted from both config files, defaults to excluding `**/node_modules`, `**/.git`, and `**/.rnex`. |
+
+**Two-Level Override & Replacement Rules:**
+* `codeWorkspace.enabled` and `codeWorkspace.name` resolve independently (`.local.rnex.yaml` > `rnex.yaml`), so you can disable or rename locally without duplicating `settings`.
+* `codeWorkspace.settings` uses **full replacement (no merging)**: defining `settings` in `.local.rnex.yaml` completely replaces `rnex.yaml` and defaults; defining `settings` in `rnex.yaml` completely replaces built-in defaults. Pass `settings: {}` to emit an empty `"settings": {}` object.
+* **Legacy Deprecation:** Scalar `codeWorkspace: true` / `codeWorkspace: false` remains supported as a fallback for `codeWorkspace.enabled` and logs a deprecation notice during `rnex sync`. Migrate to `codeWorkspace: { enabled: true }` (or the multi-line object form above).
 
 ### Git Integration (`git`)
 

@@ -15,7 +15,20 @@ description: "Multi-repo platform workspace and shared AI context"
 # Directory where member repositories are cloned (default: "./repos").
 # Automatically added to workspace .gitignore and un-ignored in .ignore.
 reposDir: "./repos"
-codeWorkspace: "acme.code-workspace"
+# VS Code / Cursor multi-root workspace generation.
+# - enabled: true|false (default: false)
+# - name: Optional custom filename (omitted uses <workspaceDir>.code-workspace)
+# - settings: Optional VS Code settings object. When omitted, defaults to excluding
+#   node_modules, .git, and .rnex. When provided (in rnex.yaml or .local.rnex.yaml),
+#   replaces defaults/lower layers entirely (no deep merging; use `{}` for empty).
+codeWorkspace:
+  enabled: true
+  name: "acme"
+  settings:
+    search.exclude:
+      "**/node_modules": true
+      "**/.git": true
+      "**/.rnex": true
 
 # Git Integration (Ignore rules & Git hooks)
 git:

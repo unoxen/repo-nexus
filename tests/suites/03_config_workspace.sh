@@ -822,6 +822,284 @@ env -i PATH="$PATH" HOME="$HOME" RNEX_ROOT="$TEST_REG_WS" RNEX_LIB_DIR="$DIR/lib
 }
 pass
 
+# --------------------------------------------------------------------------
+run_test "codeWorkspace Unit 1: resolver, filename validators, legacy detection, and pure POSIX YAML-to-JSON"
+(
+  SCRIPT_LOCATION="$DIR"
+  # shellcheck source=lib/core.sh
+  . "$DIR/lib/core.sh"
+  # shellcheck source=lib/yaml.sh
+  . "$DIR/lib/yaml.sh"
+
+  _u1_ws="$TEST_TMP/cw-unit1-ws"
+  mkdir -p "$_u1_ws"
+
+  # 1. Filename validation & normalization (OWASP A03 allowlist)
+  for _ok_name in "my-workspace" "team_v2" "app.dev" "app.code-workspace"; do
+    rnex_validate_workspace_name "$_ok_name" || exit 10
+  done
+  [ "$(rnex_normalize_workspace_filename "my-workspace")" = "my-workspace.code-workspace" ] || exit 11
+  [ "$(rnex_normalize_workspace_filename "app.code-workspace")" = "app.code-workspace" ] || exit 12
+
+  for _bad_name in "../escape" "sub/dir" 'sub\dir' ".hidden" ".code-workspace" "foo..bar" "a b" "" "foo;rm -rf /"; do
+    if rnex_validate_workspace_name "$_bad_name"; then exit 13; fi
+    if rnex_normalize_workspace_filename "$_bad_name" >/dev/null 2>&1; then exit 14; fi
+  done
+
+  # 2. Nested YAML-to-JSON serialization (search.exclude, mixed scalars, arrays, # comments, quoted keys)
+  cat <<'EOF_U1_YAML' > "$_u1_ws/rnex.yaml"
+version: 1.0.0
+codeWorkspace:
+  enabled: true
+  settings:
+    search.exclude:
+      "**/node_modules": true
+      "**/.git": true
+      "**/.rnex": true
+EOF_U1_YAML
+  _ser_def="$(rnex_get_code_workspace_settings_json "$_u1_ws")" || exit 20
+  [ "$_ser_def" = "$RNEX_DEFAULT_CODE_WORKSPACE_SETTINGS_JSON" ] || exit 21
+
+  cat <<'EOF_U1_MIXED' > "$_u1_ws/rnex.yaml"
+codeWorkspace:
+  enabled: true
+  settings:
+    editor.tabSize: 2
+    editor.formatOnSave: true
+    files.eol: "\n"
+    custom.null: null
+    custom.tilde: ~
+    workbench.colorCustomizations:
+      "editor.background": "#ff0000" # inline comment stripped outside quotes
+    eslint.workingDirectories: ["repos/api", "repos/web"]
+    block.items:
+      - alpha
+      - "beta"
+    "key\"quoted:colon": 'val''s'
+EOF_U1_MIXED
+  _ser_mix="$(rnex_get_code_workspace_settings_json "$_u1_ws")" || exit 22
+  if printf '%s\n' "$_ser_mix" | grep -qE ',[[:space:]]*[}\]]'; then exit 23; fi
+  if printf '%s\n' "$_ser_mix" | grep -q 'inline comment stripped'; then exit 24; fi
+  if command -v node >/dev/null 2>&1; then
+    node - "$_ser_mix" <<'EOF_U1_NODE' || exit 25
+const assert = require("assert");
+const obj = JSON.parse(process.argv[2]);
+assert.strictEqual(obj["editor.tabSize"], 2);
+assert.strictEqual(obj["editor.formatOnSave"], true);
+assert.strictEqual(obj["files.eol"], "\n");
+assert.strictEqual(obj["custom.null"], null);
+assert.strictEqual(obj["custom.tilde"], null);
+assert.strictEqual(obj["workbench.colorCustomizations"]["editor.background"], "#ff0000");
+assert.deepStrictEqual(obj["eslint.workingDirectories"], ["repos/api", "repos/web"]);
+assert.deepStrictEqual(obj["block.items"], ["alpha", "beta"]);
+assert.strictEqual(obj['key"quoted:colon'], "val's");
+EOF_U1_NODE
+  fi
+
+  # 3. Explicit empty `settings: {}` produces `{}` rather than defaults
+  printf 'codeWorkspace:\n  enabled: true\n  settings: {}\n' > "$_u1_ws/rnex.yaml"
+  rnex_yaml_has_nested_key "$_u1_ws/rnex.yaml" "codeWorkspace" "settings" || exit 26
+  [ "$(rnex_get_code_workspace_settings_json "$_u1_ws")" = "{}" ] || exit 27
+
+  # 4. Two-level precedence: local field overrides preserve base settings; local settings replace entirely
+  cat <<'EOF_U1_BASE' > "$_u1_ws/rnex.yaml"
+codeWorkspace:
+  enabled: true
+  name: team-ws
+  settings: { "editor.tabSize": 4 }
+EOF_U1_BASE
+  cat <<'EOF_U1_LOC_NAME' > "$_u1_ws/.local.rnex.yaml"
+codeWorkspace:
+  name: personal-ws
+EOF_U1_LOC_NAME
+  rnex_get_code_workspace_enabled "$_u1_ws" || exit 30
+  [ "$(rnex_get_code_workspace_name "$_u1_ws")" = "personal-ws" ] || exit 31
+  rnex_get_code_workspace_settings_json "$_u1_ws" | grep -qF '"editor.tabSize": 4' || exit 32
+
+  printf 'codeWorkspace:\n  settings:\n    files.autoSave: afterDelay\n' > "$_u1_ws/.local.rnex.yaml"
+  _loc_st="$(rnex_get_code_workspace_settings_json "$_u1_ws")" || exit 33
+  printf '%s\n' "$_loc_st" | grep -qF '"files.autoSave": "afterDelay"' || exit 34
+  if printf '%s\n' "$_loc_st" | grep -q 'editor\.tabSize\|search\.exclude'; then exit 35; fi
+
+  # 5. Pure legacy detection (rnex.yaml & .local.rnex.yaml) with zero stderr/stdout side effects
+  rm -f "$_u1_ws/.local.rnex.yaml"
+  printf 'codeWorkspace: true\n' > "$_u1_ws/rnex.yaml"
+  _leg_out="$(rnex_is_legacy_code_workspace "$_u1_ws" 2>&1)" || exit 40
+  [ -z "$_leg_out" ] || exit 41
+  _en_out="$(rnex_get_code_workspace_enabled "$_u1_ws" 2>&1)" || exit 42
+  [ -z "$_en_out" ] || exit 43
+
+  printf 'codeWorkspace:\n  enabled: true\n' > "$_u1_ws/rnex.yaml"
+  printf 'codeWorkspace: false\n' > "$_u1_ws/.local.rnex.yaml"
+  rnex_is_legacy_code_workspace "$_u1_ws" || exit 44
+  if rnex_get_code_workspace_enabled "$_u1_ws"; then exit 45; fi
+
+  rm -f "$_u1_ws/.local.rnex.yaml"
+  if rnex_is_legacy_code_workspace "$_u1_ws"; then exit 46; fi
+
+  # 6. Malformed YAML and invalid name fail fast
+  for _bad_yaml in \
+    "$(printf 'a: *alias')" \
+    "$(printf 'a: &anc val')" \
+    "$(printf 'obj:\n\ta: 1')" \
+    "$(printf 'obj:\n    a: 1\n  b: 2')" \
+    "$(printf 'arr: [1, 2')"; do
+    if printf '%s\n' "$_bad_yaml" | rnex_yaml_block_to_json >/dev/null 2>&1; then exit 50; fi
+  done
+  printf 'codeWorkspace:\n  enabled: true\n  name: "../evil"\n' > "$_u1_ws/rnex.yaml"
+  if rnex_get_code_workspace_name "$_u1_ws" >/dev/null 2>&1; then exit 51; fi
+) || { fail "codeWorkspace Unit 1 tests failed (rc=$?)"; exit 1; }
+pass
+
+# --------------------------------------------------------------------------
+run_test "codeWorkspace Unit 2: end-to-end sync generation, custom name, replacement, and legacy warning"
+(
+  _u2_ws="$TEST_TMP/cw-unit2-ws"
+  mkdir -p "$_u2_ws"
+  cp "$CLI" "$_u2_ws/rnex"
+  chmod +x "$_u2_ws/rnex"
+  cp "$DIR/package.json" "$_u2_ws/package.json"
+  link_dir_contents "$DIR/lib" "$_u2_ws/lib"
+  link_dir_contents "$DIR/plugins" "$_u2_ws/plugins"
+  link_dir_contents "$DIR/skills" "$_u2_ws/skills"
+
+  _check_json() {
+    [ -f "$1" ] || return 1
+    if grep -qE ',[[:space:]]*[}\]]' "$1"; then return 1; fi
+    if command -v node >/dev/null 2>&1; then
+      node -e 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));' "$1" || return 1
+    fi
+  }
+
+  (cd "$_u2_ws" && ./rnex init -y >/dev/null 2>&1)
+  (cd "$_u2_ws" && ./rnex repo add "$TEST_REPO" --name svc-api >/dev/null 2>&1)
+
+  # 1. enabled: false -> skips cleanly
+  cat <<EOF_U2_DIS > "$_u2_ws/rnex.yaml"
+version: 1.0.0
+reposDir: "repos"
+codeWorkspace:
+  enabled: false
+repos:
+  svc-api:
+    url: $TEST_REPO
+EOF_U2_DIS
+  (cd "$_u2_ws" && ./rnex sync >/dev/null) || exit 10
+  [ ! -f "$_u2_ws/cw-unit2-ws.code-workspace" ] || exit 11
+
+  # 2. enabled: true (omitting name & settings) -> <repoName>.code-workspace + default search.exclude
+  cat <<EOF_U2_DEF > "$_u2_ws/rnex.yaml"
+version: 1.0.0
+reposDir: "repos"
+codeWorkspace:
+  enabled: true
+repos:
+  svc-api:
+    url: $TEST_REPO
+EOF_U2_DEF
+  _sync_obj_out="$(cd "$_u2_ws" && ./rnex sync 2>&1)" || exit 20
+  if printf '%s\n' "$_sync_obj_out" | grep -qi "deprecated"; then exit 21; fi
+  _check_json "$_u2_ws/cw-unit2-ws.code-workspace" || exit 22
+  grep -qF '"repos/svc-api"' "$_u2_ws/cw-unit2-ws.code-workspace" || exit 23
+  grep -qF '"**/node_modules": true' "$_u2_ws/cw-unit2-ws.code-workspace" || exit 24
+  grep -qF '"**/.git": true' "$_u2_ws/cw-unit2-ws.code-workspace" || exit 25
+  grep -qF '"**/.rnex": true' "$_u2_ws/cw-unit2-ws.code-workspace" || exit 26
+  rm -f "$_u2_ws/cw-unit2-ws.code-workspace"
+
+  # 3. custom name (with and without .code-workspace suffix)
+  cat <<EOF_U2_NM > "$_u2_ws/rnex.yaml"
+version: 1.0.0
+reposDir: "repos"
+codeWorkspace:
+  enabled: true
+  name: custom-app
+repos:
+  svc-api:
+    url: $TEST_REPO
+EOF_U2_NM
+  (cd "$_u2_ws" && ./rnex sync >/dev/null) || exit 30
+  _check_json "$_u2_ws/custom-app.code-workspace" || exit 31
+  [ ! -f "$_u2_ws/cw-unit2-ws.code-workspace" ] || exit 32
+
+  sed -e 's/name: custom-app/name: custom-app.code-workspace/' "$_u2_ws/rnex.yaml" > "$_u2_ws/rnex.yaml.tmp"
+  mv "$_u2_ws/rnex.yaml.tmp" "$_u2_ws/rnex.yaml"
+  (cd "$_u2_ws" && ./rnex sync >/dev/null) || exit 33
+  _check_json "$_u2_ws/custom-app.code-workspace" || exit 34
+  [ ! -f "$_u2_ws/custom-app.code-workspace.code-workspace" ] || exit 35
+
+  # 4. settings in rnex.yaml replaces defaults entirely; .local.rnex.yaml replaces rnex.yaml entirely
+  cat <<EOF_U2_ST > "$_u2_ws/rnex.yaml"
+version: 1.0.0
+reposDir: "repos"
+codeWorkspace:
+  enabled: true
+  name: custom-app
+  settings:
+    editor.tabSize: 4
+repos:
+  svc-api:
+    url: $TEST_REPO
+EOF_U2_ST
+  (cd "$_u2_ws" && ./rnex sync >/dev/null) || exit 40
+  _check_json "$_u2_ws/custom-app.code-workspace" || exit 41
+  grep -qF '"editor.tabSize": 4' "$_u2_ws/custom-app.code-workspace" || exit 42
+  if grep -q 'search\.exclude' "$_u2_ws/custom-app.code-workspace"; then exit 43; fi
+
+  cat <<'EOF_U2_ST_LOC' > "$_u2_ws/.local.rnex.yaml"
+codeWorkspace:
+  settings:
+    files.autoSave: afterDelay
+EOF_U2_ST_LOC
+  (cd "$_u2_ws" && ./rnex sync >/dev/null) || exit 44
+  _check_json "$_u2_ws/custom-app.code-workspace" || exit 45
+  grep -qF '"files.autoSave": "afterDelay"' "$_u2_ws/custom-app.code-workspace" || exit 46
+  if grep -q 'editor\.tabSize\|search\.exclude' "$_u2_ws/custom-app.code-workspace"; then exit 47; fi
+
+  printf 'codeWorkspace:\n  settings: {}\n' > "$_u2_ws/.local.rnex.yaml"
+  (cd "$_u2_ws" && ./rnex sync >/dev/null) || exit 48
+  _check_json "$_u2_ws/custom-app.code-workspace" || exit 49
+  grep -qF '"settings": {}' "$_u2_ws/custom-app.code-workspace" || exit 50
+  rm -f "$_u2_ws/.local.rnex.yaml" "$_u2_ws/custom-app.code-workspace"
+
+  # 5. Legacy `codeWorkspace: true` generates default workspace + prints deprecation warning on sync (not status)
+  cat <<EOF_U2_LEG > "$_u2_ws/rnex.yaml"
+version: 1.0.0
+reposDir: "repos"
+codeWorkspace: true
+repos:
+  svc-api:
+    url: $TEST_REPO
+EOF_U2_LEG
+  _status_leg="$(cd "$_u2_ws" && ./rnex status 2>&1)"
+  if printf '%s\n' "$_status_leg" | grep -qi "deprecated"; then exit 60; fi
+  _sync_leg="$(cd "$_u2_ws" && ./rnex sync 2>&1)" || exit 61
+  printf '%s\n' "$_sync_leg" | grep -qi "deprecated" || exit 62
+  _check_json "$_u2_ws/cw-unit2-ws.code-workspace" || exit 63
+  grep -qF '"**/.rnex": true' "$_u2_ws/cw-unit2-ws.code-workspace" || exit 64
+
+  # 6. Malformed settings fails sync cleanly without corrupting existing file or leaking temp files
+  _saved_sum="$(cksum < "$_u2_ws/cw-unit2-ws.code-workspace")"
+  cat <<EOF_U2_BAD > "$_u2_ws/rnex.yaml"
+version: 1.0.0
+reposDir: "repos"
+codeWorkspace:
+  enabled: true
+  settings:
+    bad: *alias
+repos:
+  svc-api:
+    url: $TEST_REPO
+EOF_U2_BAD
+  set +e
+  (cd "$_u2_ws" && ./rnex sync >/dev/null 2>&1)
+  _bad_rc=$?
+  set -e
+  [ "$_bad_rc" -ne 0 ] || exit 70
+  [ "$(cksum < "$_u2_ws/cw-unit2-ws.code-workspace")" = "$_saved_sum" ] || exit 71
+  if ls "$_u2_ws/.rnex"/.tmp.code-workspace.* >/dev/null 2>&1; then exit 72; fi
+) || { fail "codeWorkspace Unit 2 tests failed (rc=$?)"; exit 1; }
+pass
+
 if [ "${_STANDALONE_RUN:-0}" -eq 1 ]; then
   report_results
 fi

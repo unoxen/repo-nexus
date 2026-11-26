@@ -117,6 +117,7 @@ _yaml_top_level_from_file() {
       sub(/[ \t]*#.*/, "", line)
       sub(/^[ \t]+/, "", line)
       sub(/[ \t\r]+$/, "", line)
+      if (line ~ /^\{/) { val = ""; next }
       gsub(/^["\047]|["\047]$/, "", line)
       val = line
     }
@@ -1508,6 +1509,10 @@ $_vwc_findings
 EOF_VWC
     [ "$_vwc_rc_tmp" -eq 0 ] || _vwc_err=1
   done
+  if rnex_get_code_workspace_enabled 2>/dev/null; then
+    rnex_get_code_workspace_name >/dev/null 2>&1 || _vwc_err=1
+    rnex_get_code_workspace_settings_json >/dev/null 2>&1 || _vwc_err=1
+  fi
   return "$_vwc_err"
 }
 
@@ -2185,4 +2190,725 @@ _yaml_set_top_level_in_file() {
 yaml_set_top_level() {
   _yaml_resolve_files
   _yaml_set_top_level_in_file "${WORKSPACE_YAML:-$_wy}" "$1" "$2"
+}
+
+# ==============================================================================
+# Structured `codeWorkspace` Resolver & Pure POSIX YAML-to-JSON Serializer
+# Architectural Layer: Configuration Contract & Serialization Module
+# Pattern: Pure Query Facade + AST Pretty-Printer (POSIX /bin/sh + POSIX awk)
+# Responsibility:
+#   Centralize `codeWorkspace` constants, OWASP A03 filename validation,
+#   nested key presence detection, POSIX YAML-to-JSON serialization, and pure
+#   two-level config getters (.local.rnex.yaml > rnex.yaml > defaults).
+# ==============================================================================
+
+RNEX_CODE_WORKSPACE_EXT=".code-workspace"
+RNEX_DEFAULT_CODE_WORKSPACE_SETTINGS_JSON='{
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/.git": true,
+    "**/.rnex": true
+  }
+}'
+
+# ------------------------------------------------------------------------------
+# Validate a candidate `codeWorkspace.name` against a strict OWASP A03 ASCII
+# allowlist (^[A-Za-z0-9][A-Za-z0-9._-]*$, rejecting '..', trailing '.', '/',
+# '\', whitespace, newlines, and control characters).
+# @param $1 - Candidate workspace name string.
+# @returns 0 if valid; 1 if missing, empty, or invalid (zero output).
+# @pure
+# ------------------------------------------------------------------------------
+rnex_validate_workspace_name() {
+  [ $# -ge 1 ] && [ -n "$1" ] || return 1
+  case "$1" in
+    [!ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789]*) return 1 ;;
+    *[!ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-]*) return 1 ;;
+    *..*|*.) return 1 ;;
+  esac
+  return 0
+}
+
+# ------------------------------------------------------------------------------
+# Normalize a validated workspace name to '<name>.code-workspace' without
+# duplicating RNEX_CODE_WORKSPACE_EXT if already present.
+# @param $1 - Candidate workspace name.
+# @returns Normalized filename on stdout (exit 0), or nothing (exit 1) if invalid.
+# @pure
+# ------------------------------------------------------------------------------
+rnex_normalize_workspace_filename() {
+  [ $# -ge 1 ] && rnex_validate_workspace_name "$1" || return 1
+  case "$1" in
+    *"$RNEX_CODE_WORKSPACE_EXT") printf '%s' "$1" ;;
+    *) printf '%s%s' "$1" "$RNEX_CODE_WORKSPACE_EXT" ;;
+  esac
+}
+
+# Shared POSIX awk lexical helpers (quote-aware comment stripping, mapping
+# colon lookup, scalar unquoting, and sequence indicator detection).
+# shellcheck disable=SC2016
+_RNEX_YAML_AWK_LEX='
+function trim(s) {
+  sub(/^[ \t]+/, "", s)
+  sub(/[ \t]+$/, "", s)
+  return s
+}
+
+function strip_comment(line,    len, i, c, prev, sq, dq) {
+  sub(/\r$/, "", line)
+  len = length(line); sq = 0; dq = 0; prev = ""
+  for (i = 1; i <= len; i++) {
+    c = substr(line, i, 1)
+    if (sq) {
+      if (c == "\047") {
+        if (substr(line, i + 1, 1) == "\047") { i++; prev = c; continue }
+        sq = 0
+      }
+    } else if (dq) {
+      if (c == "\\") { i++; prev = ""; continue }
+      if (c == "\"") dq = 0
+    } else {
+      if (c == "\047") sq = 1
+      else if (c == "\"") dq = 1
+      else if (c == "#" && (i == 1 || prev == " " || prev == "\t")) {
+        line = substr(line, 1, i - 1)
+        sub(/[ \t]+$/, "", line)
+        return line
+      }
+    }
+    prev = c
+  }
+  sub(/[ \t]+$/, "", line)
+  return line
+}
+
+# Locate top-level mapping colon outside quotes/brackets.
+# Returns >0 (1-based index), 0 (none), or -1 (unterminated quote).
+function find_colon(s,    len, i, c, nxt, sq, dq, bd, kd, cq) {
+  len = length(s); sq = 0; dq = 0; bd = 0; kd = 0; cq = 0
+  for (i = 1; i <= len; i++) {
+    c = substr(s, i, 1)
+    if (sq) {
+      if (c == "\047") {
+        if (substr(s, i + 1, 1) == "\047") { i++; continue }
+        sq = 0; if (bd == 0 && kd == 0) cq = 1
+      }
+    } else if (dq) {
+      if (c == "\\") { i++; continue }
+      if (c == "\"") { dq = 0; if (bd == 0 && kd == 0) cq = 1 }
+    } else {
+      if (c == "\047") { sq = 1; cq = 0 }
+      else if (c == "\"") { dq = 1; cq = 0 }
+      else if (c == "{") { bd++; cq = 0 }
+      else if (c == "}") { bd--; cq = 0 }
+      else if (c == "[") { kd++; cq = 0 }
+      else if (c == "]") { kd--; cq = 0 }
+      else if (c == ":" && bd == 0 && kd == 0) {
+        nxt = substr(s, i + 1, 1)
+        if (nxt == "" || nxt == " " || nxt == "\t" || cq) return i
+        cq = 0
+      } else if (c != " " && c != "\t") { cq = 0 }
+    }
+  }
+  return (sq || dq) ? -1 : 0
+}
+
+function unquote_val(raw,    s, len, i, c, esc, out) {
+  s = trim(raw); len = length(s)
+  if (len >= 2 && substr(s, 1, 1) == "\"" && substr(s, len, 1) == "\"") {
+    out = ""
+    for (i = 2; i < len; i++) {
+      c = substr(s, i, 1)
+      if (c == "\\" && i < len - 1) {
+        i++; esc = substr(s, i, 1)
+        if (esc == "n") out = out "\n"
+        else if (esc == "t") out = out "\t"
+        else if (esc == "r") out = out "\r"
+        else out = out esc
+      } else out = out c
+    }
+    return out
+  }
+  if (len >= 2 && substr(s, 1, 1) == "\047" && substr(s, len, 1) == "\047") {
+    out = ""
+    for (i = 2; i < len; i++) {
+      c = substr(s, i, 1)
+      if (c == "\047" && substr(s, i + 1, 1) == "\047" && i < len - 1) { i++; out = out "\047" }
+      else out = out c
+    }
+    return out
+  }
+  return s
+}
+
+function is_seq_line(t,    c2) {
+  if (t == "-") return 1
+  if (substr(t, 1, 1) != "-") return 0
+  c2 = substr(t, 2, 1)
+  return (c2 == " " || c2 == "\t") ? 1 : 0
+}
+'
+
+# Shared nested key query/extraction engine for rnex_yaml_has_nested_key ("has")
+# and rnex_yaml_extract_nested_block ("extract"). Matches direct children of
+# top-level <parent_key> (block or inline `{...}` form) while ignoring grandchildren.
+# @param $1 mode ("has"|"extract"), $2 file, $3 parent_key, $4 child_key
+# @returns 0 if declared; 1 otherwise.
+# @pure
+_rnex_yaml_nested() {
+  [ $# -ge 4 ] && [ -f "$2" ] && [ -n "$3" ] && [ -n "$4" ] || return 1
+  # shellcheck disable=SC2016
+  LC_ALL=C _RYN_MODE="$1" _RYN_PARENT="$3" _RYN_CHILD="$4" \
+    awk "${_RNEX_YAML_AWK_LEX}"'
+    function scan_inline_parent(s,    len, i, c, sq, dq, d, st, seg, cp, rk, rv) {
+      s = trim(s); len = length(s)
+      if (len < 2 || substr(s, 1, 1) != "{" || substr(s, len, 1) != "}") return 0
+      s = substr(s, 2, len - 2); len = length(s)
+      sq = 0; dq = 0; d = 0; st = 1
+      for (i = 1; i <= len + 1; i++) {
+        c = (i <= len) ? substr(s, i, 1) : ","
+        if (i <= len) {
+          if (sq) { if (c == "\047") { if (substr(s, i + 1, 1) == "\047") i++; else sq = 0 } continue }
+          if (dq) { if (c == "\\") i++; else if (c == "\"") dq = 0; continue }
+          if (c == "\047") { sq = 1; continue }
+          if (c == "\"") { dq = 1; continue }
+          if (c == "{" || c == "[") { d++; continue }
+          if (c == "}" || c == "]") { d--; continue }
+        }
+        if (c == "," && d == 0) {
+          seg = trim(substr(s, st, i - st)); st = i + 1
+          cp = find_colon(seg)
+          if (cp > 0 && unquote_val(substr(seg, 1, cp - 1)) == CHILD) {
+            rv = trim(substr(seg, cp + 1))
+            if (MODE == "extract" && rv != "") print rv
+            return 1
+          }
+        }
+      }
+      return 0
+    }
+    BEGIN {
+      MODE = ENVIRON["_RYN_MODE"]; PARENT = ENVIRON["_RYN_PARENT"]; CHILD = ENVIRON["_RYN_CHILD"]
+      found = 0; in_p = 0; child_col = -1; in_c = 0; c_ind = -1; c_inline = 0
+    }
+    {
+      cl = strip_comment($0)
+      if (cl == "") next
+      match(cl, /^[ \t]*/); ind = RLENGTH; ws = substr(cl, 1, ind); tr = substr(cl, ind + 1)
+      if (tr == "") next
+
+      if (in_c) {
+        if (ind == 0 && (tr == "---" || tr == "...")) exit 0
+        if (ws ~ /\t/ || ind > c_ind || (!c_inline && ind == c_ind && is_seq_line(tr))) {
+          print cl; next
+        }
+        exit 0
+      }
+
+      if (ind == 0 && (tr == "---" || tr == "...")) { in_p = 0; next }
+
+      if (in_p) {
+        if (ind == 0) {
+          in_p = 0
+        } else {
+          if (child_col == -1) child_col = ind
+          if (ind == child_col) {
+            cp = find_colon(tr)
+            if (cp > 0 && unquote_val(substr(tr, 1, cp - 1)) == CHILD) {
+              found = 1
+              if (MODE == "has") exit 0
+              in_c = 1; c_ind = ind
+              cv = trim(substr(tr, cp + 1))
+              if (cv != "") { c_inline = 1; print cv } else c_inline = 0
+            }
+          }
+          next
+        }
+      }
+
+      if (ind == 0) {
+        cp = find_colon(tr)
+        if (cp > 0 && unquote_val(substr(tr, 1, cp - 1)) == PARENT) {
+          pv = trim(substr(tr, cp + 1))
+          if (pv == "") { in_p = 1; child_col = -1 }
+          else if (substr(pv, 1, 1) == "{" && scan_inline_parent(pv)) { found = 1; exit 0 }
+        }
+      }
+    }
+    END { exit (found ? 0 : 1) }
+  ' "$2"
+}
+
+# Check whether <child_key> is explicitly declared under top-level <parent_key>.
+# @param $1 file, $2 parent_key, $3 child_key
+# @returns 0 if declared (including `{}`), 1 if absent or file missing.
+# @pure
+rnex_yaml_has_nested_key() {
+  _rnex_yaml_nested "has" "${1:-}" "${2:-}" "${3:-}"
+}
+
+# Extract raw indented YAML subtree (or inline value) under <parent_key>.<child_key>.
+# @param $1 file, $2 parent_key, $3 child_key
+# @returns Extracted YAML lines on stdout (exit 0), or exit 1 if absent.
+# @pure
+rnex_yaml_extract_nested_block() {
+  _rnex_yaml_nested "extract" "${1:-}" "${2:-}" "${3:-}"
+}
+
+# Pure POSIX awk YAML-to-JSON AST serializer backing rnex_yaml_block_to_json.
+# Supports nested block mappings, block/indentless/compact sequences, inline
+# flow `{}`/`[]`/`{...}`/`[...]`, typed scalars, and strict RFC 8259 escaping.
+# shellcheck disable=SC2016
+_RNEX_YAML_AWK_TO_JSON='
+function fail(ln, msg) { ERR = 1; EMSG = sprintf("YAML error (line %d): %s", ln, msg); exit 1 }
+function mk_node(t, v,    id) { id = ++NC; NT[id] = t; NV[id] = v; ML[id] = 0; SL[id] = 0; return id }
+function map_put(mid, k, cid,    idx, n) {
+  if ((mid SUBSEP k) in MKI) { MC[mid, MKI[mid, k]] = cid; return }
+  n = ++ML[mid]; MK[mid, n] = k; MC[mid, n] = cid; MKI[mid, k] = n
+}
+function seq_push(sid, cid) { SC[sid, ++SL[sid]] = cid }
+function j_esc(c) { return (c in ESC) ? ESC[c] : c }
+function j_plain(s,    i, n, o) { n = length(s); o = ""; for (i = 1; i <= n; i++) o = o j_esc(substr(s, i, 1)); return DQ o DQ }
+
+function j_dquote(raw, ln,    n, inn, m, i, c, e, h, o) {
+  n = length(raw)
+  if (n < 2 || substr(raw, 1, 1) != DQ || substr(raw, n, 1) != DQ) fail(ln, "unterminated double-quoted string")
+  inn = substr(raw, 2, n - 2); m = length(inn); o = ""
+  for (i = 1; i <= m; i++) {
+    c = substr(inn, i, 1)
+    if (c == BS) {
+      if (i == m) fail(ln, "unterminated escape")
+      i++; e = substr(inn, i, 1)
+      if (e == DQ) o = o BS DQ
+      else if (e == BS) o = o BS BS
+      else if (e == "/") o = o "/"
+      else if (e == "b" || e == "f" || e == "n" || e == "r" || e == "t") o = o BS e
+      else if (e == "0") o = o "\\u0000"
+      else if (e == " ") o = o " "
+      else if (e == "u") {
+        h = substr(inn, i + 1, 4)
+        if (length(h) != 4 || h !~ /^[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f]$/) fail(ln, "invalid \\uXXXX escape")
+        o = o "\\u" h; i += 4
+      } else fail(ln, "unsupported escape " BS e)
+    } else if (c == DQ) fail(ln, "unexpected quote in double-quoted string")
+    else o = o j_esc(c)
+  }
+  return DQ o DQ
+}
+
+function j_squote(raw, ln,    n, inn, m, i, c, o) {
+  n = length(raw)
+  if (n < 2 || substr(raw, 1, 1) != SQ || substr(raw, n, 1) != SQ) fail(ln, "unterminated single-quoted string")
+  inn = substr(raw, 2, n - 2); m = length(inn); o = ""
+  for (i = 1; i <= m; i++) {
+    c = substr(inn, i, 1)
+    if (c == SQ) {
+      if (i < m && substr(inn, i + 1, 1) == SQ) { i++; o = o SQ }
+      else fail(ln, "unexpected quote in single-quoted string")
+    } else o = o j_esc(c)
+  }
+  return DQ o DQ
+}
+
+function parse_key(raw, ln,    k, fc) {
+  k = trim(raw); if (k == "") fail(ln, "empty key")
+  fc = substr(k, 1, 1)
+  if (fc == DQ) return j_dquote(k, ln)
+  if (fc == SQ) return j_squote(k, ln)
+  if (k == "<<" || fc == "&" || fc == "*" || fc == "!" || fc == "{" || fc == "[" || fc == "}" || fc == "]") {
+    fail(ln, "unsupported YAML key: " k)
+  }
+  return j_plain(k)
+}
+
+function parse_scalar(raw, ln,    v, fc) {
+  v = trim(raw); fc = substr(v, 1, 1)
+  if (fc == DQ) return j_dquote(v, ln)
+  if (fc == SQ) return j_squote(v, ln)
+  if (fc == "&" || fc == "*" || fc == "!") fail(ln, "unsupported YAML anchor/alias/tag: " v)
+  if (v ~ /^[|>]([-+0-9]*)?([ \t].*)?$/) fail(ln, "unsupported multiline block scalar: " v)
+  if (fc == "}" || fc == "]") fail(ln, "unexpected closing delimiter: " fc)
+  if (v == "true" || v == "True" || v == "TRUE") return "true"
+  if (v == "false" || v == "False" || v == "FALSE") return "false"
+  if (v == "null" || v == "Null" || v == "NULL" || v == "~") return "null"
+  if (v ~ /^-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?$/) return v
+  if (find_colon(v) != 0) fail(ln, "invalid nested colon or unclosed quote: " v)
+  return j_plain(v)
+}
+
+function split_flow(inn, out_arr, ln,    n, i, c, sq, dq, d, st, cnt, exp_stk) {
+  n = length(inn); sq = 0; dq = 0; d = 0; st = 1; cnt = 0
+  for (i = 1; i <= n; i++) {
+    c = substr(inn, i, 1)
+    if (sq) { if (c == SQ) { if (substr(inn, i + 1, 1) == SQ) i++; else sq = 0 } continue }
+    if (dq) { if (c == BS) i++; else if (c == DQ) dq = 0; continue }
+    if (c == SQ) sq = 1
+    else if (c == DQ) dq = 1
+    else if (c == "{") exp_stk[++d] = "}"
+    else if (c == "[") exp_stk[++d] = "]"
+    else if (c == "}" || c == "]") {
+      if (d <= 0 || exp_stk[d] != c) fail(ln, "mismatched brackets/braces in flow collection")
+      d--
+    } else if (c == "," && d == 0) {
+      out_arr[++cnt] = substr(inn, st, i - st); st = i + 1
+    }
+  }
+  if (sq || dq || d != 0) fail(ln, "unclosed quote or flow collection")
+  out_arr[++cnt] = substr(inn, st, n - st + 1)
+  return cnt
+}
+
+function parse_flow(expr, ln,    n, i, c, sq, dq, d, fc, inn, id, cnt, seg, cp, rk, rv, estk, items) {
+  expr = trim(expr); n = length(expr); fc = substr(expr, 1, 1)
+  sq = 0; dq = 0; d = 0
+  for (i = 1; i <= n; i++) {
+    c = substr(expr, i, 1)
+    if (sq) { if (c == SQ) { if (substr(expr, i + 1, 1) == SQ) i++; else sq = 0 } continue }
+    if (dq) { if (c == BS) i++; else if (c == DQ) dq = 0; continue }
+    if (c == SQ) sq = 1
+    else if (c == DQ) dq = 1
+    else if (c == "{") estk[++d] = "}"
+    else if (c == "[") estk[++d] = "]"
+    else if (c == "}" || c == "]") {
+      if (d <= 0 || estk[d] != c) fail(ln, "mismatched brackets/braces")
+      d--; if (d == 0 && i < n) fail(ln, "unexpected trailing content after flow collection")
+    }
+  }
+  if (sq || dq || d != 0) fail(ln, "unclosed flow collection or quote")
+
+  inn = trim(substr(expr, 2, n - 2))
+  if (fc == "[") {
+    id = mk_node("seq", "")
+    if (inn == "") return id
+    cnt = split_flow(inn, items, ln)
+    for (i = 1; i <= cnt; i++) {
+      seg = trim(items[i])
+      if (seg == "") { if (i == cnt && cnt > 1) continue; fail(ln, "empty array element") }
+      c = substr(seg, 1, 1)
+      seq_push(id, (c == "{" || c == "[") ? parse_flow(seg, ln) : mk_node("scalar", parse_scalar(seg, ln)))
+    }
+    return id
+  }
+  id = mk_node("map", "")
+  if (inn == "") return id
+  cnt = split_flow(inn, items, ln)
+  for (i = 1; i <= cnt; i++) {
+    seg = trim(items[i])
+    if (seg == "") { if (i == cnt && cnt > 1) continue; fail(ln, "empty map entry") }
+    cp = find_colon(seg); if (cp <= 0) fail(ln, "expected key: value in flow map")
+    rk = parse_key(substr(seg, 1, cp - 1), ln); rv = trim(substr(seg, cp + 1))
+    if (rv == "") map_put(id, rk, mk_node("scalar", "null"))
+    else {
+      c = substr(rv, 1, 1)
+      map_put(id, rk, (c == "{" || c == "[") ? parse_flow(rv, ln) : mk_node("scalar", parse_scalar(rv, ln)))
+    }
+  }
+  return id
+}
+
+function push_stk(nid, col, pcol, indless) {
+  SP++; SN[SP] = nid; SI[SP] = col; SPI[SP] = pcol; SIL[SP] = indless
+}
+
+function add_map_entry(mid, mcol, entry, ln,    cp, kj, rv, fc, pid) {
+  cp = find_colon(entry)
+  if (cp < 0) fail(ln, "unterminated quote in mapping")
+  if (cp == 0) fail(ln, "expected key: value mapping")
+  kj = parse_key(substr(entry, 1, cp - 1), ln)
+  rv = trim(substr(entry, cp + 1))
+  if (rv == "") { pid = mk_node("pending", ""); map_put(mid, kj, pid); push_stk(pid, -1, mcol, 0); return }
+  fc = substr(rv, 1, 1)
+  if (fc == "{" || fc == "[") map_put(mid, kj, parse_flow(rv, ln))
+  else map_put(mid, kj, mk_node("scalar", parse_scalar(rv, ln)))
+}
+
+function render(id, depth,    t, n, i, pad, cpad, o) {
+  t = NT[id]
+  if (t == "scalar") return NV[id]
+  if (t == "pending") return "null"
+  pad = ""; for (i = 1; i <= depth; i++) pad = pad "  "
+  cpad = pad "  "
+  if (t == "map") {
+    n = ML[id]; if (n == 0) return "{}"
+    o = "{\n"
+    for (i = 1; i <= n; i++) o = o cpad MK[id, i] ": " render(MC[id, i], depth + 1) (i < n ? "," : "") "\n"
+    return o pad "}"
+  }
+  n = SL[id]; if (n == 0) return "[]"
+  o = "[\n"
+  for (i = 1; i <= n; i++) o = o cpad render(SC[id, i], depth + 1) (i < n ? "," : "") "\n"
+  return o pad "]"
+}
+
+BEGIN {
+  SQ = "\047"; DQ = "\""; BS = "\\"
+  for (_i = 1; _i <= 31; _i++) {
+    _c = sprintf("%c", _i)
+    if (_i == 8) ESC[_c] = BS "b"
+    else if (_i == 9) ESC[_c] = BS "t"
+    else if (_i == 10) ESC[_c] = BS "n"
+    else if (_i == 12) ESC[_c] = BS "f"
+    else if (_i == 13) ESC[_c] = BS "r"
+    else ESC[_c] = sprintf("\\u%04x", _i)
+  }
+  ESC[DQ] = BS DQ; ESC[BS] = BS BS
+  ERR = 0; NC = 0; ROOT = 0; LOCKED = 0; SP = 0
+}
+
+{
+  cl = strip_comment($0); if (cl == "") next
+  match(cl, /^[ \t]*/); ind = RLENGTH; ws = substr(cl, 1, ind); tr = substr(cl, ind + 1)
+  if (tr == "") next
+  if (ws ~ /\t/) fail(NR, "tab characters are not allowed in indentation")
+  if (LOCKED) fail(NR, "unexpected content after flow root")
+
+  if (SP == 0) {
+    fc = substr(tr, 1, 1)
+    if (fc == "{" || fc == "[") { ROOT = parse_flow(tr, NR); LOCKED = 1; next }
+    if (is_seq_line(tr)) { ROOT = mk_node("seq", ""); push_stk(ROOT, ind, -1, 0) }
+    else if (find_colon(tr) > 0) { ROOT = mk_node("map", ""); push_stk(ROOT, ind, -1, 0) }
+    else fail(NR, "expected YAML mapping, sequence, or flow object")
+  }
+
+  # Resolve pending container from prior bare `key:` or `-`
+  while (SP >= 1 && NT[SN[SP]] == "pending") {
+    pn = SN[SP]; pi = SPI[SP]
+    if (ind > pi) { NT[pn] = is_seq_line(tr) ? "seq" : "map"; SI[SP] = ind; break }
+    if (ind == pi && is_seq_line(tr) && SP > 1 && NT[SN[SP - 1]] == "map") {
+      NT[pn] = "seq"; SI[SP] = ind; SIL[SP] = 1; break
+    }
+    NT[pn] = "scalar"; NV[pn] = "null"; SP--
+  }
+
+  # Unwind indentation stack on de-indent
+  while (SP > 1) {
+    if (ind < SI[SP] || (ind == SI[SP] && SIL[SP] == 1 && !is_seq_line(tr))) SP--
+    else break
+  }
+
+  if (ind != SI[SP]) fail(NR, sprintf("inconsistent indentation (got %d, expected %d)", ind, SI[SP]))
+  cid = SN[SP]
+
+  if (NT[cid] == "map") {
+    if (is_seq_line(tr)) fail(NR, "unexpected sequence item inside mapping")
+    add_map_entry(cid, ind, tr, NR); next
+  }
+
+  if (!is_seq_line(tr)) fail(NR, "expected sequence item (-)")
+  rest = substr(tr, 2); match(rest, /^[ \t]*/); dws = RLENGTH; item = substr(rest, dws + 1)
+  if (item == "") { pn = mk_node("pending", ""); seq_push(cid, pn); push_stk(pn, -1, ind, 0); next }
+  fc = substr(item, 1, 1)
+  if (fc == "{" || fc == "[") { seq_push(cid, parse_flow(item, NR)); next }
+  icp = find_colon(item)
+  if (icp < 0) fail(NR, "unterminated quote in sequence item")
+  if (icp > 0) {
+    if (substr(rest, 1, dws) ~ /\t/) fail(NR, "tab characters are not allowed after -")
+    im = mk_node("map", ""); seq_push(cid, im)
+    push_stk(im, ind + 1 + dws, ind, 0); add_map_entry(im, ind + 1 + dws, item, NR); next
+  }
+  seq_push(cid, mk_node("scalar", parse_scalar(item, NR)))
+}
+
+END {
+  if (ERR) { print EMSG; exit 1 }
+  if (ROOT == 0) { print "{}"; exit 0 }
+  print render(ROOT, 0)
+}
+'
+
+# ------------------------------------------------------------------------------
+# Serialize a YAML block from stdin into 2-space-indented strict RFC 8259 JSON.
+# @param stdin - Extracted YAML block.
+# @returns Formatted JSON on stdout (exit 0), or error on stderr (exit 1).
+# @pure
+# ------------------------------------------------------------------------------
+rnex_yaml_block_to_json() {
+  (
+    set +e
+    _out="$(LC_ALL=C awk "${_RNEX_YAML_AWK_LEX}${_RNEX_YAML_AWK_TO_JSON}")"
+    _rc=$?
+    if [ "$_rc" -ne 0 ]; then
+      printf '%b[✗]%b %s\n' "${_R:-}" "${_NC:-}" "${_out:-Invalid YAML block}" >&2
+      exit 1
+    fi
+    printf '%s\n' "$_out"
+  )
+}
+
+# Internal helper: resolve (_cw_local, _cw_base) config paths for optional <root>.
+_rnex_cw_config_files() {
+  if [ -n "${1:-}" ]; then
+    if [ -n "${NEXUS_DIR:-}" ] && [ "$1" = "$NEXUS_DIR" ] && [ -n "${WORKSPACE_YAML:-}" ]; then
+      _cw_base="$WORKSPACE_YAML"
+      _cw_local="${WORKSPACE_LOCAL_YAML:-$1/${RNEX_LOCAL_CONFIG_FILE:-.local.rnex.yaml}}"
+    else
+      _cw_base="$1/${RNEX_CONFIG_FILE:-rnex.yaml}"
+      [ -f "$_cw_base" ] || { [ -f "$1/.rnex.yaml" ] && _cw_base="$1/.rnex.yaml"; }
+      _cw_local="$1/${RNEX_LOCAL_CONFIG_FILE:-.local.rnex.yaml}"
+    fi
+  else
+    _yaml_resolve_files
+    _cw_base="$_wy"
+    _cw_local="$_wly"
+  fi
+}
+
+# Internal helper: inspect top-level `codeWorkspace:` in $1 for legacy scalar form.
+# Returns 0 and prints unquoted scalar if legacy scalar; returns 1 if absent or object.
+_rnex_cw_legacy_scalar_in_file() {
+  [ -n "${1:-}" ] && [ -f "$1" ] || return 1
+  # shellcheck disable=SC2016
+  LC_ALL=C awk "${_RNEX_YAML_AWK_LEX}"'
+    BEGIN { kind = "absent"; raw = "" }
+    {
+      cl = strip_comment($0); if (cl == "") next
+      match(cl, /^[ \t]*/); if (RLENGTH != 0) next
+      if (cl == "---" || cl == "...") next
+      cp = find_colon(cl)
+      if (cp > 0 && unquote_val(substr(cl, 1, cp - 1)) == "codeWorkspace") {
+        pv = trim(substr(cl, cp + 1))
+        if (pv == "" || substr(pv, 1, 1) == "{") { kind = "object"; raw = "" }
+        else { kind = "scalar"; raw = pv }
+      }
+    }
+    END { if (kind == "scalar") { print unquote_val(raw); exit 0 } exit 1 }
+  ' "$1"
+}
+
+# Internal helper: extract and unquote a single-line scalar under codeWorkspace.<child>.
+# Returns 0 and prints plain string if valid single-line scalar; 1 if non-scalar/malformed.
+_rnex_cw_nested_scalar() {
+  _raw="$(rnex_yaml_extract_nested_block "$1" "codeWorkspace" "$2")" || return 1
+  # shellcheck disable=SC2016
+  printf '%s\n' "$_raw" | LC_ALL=C awk "${_RNEX_YAML_AWK_LEX}"'
+    BEGIN { n = 0; v = "" }
+    { s = trim($0); if (s == "") next; n++; if (n > 1) exit 1; v = s }
+    END {
+      if (n == 0) exit 0
+      fc = substr(v, 1, 1); len = length(v)
+      if (fc == "{" || fc == "[" || fc == "&" || fc == "*" || fc == "!") exit 1
+      if (fc == "\"" && (len < 2 || substr(v, len, 1) != "\"")) exit 1
+      if (fc == "\047" && (len < 2 || substr(v, len, 1) != "\047")) exit 1
+      printf "%s", unquote_val(v)
+    }
+  '
+}
+
+# ------------------------------------------------------------------------------
+# Return 0 if either active config file (.local.rnex.yaml or rnex.yaml) uses
+# deprecated scalar `codeWorkspace: true|false|<name>` syntax; 1 otherwise.
+# @param $1 - Optional workspace root directory.
+# @returns 0 if legacy scalar syntax is present; 1 otherwise (zero output).
+# @pure
+# ------------------------------------------------------------------------------
+rnex_is_legacy_code_workspace() {
+  (
+    _rnex_cw_config_files "${1:-}"
+    if _rnex_cw_legacy_scalar_in_file "$_cw_local" >/dev/null 2>&1; then exit 0; fi
+    if _rnex_cw_legacy_scalar_in_file "$_cw_base" >/dev/null 2>&1; then exit 0; fi
+    exit 1
+  )
+}
+
+# ------------------------------------------------------------------------------
+# Pure predicate returning 0 if `codeWorkspace` is enabled, 1 if disabled.
+# Precedence: .local.rnex.yaml (`codeWorkspace.enabled` > legacy scalar) >
+#             rnex.yaml (`codeWorkspace.enabled` > legacy scalar) > false.
+# @param $1 - Optional workspace root directory.
+# @returns 0 if enabled, 1 if disabled (zero stdout/stderr side effects).
+# @pure
+# ------------------------------------------------------------------------------
+rnex_get_code_workspace_enabled() {
+  (
+    set +e
+    _rnex_cw_config_files "${1:-}"
+    for _f in "$_cw_local" "$_cw_base"; do
+      [ -f "$_f" ] || continue
+      if rnex_yaml_has_nested_key "$_f" "codeWorkspace" "enabled"; then
+        _v="$(_rnex_cw_nested_scalar "$_f" "enabled")" || exit 1
+        is_truthy "$_v"; exit $?
+      fi
+      if _lv="$(_rnex_cw_legacy_scalar_in_file "$_f")"; then
+        _lc="$(printf '%s' "$_lv" | tr '[:upper:]' '[:lower:]')"
+        case "$_lc" in
+          false|no|0|off|none|disabled|null|"~"|"" ) exit 1 ;;
+          *) exit 0 ;;
+        esac
+      fi
+    done
+    exit 1
+  )
+}
+
+# ------------------------------------------------------------------------------
+# Resolve `codeWorkspace.name` across .local.rnex.yaml > rnex.yaml (with legacy
+# non-boolean filename scalar compatibility). Outputs empty string (exit 0) if
+# omitted; validates via rnex_validate_workspace_name and fails fast (exit 1)
+# on invalid names.
+# @param $1 - Optional workspace root directory.
+# @returns Validated name (or empty string) on stdout (exit 0); exit 1 if invalid.
+# @pure
+# ------------------------------------------------------------------------------
+rnex_get_code_workspace_name() {
+  (
+    set +e
+    _rnex_cw_config_files "${1:-}"
+    for _f in "$_cw_local" "$_cw_base"; do
+      [ -f "$_f" ] || continue
+      if rnex_yaml_has_nested_key "$_f" "codeWorkspace" "name"; then
+        _nm="$(_rnex_cw_nested_scalar "$_f" "name")"
+        _rc=$?
+        if [ "$_rc" -ne 0 ] || ! rnex_validate_workspace_name "$_nm"; then
+          printf '%b[✗]%b Invalid codeWorkspace.name in %s: must match ^[A-Za-z0-9][A-Za-z0-9._-]*$ without path separators or "..".\n' \
+            "${_R:-}" "${_NC:-}" "$(basename "$_f")" >&2
+          exit 1
+        fi
+        printf '%s' "$_nm"
+        exit 0
+      fi
+    done
+
+    # Backward compatibility for legacy scalar filename (`codeWorkspace: custom.code-workspace`)
+    for _f in "$_cw_local" "$_cw_base"; do
+      [ -f "$_f" ] || continue
+      if _lv="$(_rnex_cw_legacy_scalar_in_file "$_f")"; then
+        _lc="$(printf '%s' "$_lv" | tr '[:upper:]' '[:lower:]')"
+        case "$_lc" in
+          true|false|yes|no|1|0|on|off|none|enabled|disabled|null|"~"|"" ) exit 0 ;;
+          *)
+            if ! rnex_validate_workspace_name "$_lv"; then
+              printf '%b[✗]%b Invalid codeWorkspace filename in %s.\n' "${_R:-}" "${_NC:-}" "$(basename "$_f")" >&2
+              exit 1
+            fi
+            printf '%s' "$_lv"
+            exit 0
+            ;;
+        esac
+      fi
+    done
+    exit 0
+  )
+}
+
+# ------------------------------------------------------------------------------
+# Resolve `codeWorkspace.settings` JSON with atomic block replacement (no merge):
+#   .local.rnex.yaml `settings` > rnex.yaml `settings` > built-in defaults.
+# @param $1 - Optional workspace root directory.
+# @returns Valid RFC 8259 JSON object on stdout (exit 0); exit 1 on YAML error.
+# @pure
+# ------------------------------------------------------------------------------
+rnex_get_code_workspace_settings_json() {
+  (
+    set +e
+    _rnex_cw_config_files "${1:-}"
+    for _f in "$_cw_local" "$_cw_base"; do
+      [ -f "$_f" ] || continue
+      if rnex_yaml_has_nested_key "$_f" "codeWorkspace" "settings"; then
+        _blk="$(rnex_yaml_extract_nested_block "$_f" "codeWorkspace" "settings")" || exit 1
+        printf '%s\n' "$_blk" | rnex_yaml_block_to_json
+        exit $?
+      fi
+    done
+    printf '%s\n' "$RNEX_DEFAULT_CODE_WORKSPACE_SETTINGS_JSON"
+  )
 }

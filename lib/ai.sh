@@ -476,78 +476,94 @@ build_ai_instructions() {
 # ---- Multi-Root IDE Workspace (.code-workspace) ----------------------------
 
 # Generate and maintain a multi-root VS Code / Cursor workspace file (.code-workspace).
-# Adds workspace root and each active member repository as first-class workspace folders.
+# Emits a deprecation warning when legacy scalar `codeWorkspace` is configured,
+# resolves `enabled`, `name`, and atomic-replacement `settings` via lib/yaml.sh
+# contracts, and writes valid RFC 8259 JSON atomically via a workspace temp file.
+# @param $1 - Optional workspace root directory (defaults to $NEXUS_DIR).
+# @returns 0 on skip or atomic update; 1 on validation, YAML, or write error.
 sync_code_workspace() {
-  [ -n "$CODE_WORKSPACE_FILE" ] || return 0
-  _ws_path="$NEXUS_DIR/$CODE_WORKSPACE_FILE"
-  _root_name="$(basename "$NEXUS_DIR")"
+  _ws_dir="${1:-$NEXUS_DIR}"
+  [ -n "$_ws_dir" ] && [ -d "$_ws_dir" ] || return 0
 
-  _f_tmp="$(mktemp)"
+  # 1. Surface legacy scalar deprecation notice once at the sync boundary
+  if rnex_is_legacy_code_workspace "$_ws_dir"; then
+    log_warn "Deprecated: scalar 'codeWorkspace' is deprecated; use 'codeWorkspace: { enabled: true|false }' instead."
+  fi
 
-  printf '    {\n      "name": "%s (Workspace Root)",\n      "path": "."\n    }' "$_root_name" > "$_f_tmp"
-
-  _repos_rel="${REPOS_DIR#"$NEXUS_DIR"/}"
-  _repos_rel="${_repos_rel#./}"
-  [ -n "$_repos_rel" ] || _repos_rel="repos"
-
-  yaml_list_repos | while read -r _rname; do
-    [ -n "$_rname" ] || continue
-    if yaml_repo_enabled "$_rname"; then
-      _rdir="$(resolve_repo_path "$_rname")"
-      if [ -d "$_rdir" ]; then
-        _custom_p="$(yaml_get "$_rname" "path" 2>/dev/null || true)"
-        if [ -n "$_custom_p" ]; then
-          _folder_p="$(clean_rel_subpath "$_custom_p")"
-        else
-          _folder_p="$_repos_rel/$_rname"
-        fi
-        printf ',\n    {\n      "name": "%s",\n      "path": "%s"\n    }' "$_rname" "$_folder_p" >> "$_f_tmp"
-      fi
-    fi
-  done
-
-  if [ ! -f "$_ws_path" ]; then
-    {
-      printf '{\n  "folders": [\n'
-      cat "$_f_tmp"
-      printf '\n  ],\n  "settings": {\n    "search.exclude": {\n      "**/node_modules": true,\n      "**/.git": true\n    }\n  }\n}\n'
-    } > "$_ws_path"
-    rm -f "$_f_tmp"
-    log_ok "Created $CODE_WORKSPACE_FILE (VS Code / Cursor multi-root workspace)"
+  # 2. Skip cleanly when codeWorkspace is disabled
+  if ! rnex_get_code_workspace_enabled "$_ws_dir"; then
     return 0
   fi
 
-  if grep -q '"folders"[ ]*:' "$_ws_path" 2>/dev/null; then
-    _tmp_out="$(mktemp)"
-    awk -v f_src="$_f_tmp" '
-      BEGIN { in_f = 0 }
-      /"folders"[ ]*:[ ]*\[/ {
-        in_f = 1
-        print "  \"folders\": ["
-        while ((getline line < f_src) > 0) print line
-        close(f_src)
-        next
-      }
-      in_f {
-        if (/\]/) {
-          in_f = 0
-          has_comma = ($0 ~ /,[ ]*$/) ? "," : ""
-          print "  ]" has_comma
-        }
-        next
-      }
-      { print }
-    ' "$_ws_path" > "$_tmp_out" && mv "$_tmp_out" "$_ws_path"
-    rm -f "$_f_tmp"
-    log_ok "Updated folders in $CODE_WORKSPACE_FILE"
+  # 3. Resolve and validate target .code-workspace filename
+  _raw_name="$(rnex_get_code_workspace_name "$_ws_dir")" || return 1
+  _root_name="$(basename "$_ws_dir")"
+  if [ -n "$_raw_name" ]; then
+    _cw_file="$(rnex_normalize_workspace_filename "$_raw_name")" || return 1
   else
-    {
-      printf '{\n  "folders": [\n'
-      cat "$_f_tmp"
-      printf '\n  ],\n  "settings": {\n    "search.exclude": {\n      "**/node_modules": true,\n      "**/.git": true\n    }\n  }\n}\n'
-    } > "$_ws_path"
-    rm -f "$_f_tmp"
-    log_ok "Updated $CODE_WORKSPACE_FILE"
+    _cw_file="${_root_name}${RNEX_CODE_WORKSPACE_EXT:-.code-workspace}"
+  fi
+
+  # 4. Resolve settings JSON (atomic replacement; fail-fast before any disk write)
+  _settings_json="$(rnex_get_code_workspace_settings_json "$_ws_dir")" || return 1
+
+  CODE_WORKSPACE_FILE="$_cw_file"
+  _ws_path="$_ws_dir/$_cw_file"
+  _repos_rel="${REPOS_DIR#"$_ws_dir"/}"
+  _repos_rel="${_repos_rel#./}"
+  [ -n "$_repos_rel" ] || _repos_rel="repos"
+
+  # 5. Render strict RFC 8259 JSON to an in-workspace temp file and atomically mv
+  mkdir -p "$_ws_dir/.rnex" || return 1
+  _cw_tmp="$_ws_dir/.rnex/.tmp.code-workspace.$$"
+  rm -f "$_cw_tmp"
+  _existed=0
+  [ -f "$_ws_path" ] && _existed=1
+
+  _root_esc="$(printf '%s' "$_root_name" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')"
+  if ! {
+    printf '{\n  "folders": [\n'
+    printf '    {\n      "name": "%s (Workspace Root)",\n      "path": "."\n    }' "$_root_esc"
+
+    yaml_list_repos | while IFS= read -r _rname || [ -n "$_rname" ]; do
+      [ -n "$_rname" ] || continue
+      if yaml_repo_enabled "$_rname"; then
+        _rdir="$(resolve_repo_path "$_rname")"
+        if [ -d "$_rdir" ]; then
+          _custom_p="$(yaml_get "$_rname" "path" 2>/dev/null || true)"
+          if [ -n "$_custom_p" ]; then
+            _folder_p="$(clean_rel_subpath "$_custom_p")"
+          else
+            _folder_p="$_repos_rel/$_rname"
+          fi
+          _rn_esc="$(printf '%s' "$_rname" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')"
+          _fp_esc="$(printf '%s' "$_folder_p" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')"
+          printf ',\n    {\n      "name": "%s",\n      "path": "%s"\n    }' "$_rn_esc" "$_fp_esc"
+        fi
+      fi
+    done
+
+    printf '\n  ],\n'
+    printf '%s\n' "$_settings_json" | awk '
+      NR == 1 { print "  \"settings\": " $0; next }
+      { print "  " $0 }
+    '
+    printf '}\n'
+  } > "$_cw_tmp"; then
+    rm -f "$_cw_tmp"
+    return 1
+  fi
+
+  if [ "$_existed" -eq 1 ]; then
+    if cmp -s "$_cw_tmp" "$_ws_path"; then
+      rm -f "$_cw_tmp"
+    else
+      mv "$_cw_tmp" "$_ws_path" || { rm -f "$_cw_tmp"; return 1; }
+    fi
+    log_ok "Updated $_cw_file"
+  else
+    mv "$_cw_tmp" "$_ws_path" || { rm -f "$_cw_tmp"; return 1; }
+    log_ok "Created $_cw_file (VS Code / Cursor multi-root workspace)"
   fi
 }
 
